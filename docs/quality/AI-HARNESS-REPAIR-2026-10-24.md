@@ -377,3 +377,79 @@ capability. Historical receipts/observations are unchanged. Whisper, model ident
 one-image/1MiB/output4000 bounds,60s media limit and no-overlap settlement are unchanged.
 Finite media diagnostics distinguish an actual timer expiry from other failures.
 Actual native-image/video acceptance remains required.
+
+Exact main8fb0db3 [native media40084623164](https://github.com/creno-va/baro/actions/runs/40084623164)
+passed: native JPEG vision50051ms/602input/104output with the expected visible marker,
+Whisper2215ms/0/0 with the expected Korean spoken markers and one segment, both
+quality=processed. This is not a latency improvement claim; earlier observations
+and timeout failures remain preserved. The changed video's composed run is separate.
+
+The explicit [full9c40082313723](https://github.com/creno-va/baro/actions/runs/40082313723)
+failed in the workspace browser suite: the new tool-card test could not see its
+mock result;78 other workspace cases passed. Unit/DB/offline/build and the preceding
+browser suites had completed, but later CSP/security/audit/native stages were not
+reached. The existing separate raw-audit high2 observation is not this run's cause.
+No successful full receipt was produced.
+
+The isolated local UI run had used real HTTP; full's PUBLIC_API_MODE=mock deliberately
+handles apiRequest without fetch, so the test's Playwright route was never reached.
+The fixture now forwards only its exact synthetic tool-result endpoint from that
+mock HTTP adapter to the registered route, after reload. Both explicit mock and real
+HTTP modes passed the same desktop/mobile, exact-original-link, overflow and axe
+checks. Product requests and mock isolation are unchanged. A new exact-SHA full run
+is still required; these focused checks do not rewrite the failed full result.
+
+Exact main8fb0db3 [composed video40084771580](https://github.com/creno-va/baro/actions/runs/40084771580)
+passed the pinned Linux native stage and all three Gateway observations. The two
+actual scene frames at1.4s/index14 and3.2s/index32 matched their visible markers:
+9594ms/586input/28output and9139ms/586input/77output. Extracted0–8s audio passed
+Whisper5171ms/0/0 with its spoken markers and one segment. All three qualities were
+processed; providerFailures was empty and auth/replay guards passed. Tokens0/0 are
+observed ASR metadata, not a zero-cost claim. The old timeout receipt remains failed.
+This is actual composed synthetic native/Gateway evidence, not a deployed R2/OAuth/
+Cloudflare Container/full-product or public/legal approval.
+
+The separate material_chat diagnostic checks actual model-directed attachment
+reading. Only the first16 observations of a synthetic48-page document are initially
+supplied; the requested final-page amount/code are absent. A scoped, revision-checked
+read adapter can return at most two windows of32 observations in one round. Success
+requires an actual read reaching page48, the hidden answer markers, a matching
+file/revision/page reference and final independent audit, within three model calls.
+Reports contain only counts/booleans, never excerpts or answers. This adapter uses
+pre-extracted synthetic observations, not live D1/R2 or an actual48-page PDF. The
+separate real encrypted-reader/deletion/revision tests remain necessary; neither
+component substitutes for deployed product file/OAuth acceptance.
+
+## Material reading and deployed intake follow-up (2026-10-24)
+
+Exact main054b1e6 [material_chat40086793197](https://github.com/creno-va/baro/actions/runs/40086793197)
+passed all three Gateway calls:8051ms/12972input/604output,
+4376ms/16343input/255output and7365ms/7800input/788output. One actual read
+returned32 observations, reached page48, and matched the hidden answer and exact
+source position before independent audit. Auth/replay guards passed and providerFailures
+was empty. The finite [original receipt](./ai-harness-2026-10-24/material-chat-054b1e6.json)
+retains its real checkedAt; sourceManifest is withheld. This is still the pre-extracted
+fixture described above, not an actual uploaded48-page PDF or live D1/R2 acceptance.
+
+[Preview40086967281](https://github.com/creno-va/baro/actions/runs/40086967281)
+deployed exact054b1e6. The actual ready endpoint matched release/schema0016; foundation,
+all9 endpoint checks and text configuration readiness passed. Unavailable price/SKU
+observations were warnings, not blockers. No model call is implied by deployment smoke.
+
+In the existing authenticated Safari preview session, a new synthetic case produced
+three first-round questions, saved its answers, produced two second-round questions,
+and generated a matching summary after those answers. During the second-round
+publication, the page displayed NOT_FOUND. A read-only reload, without repeating a
+model request, recovered the saved answers and already-published questions. This is a
+product observation, not proof that every possible cause of that UI error is known.
+
+Inspection reproduced a concrete false404 path: metadata's post-decrypt fence returns
+null when intake revision changes, and service.intake previously converted every null
+to NOT_FOUND. The service now recovers only reads, at most three times, with a fresh
+owner/tombstone check after each rejected snapshot. Continuous changes yield a transient
+503; deleted/foreign workspaces remain denied. Four new expectations failed before the
+fix; all101 targeted tests across read races, intake saves, snapshot recovery and actual
+Hono/AES/SQLite load paths passed afterward. Frozen bun ci, validate:quick(server243)
+and validate:build/local workerd passed. No schema, mobile/shared DTO, model request,
+quota, execution hold or original provider observation changed. The fix still requires
+its own exact PR/main CI and deployment;054's live results do not attest the new code.

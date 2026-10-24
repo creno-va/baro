@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { mobileReauthPrepareV2Schema, mobileReauthProofSchema } from "../../contracts/mobile-auth";
 import {
+  mobileDeletionActivityRequestSchema,
+  mobileDeletionActivitySchema,
   mobileDeletionPrepareSchema,
   mobileDeletionProofSchema,
 } from "../../contracts/mobile-deletion";
+import { deletionOwnerTag } from "../modules/deletion/service";
 import { AuthConfigurationError } from "./env";
 import { NativeAuthProofError, nativeAuthChallenge } from "./native-codes";
+import { createNativeDeletionActivityProof } from "./native-deletion-activity";
 import { AUTH_RETENTION_MS, RECENT_OAUTH_MS } from "./policy";
 
 export const NATIVE_REAUTH_TTL_MS = 10 * 60_000;
@@ -145,17 +149,20 @@ export function createNativeReauthentication(dependencies: {
       ciphertext: encode(new Uint8Array(encrypted)),
     });
   }
-  async function read(attemptId: string) {
+  async function readRecord(attemptId: string, purpose: "strict" | "deletion-activity") {
     const name = await storageKey(attemptId),
       row = await dependencies.db
         .prepare("SELECT value FROM app_metadata WHERE key=?")
         .bind(name)
         .first<{ value: string }>();
-    if (!row) throw new NativeAuthProofError();
+    if (!row) return null;
     try {
       const envelope = envelopeSchema.parse(JSON.parse(row.value)),
         time = now();
-      if (envelope.expiresAt <= time || envelope.expiresAt > time + NATIVE_REAUTH_TTL_MS)
+      if (
+        (purpose === "strict" && envelope.expiresAt <= time) ||
+        envelope.expiresAt > time + NATIVE_REAUTH_TTL_MS
+      )
         throw new NativeAuthProofError();
       const raw = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv: decode(envelope.iv), additionalData: aad(name, envelope) },
@@ -167,13 +174,19 @@ export function createNativeReauthentication(dependencies: {
         payload.attemptId !== attemptId ||
         payload.startedAt + NATIVE_REAUTH_TTL_MS !== envelope.expiresAt ||
         payload.startedAt > time ||
-        payload.operation !== envelope.operation
+        payload.operation !== envelope.operation ||
+        (purpose === "deletion-activity" && payload.operation !== "delete-account")
       )
         throw new NativeAuthProofError();
       return { name, row: row.value, envelope, payload };
     } catch {
       throw new NativeAuthProofError();
     }
+  }
+  async function read(attemptId: string) {
+    const record = await readRecord(attemptId, "strict");
+    if (!record) throw new NativeAuthProofError();
+    return record;
   }
   async function prepare(
     input: z.infer<typeof mobileReauthPrepareV2Schema>,
@@ -324,6 +337,44 @@ export function createNativeReauthentication(dependencies: {
         if (result.meta.changes === 1) return true;
       }
       return false;
+    },
+    async deletionActivity(raw: unknown) {
+      const input = mobileDeletionActivityRequestSchema.parse(raw);
+      const context = await createNativeDeletionActivityProof(dependencies).verify(input);
+      const observed = (status: "active" | "inactive") =>
+        mobileDeletionActivitySchema.parse({
+          contractVersion: 2,
+          attemptId: input.attemptId,
+          status,
+          outcome: "unknown",
+          observedAt: new Date(now()).toISOString(),
+        });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        // Direct D1 bindings use the primary. No unconstrained read session is introduced here.
+        const record = await readRecord(input.attemptId, "deletion-activity");
+        if (!record) return observed("inactive");
+        if (
+          context.challenge !== record.payload.challenge ||
+          context.startedAt !== record.payload.startedAt ||
+          context.ownerTag !== (await deletionOwnerTag(dependencies.secret, record.envelope.userId))
+        )
+          throw new NativeAuthProofError();
+        const time = now();
+        if (
+          record.payload.startedAt > time ||
+          record.envelope.expiresAt > time + NATIVE_REAUTH_TTL_MS
+        )
+          throw new NativeAuthProofError();
+        if (record.envelope.expiresAt > time) return observed("active");
+        // Expiry alone cannot retire a callback that already acquired a guard.
+        // The same exact-row CAS used by commit makes cleanup and deletion exclusive.
+        const result = await dependencies.db
+          .prepare("DELETE FROM app_metadata WHERE key=? AND value=?")
+          .bind(record.name, record.row)
+          .run();
+        if (result.meta.changes === 1) return observed("inactive");
+      }
+      throw new NativeAuthProofError();
     },
     async verify(raw: unknown, actor: Actor) {
       const input = mobileReauthProofSchema.parse(raw),

@@ -5,12 +5,14 @@ const proof = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const legacyMobileAuthProviderSchema = z.enum(["google", "naver", "kakao"]);
 export const mobileAuthV2ProviderSchema = z.enum(["google", "naver", "kakao", "apple"]);
 export const MOBILE_AUTH_CONTRACT_HEADER = "x-baro-auth-contract";
+export const MOBILE_DELETION_ACTIVITY_HEADER = "x-baro-deletion-activity";
 export const mobileAuthCapabilitiesSchema = z.strictObject({
   contractVersion: z.literal(2),
   providers: z
     .array(mobileAuthV2ProviderSchema)
     .max(4)
     .refine((providers) => new Set(providers).size === providers.length),
+  deletionActivity: z.literal(1).optional(),
 });
 export const mobileAuthAttemptIdSchema = z.uuid();
 export const mobileAuthChallengeSchema = proof;

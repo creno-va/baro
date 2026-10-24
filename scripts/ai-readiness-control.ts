@@ -17,6 +17,7 @@ export const featureCaseSchema = z.enum([
   "tools_registry",
   "legal_chat",
   "video_media",
+  "material_chat",
 ]);
 /** Outer observation deadline accommodates existing phase limits without
  * creating a second POST or extending the application's execution limits. */
@@ -127,6 +128,13 @@ const legalChecksSchema = z.strictObject({
   acceptedQuotationCount: z.number().int().min(0).max(50),
   sourceFailures: z.array(z.enum(["upstream_rejected", "schema_mismatch", "unavailable"])).max(2),
 });
+const materialChecksSchema = z.strictObject({
+  readRequests: z.number().int().min(0).max(2),
+  observationsRead: z.number().int().min(0).max(64),
+  lastPageRead: z.boolean(),
+  answerMatched: z.boolean(),
+  sourcePositionMatched: z.boolean(),
+});
 const reportSchema = z
   .strictObject({
     version: z.literal(PROBE_PROTOCOL_VERSION),
@@ -157,6 +165,7 @@ const reportSchema = z
     mediaChecks: mediaChecksSchema.optional(),
     policyFailure: probePolicyFailureSchema.optional(),
     legalChecks: legalChecksSchema.optional(),
+    materialChecks: materialChecksSchema.optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -180,12 +189,22 @@ const reportSchema = z
       report.metricCoverage ===
         (report.metrics.length === report.attempts ? "complete" : "partial") &&
       (report.featureCase === "legal_chat" || report.legalChecks === undefined) &&
+      (report.featureCase === "material_chat" || report.materialChecks === undefined) &&
       (report.featureCase === "video_media" ||
         report.mediaChecks?.every((check) => check.videoFrame === undefined) !== false) &&
       (report.status === "passed"
         ? report.failure === null &&
           report.attempts > 0 &&
           report.metrics.at(-1)?.status === "success" &&
+          (report.featureCase !== "material_chat" ||
+            (report.materialChecks !== undefined &&
+              report.materialChecks.readRequests > 0 &&
+              report.materialChecks.observationsRead > 0 &&
+              report.materialChecks.lastPageRead &&
+              report.materialChecks.answerMatched &&
+              report.materialChecks.sourcePositionMatched &&
+              report.metrics.filter((m) => m.phase === "workspace_chat").length >= 2 &&
+              report.metrics.at(-1)?.phase === "workspace_audit")) &&
           (report.featureCase !== "video_media" ||
             (report.attempts === 3 &&
               report.metrics.length === 3 &&
@@ -360,6 +379,7 @@ export interface ProbeOutcome {
   mediaChecks?: z.infer<typeof mediaChecksSchema>;
   policyFailure?: z.infer<typeof probePolicyFailureSchema>;
   legalChecks?: z.infer<typeof legalChecksSchema>;
+  materialChecks?: z.infer<typeof materialChecksSchema>;
 }
 export async function handleDurableProbe(
   request: Request,

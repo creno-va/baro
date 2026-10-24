@@ -14,7 +14,7 @@ import {
   v2WorkspaceStateRequestSchema,
 } from "../../../contracts/v2";
 import { createV2AccountingRepository } from "../../db/v2-accounting";
-import type { Actor, V2Core } from "../../db/v2-core";
+import { type Actor, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { canRetryV2Job } from "../../db/v2-job-retry";
 import { createV2JobsRepository } from "../../db/v2-jobs";
 import type { MutationReceipt } from "../../db/v2-mutation-receipts";
@@ -322,10 +322,15 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       return find(ownerId, id);
     },
     async intake(ownerId: string, id: string) {
-      // metadata owns the initial owner/tombstone read and the post-decrypt fence.
-      const value = await workspace.metadata(actor(ownerId), id);
-      if (!value) throw new WorkspaceError("NOT_FOUND");
-      return value;
+      // A publication may invalidate metadata's post-decrypt fence without
+      // deleting the case. Recover only reads, under fresh owner/tombstone
+      // checks; never turn that race into a permanent access-denial response.
+      for (let recovery = 0; recovery < 3; recovery++) {
+        const value = await workspace.metadata(actor(ownerId), id);
+        if (value) return value;
+        await find(ownerId, id);
+      }
+      throw new V2RepositoryError("DB_OPERATION_FAILED");
     },
     async summaryAvailable(ownerId: string, id: string) {
       return workspace.summaryAvailable(actor(ownerId), id);
