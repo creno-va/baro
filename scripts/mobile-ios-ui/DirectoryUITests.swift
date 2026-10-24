@@ -38,6 +38,29 @@ final class BaroDirectoryUITests: XCTestCase {
   }
 
   @MainActor
+  private func reportInput(_ stage: String, input: XCUIElement, app: XCUIApplication) {
+    let expected = "baro-mobile-smoke-20261024"
+    let sentence = "Baro-mobile-smoke-20261024"
+    let state: String
+    if input.exists, let value = input.value as? String {
+      if value.isEmpty { state = "empty" }
+      else if value == expected { state = "literal" }
+      else if value == sentence { state = "sentence-capitalized" }
+      else if expected.hasPrefix(value) || sentence.hasPrefix(value) { state = "prefix" }
+      else { state = "other" }
+    } else { state = "unavailable" }
+    // Only enum/booleans. Never print value, label, length, hierarchy or profile content.
+    let status: [String: Any] = [
+      "stage": stage, "inputState": state,
+      "appForeground": app.state == .runningForeground,
+      "keyboardObserved": app.keyboards.firstMatch.exists
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]) {
+      print("BARO_DIRECTORY_UI_STATUS:" + String(decoding: data, as: UTF8.self))
+    }
+  }
+
+  @MainActor
   func testPublicDirectoryKeyboardAndRotation() throws {
     continueAfterFailure = false
     XCUIDevice.shared.orientation = .portrait
@@ -73,8 +96,12 @@ final class BaroDirectoryUITests: XCTestCase {
         && keyboard.frame.minY.isFinite && input.frame.maxY <= keyboard.frame.minY
     }, seconds: 10), "BARO_DIRECTORY_INPUT_OCCLUDED")
     let synthetic = "baro-mobile-smoke-20261024"
+    reportInput("before-input", input: input, app: app)
     input.typeText(synthetic)
-    XCTAssertTrue((input.value as? String) == synthetic, "BARO_DIRECTORY_INPUT_NOT_RETAINED")
+    reportInput("after-input", input: input, app: app)
+    let typedRetained = wait({ (input.value as? String) == synthetic }, seconds: 10)
+    reportInput("typed-check", input: input, app: app)
+    XCTAssertTrue(typedRetained, "BARO_DIRECTORY_TYPED_INPUT_MISMATCH")
     input.typeText("\n")
     XCTAssertTrue(wait({ !keyboard.exists }, seconds: 10), "BARO_DIRECTORY_KEYBOARD_NOT_DISMISSED")
     XCTAssertTrue(wait({
@@ -87,15 +114,19 @@ final class BaroDirectoryUITests: XCTestCase {
       let frame = app.windows.firstMatch.frame
       return frame.width.isFinite && frame.height.isFinite && frame.height > 0 && frame.width > frame.height
     }), "BARO_DIRECTORY_LANDSCAPE_MISSING")
-    XCTAssertTrue((input.value as? String) == synthetic, "BARO_DIRECTORY_INPUT_NOT_RETAINED")
+    reportInput("landscape-check", input: input, app: app)
     reach(input, in: app)
+    reportInput("landscape-check", input: input, app: app)
+    XCTAssertTrue((input.value as? String) == synthetic, "BARO_DIRECTORY_LANDSCAPE_INPUT_MISMATCH")
     XCUIDevice.shared.orientation = .portrait
     XCTAssertTrue(wait({
       let frame = app.windows.firstMatch.frame
       return frame.width.isFinite && frame.height.isFinite && frame.width > 0 && frame.height > frame.width
     }), "BARO_DIRECTORY_PORTRAIT_MISSING")
-    XCTAssertTrue((input.value as? String) == synthetic, "BARO_DIRECTORY_INPUT_NOT_RETAINED")
+    reportInput("portrait-check", input: input, app: app)
     reach(input, in: app)
+    reportInput("portrait-check", input: input, app: app)
+    XCTAssertTrue((input.value as? String) == synthetic, "BARO_DIRECTORY_PORTRAIT_INPUT_MISMATCH")
     let back = app.navigationBars.buttons.matching(NSPredicate(format: "label IN %@", ["BARO", "Back"]))
     XCTAssertTrue(back.count == 1 && fullyHittable(back.firstMatch, in: app), "BARO_DIRECTORY_BACK_MISSING")
     back.firstMatch.tap()

@@ -871,3 +871,28 @@ user-rotation lock0→lock1→lock0을 소유 Emulator에만 적용한다. 설�
 해당 allowlist로 내보낸다. profile/contact·remote mutation·auth/private 화면은 열지 않는다.
 현재 문단은 도구 준비 상태이며 actual 성공은 exact CI/main 뒤 별도 run/proof를 인수해야 한다.
 전체 화면/역할·TalkBack/VoiceOver·한국어 키보드·실기기/store·#334/#379/#339/#71은 별도다.
+
+
+## iOS 공개 탐색 첫 실제 실패와 단계 구분 (#379)
+
+PR440/main06788cb·CI40042338503 SUCCESS 뒤 [실제40042571370](https://github.com/creno-va/baro/actions/runs/40042571370)은
+2026-10-24T00:10:22Z terminal FAILURE다. [원본 실패](../quality/mobile-internal-ios-2026-10-23/directory-failure-06788cb.json)는
+public-directory-xcuitest/exit65/timedOut=false이며 assertion은 `BARO_DIRECTORY_INPUT_NOT_RETAINED`다.
+실패 JSON 전체 SHA256은 `33ec9c15fc1477d36f25b43dd2398f3f550d01c8d6392338e16ff6db94b21827`다.
+[Home](../quality/mobile-internal-ios-2026-10-23/directory-home-06788cb.json)·[metadata](../quality/mobile-internal-ios-2026-10-23/directory-verification-06788cb.json)의
+identity와 원본 ZIP24,102,101bytes/전체 SHA·compiler receipt77d157…를 독립 대조했다.
+성공 directory proof는 없으며 관측 timeout이나 Simulator SDK compile 실패가 아니다.
+
+이전 Swift는 입력 직후·가로 전환 뒤·세로 전환 뒤에 같은 assertion을 썼으므로 현재 원본만으로
+어느 단계에서 실패했는지, 앱 상태 손실인지 UI 입력/관측 차이인지 특정하지 않는다. 후속 도구는
+각 assertion을 고유 코드로 구분하고 입력 전/직후/10초 bounded value 대기 뒤·가로/세로 검사
+위치에서 fixed status를 남긴다. 입력의 실제 문자열·길이·label은 출력하지 않고
+empty/literal/sentence-capitalized/prefix/other/unavailable enum과 foreground/keyboard boolean만
+허용한다. sentence-capitalized 분류는 원인으로 확정한 사실이 아니며 실제 입력 또는 제품 설정을
+바꾸지 않는다. 회전 후에는 입력란이 fully hittable한 위치에 도달한 뒤 정확한 값을 검사한다. 기존의 값 검사→스크롤 순서는 offscreen native 값을 먼저 읽을 수 있었으며 실제 원인으로는 아직 확정하지 않는다.
+통과 조건은 여전히 정확한 합성 입력 유지다. malformed/알 수 없는 stage/값·
+추가 필드는 모두 버리고 원본 command log/xcresult/hierarchy 저장 차단을 유지한다.
+
+새 정확한 CI/main 뒤 변경한 대기·단계 관측으로 실제 재검증하며 이전 실패를 덮어쓰지 않는다.
+Android 독립 입력/회전 도구도 같은 #379에서 준비한다. 전체 M7/#334·실제 계정/OAuth·HTTP
+transport·한국어 입력·VoiceOver/TalkBack·물리 기기/store·#339/#71은 OPEN이다.

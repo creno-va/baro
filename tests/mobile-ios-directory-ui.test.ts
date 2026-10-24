@@ -103,13 +103,13 @@ test("failure reporting retains only a known XCTest assertion code", () => {
     observeIosDirectoryFailure(
       "XCTAssertTrue failed - BARO_DIRECTORY_INPUT_OCCLUDED private details",
     ),
-  ).toEqual({ assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED" });
+  ).toEqual({ status: null, assertionCode: "BARO_DIRECTORY_INPUT_OCCLUDED" });
   for (const output of [
     "compiler echo BARO_DIRECTORY_INPUT_OCCLUDED",
     "XCTAssertTrue failed - BARO_DIRECTORY_PRIVATE",
     "private native chatter",
   ])
-    expect(observeIosDirectoryFailure(output)).toEqual({ assertionCode: null });
+    expect(observeIosDirectoryFailure(output)).toEqual({ status: null, assertionCode: null });
 });
 test("directory proof binds binary, compiler, tooling and device while preserving the narrow UI-only scope", async () => {
   const baseline = await Bun.file(
@@ -150,4 +150,55 @@ test("directory proof binds binary, compiler, tooling and device while preservin
     { rawProfile: "private-value" },
   ])
     expect(() => verifyIosDirectoryReceipt({ ...value, ...patch }, baseline)).toThrow();
+});
+
+test("iOS failure diagnostics distinguish typing and rotation using only fixed stages/input categories", () => {
+  const status = {
+    stage: "typed-check",
+    inputState: "sentence-capitalized",
+    appForeground: true,
+    keyboardObserved: true,
+  };
+  for (const stage of [
+    "before-input",
+    "after-input",
+    "typed-check",
+    "landscape-check",
+    "portrait-check",
+  ] as const)
+    for (const inputState of [
+      "empty",
+      "literal",
+      "sentence-capitalized",
+      "prefix",
+      "other",
+      "unavailable",
+    ] as const) {
+      const observed = { ...status, stage, inputState };
+      expect(
+        observeIosDirectoryFailure(
+          `BARO_DIRECTORY_UI_STATUS:${JSON.stringify(observed)}\nXCTAssertTrue failed - BARO_DIRECTORY_TYPED_INPUT_MISMATCH`,
+        ),
+      ).toEqual({ status: observed, assertionCode: "BARO_DIRECTORY_TYPED_INPUT_MISMATCH" });
+    }
+  for (const patch of [
+    { stage: "private-value" },
+    { inputState: "private-value" },
+    { value: "private-value" },
+    { label: "private-value" },
+    { hierarchy: "private-value" },
+    { appForeground: "private-value" },
+  ])
+    expect(
+      observeIosDirectoryFailure(
+        `BARO_DIRECTORY_UI_STATUS:${JSON.stringify({ ...status, ...patch })}`,
+      ).status,
+    ).toBeNull();
+  for (const code of [
+    "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
+    "BARO_DIRECTORY_LANDSCAPE_INPUT_MISMATCH",
+    "BARO_DIRECTORY_PORTRAIT_INPUT_MISMATCH",
+    "BARO_DIRECTORY_INPUT_NOT_RETAINED",
+  ] as const)
+    expect(observeIosDirectoryFailure(`XCTAssertTrue failed - ${code}`).assertionCode).toBe(code);
 });
