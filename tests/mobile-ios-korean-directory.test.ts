@@ -349,3 +349,69 @@ test("layout accepts only known query origins while historical setup diagnostics
   ])
     expect(parseControl({ ...layout, ...patch })).toBeNull();
 });
+
+test("the separate-keyboard decision is scoped to the observed Korean chooser and unique hittable owner", () => {
+  const v = {
+    koreanTitleObserved: true,
+    promptObserved: true,
+    cellCount: 0,
+    buttonCount: 1,
+    ownersOverlap: true,
+    selection: "button",
+    decision: "separate-keyboard",
+  };
+  const parseChoice = (value: unknown) =>
+    observeIosKoreanDirectoryFailure("BARO_KOREAN_SEPARATE_CHOICE:" + JSON.stringify(value))
+      .separateChoice;
+  expect<unknown>(parseChoice(v)).toEqual(v);
+  expect(parseChoice({ ...v, cellCount: 1, selection: "cell" })?.selection).toBe("cell");
+  for (const patch of [
+    { koreanTitleObserved: false },
+    { promptObserved: false },
+    { buttonCount: 2 },
+    { ownersOverlap: false },
+    { buttonCount: 9 },
+    { label: "private" },
+    { value: "private" },
+    { decision: "unknown" },
+  ])
+    expect(parseChoice({ ...v, ...patch })).toBeUndefined();
+  expect(
+    parseChoice({ ...v, cellCount: 2, selection: "ambiguous", decision: "blocked" })?.decision,
+  ).toBe("blocked");
+  expect(parseChoice({ ...v, promptObserved: false, decision: "legacy-layout" })?.decision).toBe(
+    "legacy-layout",
+  );
+  expect(
+    observeIosKoreanDirectoryFailure("XCTAssertTrue failed - BARO_KOREAN_SEPARATE_CHOICE_MISSING")
+      .assertionCode,
+  ).toBe("BARO_KOREAN_SEPARATE_CHOICE_MISSING");
+});
+test("new setup path evidence cannot replace actual composition or silently discard both setup observations", () => {
+  expect(
+    iosKoreanDirectoryResultSchema.parse({
+      ...result,
+      separateKeyboardChosen: true,
+      settingsLayoutChoiceObserved: false,
+    }).softwareJamoTapCount,
+  ).toBe(6);
+  expect(
+    iosKoreanDirectoryResultSchema.parse({
+      ...result,
+      separateKeyboardChosen: false,
+      settingsLayoutChoiceObserved: true,
+    }).compositionCheckpoints,
+  ).toBe(4);
+  for (const patch of [
+    { separateKeyboardChosen: false, settingsLayoutChoiceObserved: false },
+    { separateKeyboardChosen: true },
+    { settingsLayoutChoiceObserved: false },
+    { separateKeyboardChosen: true, settingsLayoutChoiceObserved: false, typeTextCalls: 1 },
+    {
+      separateKeyboardChosen: true,
+      settingsLayoutChoiceObserved: false,
+      compositionCheckpoints: 0,
+    },
+  ])
+    expect(() => iosKoreanDirectoryResultSchema.parse({ ...result, ...patch })).toThrow();
+});

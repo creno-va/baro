@@ -1,0 +1,63 @@
+name: Mobile iOS keyboard Settings reference (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Full green main tooling SHA; fresh Settings only, no product app or account
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: mobile-ios-keyboard-reference-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      EXPO_PUBLIC_APP_ENV: preview
+      EXPO_PUBLIC_API_URL: https://preview.baro.site
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: apps/mobile/.node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun ci
+      - run: bun run security:patches
+      - name: Verify successful immutable candidate CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
+      - name: Observe only Korean Settings names on a fresh product-free Simulator
+        run: bun scripts/mobile-ios-keyboard-reference.ts
+      - name: Preserve only bounded Settings names and fixed failure fields
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mobile-ios-keyboard-reference-${{ inputs.target_sha }}
+          path: |
+            .wrangler/mobile-ios-keyboard-reference/receipt.json
+            .wrangler/mobile-ios-keyboard-reference/failure.json
+            .wrangler/mobile-ios-keyboard-reference/cleanup.json
+          if-no-files-found: warn

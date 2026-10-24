@@ -7,6 +7,14 @@ on:
         description: Full main tooling SHA; pinned compiled product app, no recompilation
         required: true
         type: string
+      device_profile:
+        description: Owned device; iPad supports only anonymous Home/Guide/large-font/audit
+        required: false
+        default: iphone-16
+        type: choice
+        options:
+          - iphone-16
+          - ipad-pro-13-m4
       smoke:
         description: Observe two cold launches and the anonymous initial screenshot without Metro
         required: false
@@ -70,6 +78,7 @@ jobs:
     timeout-minutes: 45
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
+      BARO_IOS_DEVICE_PROFILE: ${{ inputs.device_profile || 'iphone-16' }}
       EXPO_PUBLIC_APP_ENV: preview
       EXPO_PUBLIC_API_URL: https://preview.baro.site
       CI: '1'
@@ -87,6 +96,14 @@ jobs:
           OBSERVE_KOREAN_DIRECTORY: ${{ inputs.korean_directory }}
         run: |
           [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          if [ "$BARO_IOS_DEVICE_PROFILE" != "iphone-16" ]; then
+            test "$BARO_IOS_DEVICE_PROFILE" = "ipad-pro-13-m4"
+            test "$OBSERVE_HOME" = "true"
+            test "$OBSERVE_AUTH_CANCEL" != "true"
+            test "$OBSERVE_PUBLIC_DIRECTORY" != "true"
+            test "$OBSERVE_INPUT_REFERENCE" != "true"
+            test "$OBSERVE_KOREAN_DIRECTORY" != "true"
+          fi
           if [ "$OBSERVE_KOREAN_DIRECTORY" = "true" ]; then
             test "$OBSERVE_HOME" = "true"
             test "$OBSERVE_INPUT_REFERENCE" != "true"

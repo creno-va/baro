@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "kind": "local-preserved-ios-large-font-home-guide-verification",
+  "verifiedAt": "2026-10-24T16:31:09.417Z",
+  "workflowRunId": 40111075770,
+  "workflowConclusion": "success",
+  "artifactId": 12566773040,
+  "binarySourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "toolingSourceSha": "1906321ffd6e15df99e7eb75e24ccf695b9b008f",
+  "originalCompilerRunId": 40107260341,
+  "originalArchiveUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "archiveSha256": "1a74438c10579c08e87e2e2040c4f07f76f8bb1abf493914b95407bb9b3076ba",
+  "compilerReceiptSha256": "64289f840e769bb5011f56dd578286b257e26a06fa112909c36bc4c159736bb4",
+  "verificationSha256": "3e2855108823ec45051abb14941779909be97636f016712f95986ed5539c38b2",
+  "homeReceiptSha256": "c98ae6ba649e0a8928c8edc17574cd50ef3369b938e0fa470343af597e742470",
+  "largeFontReceiptSha256": "e74df1fd52546a3493a63a0113d7585fd56a01d5d67b3e2ef37b9baee218444a",
+  "uiReceiptSha256": "9b8aac1fecbd3e8e38df41c2551e908b995661e3fa2f51db783bfa152579a6e6",
+  "auditReceiptSha256": "8dfb9f4981f8e31c863761110375f6f99a052870d39c2f566a4800921312f2b7",
+  "images": [
+    {
+      "name": "home-ios.png",
+      "bytes": 221758,
+      "sha256": "077f76263db5bbcf019c8712888b47182d12b7df841676002874218c39a4cdd3",
+      "width": 1179,
+      "height": 2556
+    },
+    {
+      "name": "large-font-ios.png",
+      "bytes": 156562,
+      "sha256": "6c1ffdd2862b1beb46f87280bdd9ff37bcaae03010c3e89595cad595a3e4b68c",
+      "width": 1179,
+      "height": 2556
+    }
+  ],
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldNativeLaunches": 2,
+  "largestContentSizeReadbackVerified": true,
+  "homeSwipes": 5,
+  "guideSwipes": 7,
+  "guideTapAndHomeReturnVerified": true,
+  "audit": {
+    "viewportCount": 4,
+    "typesPerViewport": [
+      "contrast",
+      "dynamic-type",
+      "element-detection",
+      "hit-region",
+      "element-description",
+      "text-clipped",
+      "trait"
+    ],
+    "issueCount": 0
+  },
+  "anonymousImagesVisuallyReviewed": true,
+  "visualObservation": {
+    "baselineHangulWordBoundariesObserved": true,
+    "largestHeadingDominatesInitialViewport": true,
+    "allTypographyAccepted": false
+  },
+  "originalHomeContentVerified": false,
+  "visualReviewRequiredInOriginal": true,
+  "semanticTextScaleProven": false,
+  "voiceOverVerified": false,
+  "koreanCompositionVerified": false,
+  "recompiled": false,
+  "resigned": false,
+  "oauthVerified": false,
+  "privateDataAccess": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

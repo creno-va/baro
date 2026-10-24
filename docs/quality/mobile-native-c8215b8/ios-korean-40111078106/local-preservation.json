@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "kind": "local-preserved-ios-korean-setup-failure",
+  "verifiedAt": "2026-10-24T16:39:23.031Z",
+  "workflowRunId": 40111078106,
+  "workflowConclusion": "failure",
+  "artifactId": 12567450486,
+  "binarySourceSha": "c8215b886848b102c506b40e2176498455d63668",
+  "toolingSourceSha": "1906321ffd6e15df99e7eb75e24ccf695b9b008f",
+  "originalCompilerRunId": 40107260341,
+  "originalArchiveUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "bceb1e10539b86574ba46e8f557df1f83258a2a4b83005978d757a3818dfb80e",
+  "homeReceiptSha256": "4958f809b02c99f2554308045ed508dd198cb47a7ae5f06c41ea7592d572da6b",
+  "failureSha256": "db36306f86290bf5aad310f63a8619542ad9aa5d32b584402d5faf5737320270",
+  "homePng": {
+    "bytes": 221318,
+    "sha256": "d04f9b9803d363cc209c0c32cc97166ed2ed8c21e83f06fcd76d32637f3b3deb"
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldNativeLaunches": 2,
+  "setupStage": "layout",
+  "assertionCode": "BARO_KOREAN_LAYOUT_MISSING",
+  "compositionCheckpointsObserved": 0,
+  "setupControl": {
+    "stage": "layout",
+    "cellCount": 0,
+    "buttonCount": 0,
+    "textCount": 0,
+    "ownersOverlap": true,
+    "cellQuerySource": "known-descendant",
+    "selection": "none",
+    "scrolls": 0
+  },
+  "layoutStatus": {
+    "stage": "before-selection",
+    "traitSelected": false,
+    "valueClass": "absent",
+    "doneButtonCount": 1,
+    "doneHittable": true,
+    "doneInNavigationBar": true,
+    "standardObserved": false,
+    "tenKeyObserved": false,
+    "koreanTitleObserved": true
+  },
+  "koreanKeyboardVerified": false,
+  "productInputFailureConfirmed": false,
+  "rootCauseConfirmed": false,
+  "rawHierarchyExported": false,
+  "rawXcresultExported": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

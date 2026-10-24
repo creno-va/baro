@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "kind": "ios-keyboard-settings-reference-receipt",
+  "toolingSourceSha": "eb7ea62bb7edf978ea54048de05e7937ecbf776a",
+  "observedAt": "2026-10-24T17:08:56.580Z",
+  "device": {
+    "kind": "owned-simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "swiftTestSha256": "de6ba1068ff99c31ede12450eba045c736eaad184abe670167518860757a274d",
+  "projectGeneratorSha256": "c40739496c11c52dbb15844b1f4143fdb5112be4e43bebea2e8a6b8074473a18",
+  "projectGeneratorVersion": "1.28.1",
+  "productAbsentBeforeAndAfter": true,
+  "productCompiled": false,
+  "productInstalled": false,
+  "referenceAppInstalled": false,
+  "uiTestRunnerCompiled": true,
+  "operatorAccountEntered": false,
+  "commandLogsExported": false,
+  "screenshotsExported": false,
+  "rawXcresultExported": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "result": {
+    "kind": "ios-owned-korean-settings-control-reference-only",
+    "screen": "Korean",
+    "doneObserved": true,
+    "controls": [
+      {
+        "kind": "cell",
+        "label": "Add to English (US) Keyboard"
+      },
+      {
+        "kind": "cell",
+        "label": "Add New Keyboard"
+      },
+      {
+        "kind": "cell",
+        "label": "English (US)"
+      },
+      {
+        "kind": "cell",
+        "label": "Emoji"
+      },
+      {
+        "kind": "cell",
+        "label": "Add New Keyboard"
+      },
+      {
+        "kind": "button",
+        "label": "checkmark"
+      },
+      {
+        "kind": "button",
+        "label": "chevron"
+      },
+      {
+        "kind": "button",
+        "label": "Add New Keyboard"
+      },
+      {
+        "kind": "static-text",
+        "label": "Add to English (US) Keyboard"
+      },
+      {
+        "kind": "static-text",
+        "label": "Add New Keyboard"
+      },
+      {
+        "kind": "static-text",
+        "label": "English (US)"
+      },
+      {
+        "kind": "static-text",
+        "label": "Emoji"
+      }
+    ],
+    "layoutSelected": false,
+    "productInputVerified": false,
+    "koreanKeyboardVerified": false,
+    "rawHierarchyExported": false,
+    "rawValuesExported": false,
+    "screenshotsExported": false,
+    "rawXcresultExported": false
+  },
+  "simulatorDeleted": true,
+  "privateResultsRemoved": true
+}

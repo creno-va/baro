@@ -45,42 +45,53 @@ export const iosDirectorySoftwareSearchResultSchema = iosDirectoryResultSchema
     searchSubmitControlWithinKeyboard: z.literal(true),
     searchSubmitTapped: z.literal(true),
   });
-export const iosKoreanDirectoryResultSchema = z.strictObject({
-  kind: z.literal("ios-public-directory-korean-software-composition"),
-  applicationId: z.literal("site.baro.app.preview"),
-  initialReadyState: z.enum(["empty", "cards"]),
-  keyboardSetup: z.literal("owned-simulator-settings-ui"),
-  keyboardLayout: z.literal("korean-2-set"),
-  softwareJamoTapCount: z.literal(6),
-  compositionCheckpoints: z.literal(4),
-  compositionRetained: z.literal(true),
-  spaceCommitVerified: z.literal(true),
-  spaceDeletionVerified: z.literal(true),
-  appendAfterCommitVerified: z.literal(true),
-  keyboardObserved: z.literal(true),
-  focusedInputAboveKeyboard: z.literal(true),
-  searchSubmitMethod: z.literal("software-keyboard-search"),
-  searchSubmitControlKind: z.enum(["button", "key"]),
-  searchCompletedWithoutError: z.literal(true),
-  keyboardDismissed: z.literal(true),
-  landscapeInputRetained: z.literal(true),
-  portraitInputRetained: z.literal(true),
-  homeReturnObserved: z.literal(true),
-  publicDataNavigation: z.literal(true),
-  profileOpened: z.literal(false),
-  contactOpened: z.literal(false),
-  remoteMutationPerformed: z.literal(false),
-  authenticationNavigation: z.literal(false),
-  privateDataAccess: z.literal(false),
-  typeTextCalls: z.literal(0),
-  pastePerformed: z.literal(false),
-  preferencesDatabaseEdited: z.literal(false),
-  rawInputExported: z.literal(false),
-  koreanKeyboardVerified: z.literal(true),
-  voiceOverVerified: z.literal(false),
-  physicalDeviceVerified: z.literal(false),
-  httpTransportSeparatelyObserved: z.literal(false),
-});
+export const iosKoreanDirectoryResultSchema = z
+  .strictObject({
+    kind: z.literal("ios-public-directory-korean-software-composition"),
+    applicationId: z.literal("site.baro.app.preview"),
+    initialReadyState: z.enum(["empty", "cards"]),
+    keyboardSetup: z.literal("owned-simulator-settings-ui"),
+    keyboardLayout: z.literal("korean-2-set"),
+    separateKeyboardChosen: z.boolean().optional(),
+    settingsLayoutChoiceObserved: z.boolean().optional(),
+    softwareJamoTapCount: z.literal(6),
+    compositionCheckpoints: z.literal(4),
+    compositionRetained: z.literal(true),
+    spaceCommitVerified: z.literal(true),
+    spaceDeletionVerified: z.literal(true),
+    appendAfterCommitVerified: z.literal(true),
+    keyboardObserved: z.literal(true),
+    focusedInputAboveKeyboard: z.literal(true),
+    searchSubmitMethod: z.literal("software-keyboard-search"),
+    searchSubmitControlKind: z.enum(["button", "key"]),
+    searchCompletedWithoutError: z.literal(true),
+    keyboardDismissed: z.literal(true),
+    landscapeInputRetained: z.literal(true),
+    portraitInputRetained: z.literal(true),
+    homeReturnObserved: z.literal(true),
+    publicDataNavigation: z.literal(true),
+    profileOpened: z.literal(false),
+    contactOpened: z.literal(false),
+    remoteMutationPerformed: z.literal(false),
+    authenticationNavigation: z.literal(false),
+    privateDataAccess: z.literal(false),
+    typeTextCalls: z.literal(0),
+    pastePerformed: z.literal(false),
+    preferencesDatabaseEdited: z.literal(false),
+    rawInputExported: z.literal(false),
+    koreanKeyboardVerified: z.literal(true),
+    voiceOverVerified: z.literal(false),
+    physicalDeviceVerified: z.literal(false),
+    httpTransportSeparatelyObserved: z.literal(false),
+  })
+  .refine(
+    (v) =>
+      (v.separateKeyboardChosen === undefined && v.settingsLayoutChoiceObserved === undefined) ||
+      (v.separateKeyboardChosen !== undefined &&
+        v.settingsLayoutChoiceObserved !== undefined &&
+        (v.separateKeyboardChosen || v.settingsLayoutChoiceObserved)),
+  );
+
 const directoryResultSchema = z.discriminatedUnion("kind", [
   iosDirectoryResultSchema,
   iosDirectorySoftwareSearchResultSchema,
@@ -119,6 +130,7 @@ const assertionCodes = [
   "BARO_KOREAN_SETTINGS_CONTROL_MISSING",
   "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED",
   "BARO_KOREAN_LAYOUT_MISSING",
+  "BARO_KOREAN_SEPARATE_CHOICE_MISSING",
   "BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING",
   "BARO_KOREAN_SETTINGS_DONE_MISSING",
   "BARO_KOREAN_SETTINGS_READBACK_MISSING",
@@ -302,6 +314,36 @@ const koreanLayoutStatusSchema = z
     koreanTitleObserved: z.boolean(),
   })
   .refine((v) => !v.doneHittable || v.doneButtonCount === 1);
+const koreanSeparateChoiceSchema = z
+  .strictObject({
+    koreanTitleObserved: z.boolean(),
+    promptObserved: z.boolean(),
+    cellCount: z.number().int().min(0).max(8),
+    buttonCount: z.number().int().min(0).max(8),
+    ownersOverlap: z.boolean(),
+    selection: z.enum(["cell", "button", "none", "ambiguous"]),
+    decision: z.enum(["legacy-layout", "separate-keyboard", "blocked"]),
+  })
+  .refine((v) => {
+    if (
+      !koreanSetupControlSchema.safeParse({
+        stage: "layout",
+        cellCount: v.cellCount,
+        buttonCount: v.buttonCount,
+        textCount: 0,
+        ownersOverlap: v.ownersOverlap,
+        selection: v.selection,
+        scrolls: 0,
+      }).success
+    )
+      return false;
+    const actionable = v.selection === "cell" || v.selection === "button";
+    return v.decision === "legacy-layout"
+      ? !v.koreanTitleObserved || !v.promptObserved
+      : v.koreanTitleObserved &&
+          v.promptObserved &&
+          (v.decision === "separate-keyboard" ? actionable : !actionable);
+  });
 export function observeIosKoreanDirectoryFailure(output: string) {
   const prefix = "BARO_KOREAN_UI_STATUS:",
     history: z.infer<typeof koreanStatusSchema>[] = [];
@@ -362,8 +404,24 @@ export function observeIosKoreanDirectoryFailure(output: string) {
       /* Only fixed state classes, counters and presence flags are retained. */
     }
   }
+  const choicePrefix = "BARO_KOREAN_SEPARATE_CHOICE:";
+  let separateChoice: z.infer<typeof koreanSeparateChoiceSchema> | undefined;
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(choicePrefix))
+    .slice(-2)) {
+    try {
+      const parsed = koreanSeparateChoiceSchema.safeParse(
+        JSON.parse(line.slice(choicePrefix.length)),
+      );
+      if (parsed.success) separateChoice = parsed.data;
+    } catch {
+      /* No raw system labels or values in product diagnostics. */
+    }
+  }
   return {
     history,
+    ...(separateChoice ? { separateChoice } : {}),
     layoutStatus,
     setupControl,
     setupStage: setupStages.find((stage) => stage === lastSetup) ?? null,
