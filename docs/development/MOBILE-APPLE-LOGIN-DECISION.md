@@ -7,6 +7,10 @@
 - 범위: [모바일 실행 계획](./MOBILE-EXECUTION.md)의 M3 로그인 심사와 M8 제출 준비.
   기존 3사 검증·웹 UI 개편·원격 실행을 중단하는 조건이 아니다.
 
+2026-10-24 사용자는 Apple Developer Program 회원 계정이 있다고 직접 확인했다.
+이는 실제 Services ID·Team/Key·서명·callback 설정이나 실제 Apple 로그인 성공을 입증하지 않는다.
+공식 버튼 자산은 Apple 제공 파일을 변경하지 않고 앱 UI 용도로 사용한다.
+
 ## 승인한 결정
 
 **권고: 기존 Google/Naver/Kakao를 유지하면서 Sign in with Apple을 모바일 로그인 선택지로 추가한다.**
@@ -300,3 +304,18 @@ DELETE·지원 provider·원래 owner를 전달한다. 삭제의 exchange/status
 production build/bundle/dry-run·실제 로컬 workerd와 양 OS Metro export 통과.
 Metro 입력에 변화가 없는 AI server 통합은 실제 native/기기 증거로 승격하지 않는다.
 모바일 화면·저장소·삭제 정리 adapter와 실제 Apple/기기 인수는 후속이다.
+
+## 모바일 삭제 결과 전용 전송 준비
+
+`apps/mobile/src/platform/auth/deletion-transport.ts`는 삭제 exchange/status/cancel의
+정확한 same-origin POST만 허용한다. 인증·현재 owner scope에 의존하지 않으며
+Cookie/Authorization/Expo cookie·origin을 포함한 입력 header를 폐기하고 고정 Origin,
+JSON, contract2만 보낸다. fetch는 credentials omit·redirect error·no-store·no-referrer를
+사용하며 응답의 Set-Cookie와 clone의 Set-Cookie도 제거한다. 삭제된 A 계정의 지연된
+결과가 새 B 계정의 쿠키를 읽거나 덮어쓰지 않도록 별도 JsonRequester에 연결했다.
+이 전송은 삭제 proof만으로 결과를 읽으며 새 인증 권한을 부여하지 않는다.
+
+합성 포트 검증은 header·endpoint/version·redirect/abort 거절과 A→B 교체 중 지연 응답의
+credential/사건 작업 저장 불변을 검사한다. 실제 OS cookie jar 전송/기기 로그인 성공이나
+삭제 UI·pending 저장·owner별 정리까지 인수한 결과는 아니다. 후속 모바일 소비에서
+삭제 pending을 일반 로그인 pending과 분리하고 결과를 확인한 owner만 정리해야 한다.
