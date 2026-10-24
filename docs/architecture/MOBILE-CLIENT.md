@@ -624,6 +624,13 @@ Text/TextField 기본은 OS font scaling·배율 상한 없음·자연 줄바꿈
 multiline 상단 정렬과 focus border를 함께 처리한다. Screen은 기존 Stack top inset/하단·
 좌우 safe area와 한 스크롤 소유를 유지하며 입력 처리와 drag 키보드 닫기를 제공한다.
 
+본문 Text의 기본 줄바꿈은 iOS `hangul-word`, Android `balanced`를 사용하며 caller가
+명시한 native 전략은 보존한다. [RN Text의 공식 prop](https://reactnative.dev/docs/text#linebreakstrategyios-ios)과
+실제 소비 RN0.88 types/native 매핑을 확인했다. 문구/공백·font scaling·배율/행/높이 상한은
+추가하지 않는다. source9436 두 OS Home PNG의 단독 `요` 행을 줄이려는 후보이며 실제 개선은
+새 binary source의 기본/최대 글자·탐색·OS audit으로 검증한다. Android balanced를 CSS keep-all과
+같은 기능이라고 주장하거나 renderer props 검사로 실제 line layout 인수를 대신하지 않는다.
+
 회귀는 정본 의미·본문/pressed/disabled label4.5:1·유일한 조작 경계3:1 대비, RN responder의
 pressed·disabled 방지, 체크/라디오 상태, focus/readonly, 합성320dp/2배 글자/회전과 safe area·
 list 스크롤 props를 검사한다. Yoga의 실제 줄바꿈/기기 font·키보드/VoiceOver/TalkBack 성공을
