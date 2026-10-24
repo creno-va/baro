@@ -79,7 +79,7 @@ const assertionCodes = [
   "BARO_DIRECTORY_BACK_MISSING",
   "BARO_DIRECTORY_HOME_RETURN_MISSING",
 ] as const;
-const inputSignatureSchema = z.strictObject({
+export const inputSignatureSchema = z.strictObject({
   stringObserved: z.boolean(),
   expectedLengthMatches: z.boolean(),
   caseFoldMatches: z.boolean(),

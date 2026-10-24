@@ -31,6 +31,12 @@ import {
   verifyIosHomeUiReceipt,
 } from "./mobile-ios-home-ui-test";
 import {
+  type iosInputReferenceReceiptSchema,
+  observeIosInputReferenceFailure,
+  runIosInputReference,
+  verifyIosInputReferenceReceipt,
+} from "./mobile-ios-input-reference";
+import {
   iosInternalObservationOptions,
   iosLargestContentSize,
   readIosUiCapabilities,
@@ -43,8 +49,9 @@ import { observePreviewApi } from "./mobile-preview-artifact";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 async function main() {
   if (process.platform !== "darwin") throw new Error("INTERNAL_IOS_MAC_REQUIRED");
-  const { home, largeFont, uiTest, accessibilityAudit, authCancel, publicDirectory } =
-    iosInternalObservationOptions(process.argv.slice(2));
+  const options = iosInternalObservationOptions(process.argv.slice(2)),
+    { home, largeFont, uiTest, accessibilityAudit, authCancel, publicDirectory } = options,
+    inputReference = "inputReference" in options && options.inputReference === true;
   const root = process.cwd(),
     env = internalIosEnvironment(process.env),
     tooling = env.TARGET_SHA as string,
@@ -63,6 +70,7 @@ async function main() {
     "accessibility-audit.json",
     "auth-cancel-ui.json",
     "directory-ui.json",
+    "input-reference.json",
   ])
     if (await Bun.file(resolve(base, name)).exists())
       throw new Error("INTERNAL_IOS_FRESH_OUTPUT_REQUIRED");
@@ -77,6 +85,7 @@ async function main() {
     uiTestFailure: ReturnType<typeof observeHomeUiFailure> | null = null,
     authCancelFailure: ReturnType<typeof observeIosAuthCancelFailure> | null = null,
     directoryFailure: ReturnType<typeof observeIosDirectoryFailure> | null = null,
+    inputReferenceFailure: ReturnType<typeof observeIosInputReferenceFailure> | null = null,
     lastCommand: { exitCode: number; timedOut: boolean; category: string } | null = null;
   async function command(args: string[], cwd = root, timeout = 120000) {
     lastCommand = null;
@@ -102,6 +111,8 @@ async function main() {
           authCancelFailure = observeIosAuthCancelFailure(`${out}\n${err}`);
         if (phase === "public-directory-xcuitest")
           directoryFailure = observeIosDirectoryFailure(`${out}\n${err}`);
+        if (phase === "uikit-input-reference-xcuitest")
+          inputReferenceFailure = observeIosInputReferenceFailure(`${out}\n${err}`);
         lastCommand = {
           exitCode: exit,
           timedOut: expired,
@@ -320,6 +331,45 @@ async function main() {
       flag: "wx",
     });
     console.log("INTERNAL_IOS_COLD_LAUNCH_OBSERVED_VISUAL_REVIEW_REQUIRED");
+    if (inputReference) {
+      phase = "uikit-input-reference-xcuitest";
+      privacy.enterPublicData();
+      if (privacy.explicitScreenshotReadsAllowed || privacy.persistCommandLogs)
+        throw Error("INTERNAL_IOS_REFERENCE_PRIVACY_BOUNDARY_REQUIRED");
+      const observation = await runIosInputReference({
+        root,
+        owned,
+        device,
+        captureSuppressed: !privacy.explicitScreenshotReadsAllowed && !privacy.persistCommandLogs,
+        command,
+      });
+      if (guardRequests) throw Error("INTERNAL_IOS_UNEXPECTED_METRO_REQUEST");
+      const proof = verifyIosInputReferenceReceipt(
+        {
+          ...iosAuthCancelBaseSchema.strip().parse(receipt),
+          kind: "ios-bundled-home-with-separate-uikit-input-reference",
+          observedAt: new Date().toISOString(),
+          ...observation,
+          referenceAppAndRunnerCompiled: true,
+          productRecompiled: false,
+          productResigned: false,
+          productDirectoryNavigated: false,
+          explicitScreenshotsSuppressedBeforeReference: true,
+          hostRawCommandLogsPersistedAfterBoundary: false,
+          rawXcresultExported: false,
+          rawUiHierarchyExported: false,
+        } satisfies z.input<typeof iosInputReferenceReceiptSchema>,
+        receipt,
+      );
+      await writeFile(
+        resolve(base, "input-reference.json"),
+        `${JSON.stringify(proof, null, 2)}\n`,
+        {
+          flag: "wx",
+        },
+      );
+      console.log("INTERNAL_IOS_UIKIT_REFERENCE_OBSERVED_PRODUCT_INPUT_UNVERIFIED");
+    }
     if (authCancel) {
       phase = "native-auth-cancel-xcuitest";
       privacy.enterAuthentication();
@@ -522,6 +572,11 @@ async function main() {
         "INTERNAL_IOS_DIRECTORY_IDENTITY_MISMATCH",
         "INTERNAL_IOS_DIRECTORY_OWNED_MAC_CI_REQUIRED",
         "INTERNAL_IOS_DIRECTORY_PRIVACY_BOUNDARY_REQUIRED",
+        "INTERNAL_IOS_REFERENCE_RESULT_REQUIRED",
+        "INTERNAL_IOS_REFERENCE_IDENTITY_MISMATCH",
+        "INTERNAL_IOS_REFERENCE_OWNED_MAC_CI_REQUIRED",
+        "INTERNAL_IOS_REFERENCE_PRIVACY_BOUNDARY_REQUIRED",
+        "INTERNAL_IOS_REFERENCE_SIGNATURE_SOURCE_REQUIRED",
         "INTERNAL_IOS_AUDIT_SINGLE_RESULT_REQUIRED",
         "INTERNAL_IOS_AUDIT_IDENTITY_MISMATCH",
         "INTERNAL_IOS_ACCESSIBILITY_ISSUES_FOUND",
@@ -548,7 +603,7 @@ async function main() {
       ]);
     await writeFile(
       resolve(base, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, directoryFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: tooling, phase, code: known.has(code) ? code : xcodeControlBuildFailure(error), lastCommand, uiTestFailure, authCancelFailure, directoryFailure, inputReferenceFailure, nativeProcessLaunchVerified: false, homeContentVerified: false, remoteApiVerified: false, oauthVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("INTERNAL_IOS_REVERIFY_FAILED");

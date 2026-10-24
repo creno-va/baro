@@ -58,6 +58,16 @@ export function verifyIosContentSizeReadback(output: string) {
   return iosLargestContentSize;
 }
 export function iosInternalObservationOptions(args: string[]) {
+  if (args.length === 2 && args[0] === "--home" && args[1] === "--input-reference")
+    return {
+      home: true,
+      largeFont: false,
+      uiTest: false,
+      accessibilityAudit: false,
+      authCancel: false,
+      publicDirectory: false,
+      inputReference: true,
+    };
   if (args.length === 2 && args[0] === "--home" && args[1] === "--public-directory")
     return {
       home: true,

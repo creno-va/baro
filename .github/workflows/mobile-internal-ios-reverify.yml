@@ -43,6 +43,12 @@ on:
         default: false
         type: boolean
 
+      input_reference:
+        description: Separate synthetic UIKit input reference only; no product directory navigation or input acceptance
+        required: false
+        default: false
+        type: boolean
+
 permissions:
   contents: read
   actions: read
@@ -71,8 +77,17 @@ jobs:
           OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
           OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
+          OBSERVE_INPUT_REFERENCE: ${{ inputs.input_reference }}
         run: |
           [[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]
+          if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then
+            test "$OBSERVE_HOME" = "true"
+            test "$OBSERVE_PUBLIC_DIRECTORY" != "true"
+            test "$OBSERVE_AUTH_CANCEL" != "true"
+            test "$OBSERVE_LARGE_FONT" != "true"
+            test "$OBSERVE_UI_TEST" != "true"
+            test "$OBSERVE_ACCESSIBILITY_AUDIT" != "true"
+          fi
           if [ "$OBSERVE_LARGE_FONT" = "true" ]; then test "$OBSERVE_HOME" = "true"; fi
           if [ "$OBSERVE_UI_TEST" = "true" ]; then test "$OBSERVE_LARGE_FONT" = "true"; fi
           if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then test "$OBSERVE_UI_TEST" = "true"; fi
@@ -110,7 +125,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
       - name: Require actual Apple Foundation signature comparisons
-        if: inputs.public_directory
+        if: inputs.public_directory || inputs.input_reference
         env:
           BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED: '1'
         run: bun test tests/mobile-ios-directory-signature.test.ts
@@ -138,6 +153,7 @@ jobs:
           OBSERVE_ACCESSIBILITY_AUDIT: ${{ inputs.accessibility_audit }}
           OBSERVE_AUTH_CANCEL: ${{ inputs.auth_cancel }}
           OBSERVE_PUBLIC_DIRECTORY: ${{ inputs.public_directory }}
+          OBSERVE_INPUT_REFERENCE: ${{ inputs.input_reference }}
         run: |
           args=()
           if [ "$OBSERVE_HOME" = "true" ]; then args+=(--home); fi
@@ -146,6 +162,7 @@ jobs:
           if [ "$OBSERVE_ACCESSIBILITY_AUDIT" = "true" ]; then args+=(--accessibility-audit); fi
           if [ "$OBSERVE_AUTH_CANCEL" = "true" ]; then args+=(--auth-cancel); fi
           if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then args+=(--public-directory); fi
+          if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then args+=(--input-reference); fi
           bun scripts/mobile-internal-ios-reverify.ts "${args[@]}"
           if [ "$OBSERVE_HOME" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/home.json
@@ -167,6 +184,9 @@ jobs:
           if [ "$OBSERVE_PUBLIC_DIRECTORY" = "true" ]; then
             test -s .wrangler/mobile-internal-ios-reverify/directory-ui.json
           fi
+          if [ "$OBSERVE_INPUT_REFERENCE" = "true" ]; then
+            test -s .wrangler/mobile-internal-ios-reverify/input-reference.json
+          fi
       - name: Observe SDK UI command documentation without reading or changing device state
         run: bun scripts/mobile-ios-ui-capabilities.ts
       - name: Preserve scoped unchanged binary and observations
@@ -186,6 +206,7 @@ jobs:
             .wrangler/mobile-internal-ios-reverify/accessibility-audit.json
             .wrangler/mobile-internal-ios-reverify/auth-cancel-ui.json
             .wrangler/mobile-internal-ios-reverify/directory-ui.json
+            .wrangler/mobile-internal-ios-reverify/input-reference.json
             .wrangler/mobile-internal-ios-reverify/large-font.json
             .wrangler/mobile-internal-ios-reverify/large-font-ios.png
           if-no-files-found: warn
