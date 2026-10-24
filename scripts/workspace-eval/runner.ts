@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { V2_INTAKE_POLICY, type V2Fact } from "../../src/contracts/v2";
 import { MODEL_ID, type Phase, prompts } from "../../src/server/modules/llm-gateway/prompts";
+import { providerWire } from "../../src/server/modules/llm-gateway/provider-wire";
 import {
   createLlmGateway,
   gatewayTransportIdentity,
@@ -76,7 +77,7 @@ export async function evaluationIdentity() {
       model: MODEL_ID,
       policy: V2_INTAKE_POLICY,
       wire: ["workspace_questions", "workspace_summary", "workspace_chat", "workspace_audit"].map(
-        (phase) => prepareGatewayWireInput(phase as Phase, {}),
+        (phase) => providerWire(prepareGatewayWireInput(phase as Phase, {})),
       ),
     }),
   };

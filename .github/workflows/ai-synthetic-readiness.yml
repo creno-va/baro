@@ -3,12 +3,27 @@ name: Manual synthetic Gemini acceptance
 on:
   workflow_dispatch:
     inputs:
+      feature_case:
+        description: One AI feature (max3), all seven (max21), or native_materials (no models)
+        required: true
+        default: workspace_questions
+        type: choice
+        options:
+          - workspace_questions
+          - workspace_summary
+          - workspace_chat
+          - media
+          - tools_business
+          - tools_property
+          - tools_registry
+          - all
+          - native_materials
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
         required: true
         type: string
       confirmation:
-        description: Type single-synthetic-probe to allow at most three model attempts
+        description: Type single-synthetic-probe for max3 attempts per selected feature (all=max21)
         required: true
         type: string
 
@@ -24,7 +39,12 @@ jobs:
   probe:
     if: github.ref == 'refs/heads/main' && github.sha == inputs.candidate_sha && inputs.confirmation == 'single-synthetic-probe'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        feature_case: ${{ fromJSON(inputs.feature_case == 'all' && '["workspace_questions","workspace_summary","workspace_chat","media","tools_business","tools_property","tools_registry"]' || format('["{0}"]', inputs.feature_case)) }}
+    timeout-minutes: ${{ matrix.feature_case == 'native_materials' && 45 || 10 }}
     environment:
       name: preview
       deployment: false
@@ -44,16 +64,21 @@ jobs:
           bun ci
           bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
       - name: Run explicitly requested live synthetic acceptance
+        if: matrix.feature_case != 'native_materials'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           READINESS_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          READINESS_FEATURE_CASE: ${{ matrix.feature_case }}
         run: bun scripts/run-ai-readiness.ts
+      - name: Validate native material processing without model calls
+        if: matrix.feature_case == 'native_materials'
+        run: bun run validate:native
       - name: Save finite observation without prompts or provider bodies
-        if: always()
+        if: always() && matrix.feature_case != 'native_materials'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ai-synthetic-${{ inputs.candidate_sha }}
+          name: ai-synthetic-${{ matrix.feature_case }}-${{ inputs.candidate_sha }}
           path: .wrangler/readiness/ai.json
           if-no-files-found: error
           retention-days: 7

@@ -5,11 +5,13 @@ import {
   type V2Fact,
   type V2Summary,
   type V2TimelineEntry,
+  type V2ToolResult,
   v2ActionSchema,
   v2FactSchema,
   v2MessageSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
+  v2ToolResultsSchema,
 } from "../../contracts/v2";
 import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2/publication-authority";
 import {
@@ -41,6 +43,7 @@ export function createV2WorkspaceResponseRepository(
         parties: V2Summary["parties"];
         actions: V2Action[];
         timeline: V2TimelineEntry[];
+        toolResults?: V2ToolResult[];
       },
       onFailure?: (failure: WorkspacePublicationFailure) => void,
     ) {
@@ -55,6 +58,7 @@ export function createV2WorkspaceResponseRepository(
         const parties = parse(v2SummarySchema.shape.parties.max(5), input.parties);
         const actions = parse(z.array(v2ActionSchema).max(5), input.actions);
         const timeline = parse(z.array(v2TimelineEntrySchema).max(5), input.timeline);
+        const toolResults = parse(v2ToolResultsSchema, input.toolResults ?? []);
         diagnostics.at("confirmed_summary");
         const current = await core
           .statement(
@@ -234,7 +238,10 @@ export function createV2WorkspaceResponseRepository(
             ),
           );
         diagnostics.at("message_encryption");
-        const payload = await core.encrypt("v2_messages", message.id, g.ownerId, 1, message);
+        const payload = await core.encrypt("v2_messages", message.id, g.ownerId, 1, {
+          ...message,
+          ...(toolResults.length ? { toolResults } : {}),
+        });
         statements.push(
           core.statement(
             `INSERT INTO v2_messages(id,workspace_id,workspace_revision,operation_id,role,safety,encrypted_payload,created_at) SELECT ?,?,?,?,'assistant','validated',?,? WHERE ${sqlClaim}`,

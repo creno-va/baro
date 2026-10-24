@@ -164,6 +164,16 @@ export function createWorkspacesApi(
       ),
     );
   });
+  app.get("/:id/messages/:messageId/tool-results", async (c) => {
+    const a = await customerAccess(c);
+    if (a.response) return a.response;
+    emptyQuery.parse(c.req.query());
+    const s = await service(c.env, a.ownerId);
+    return c.json({
+      schemaVersion: "2",
+      results: await s.toolResults(a.ownerId, c.req.param("id"), c.req.param("messageId")),
+    });
+  });
   app.get("/:id/summary", async (c) => {
     const a = await customerAccess(c);
     if (a.response) return a.response;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ProcessingArtifactScope } from "../../db/v2-paid-contracts";
+import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
 import { MAX_ARTIFACT_BYTES, ProcessingError } from "../file-processing/protocol";
 import {
   authorize,
@@ -7,10 +8,11 @@ import {
   type ProcessingCosts,
 } from "../file-processing/transport";
 import { digest } from "../files/binary";
+import { providerStatus } from "./attempts";
 import { readModelCompletion } from "./completion";
 import { MODEL_ID } from "./prompts";
 import type { GatewayBinding } from "./service";
-import { gatewayResponse } from "./transport";
+import { type GatewayRequestIssue, gatewayRequestIssue, gatewayResponse } from "./transport";
 import { isDocumentedVisionSupport, prepareVisionWire, type VisionCapability } from "./vision-wire";
 
 export const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo" as const;
@@ -97,6 +99,12 @@ export function createMediaGateway(
     /** Server-owned documented support or a separately verified live capability. Never client input. */
     visionCapability?: (now: string) => Promise<VisionCapability | null>;
     clock?: () => string;
+    observeFailure?: (failure: {
+      phase: "vision" | "asr";
+      category: DependencyCategory;
+      httpStatus: number | null;
+      requestIssue?: GatewayRequestIssue;
+    }) => void;
   },
 ) {
   const clock = () => (options.clock ?? (() => new Date().toISOString()))();
@@ -206,6 +214,17 @@ export function createMediaGateway(
       if (!(await authorize(access))) throw new ProcessingError("STALE_REVISION");
       return raw;
     } catch (error) {
+      try {
+        const issue = gatewayRequestIssue(error);
+        options.observeFailure?.({
+          phase: model === WHISPER_MODEL ? "asr" : "vision",
+          category: dependencyCategory(error),
+          httpStatus: providerStatus(error),
+          ...(issue ? { requestIssue: issue } : {}),
+        });
+      } catch {
+        /* Optional diagnostics cannot change the processing outcome. */
+      }
       if (!settled) {
         timedOut = sent;
         try {

@@ -12,6 +12,64 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("tool cards distinguish unconfigured and test responses on desktop and mobile", async ({
+  page,
+}) => {
+  await page.goto(base);
+  await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.workspace["synthetic-case"].messages = [
+      {
+        id: "synthetic-tool-message",
+        role: "assistant",
+        text: "외부 조회의 연결 상태를 확인했어요.",
+        status: "complete",
+        createdAt: "2026-10-24T00:00:00.000Z",
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await page.route(
+    "**/api/v2/cases/synthetic-case/messages/synthetic-tool-message/tool-results",
+    (route) =>
+      route.fulfill({
+        json: {
+          schemaVersion: "2",
+          results: [
+            {
+              id: "synthetic-tool-1",
+              tool: "hometax_status",
+              status: "not_configured",
+              title: "국세청 사업자 상태 조회",
+              sourceUrl: "https://www.data.go.kr/data/15081808/openapi.do",
+              observedAt: null,
+              rows: [],
+              notices: ["이 조회 서비스가 아직 연결되지 않아 실제 정보를 확인하지 못했어요."],
+            },
+            {
+              id: "synthetic-tool-2",
+              tool: "thecheat",
+              status: "test_data",
+              title: "더치트 피해 등록 조회",
+              sourceUrl: "https://apicenter.thecheat.co.kr/",
+              observedAt: "2026-10-24T00:00:00.000Z",
+              rows: [],
+              notices: ["실제 피해 등록 조회로 사용할 수 없어요."],
+            },
+          ],
+        },
+      }),
+  );
+  await page.reload();
+  await page.getByText("공공·외부 조회 내역", { exact: true }).click();
+  await expect(page.getByText("아직 연결되지 않음", { exact: true })).toBeVisible();
+  await expect(page.getByText("테스트 응답 · 실제 조회 아님", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "제공 기관 안내" })).toHaveCount(2);
+  await expect(page.locator(".workspace-tool-card").first().locator("time")).toHaveCount(0);
+  await captureCaseViewports(page, "tool-results");
+});
+
 async function useSessionHttpTransport(page: Page) {
   await page.evaluate(async () => {
     const corePath = "/src/client/api/core.ts";
