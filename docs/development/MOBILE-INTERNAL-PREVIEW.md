@@ -1073,3 +1073,36 @@ count/boolean만 남기며 label/package/component/키 입력/계층은 출력�
 Enter 원본 receipt는 그대로 읽되 재명명을 거부한다. 합성 parser/명령·복구 검증을 실제 키
 탭 성공으로 표현하지 않는다. 새 앱 pin/정확한 main CI 뒤 실제 Emulator에서 확인해야 한다.
 한국어 조합·TalkBack·실기기/전체 역할과 원격 API·OAuth·스토어 인수는 계속 별도다.
+
+## 새 검색 앱 Android/iPhone SDK compiler 인수 (#379)
+
+PR445 head `f0ae94c7e2d1811d5668689c4db41f9f995d105b`의 CI40052617643와 Android host
+preflight40052617656 SUCCESS 뒤 정상 통합했고, main `f4cf115e83a070fb2b05eda0cd11e4348464ad12`의
+CI40052811445도 SUCCESS다. b3eea74→f4cf115의 bundled product 입력 parity를 확인했다.
+tooling·문서만 추가했으므로 진행 중인 b3eea74 원본 compiler를 재시작하지 않는다.
+
+새 제품 source `b3eea741010b572158a01fc50b51e58aa13344c6`의 [Android40051994117](https://github.com/creno-va/baro/actions/runs/40051994117)은
+terminal SUCCESS이고 artifact12543907248의 성공 run/source/name/만료 아님을 대조했다.
+[원본 receipt](../quality/mobile-internal-android-2026-10-24/compiler-receipt-b3eea74.json)의 SHA256은
+`9caa6db3b188abcf1956b82ec47f284b55f9038f9fea6e6a15aabbc10c5e4a75`다.
+APK57,134,542bytes의 전체 SHA256은 `8da138d788c56b78f7671faa1a9eac6fcc3605ea1b8a8ee27f8934caf9aef41c`이며
+[독립 대조](../quality/mobile-internal-android-2026-10-24/compiler-independent-b3eea74.json)는 원본 byte/hash·
+HBC3,571,056bytes/05297913…·graph1456·폰트 byte/compiled family400/600/700와 실제 aapt2
+package/launch/min24/arm64-v8a+x86_64/Release non-debug metadata를 확인했다. aapt2의
+`minSdkVersion` 필드를 명시적으로 읽었고 기존 aapt parser의 raw format을 바꾸지 않았다.
+공개 Expo 개발 cert의 compiler attestation은 보존한다. local cert 독립 readback은 false이며
+후속 fresh SDK 재검증에서 actual signature를 다시 확인해야 한다. 아직 새 앱 실행/입력 해결은 아니다.
+
+[iPhone SDK40052099884](https://github.com/creno-va/baro/actions/runs/40052099884)도 terminal SUCCESS다.
+[원본 receipt](../quality/mobile-ios-device-sdk-2026-10-24/receipt-b3eea74.json)의 observedAt은
+2026-10-24T02:07:33.186Z, SHA256은 `b740b30e5481661171b75a3b7fa60f1b0f236319d232fd2c68fe49c23f4f1bfb`다.
+ZIP13,808,649bytes/30bbee5a…·실제 Info.plist/Mach-O iPhoneOS platform2/arm64·SDK26.5/min16.4·
+서명 없음·HBC3,583,012bytes/fb561553…·font·키/profile/map 부재를 [독립 대조](../quality/mobile-ios-device-sdk-2026-10-24/independent-b3eea74.json)했다.
+이전 source87dec15 기록과 이름이 다른 [unaccepted inspection](../quality/mobile-ios-device-sdk-2026-10-24/inspection-b3eea74.json)도 그대로 보존한다.
+unsigned/unprovisioned SDK compile이며 설치·실기기·스토어 성공이 아니다.
+
+iOS Simulator40051996500은 이 기록 시점 같은 run에서 컴파일 중이다. 관측 timeout으로
+재시작하지 않는다. Android는 성공 원본 pin을 먼저 통합하고 exact tooling main CI 후 독립적으로
+실제 키보드·소프트 Search/회전을 검증한다. iOS는 성공 원본 receipt/ZIP를 대조하고 pin을 별도
+통합한 뒤 검증하며 기존 pin에 대한 parity guard를 완화하지 않는다. 기존171989e의 성공/실패/원본은
+보존하며 새 앱의 실제 안정성·한국어/reader·계정/API/physical/store 인수로 적용하지 않는다.
