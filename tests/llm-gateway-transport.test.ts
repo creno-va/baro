@@ -23,6 +23,19 @@ test("HTTP request diagnostics classify thinking and schema settings without ret
   }
 });
 
+test("wrapped/string upstream diagnostics retain only a finite category", async () => {
+  for (const body of [
+    { description: "schema produces a constraint with too many states private sentinel" },
+    { error: "schema has too much branching private sentinel" },
+    { errors: [{ details: [{ message: "schema too complex private sentinel" }] }] },
+  ]) {
+    const error = await gatewayResponse(Response.json(body, { status: 400 })).catch((e) => e);
+    expect(gatewayRequestIssue(error)).toBe("schema_complexity");
+    expect(Object.keys(error as object)).toEqual(["status"]);
+    expect(String(error)).toBe("Error: GATEWAY_HTTP_ERROR");
+  }
+});
+
 for (const [status, body, category] of [
   [
     400,
