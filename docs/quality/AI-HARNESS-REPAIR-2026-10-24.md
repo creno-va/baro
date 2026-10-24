@@ -968,3 +968,15 @@ browser tests, accessibility/overflow checks and build/local Worker passed;
 actual changed-UI preview acceptance remains pending deployment. After integrating
 RN main7ec63528, frozen install and quick319/37files/3035 assertions passed;
 focused shared-client/recovery22/3files/115 assertions and docs also passed.
+
+
+A distinct Civil Act600 request then completed17:50:09–17:52:30Z on the same
+preview. Unlike the cached598/603 answer, this executed retrieval7444ms and
+reported legalRetrieval kind=statute, availability=verified, reason=null.
+Context9122ms, initial generation29278ms, final generation81265ms, audit10992ms
+and publication988ms completed; quotation resolution valid_span1 and all
+rejected/unavailable counts0. The chat displayed the600 interest-calculation
+article title, exact returned quotation and law.go.kr original link, with no
+case/timeline/action additions requested. This verifies a fresh source lookup
+path under2.6; its roughly2m20s duration remains a performance limitation. No
+unchanged failed request was replayed and no deadline was increased.
