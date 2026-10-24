@@ -178,6 +178,31 @@ test("wire changes retain a distinct execution evidence digest", async () => {
   expect(first?.evidenceHash).not.toBe(second?.evidenceHash);
 });
 
+test("frame and image profiles bind distinct exact wires under the same conservative resource ceiling", async () => {
+  const image = await input(),
+    frame = await input();
+  frame.wire = prepareVisionWire(new Uint8Array([255, 216, 255, 217]), "video_frame");
+  const bytes = new TextEncoder().encode(JSON.stringify(frame.wire));
+  frame.identity = await digest(bytes);
+  frame.byteLength = bytes.length;
+  expect(isBoundedVisionWire(frame.wire)).toBe(true);
+  expect(frame.wire.generationConfig.maxOutputTokens).toBe(2000);
+  const a = await policy().bounds(image, await runtimeDigest(image), now);
+  const b = await policy().bounds(frame, await runtimeDigest(frame), now);
+  expect(b).not.toBeNull();
+  expect(b?.quantities).toEqual(a?.quantities);
+  expect(b?.evidenceHash).not.toBe(a?.evidenceHash);
+  const altered = structuredClone(frame.wire);
+  altered.systemInstruction = image.wire.systemInstruction;
+  expect(isBoundedVisionWire(altered)).toBe(false);
+  expect(
+    isBoundedVisionWire({
+      ...frame.wire,
+      generationConfig: { ...frame.wire.generationConfig, maxOutputTokens: 1999 },
+    }),
+  ).toBe(false);
+});
+
 test("legacy or unbound model capability never authorizes Gemini vision", async () => {
   const current = config();
   for (const model of ["openai/gpt-6-sol", undefined]) {

@@ -752,3 +752,37 @@ required before claiming this response is fixed.
 Prompt2.5 on b4e-integrated source passes frozen install, quick305, full unit4217
 across386 files/172812 assertions and build/local built Worker. No actual prompt2.5
 provider success is inferred from these checks.
+
+
+## Video artifact deadline and bounded frame observation profile
+
+The changed d842 video attempt started15:22:08Z. Native extraction succeeded
+in28.551s, followed by interpret0/0 in8.698s,0/1 in14.545s and0/2 in6.309s.
+Interpret0/3 started15:23:07Z and failed JOB_TIMEOUT at15:24:09Z under the
+existing60-second local media deadline (step elapsed about62s including its
+other work). No unchanged-condition retry was sent. The exact remote cause,
+late response and accuracy of the unpublished interpretation outputs are not
+inferred from the timeout. Its unknown/late accounting records, prior outputs
+and original file remain intact. Audio/PDF ready results are unaffected.
+
+The candidate adds a server-owned video_frame vision profile: one bounded JPEG,
+the same Gemini model through Cloudflare Gateway, LOW media and thinking,
+2000 output tokens, at most6 brief observations/800 characters each. It asks
+for frame-local visible facts and readable labels without inferring outside
+events, identities, dates, clinical conclusions or legal outcomes. The regular
+image/medical-document profile remains4000 tokens with its existing schema.
+Both retain the same60s deadline, no automatic paid retry, source authorization,
+artifact-position binding, maximum calls and conservative4000-token resource
+reservation. Each actual position still has its own logical invocation even
+when JPEG bytes repeat; this is not a cross-frame cache or fabricated reuse.
+
+Exact wire validation accepts only the two generated profiles; mixing a frame
+cap with another instruction or changing the cap is rejected. Wire/evidence
+hashes distinguish them. Overlong/excess frame output preserves its actual paid
+response but cannot publish observations or dispatch another request. The frame
+timeout regression retains unknown exposure and its late real response without
+re-dispatch. The isolated composed-video probe now uses this same frame profile.
+The current focused110 tests across4 files/910 assertions and the two manual
+probe contract tests pass. These local/scripted checks do not establish lower
+provider latency or actual complete video interpretation. Broad validation,
+exact-head CI and a single changed-request-profile actual acceptance remain.

@@ -148,7 +148,12 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
             let matched = false;
             try {
               if (phase === "vision") {
-                const output = await media.observe(bytes, access);
+                const output = await media.observe(
+                  bytes,
+                  access,
+                  undefined,
+                  video ? "video_frame" : "image",
+                );
                 const text = output.texts.join(" ");
                 matched = video
                   ? sample.videoFrame?.frameIndex === 14

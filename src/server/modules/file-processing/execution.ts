@@ -869,7 +869,12 @@ export function createFileProcessingExecution(
           }
         } else {
           try {
-            const output = await options.media.observe(bytes, access(signal), { unit, index });
+            const output = await options.media.observe(
+              bytes,
+              access(signal),
+              { unit, index },
+              artifact.kind === "frame" ? "video_frame" : "image",
+            );
             result.status = artifact.multiFrame ? "low_quality" : output.quality;
             result.observations = output.texts.flatMap((text, n) =>
               texts(text, artifact.position, `${scope}-${n}`),

@@ -251,29 +251,55 @@ test("missing confidence and empty text preserve low-quality coverage", async ()
   expect((await s.gateway.transcribe(wav(), 0, 1, s.access)).status).toBe("low_quality");
 });
 
-test("timeout retains unknown charge exposure and observes the late real outcome", async () => {
-  const failures: unknown[] = [];
-  let resolve!: (value: unknown) => void;
-  const s = setup({
-    timeoutMs: 1,
-    observeFailure: (failure) => failures.push(failure),
-    run: () =>
-      new Promise((r) => {
-        resolve = r;
-      }),
+for (const phase of ["asr", "video_frame"] as const)
+  test(`${phase} timeout retains unknown charge exposure and observes the late real outcome`, async () => {
+    const failures: unknown[] = [];
+    let resolve!: (value: unknown) => void;
+    const s = setup({
+      timeoutMs: 1,
+      observeFailure: (failure) => failures.push(failure),
+      run: () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    });
+    const request =
+      phase === "asr"
+        ? s.gateway.transcribe(wav(), 0, 1, s.access)
+        : s.gateway.observe(
+            new Uint8Array([255, 216, 255, 217]),
+            s.access,
+            { unit: 0, index: 3 },
+            "video_frame",
+          );
+    await expect(request).rejects.toMatchObject({
+      code: "JOB_TIMEOUT",
+    });
+    expect(s.receipts).toEqual([{ transport: "unknown" }]);
+    expect(failures).toEqual([
+      { phase: phase === "asr" ? "asr" : "vision", category: "provider_timeout", httpStatus: null },
+    ]);
+    expect(s.state()).toBe(1);
+    const late =
+      phase === "asr"
+        ? valid
+        : {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({ texts: ["visible frame"], quality: "processed" }),
+                },
+                finish_reason: "stop",
+              },
+            ],
+          };
+    resolve(late);
+    await Promise.all(s.pending);
+    expect(s.receipts).toEqual([
+      { transport: "unknown" },
+      { transport: "response", rawUsage: late },
+    ]);
   });
-  await expect(s.gateway.transcribe(wav(), 0, 1, s.access)).rejects.toMatchObject({
-    code: "JOB_TIMEOUT",
-  });
-  expect(s.receipts).toEqual([{ transport: "unknown" }]);
-  expect(failures).toEqual([{ phase: "asr", category: "provider_timeout", httpStatus: null }]);
-  resolve(valid);
-  await Promise.all(s.pending);
-  expect(s.receipts).toEqual([
-    { transport: "unknown" },
-    { transport: "response", rawUsage: valid },
-  ]);
-});
 
 test("synchronous binding failure is sanitized and keeps unknown exposure", async () => {
   const s = setup({
