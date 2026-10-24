@@ -18,13 +18,14 @@ export const featureCaseSchema = z.enum([
   "legal_chat",
   "video_media",
   "material_chat",
+  "precedent_compare",
 ]);
 /** Outer observation deadline accommodates existing phase limits without
  * creating a second POST or extending the application's execution limits. */
 export function probePostTimeoutMs(feature: z.infer<typeof featureCaseSchema>) {
   const phase =
     feature === "media" || feature === "video_media" ? 60_000 : WORKSPACE_MODEL_TIMEOUT_MS;
-  return 3 * phase + (feature === "legal_chat" ? 120_000 : 0) + 10_000;
+  return 3 * phase + (["legal_chat", "precedent_compare"].includes(feature) ? 120_000 : 0) + 10_000;
 }
 export const PROBE_REQUEST_ID = "00000000-0000-4000-8000-000000000027" as const;
 const candidateSchema = z.string().regex(/^[a-f0-9]{40}$/);
@@ -50,6 +51,7 @@ const probePhaseSchema = z.enum([
   "workspace_questions",
   "workspace_summary",
   "workspace_chat",
+  "workspace_precedent_compare",
   "workspace_audit",
   "vision",
   "asr",
@@ -135,6 +137,33 @@ const materialChecksSchema = z.strictObject({
   answerMatched: z.boolean(),
   sourcePositionMatched: z.boolean(),
 });
+const comparisonChecksSchema = z.strictObject({
+  requests: z.number().int().min(0).max(9),
+  verifiedSourceCount: z.number().int().min(0).max(10),
+  metricCount: z.number().int().min(0).max(8).nullable(),
+  matchedCount: z.number().int().min(0).max(8).nullable(),
+  knownCount: z.number().int().min(0).max(8).nullable(),
+  percentage: z.number().int().min(0).max(100).nullable(),
+  source: z
+    .strictObject({
+      officialId: z.string().regex(/^\d{1,20}$/),
+      contentHash: hashSchema,
+      verifiedAt: z.iso.datetime(),
+      excerptStartUtf16: z.number().int().nonnegative(),
+      excerptEndUtf16: z.number().int().positive(),
+      fullLengthUtf16: z.number().int().positive(),
+      truncated: z.boolean(),
+    })
+    .refine(
+      (source) =>
+        source.excerptStartUtf16 < source.excerptEndUtf16 &&
+        source.excerptEndUtf16 <= source.fullLengthUtf16 &&
+        source.truncated ===
+          (source.excerptStartUtf16 > 0 || source.excerptEndUtf16 < source.fullLengthUtf16),
+    )
+    .nullable(),
+  sourceFailures: legalChecksSchema.shape.sourceFailures,
+});
 const reportSchema = z
   .strictObject({
     version: z.literal(PROBE_PROTOCOL_VERSION),
@@ -166,6 +195,7 @@ const reportSchema = z
     policyFailure: probePolicyFailureSchema.optional(),
     legalChecks: legalChecksSchema.optional(),
     materialChecks: materialChecksSchema.optional(),
+    comparisonChecks: comparisonChecksSchema.optional(),
     unverified: z.tuple(
       unverified.map((value) => z.literal(value)) as [
         z.ZodLiteral<"full-product-smoke">,
@@ -190,12 +220,33 @@ const reportSchema = z
         (report.metrics.length === report.attempts ? "complete" : "partial") &&
       (report.featureCase === "legal_chat" || report.legalChecks === undefined) &&
       (report.featureCase === "material_chat" || report.materialChecks === undefined) &&
+      (report.featureCase === "precedent_compare" || report.comparisonChecks === undefined) &&
       (report.featureCase === "video_media" ||
         report.mediaChecks?.every((check) => check.videoFrame === undefined) !== false) &&
       (report.status === "passed"
         ? report.failure === null &&
           report.attempts > 0 &&
           report.metrics.at(-1)?.status === "success" &&
+          (report.featureCase !== "precedent_compare" ||
+            (report.comparisonChecks !== undefined &&
+              report.comparisonChecks.requests > 0 &&
+              report.comparisonChecks.verifiedSourceCount > 0 &&
+              report.comparisonChecks.sourceFailures.length === 0 &&
+              report.comparisonChecks.metricCount === 8 &&
+              report.comparisonChecks.source !== null &&
+              Date.parse(report.comparisonChecks.source.verifiedAt) <=
+                Date.parse(report.checkedAt) &&
+              report.comparisonChecks.matchedCount !== null &&
+              report.comparisonChecks.knownCount !== null &&
+              report.comparisonChecks.knownCount > 0 &&
+              report.comparisonChecks.knownCount >= report.comparisonChecks.matchedCount &&
+              report.comparisonChecks.percentage ===
+                Math.round((100 * report.comparisonChecks.matchedCount) / 8) &&
+              report.metrics.some(
+                (metric) =>
+                  metric.phase === "workspace_precedent_compare" && metric.status === "success",
+              ) &&
+              report.metrics.at(-1)?.phase === "workspace_audit")) &&
           (report.featureCase !== "material_chat" ||
             (report.materialChecks !== undefined &&
               report.materialChecks.readRequests > 0 &&
@@ -380,6 +431,7 @@ export interface ProbeOutcome {
   policyFailure?: z.infer<typeof probePolicyFailureSchema>;
   legalChecks?: z.infer<typeof legalChecksSchema>;
   materialChecks?: z.infer<typeof materialChecksSchema>;
+  comparisonChecks?: z.infer<typeof comparisonChecksSchema>;
 }
 export async function handleDurableProbe(
   request: Request,

@@ -79,3 +79,29 @@ separate external acceptance. Neither synthetic adapters nor existing intake/cha
 Gemini receipts establish that result. No production deployment or full-MVP/#71
 acceptance is claimed. Unissued four-service credentials and their target/recipient
 consent execution producer remain separate work under #458.
+
+## Bounded manual external check
+
+The independent `precedent_compare` selector in the existing manual synthetic
+workflow retrieves one official Supreme Court precedent for the fixed public term
+`대여금`. It sends no private narrative/search term to the law service. Its facts
+come from the existing explicitly synthetic loan narrative, with exact reported
+excerpts; expected answers/scores are not inserted into the prompt. The product's
+same 4,000-character excerpt builder, real comparison pipeline, native LOW phase
+and separate MEDIUM audit are used.
+
+The existing durable three-total-model-attempt limit, authenticated invocation,
+exact clean current-main/CI/source-manifest identity, source timeout/request cap,
+replay refusal and temporary legal-credential cleanup remain. The all-seven matrix
+still has seven entries and max21 reservations; comparison requires its own explicit
+manual selection. Automatic CI/full never calls a model. The isolated Worker has
+no application DB, OAuth credential or private case.
+
+Acceptance requires eight indicators, at least one genuinely comparable indicator,
+the fixed denominator score, a verified source and successful independent audit.
+A finite receipt preserves actual counts/timing/usage and the public original's
+numeric ID, content hash, verification time and excerpt bounds. It omits source
+body, user/model text and credentials. Unrun or failed comparison counts remain
+null. Offline control/source/privacy tests and isolated Worker bundling validate
+the harness, not Gemini acceptance. Frozen/quick598 (50 files, 5,614 assertions)
+and 45 targeted probe tests pass before dispatch.

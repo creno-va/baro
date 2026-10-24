@@ -11,7 +11,11 @@ import { ModelError } from "../src/server/modules/llm-gateway/service";
 import type { WorkspaceContext } from "../src/server/modules/workspace/pipeline";
 
 /** Public synthetic source test only. No application DB/cache or caller query. */
-export function createSyntheticLegalLookup(credential: string, transport?: Transport) {
+export function createSyntheticLegalLookup(
+  credential: string,
+  transport?: Transport,
+  task: "legal_chat" | "precedent_compare" = "legal_chat",
+) {
   const sources = new Map<string, OfficialSourceWrite>();
   let requests = 0,
     verifiedSourceCount = 0;
@@ -47,12 +51,13 @@ export function createSyntheticLegalLookup(credential: string, transport?: Trans
       // Never repeat the known pending guide or expand this public diagnostic.
       if (
         plans.length !== 1 ||
-        plans.some(
-          (p) =>
-            p.kind !== "statute" ||
-            p.lawTitle !== "민법" ||
-            p.articles.length !== 1 ||
-            p.articles.some((a) => BigInt(a.number) !== 598n || BigInt(a.branch) !== 0n),
+        plans.some((p) =>
+          task === "precedent_compare"
+            ? p.kind !== "precedent" || p.query !== "대여금" || p.limit !== 1
+            : p.kind !== "statute" ||
+              p.lawTitle !== "민법" ||
+              p.articles.length !== 1 ||
+              p.articles.some((a) => BigInt(a.number) !== 598n || BigInt(a.branch) !== 0n),
         )
       )
         throw new ModelError("POLICY_REJECTED");

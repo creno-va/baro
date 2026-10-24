@@ -90,3 +90,22 @@ export function syntheticLegalContext(): WorkspaceContext {
     "민법 제598조 내용을 공식 원문에서 확인한 뒤, 읽은 조문의 문장을 출처와 함께 그대로 인용해 주세요. 사건에 대한 법률 판단이나 전략은 요청하지 않습니다.";
   return context;
 }
+
+export function syntheticComparisonContext(): WorkspaceContext {
+  const context = syntheticChatContext();
+  if (!context.latestMessage || !context.confirmedSummary)
+    throw new Error("Synthetic comparison context unavailable");
+  context.latestMessage.text = "선택한 판례와 확인한 사건 사실을 항목별로 비교해 주세요.";
+  context.facts = context.intake.narrative.split(/(?<=\.)\s+/).map((text, index) => ({
+    id: `synthetic_comparison_fact_${index}`,
+    text,
+    attribution: "user_statement",
+    certainty: "reported",
+    significance: "neutral",
+    userEdited: false,
+    conflictingFactIds: [],
+    references: [{ kind: "intake_narrative", intakeRevision: context.intake.revision }],
+  }));
+  context.confirmedSummary.facts = context.facts;
+  return context;
+}

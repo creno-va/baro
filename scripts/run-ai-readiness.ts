@@ -152,7 +152,7 @@ try {
   ).join("");
   stage = "token-registration";
   await wrangler(["secret", "put", "READINESS_TOKEN"], token);
-  if (featureCase === "legal_chat") {
+  if (featureCase === "legal_chat" || featureCase === "precedent_compare") {
     const credential = process.env.LAW_API_OC;
     if (!credential?.trim()) throw new Error("Synthetic legal credential unavailable");
     const scope = {
