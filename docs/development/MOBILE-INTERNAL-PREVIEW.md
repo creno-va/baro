@@ -1814,3 +1814,9 @@ virtual key에 ACTION_CLICK을 추가하지만 clickable flag를 직접 설정�
 좌표·계층은 내보내지 않는다. class 일치만으로 클릭 가능하다고 처리하지 않는다.
 유일하고 enabled/clickable인 현재 IME 검색 키·실제 tap·키보드 닫힘·검색 결과·회전·Home 복귀의
 성공 조건은 유지한다. 후보가 없으면 실패하며 Enter나 고정 좌표로 대체하지 않는다.
+
+Gboard 참고40127021886은 IME 등록 ready 뒤 Settings scope 검사에서 중단했다. 다음 진단은
+dump 전후의 명시적 Settings activity를 모두 확인한 뒤, 알려진 제목·메뉴별0~8개와
+`strictScopeObserved`만 실패 기록에 남긴다. 알 수 없는 제목/입력값/전체 계층을 기록하거나
+기존 title+메뉴2종 조건을 완화하지 않는다. foreground 불일치·구조 오류·개수 초과에서는
+진단을 내보내지 않는다. 실패 진단은 언어 선택·한국어 입력·제품 성공 receipt가 아니다.
