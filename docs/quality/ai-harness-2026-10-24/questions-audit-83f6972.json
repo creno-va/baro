@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "checkedAt": "2026-10-24T06:54:42.532Z",
+  "candidateSha": "83f697244fd792c437c14c7a4660935c128d211b",
+  "probeSourceSha256": "61a42f15f2d44e2c361138a2b1dbc01935b98da4fa7649a8b56ec95649a1227d",
+  "environment": "isolated-synthetic-worker",
+  "status": "passed",
+  "failure": null,
+  "runtimeWorker": true,
+  "attempts": 2,
+  "metricCoverage": "complete",
+  "metrics": [
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "workspace_questions",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 6659,
+      "inputTokens": 1587,
+      "outputTokens": 260,
+      "status": "success"
+    },
+    {
+      "requestId": "00000000-0000-4000-8000-000000000027",
+      "phase": "workspace_audit",
+      "model": "google/gemini-3.8-flash",
+      "latencyMs": 7149,
+      "inputTokens": 2368,
+      "outputTokens": 733,
+      "status": "success"
+    }
+  ],
+  "providerFailures": [],
+  "unverified": [
+    "full-product-smoke",
+    "live-corpus-eval",
+    "oauth",
+    "legal",
+    "public-policy"
+  ],
+  "authenticationChecked": true,
+  "replayRejected": true,
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40072018097"
+}

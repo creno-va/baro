@@ -46,3 +46,17 @@ HTTP20초·응답256KiB이며 자동 retry·redirect·임의 URL·개발 서버 
 기존 strict assistant message DTO에는 아직 필드를 추가하지 않았다. 후속 producer는
 기존 응답 shape를 보존하고 opt-in endpoint로 결과를 제공해야 한다. 모바일 채팅과
 이 범위를 조율했으며 앱/package 소비 변경은 별도 통합한다.
+
+## 채팅 연결
+
+채팅 planner는 최대2개의 중복 없는 등록 ID만 요청하고 서버 결과를 받은 뒤 한 번
+재생성·독립 감사한다. 결과는 validated 메시지와 같은 암호화 payload에 원자적으로
+저장하며 기본 메시지 projection에서는 제거한다. 별도 소유권 검사의
+`GET /api/v2/cases/:id/messages/:messageId/tool-results`로만 읽는다. 이전 payload는
+빈 결과로 읽힌다. 웹 카드에서는 상태·관측 시각·고정 출처·주의점을 구분한다.
+
+설정 이름은 `HOMETAX_SERVICE_KEY`, `THECHEAT_API_KEY`,
+`THECHEAT_ENCRYPTION_KEY`, `DATAHUB_API_TOKEN`이다. 값은 현재 미발급이며
+이름 선언은 secret 설정이나 검증을 의미하지 않는다. 현재 runtime은 대상이 null인
+상태 조회만 허용한다. 키가 있어도 별도 대상/수신자 동의와 durable producer가
+연결되기 전에는 input_required이며 외부 HTTP를 예약/실행하지 않는다.

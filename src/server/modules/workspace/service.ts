@@ -23,6 +23,7 @@ import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
 import { dependencyStep } from "../../dependency-diagnostics";
+import { storedMessageSchema } from "./stored-message";
 
 export class WorkspaceError extends Error {
   constructor(
@@ -443,6 +444,35 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     send: (ownerId: string, id: string, key: string, body: unknown) =>
       enqueue(ownerId, id, key, body, "chat_response"),
+    async toolResults(ownerId: string, id: string, rawMessageId: string) {
+      const messageId = opaqueIdSchema.parse(rawMessageId);
+      const current = await find(ownerId, id);
+      const read = () =>
+        core
+          .statement(
+            "SELECT id,revision,encrypted_payload FROM v2_messages WHERE workspace_id=? AND id=? AND role='assistant' AND safety='validated'",
+            [id, messageId],
+          )
+          .first<{ id: string; revision: number; encrypted_payload: string }>();
+      const row = await read();
+      if (!row) throw new WorkspaceError("NOT_FOUND");
+      const message = await core.decrypt(
+        "v2_messages",
+        row.id,
+        ownerId,
+        row.revision,
+        row.encrypted_payload,
+        storedMessageSchema(deps.guideHosts),
+      );
+      const after = await read();
+      if (
+        (await find(ownerId, id)).workspaceRevision !== current.workspaceRevision ||
+        after?.encrypted_payload !== row.encrypted_payload ||
+        after.revision !== row.revision
+      )
+        throw new WorkspaceError("STALE_REVISION");
+      return message.role === "assistant" ? (message.toolResults ?? []) : [];
+    },
     async messages(
       ownerId: string,
       id: string,

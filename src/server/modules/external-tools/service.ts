@@ -103,8 +103,8 @@ export function createExternalTools(
       )
         return result("not_configured", [
           tool === "registry"
-            ? "등기정보광장 서비스별 인증키와 승인된 API 명세 연결이 필요해요. 등기부등본을 조회한 상태가 아니에요."
-            : "API 인증 설정이 없어 실제 조회를 실행하지 않았어요.",
+            ? "등기정보광장 조회 서비스가 아직 연결되지 않았어요. 등기부등본을 조회한 상태가 아니에요."
+            : "이 조회 서비스가 아직 연결되지 않아 실제 정보를 확인하지 못했어요.",
         ]);
       if (tool === "registry")
         return result("not_configured", ["서비스별 API 명세를 먼저 연결해 주세요."]);

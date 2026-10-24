@@ -154,6 +154,7 @@ async function nativeAdmissionDiagnostics(
 async function exerciseNativeRuntime(
   applicationCostLimitsEnabled: boolean,
   lifetime: NativeLifetime,
+  staleChatAdmission = false,
 ) {
   const started = performance.now();
   const recovery = createNativeRecoveryMeasurements(),
@@ -992,13 +993,25 @@ async function exerciseNativeRuntime(
     });
     expect(chat.status).toBe(202);
     const chatJob = (await chat.json()) as { jobId: string };
-    unavailable = true;
+    const oldPlan = await preview
+      .prepare(
+        "SELECT p.id,p.evidence_hash,p.payload_json,p.digest FROM v2_execution_job_holds h JOIN v2_execution_job_plans p ON p.id=h.plan_id WHERE h.job_id=? AND h.state='prepared' ORDER BY h.attempt_id LIMIT 1",
+      )
+      .bind(chatJob.jobId)
+      .first<{ id: string; evidence_hash: string; payload_json: string; digest: string }>();
+    const callsBeforeChat = providerCalls;
+    expect(oldPlan).not.toBeNull();
+    // Legitimate configuration change after admission changes the wire. It
+    // represents an old queued prompt/catalog without tampering with its proof.
+    if (staleChatAdmission) env.HOMETAX_SERVICE_KEY = "synthetic-nonsecret-configuration";
+    unavailable = !staleChatAdmission;
     expect((await execute(chatJob.jobId)).status).toBe("failed");
     expect(await service.job(ownerId, workspace.id, chatJob.jobId)).toMatchObject({
       status: "failed",
       failure: "MODEL_UNAVAILABLE",
       retryable: true,
     });
+    if (staleChatAdmission) expect(providerCalls).toBe(callsBeforeChat);
     unavailable = false;
     const chatRetry = await request(
       `/api/v2/cases/${workspace.id}/workspace-jobs/${chatJob.jobId}/retry`,
@@ -1013,7 +1026,17 @@ async function exerciseNativeRuntime(
     );
     expect(replayedRetry.status).toBe(202);
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(14);
+    const expectedCalls = staleChatAdmission ? 13 : 14;
+    expect(providerCalls).toBe(expectedCalls);
+    if (staleChatAdmission && oldPlan)
+      expect(
+        await preview
+          .prepare(
+            "SELECT id,evidence_hash,payload_json,digest FROM v2_execution_job_plans WHERE id=?",
+          )
+          .bind(oldPlan.id)
+          .first<NonNullable<typeof oldPlan>>(),
+      ).toEqual(oldPlan);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
     expect(await messages.json()).toMatchObject({
@@ -1031,14 +1054,14 @@ async function exerciseNativeRuntime(
       await preview
         .prepare("SELECT count(*) AS n FROM v2_execution_attempts WHERE state='settled'")
         .first<number>("n"),
-    ).toBe(applicationCostLimitsEnabled ? 12 : 14);
+    ).toBe(applicationCostLimitsEnabled ? 12 : expectedCalls);
     expect(
       await preview
         .prepare(
           "SELECT count(*) AS n FROM v2_execution_attempts WHERE state='ambiguous' AND charged_krw IS NULL",
         )
         .first<number>("n"),
-    ).toBe(applicationCostLimitsEnabled ? 2 : 0);
+    ).toBe(applicationCostLimitsEnabled ? (staleChatAdmission ? 1 : 2) : 0);
     if (!applicationCostLimitsEnabled) {
       expect(
         await preview.prepare("SELECT count(*) n FROM v2_cost_attempts").first<number>("n"),
@@ -1049,12 +1072,12 @@ async function exerciseNativeRuntime(
             "SELECT count(*) n FROM v2_execution_cost_observations WHERE charged_krw IS NULL",
           )
           .first<number>("n"),
-      ).toBe(2);
+      ).toBe(staleChatAdmission ? 1 : 2);
     }
     // Replay cannot emit another model request or duplicate published entities.
     progress.enter("replay", "runtime");
     expect((await execute(chatJob.jobId)).status).toBe("completed");
-    expect(providerCalls).toBe(14);
+    expect(providerCalls).toBe(expectedCalls);
     completed = true;
   } catch (error) {
     progress.report("failure");
@@ -1072,9 +1095,11 @@ async function exerciseNativeRuntime(
 }
 
 for (const enabled of [true, false]) {
-  test(
-    `workerd D1 executes questions, recovery and chat (cost limits=${enabled})`,
-    () => nativeTests.run((lifetime) => exerciseNativeRuntime(enabled, lifetime)),
-    30000,
-  );
+  for (const stale of [false, true]) {
+    test(
+      `workerd D1 executes questions, recovery and chat (cost limits=${enabled}, stale admission=${stale})`,
+      () => nativeTests.run((lifetime) => exerciseNativeRuntime(enabled, lifetime, stale)),
+      30000,
+    );
+  }
 }

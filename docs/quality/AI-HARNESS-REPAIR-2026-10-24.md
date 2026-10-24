@@ -156,3 +156,70 @@ Zod bounds (including questions2×3 and audit findings30/IDs300), output token c
 required fields, closed objects and zero-item constraints remain unchanged. This is
 provider grammar projection, not authorization to publish larger arrays. The
 specific original HTTP400 cause remains unproven pending live verification.
+
+## Actual native audit accepted
+
+[Manual run40072018097](https://github.com/creno-va/baro/actions/runs/40072018097)
+on exact main83f6972 passed actual workspace questions plus independent audit in two
+attempts. Questions6659ms/1587input/260output; audit7149ms/2368input/733output.
+[Finite receipt](./ai-harness-2026-10-24/questions-audit-83f6972.json) retains the
+actual observations. This accepts the combined native-wire/grammar-projection
+candidate; it does not isolate one original HTTP400 cause or prove summary/chat,
+media, production serving, user-specific quality or external-provider acceptance.
+Final offline c90d47c quick151/full3866/build/workerd and exact CI40071608812 passed.
+
+Protocol3 adds seven fixed feature cases (questions, summary, chat, media and three
+external-tool groups). Each
+exact candidate/feature has one durable run with at most three attempts (all-seven matrix: at most21 total); source-hash
+changes, replay, ambiguous POST or redeployment cannot reset that run. Selected case
+is part of provenance/control/authenticated forwarding and source identity. Automatic
+CI/full still never invokes a model. Manual dispatches serialize deployments of the
+isolated worker. Image/WAV assets are locally authored/TTS synthetic fixtures with
+exact tracked-byte hashes, not user files. Media reports retain only latency, finite
+quality/segment-count and marker-match checks, never observed text or audio. Missing
+ASR confidence/timing remains low_quality; the probe must not invent it. There is no
+application DB/R2/OAuth or external4API credential in this isolated campaign.
+
+## Tool publication and feature campaign
+
+The follow-up combines the validated private tool-result producer and web cards
+with the manual acceptance selector. Existing strict installed-client messages
+remain unchanged; only the separate owner-checked endpoint exposes encrypted stored
+results. Readback rechecks the workspace/row after AES and account changes abort web
+requests. Desktop/mobile cards passed real Chromium/axe and were visually inspected.
+No database migration, mobile source or package change is made.
+
+An actual workerd regression caught added tool context missing from the immutable
+initial chat admission. Preparation and execution now initialize the same catalog,
+lookup flag and result array before wire hashing. Cost-enabled/observation-only
+chat outage/retry/full audit tests pass again; the guard was preserved. Catalog is
+sent only for chat, avoiding unrelated intake/summary input. Tool cases run the real
+Gemini planner/re-generation/audit with missing-key adapters and a forbidden external
+HTTP test adapter. They validate unconfigured results, not actual HomeTax/TheCheat/
+registry/DataHub records. A single all-seven manual matrix is serial, fail-fast=false,
+with max21 total model reservations. The fixture asset hashes are verified before
+media dispatch and no expected answers are added to model prompts.
+
+Queued admissions can predate a prompt/wire/catalog deployment. A failed restore now
+stops before any model dispatch with retryable MODEL_UNAVAILABLE instead of terminal
+INTERNAL_ERROR. A fresh explicit retry still creates/verifies a new immutable
+admission, checks all existing permission/revision/technical/unknown-exposure guards,
+and does not rewrite the old proof. Actual workerd tests cover a legitimate catalog
+configuration change between admission and dispatch in both cost modes: zero old
+model calls, unchanged old plan/payload/digest, successful new retry, and replay with
+no additional provider calls. Existing cost/unknown observations remain preserved.
+
+The full release gate remains blocked by the separately owned raw high audit
+advisories in mobile developer tooling (#339). Do not repeat that failed full run
+without a changed condition or bypass it. The same manual workflow offers
+native_materials (no model calls) to run the actual pinned Linux Container fixture
+profile where Docker is available. It is component evidence only and creates no
+full-validation/release/#71 receipt. The all-seven selector remains limited to the
+seven AI cases and max21 reservations.
+
+Feature failures may retain only a finite policy reason/fact category/audit code list.
+Media Gateway HTTP diagnostics now expose the same sanitized category/status/finite
+request issue to an optional observer; an observer exception cannot replace the
+processing failure or release its unresolved receipt. No provider body or generated
+text is attached. These diagnostics prepare actual per-feature failure analysis and
+are not success receipts.

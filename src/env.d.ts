@@ -20,6 +20,10 @@ interface Env {
   TURNSTILE_SECRET_KEY: string;
   CASE_DATA_KEY_V1: string;
   LAW_API_OC: string;
+  HOMETAX_SERVICE_KEY?: string;
+  THECHEAT_API_KEY?: string;
+  THECHEAT_ENCRYPTION_KEY?: string;
+  DATAHUB_API_TOKEN?: string;
   AI_GATEWAY_ID: string;
   CASE_IP_LIMIT: RateLimit;
   CASE_ACCOUNT_LIMIT: RateLimit;

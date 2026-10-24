@@ -3,7 +3,6 @@ import { timestampSchema } from "../../../contracts";
 import {
   type V2Intake,
   type V2UserMessage,
-  v2MessageSchema,
   v2SummarySchema,
   v2UserMessageSchema,
 } from "../../../contracts/v2";
@@ -17,6 +16,7 @@ import { EXTRACTOR_VERSION, type SourceChunk } from "../legal-retrieval/v2/contr
 import { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
 import { conversationMaterialIds, MATERIAL_CONTEXT_BYTES, readMaterialWindow } from "./materials";
 import type { WorkspaceContext } from "./pipeline";
+import { publicStoredMessageSchema } from "./stored-message";
 
 /** Korea's request calendar is independent of stored UTC/event timestamps. */
 export function workspaceCalendar(now: string) {
@@ -115,7 +115,7 @@ export async function readWorkspaceContext(
         actor.ownerId,
         row.revision,
         row.encrypted_payload,
-        v2MessageSchema(guideHosts),
+        publicStoredMessageSchema(guideHosts),
       ),
     ),
   );

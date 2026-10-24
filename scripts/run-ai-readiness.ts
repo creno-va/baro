@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import {
   assertGitCandidate,
   controlSchema,
+  featureCaseSchema,
   PROBE_PROTOCOL_VERSION,
   ProbeControlError,
   type ProbeReply,
@@ -17,6 +18,9 @@ async function git(args: string[]): Promise<string> {
 let stage = "source-verification";
 try {
   const candidate = process.env.READINESS_CANDIDATE_SHA ?? "";
+  const featureCase = featureCaseSchema.parse(
+    process.env.READINESS_FEATURE_CASE ?? "workspace_questions",
+  );
   assertGitCandidate(
     candidate,
     await git(["rev-parse", "HEAD"]),
@@ -31,6 +35,8 @@ try {
       "scripts/ai-readiness-fixture.ts",
       "scripts/ai-readiness-control.ts",
       "scripts/ai-readiness.wrangler.jsonc",
+      "tests/fixtures/media/image-markers.jpg",
+      "tests/fixtures/media/speech-ko.wav",
       "src/server",
       "src/contracts",
     ])
@@ -59,18 +65,36 @@ try {
     .update(
       JSON.stringify({
         candidateSha: candidate,
+        featureCase,
         protocolVersion: PROBE_PROTOCOL_VERSION,
         sourceManifest,
       }),
     )
     .digest("hex");
-  const provenance = { candidateSha: candidate, probeSourceSha256: probeHash };
+  const provenance = { candidateSha: candidate, probeSourceSha256: probeHash, featureCase };
   const config = ".wrangler/goal/ai-readiness.config.json";
   const definition = await Bun.file("scripts/ai-readiness.wrangler.jsonc").json();
   definition.main = resolve("scripts/ai-readiness-worker.ts");
   definition.$schema = resolve("node_modules/wrangler/config-schema.json");
   definition.vars.READINESS_CANDIDATE_SHA = candidate;
+  definition.vars.READINESS_FEATURE_CASE = featureCase;
   definition.vars.READINESS_PROBE_SHA256 = probeHash;
+  const fixtureDirectory = resolve(".wrangler/goal/ai-probe-fixtures");
+  for (const [name, variable] of [
+    ["image-markers.jpg", "READINESS_IMAGE_SHA256"],
+    ["speech-ko.wav", "READINESS_AUDIO_SHA256"],
+  ]) {
+    const source = `tests/fixtures/media/${name}`;
+    const expected = sourceManifest.find((item) => item.path === source)?.sha256;
+    if (!expected || !name || !variable) throw new Error("Tracked synthetic media unavailable");
+    await Bun.write(`${fixtureDirectory}/${name}`, await Bun.file(source).arrayBuffer());
+    definition.vars[variable] = expected;
+  }
+  definition.assets = {
+    directory: fixtureDirectory,
+    binding: "PROBE_FIXTURES",
+    run_worker_first: true,
+  };
   definition.durable_objects.code_update_strategy = { mode: "immediate" };
   await Bun.write(config, `${JSON.stringify(definition, null, 2)}\n`);
   async function wrangler(args: string[], input?: string) {
@@ -136,6 +160,7 @@ try {
       previous.status === 200 &&
       state.success &&
       (state.data.activeCandidateSha !== candidate ||
+        state.data.activeFeatureCase !== featureCase ||
         state.data.activeProbeSourceSha256 !== probeHash)
     )
       continue;
@@ -154,6 +179,7 @@ try {
   console.log(
     JSON.stringify({
       check: "live-synthetic-worker-intake-and-audit",
+      featureCase,
       status: report.status,
       failure: report.failure,
       attempts: report.attempts,
