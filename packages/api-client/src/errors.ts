@@ -4,6 +4,7 @@ export class ApiError extends Error implements ApiErrorView {
     public code: ApiErrorView["code"],
     message: string,
     public retryable = false,
+    public readonly httpStatus?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -66,5 +67,10 @@ export async function responseError(response: Response): Promise<ApiError> {
         ? "AI 처리를 지금 시작할 수 없어요. 저장한 내용은 보존돼요."
         : "요청을 완료하지 못했어요. 다시 시도해 주세요.",
   };
-  return new ApiError(code, messages[code], code === "UNAVAILABLE" || code === "QUOTA_EXCEEDED");
+  return new ApiError(
+    code,
+    messages[code],
+    code === "UNAVAILABLE" || code === "QUOTA_EXCEEDED",
+    response.status,
+  );
 }

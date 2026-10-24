@@ -48,6 +48,8 @@ export const mobileReauthReceiptSchema = z.strictObject({
   startedAt: z.number().int().nonnegative(),
 });
 export type MobileReauthPrepare = z.infer<typeof mobileReauthPrepareSchema>;
+export type MobileAuthProvider = z.infer<typeof mobileAuthV2ProviderSchema>;
+export type MobileReauthPrepareV2 = z.infer<typeof mobileReauthPrepareV2Schema>;
 export type MobileReauthReceipt = z.infer<typeof mobileReauthReceiptSchema>;
 export const mobileAuthExchangeResponseSchema = z.strictObject({ status: z.literal("accepted") });
 export type MobileAuthStart = z.infer<typeof mobileAuthStartSchema>;

@@ -11,6 +11,7 @@ import type { V2Summary } from "@baro/contracts/v2/intake";
 
 export type AccountType = NonNullable<ClientSession["user"]>["accountType"];
 export type Provider = "google" | "naver" | "kakao";
+export type MobileProvider = import("@baro/contracts/mobile-auth").MobileAuthProvider;
 export type SessionView = ClientSession;
 export type CaseView = {
   id: string;
