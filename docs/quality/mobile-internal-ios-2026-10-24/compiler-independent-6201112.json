@@ -1,0 +1,71 @@
+{
+  "verificationObservedAt": "2026-10-24T05:24:04.517Z",
+  "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+  "runId": "40063716187",
+  "artifactId": "12548714921",
+  "successfulCompilerProvenanceVerified": true,
+  "receiptSha256": "55ce6e324debcc14d33f9d6769550c8105f142e718a4ecce5378e507902338a4",
+  "artifact": {
+    "name": "baro-internal-preview-ios-simulator-6201112438fea33ef761c053dfdc9fa500cbd407.zip",
+    "bytes": 21544574,
+    "sha256": "c5afcab4d3c704182ac42a6978a0f8e996db999ef39e3d8f97f8a34d394f8c20"
+  },
+  "embeddedBundle": {
+    "path": "main.jsbundle",
+    "format": "hermes-bytecode",
+    "bytes": 3584848,
+    "sha256": "bd7cbef8ef5dd8e51e6f2251491216f5bdadb90266ed646a3cbe2f0be68ff67f",
+    "generatedJavascriptSha256": "540087ca268b30a38a47e41175b08416d2526f23afdc00c8eac9a40d31f781c4",
+    "sourceMapSha256": "4a8050c8877b71bf642aa7519e6c7e3f958fe232ce71f7ea1d371897485d9baa",
+    "archiveBytesMatch": true,
+    "productEntry": "expo-router/entry",
+    "productSourceObserved": true,
+    "probeSourceAbsent": true,
+    "sourceMapPackaged": false,
+    "sourceModules": 1465
+  },
+  "compiledFont": {
+    "kind": "compiled-resource-only",
+    "family": "BaroMobile",
+    "sha256": "3ae12c1281a84901b32d8c5f0e43fd6c4f8a5b7fd4ccbde66cfbe9f07cde05e8",
+    "weights": [
+      400,
+      600,
+      700
+    ],
+    "glyphs": 14757,
+    "codepoints": 14336,
+    "hangul": 11172,
+    "licenseEmbedded": true,
+    "compiledBytesMatch": true,
+    "appRuntimeVerified": false
+  },
+  "actualSignatureVerified": true,
+  "signature": "ad-hoc",
+  "teamIdentifier": "not set",
+  "actualSimulatorPlatformAndXmlDerSectionsVerified": true,
+  "architectures": [
+    "x86_64",
+    "arm64"
+  ],
+  "infoPlistSha256": "f11ff44690377a600ad247f7761088d374529beb18f451d1d8d6183395be4c92",
+  "executableSha256": "35e8fa73fa5d717ffb85199012d5e9edb4d432183f34706cda2504e4789b5461",
+  "originalControlMatched": true,
+  "nativeTextInputPatch": {
+    "kind": "ios-text-input-patched-source-compile-only",
+    "reactNative": "0.88.0",
+    "patchSha256": "87869cb1cff68c5c134b8662eb5c818f53eb890b9183b0f14571e768e5e6e813",
+    "manifestSha256": "bd0f12c88b8c76fd54a20ddb99b563789dba68f7d30114cd3acfdea9262bc4fd",
+    "generatedSourceBuildPropertyVerified": true,
+    "prebuiltRnCoreDisabled": true,
+    "compiledArchitectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "bothSourcesObservedForEveryArchitecture": true,
+    "nativeRuntimeVerified": false
+  },
+  "appRuntimeVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false
+}
