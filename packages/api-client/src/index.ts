@@ -42,6 +42,8 @@ export {
 } from "./lawyer-assets";
 export type { LawyerView } from "./lawyers";
 export { createLawyersClient, fromVerified, lawyerErrorMessage, rotateLawyers } from "./lawyers";
+export type { MobileAuthClient, MobileAuthProtocol } from "./mobile-auth";
+export { createMobileAuthClient } from "./mobile-auth";
 export { createPrecedentsClient } from "./precedents";
 export type {
   DomainRequest,

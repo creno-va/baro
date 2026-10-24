@@ -274,3 +274,29 @@ Apple 성공으로 표시하지 않는다. 실제 Safari/system browser의 cooki
 auth·기존 삭제/복구 journal216개/1752 assertions와 `validate:build`/로컬 workerd 통과.
 이 변경은 server/config만 다루며 native source·모바일 bundle·DB schema/query를 추가하지 않는다.
 이전에 통과한 OS/DB 증거를 새 실제 로그인/기기·전체 security/#71 인수로 전이하지 않는다.
+
+## 공통 모바일 v2 client 소비
+
+`codex/346-mobile-auth-v2-consumer`의 공통 선행은 `createMobileAuthClient`다.
+capability의 실제 HTTP404만 legacy3사로 선택하며, 503/401 본문의 NOT_FOUND·timeout·잘못된
+성공 DTO·알 수 없는 버전/중복 provider는 downgrade하지 않는다. `ApiError.httpStatus`는
+실제 응답 상태를 보존하는 선택적 관측 값이며 기존 code/message/retryable 의미는 유지한다.
+현재 웹/이전 client의 `Provider`는3사 그대로이고, `MobileProvider`는 canonical v2 enum의
+별도 type alias다. wire schema나 endpoint의 기존 응답을 바꾸지 않는다.
+
+협상한 버전으로 삭제 접근·재인증 prepare/verify를 파싱하고, v2 삭제 prepare는 explicit
+DELETE·지원 provider·원래 owner를 전달한다. 삭제의 exchange/status/cancel은 세션이 사라진 뒤
+읽을 수 있도록 별도의 completion requester를 명시적으로 받는다. 결과 ownerTag는 원래 준비
+영수증에 결합하며 invalid proof/tag는 전송 전에 거절한다. status/cancel의 unknown/401/404/503을
+취소나 삭제 실패/성공으로 임의 확정하지 않는다. 이 공통 client는 cookie·verifier 저장이나
+계정 자료 정리를 수행하지 않는다. 그 수명과 owner 전환 경합은 native adapter가 책임진다.
+
+합성 대역의 응답 행렬과 기존3사 실제 Better Auth/Hono/SQLite callback을 결합해 삭제 후
+무세션 결과 복구·one-use 재교환 거절을 검사한다. 실제 제공자 로그인이나 native 저장소/화면
+성공은 아니며 다음 단계에서 capability UI·Apple 버튼·pending 저장소·credential 정리를 연결한다.
+
+공통 client의 최신 maineb57a03 통합 검증: `bun ci` lock 변경 없음, quick source 회귀243개,
+전체 로컬 unit3986개/371파일/170925 assertions, 새 shared mobile-auth19개/86 assertions,
+production build/bundle/dry-run·실제 로컬 workerd와 양 OS Metro export 통과.
+Metro 입력에 변화가 없는 AI server 통합은 실제 native/기기 증거로 승격하지 않는다.
+모바일 화면·저장소·삭제 정리 adapter와 실제 Apple/기기 인수는 후속이다.
