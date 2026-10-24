@@ -35,6 +35,7 @@ import {
   gatewayWireIdentity,
   ModelError,
   prepareGatewayWireInput,
+  WORKSPACE_MODEL_TIMEOUT_MS,
 } from "../modules/llm-gateway/service";
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
@@ -325,7 +326,7 @@ export async function runWorkspaceRuntime(
             observeFailure: reportProviderFailure,
             // Observed model responses can exceed one minute. Each phase still
             // fits its renewed five-minute lease; timeout never retries a live call.
-            timeoutMs: 120000,
+            timeoutMs: WORKSPACE_MODEL_TIMEOUT_MS,
           }).call(phase, input, requestId, reserve, reserveCorrection, currentId);
         },
       };

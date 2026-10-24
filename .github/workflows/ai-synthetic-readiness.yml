@@ -20,6 +20,7 @@ on:
           - chat_tools
           - native_materials
           - legal_chat
+          - video_media
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
         required: true
@@ -46,7 +47,7 @@ jobs:
       max-parallel: 1
       matrix:
         feature_case: ${{ fromJSON(inputs.feature_case == 'all' && '["workspace_questions","workspace_summary","workspace_chat","media","tools_business","tools_property","tools_registry"]' || inputs.feature_case == 'chat_tools' && '["workspace_chat","tools_business","tools_property","tools_registry"]' || format('["{0}"]', inputs.feature_case)) }}
-    timeout-minutes: ${{ matrix.feature_case == 'native_materials' && 45 || 10 }}
+    timeout-minutes: ${{ (matrix.feature_case == 'native_materials' || matrix.feature_case == 'video_media') && 45 || 10 }}
     environment:
       name: preview
       deployment: false
@@ -65,6 +66,9 @@ jobs:
         run: |
           bun ci
           bun scripts/verify-release.ts "$GITHUB_SHA" --ci-only
+      - name: Prepare video frames and audio with the pinned native image
+        if: matrix.feature_case == 'video_media'
+        run: bun scripts/ai-readiness-video.ts
       - name: Run explicitly requested live synthetic acceptance
         if: matrix.feature_case != 'native_materials'
         env:
