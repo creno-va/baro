@@ -24,10 +24,13 @@ private func koreanSettingsOwnerChoice(cells: [CGRect], buttons: [CGRect], texts
 // Appended to DirectoryUITests.swift in the owned runner only. No product changes.
 extension BaroDirectoryUITests {
   @MainActor
-  private func settingsControl(_ aliases: [String], in settings: XCUIApplication) -> (element: XCUIElement?, cells: Int, buttons: Int, texts: Int, selection: String, ownersOverlap: Bool) {
+  private func settingsControl(_ aliases: [String], in settings: XCUIApplication, deriveCellFromKnownLabel: Bool = false) -> (element: XCUIElement?, cells: Int, buttons: Int, texts: Int, selection: String, ownersOverlap: Bool, cellQuerySource: String) {
     let predicates = aliases.flatMap { label in [NSPredicate(format: "label == %@", label), NSPredicate(format: "label BEGINSWITH %@", label + ",")] }
     let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
-    let cellQuery = settings.cells.matching(predicate), buttonQuery = settings.buttons.matching(predicate)
+    let directCells = settings.cells.matching(predicate)
+    let useDescendant = deriveCellFromKnownLabel && directCells.count == 0
+    let cellQuery = useDescendant ? settings.cells.containing(NSPredicate(format: "label IN %@", aliases)) : directCells
+    let buttonQuery = settings.buttons.matching(predicate)
     let textQuery = settings.staticTexts.matching(NSPredicate(format: "label IN %@", aliases))
     XCTAssertTrue([cellQuery.count, buttonQuery.count, textQuery.count].allSatisfy { $0 <= 8 }, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
     @MainActor
@@ -47,7 +50,33 @@ extension BaroDirectoryUITests {
     case "text": element = texts.first
     default: element = nil
     }
-    return (element, counts.0, counts.1, counts.2, choice.selection, choice.ownersOverlap)
+    return (element, counts.0, counts.1, counts.2, choice.selection, choice.ownersOverlap, useDescendant ? "known-descendant" : "direct-label")
+  }
+
+  @MainActor
+  private func reportLayoutStatus(_ stage: String, settings: XCUIApplication, element: XCUIElement?) {
+    let value = element?.value
+    let valueClass: String
+    if value == nil { valueClass = "absent" }
+    else if let string = value as? String {
+      if string == "1" || string == "Selected" { valueClass = "selected" }
+      else if string == "0" || string == "Not selected" { valueClass = "unselected" }
+      else if string.isEmpty { valueClass = "empty" }
+      else { valueClass = "other" }
+    } else { valueClass = "other" }
+    let done = settings.buttons.matching(NSPredicate(format: "label == %@", "Done"))
+    XCTAssertTrue(done.count <= 8, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
+    let status: [String: Any] = [
+      "stage": stage, "traitSelected": element?.isSelected ?? false, "valueClass": valueClass,
+      "doneButtonCount": done.count, "doneHittable": done.count == 1 && fullyHittable(done.firstMatch, in: settings),
+      "doneInNavigationBar": settings.navigationBars.buttons["Done"].exists,
+      "standardObserved": settings.staticTexts["Standard"].exists || settings.buttons["Standard"].exists,
+      "tenKeyObserved": settings.staticTexts["10 Key"].exists || settings.staticTexts["10-Key"].exists || settings.buttons["10 Key"].exists || settings.buttons["10-Key"].exists,
+      "koreanTitleObserved": settings.navigationBars["Korean"].exists
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]) {
+      print("BARO_KOREAN_LAYOUT_STATUS:" + String(decoding: data, as: UTF8.self))
+    }
   }
 
   @MainActor
@@ -84,14 +113,33 @@ extension BaroDirectoryUITests {
       element.tap()
     }
     print("BARO_KOREAN_SETUP_STAGE:layout")
-    let layout = settings.cells.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "2-Set", "2-Set,"))
-    XCTAssertTrue(layout.firstMatch.waitForExistence(timeout: 10) && layout.count == 1 && layout.firstMatch.isHittable, "BARO_KOREAN_LAYOUT_MISSING")
-    let alreadySelected = layout.firstMatch.isSelected || (layout.firstMatch.value as? String) == "1" || (layout.firstMatch.value as? String) == "Selected"
-    if !alreadySelected { layout.firstMatch.tap() }
+    let aliases = ["2-Set", "2-Set (QWERTY)"]
+    var layout = settingsControl(aliases, in: settings, deriveCellFromKnownLabel: true)
+    _ = wait({
+      layout = self.settingsControl(aliases, in: settings, deriveCellFromKnownLabel: true)
+      return layout.selection != "none"
+    }, seconds: 10)
+    let diagnostic: [String: Any] = ["stage": "layout", "cellCount": layout.cells, "buttonCount": layout.buttons, "textCount": layout.texts, "selection": layout.selection, "ownersOverlap": layout.ownersOverlap, "cellQuerySource": layout.cellQuerySource, "scrolls": 0]
+    if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]) {
+      print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
+    }
+    reportLayoutStatus("before-selection", settings: settings, element: layout.element)
+    XCTAssertNotNil(layout.element, "BARO_KOREAN_LAYOUT_MISSING")
+    XCTAssertTrue(layout.selection == "cell" || layout.selection == "button", "BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING")
+    guard let layoutElement = layout.element, layout.selection == "cell" || layout.selection == "button" else { return }
+    let alreadySelected = layoutElement.isSelected || (layoutElement.value as? String) == "1" || (layoutElement.value as? String) == "Selected"
+    if !alreadySelected { layoutElement.tap() }
+    reportLayoutStatus("after-selection", settings: settings, element: layoutElement)
     print("BARO_KOREAN_SETUP_STAGE:done")
-    let done = settings.navigationBars.buttons["Done"]
-    XCTAssertTrue(done.waitForExistence(timeout: 10) && done.isHittable, "BARO_KOREAN_SETTINGS_DONE_MISSING")
-    done.tap()
+    var done = settingsControl(["Done"], in: settings)
+    _ = wait({ done = self.settingsControl(["Done"], in: settings); return done.selection != "none" }, seconds: 10)
+    let doneDiagnostic: [String: Any] = ["stage": "done", "cellCount": done.cells, "buttonCount": done.buttons, "textCount": done.texts, "selection": done.selection, "ownersOverlap": done.ownersOverlap, "scrolls": 0]
+    if let data = try? JSONSerialization.data(withJSONObject: doneDiagnostic, options: [.sortedKeys]) {
+      print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
+    }
+    XCTAssertTrue(done.selection == "cell" || done.selection == "button", "BARO_KOREAN_SETTINGS_DONE_MISSING")
+    guard let doneElement = done.element, done.selection == "cell" || done.selection == "button" else { return }
+    doneElement.tap()
     print("BARO_KOREAN_SETUP_STAGE:readback")
     XCTAssertTrue(settings.cells.matching(NSPredicate(format: "label BEGINSWITH %@", "Korean")).firstMatch.waitForExistence(timeout: 10), "BARO_KOREAN_SETTINGS_READBACK_MISSING")
     settings.terminate()

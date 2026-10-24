@@ -1,0 +1,40 @@
+{
+  "toolingSourceSha": "b4e146dda6fc65b51af21a748e725e70d58412b7",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": null,
+    "history": [],
+    "searchControl": null,
+    "assertionCode": "BARO_KOREAN_LAYOUT_MISSING"
+  },
+  "koreanDirectoryFailure": {
+    "history": [],
+    "setupControl": {
+      "stage": "korean",
+      "cellCount": 1,
+      "buttonCount": 0,
+      "textCount": 1,
+      "ownersOverlap": true,
+      "selection": "cell",
+      "scrolls": 6
+    },
+    "setupStage": "layout",
+    "assertionCode": "BARO_KOREAN_LAYOUT_MISSING"
+  },
+  "inputReferenceFailure": null,
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

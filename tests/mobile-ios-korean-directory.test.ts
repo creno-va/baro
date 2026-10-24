@@ -106,6 +106,7 @@ test("native failure retains bounded fixed stages and booleans; malformed rows a
     history: [safe],
     setupStage: null,
     setupControl: null,
+    layoutStatus: null,
     assertionCode: "BARO_KOREAN_COMPOSITION_MISMATCH",
   });
   expect(JSON.stringify(observed)).not.toContain("private");
@@ -285,4 +286,66 @@ test("owner-aware diagnostic permits duplicate captions only with unique actiona
   expect(await Bun.file("scripts/validate.ts").text()).toContain(
     '"tests/mobile-ios-korean-settings-owner.test.ts"',
   );
+});
+
+test("layout diagnostics retain only fixed selection states and known-control presence without raw values", () => {
+  const value = {
+    stage: "before-selection",
+    traitSelected: false,
+    valueClass: "absent",
+    doneButtonCount: 1,
+    doneHittable: true,
+    doneInNavigationBar: true,
+    standardObserved: true,
+    tenKeyObserved: false,
+    koreanTitleObserved: true,
+  };
+  const encode = (v: unknown) => `BARO_KOREAN_LAYOUT_STATUS:${JSON.stringify(v)}`;
+  const parseStatus = (v: unknown) => observeIosKoreanDirectoryFailure(encode(v)).layoutStatus;
+  expect<unknown>(parseStatus(value)).toEqual(value);
+  for (const patch of [
+    { rawValue: "private" },
+    { rawLabel: "private" },
+    { frame: [1, 2, 3, 4] },
+    { valueClass: "private" },
+    { traitSelected: "true" },
+    { stage: "private" },
+    { doneButtonCount: 9 },
+    { doneButtonCount: -1 },
+    { doneButtonCount: 0 },
+    { standardObserved: "true" },
+  ])
+    expect(parseStatus({ ...value, ...patch })).toBeNull();
+  const later = { ...value, stage: "after-selection", traitSelected: true, valueClass: "selected" };
+  expect<unknown>(
+    observeIosKoreanDirectoryFailure(`${encode(value)}\n${encode(later)}`).layoutStatus,
+  ).toEqual(later);
+  expect(parseStatus({ ...value, doneButtonCount: 0, doneHittable: false })?.doneHittable).toBe(
+    false,
+  );
+  expect(
+    observeIosKoreanDirectoryFailure("BARO_KOREAN_LAYOUT_STATUS:{malformed").layoutStatus,
+  ).toBeNull();
+  expect(
+    observeIosKoreanDirectoryFailure(
+      "XCTAssertTrue failed - BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING",
+    ).assertionCode,
+  ).toBe("BARO_KOREAN_LAYOUT_ACTIONABLE_OWNER_MISSING");
+});
+
+test("layout accepts only known query origins while historical setup diagnostics keep their prior shape", async () => {
+  const historical = (
+    await Bun.file("docs/quality/mobile-native-9436e77/ios-korean-40106535873/failure.json").json()
+  ).koreanDirectoryFailure.setupControl;
+  const parseControl = (v: unknown) =>
+    observeIosKoreanDirectoryFailure(`BARO_KOREAN_SETUP_CONTROL:${JSON.stringify(v)}`).setupControl;
+  expect<unknown>(parseControl(historical)).toEqual(historical);
+  const layout = { ...historical, stage: "layout", cellQuerySource: "known-descendant" };
+  expect(parseControl(layout)?.cellQuerySource).toBe("known-descendant");
+  for (const patch of [
+    { cellQuerySource: "fuzzy" },
+    { cellQuerySource: "private" },
+    { rawCaption: "private" },
+  ])
+    expect(parseControl({ ...layout, ...patch })).toBeNull();
 });
