@@ -7,8 +7,10 @@ import {
   type ProcessingCosts,
 } from "../file-processing/transport";
 import { digest } from "../files/binary";
+import { readModelCompletion } from "./completion";
 import { MODEL_ID } from "./prompts";
 import type { GatewayBinding } from "./service";
+import { gatewayResponse } from "./transport";
 import { isDocumentedVisionSupport, prepareVisionWire, type VisionCapability } from "./vision-wire";
 
 export const WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo" as const;
@@ -184,7 +186,8 @@ export function createMediaGateway(
         resolveRemote(
           env.AI.run(model, JSON.parse(new TextDecoder().decode(serialized)), {
             gateway: { id: env.AI_GATEWAY_ID, collectLog: false, skipCache: true },
-          }),
+            returnRawResponse: true,
+          }).then(gatewayResponse),
         );
       } catch (error) {
         rejectRemote(error);
@@ -321,19 +324,12 @@ export function createMediaGateway(
       if (!(await permitted())) throw new ProcessingError("MODEL_UNAVAILABLE");
       const wire = prepareVisionWire(bytes);
       const raw = await dispatch(MODEL_ID, wire, null, access, permitted, artifactScope);
-      const envelope = z
-        .object({
-          choices: z
-            .array(z.object({ message: z.object({ content: z.string().max(120000) }) }))
-            .min(1)
-            .max(1),
-        })
-        .safeParse(raw);
-      if (!envelope.success) throw new ProcessingError("MODEL_SCHEMA_INVALID");
+      const completion = readModelCompletion(raw);
+      if (completion?.refused) throw new ProcessingError("POLICY_REJECTED");
+      if (!completion?.stopped || !completion.content)
+        throw new ProcessingError("MODEL_SCHEMA_INVALID");
       try {
-        const choice = envelope.data.choices[0];
-        if (!choice) throw new ProcessingError("MODEL_SCHEMA_INVALID");
-        return visionSchema.parse(JSON.parse(choice.message.content));
+        return visionSchema.parse(JSON.parse(completion.content));
       } catch {
         throw new ProcessingError("MODEL_SCHEMA_INVALID");
       }

@@ -162,6 +162,7 @@ export class ProcessingError extends Error {
       | "STALE_REVISION"
       | "MODEL_UNAVAILABLE"
       | "MODEL_SCHEMA_INVALID"
+      | "POLICY_REJECTED"
       | "STORAGE_UNAVAILABLE",
   ) {
     super(code);

@@ -67,3 +67,24 @@ mobile package, schema migration or installed-app parser is changed. Local tests
 cover later windows, excluded/corrected text, ownership/revision/deletion, continued
 attachments, duplicate-position quotes/dates and tool loops. External Gemini/media
 quality and deployed customer journeys still require their own observations.
+## Live baseline and response boundaries
+
+[Manual run40067350279](https://github.com/creno-va/baro/actions/runs/40067350279)
+on exact mainaf42d0e passed screening in one provider attempt,5091ms,430input/
+25output tokens. [Finite original observation](./ai-harness-2026-10-24/screening-af42d0e.json)
+retains its actual timestamps and provenance; the workflow artifact retains the
+source manifest. It does not establish workspace question/audit/chat/media success.
+The provider accepts the existing simple Chat Completions request; blanket model
+unavailability is not established. Next probe uses actual workspace questions and
+independent audit with synthetic input, preserving the three-total-attempt cap.
+
+Response repair accepts the documented native Gemini envelope as well as the
+existing Chat Completions envelope, without changing the selected model. Native
+thought parts/signatures are excluded, safety refusal and truncated/function-call
+responses cannot become final output, and an explicit Cloudflare success/result
+wrapper is decoded. Vision and ASR use the same bounded raw HTTP decoder. Image
+observations require a final stop and cannot publish partial JSON after truncation.
+Native output metering includes thinking via total minus input; absent cache/tier
+observations remain unknown. Invalid usage metadata remains an invalid receipt
+instead of invalidating a schema-valid answer or triggering another paid correction.
+No production failure cause is inferred from this offline compatibility repair.

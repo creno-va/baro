@@ -341,8 +341,9 @@ test("malformed choices still retain usage; missing or unsafe metering never bec
     { prompt_tokens: "10", completion_tokens: 1.5 },
   ]) {
     const h = harness(async () => ({ ...completion(), id: "private id with spaces", usage }));
-    if (usage === undefined) expect(await h.call()).toEqual(output);
-    else await expect(h.call()).rejects.toThrow("MODEL_SCHEMA_INVALID");
+    // Accounting metadata cannot invalidate an otherwise schema-valid answer.
+    // Invalid counts remain invalid in the immutable receipt below.
+    expect(await h.call()).toEqual(output);
     expect(h.receipts[0]?.receipt).toMatchObject({
       inputTokens: null,
       outputTokens: null,

@@ -1,11 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
-import { z } from "zod";
+import type { z } from "zod";
 import {
   createLlmGateway,
   type GatewayBinding,
   ModelError,
   type ModelMetric,
 } from "../src/server/modules/llm-gateway/service";
+import { createWorkspacePipeline } from "../src/server/modules/workspace/pipeline";
 import {
   activeProvenance,
   authorizedProbeRequest,
@@ -15,6 +16,7 @@ import {
   type ProbeConfiguration,
   probeProviderFailureSchema,
 } from "./ai-readiness-control";
+import { syntheticIntakeContext } from "./ai-readiness-fixture";
 
 interface ProbeEnv extends ProbeConfiguration {
   AI: GatewayBinding;
@@ -29,25 +31,19 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
       const metrics: ModelMetric[] = [];
       const providerFailures: z.infer<typeof probeProviderFailureSchema>[] = [];
       try {
-        const output = await createLlmGateway(this.env, {
+        const gateway = createLlmGateway(this.env, {
           observe: (m) => metrics.push(m),
           observeFailure: (failure) => {
             const safe = probeProviderFailureSchema.safeParse(failure);
             if (safe.success) providerFailures.push(safe.data);
           },
-        }).call(
-          "screening",
-          {
-            sentences: [
-              "대한민국에서 지인에게 100만 원을 빌려주었습니다.",
-              "약속한 상환일이 지났지만 아직 돌려받지 못했습니다.",
-            ],
-          },
-          PROBE_REQUEST_ID,
-          reserve,
-        );
-        const expected = z.object({ inScope: z.literal(true), urgency: z.literal("none") });
-        return expected.safeParse(output).success
+        });
+        const pipeline = createWorkspacePipeline(gateway, {
+          reserve: async () => reserve(),
+          invocation: () => crypto.randomUUID(),
+        });
+        const output = await pipeline.questions(syntheticIntakeContext(), PROBE_REQUEST_ID);
+        return output.length >= 1 && output.length <= 3
           ? { status: "passed", failure: null, metrics, providerFailures }
           : { status: "failed", failure: "POLICY_REJECTED", metrics, providerFailures };
       } catch (error) {

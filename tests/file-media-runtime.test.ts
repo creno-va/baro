@@ -118,6 +118,7 @@ async function setupImage(
                         quality: "processed",
                       }),
                     },
+                    finish_reason: "stop",
                   },
                 ],
               })
