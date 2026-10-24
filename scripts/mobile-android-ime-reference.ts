@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  type AndroidHierarchyDumpOutcome,
   androidPostBoundaryCommandFailures,
   runAndroidHomeCommand,
 } from "./mobile-android-command-observation";
@@ -113,10 +114,134 @@ export function inspectAndroidImeInventory(raw: string, selected: string) {
 export function androidImeReferenceConfiguration(input: Record<string, string | undefined>) {
   const env = internalAndroidEnvironment(input),
     sdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT,
-    source = input.TARGET_SHA;
+    source = input.TARGET_SHA,
+    mode = input.BARO_ANDROID_IME_REFERENCE_MODE ?? "metadata";
   if (!sdk || !source || !/^[a-f0-9]{40}$/.test(source))
     throw Error("ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED");
-  return { env, sdk, source };
+  if (mode !== "metadata" && mode !== "settings")
+    throw Error("ANDROID_IME_REFERENCE_MODE_REQUIRED");
+  return { env, sdk, source, mode };
+}
+/** Public SDK metadata supplies the explicit Settings component; never guess an activity or install an IME. */
+export function androidGboardSettingsActivity(raw: string, selected: string) {
+  const inventory = inspectAndroidImeInventory(raw, selected);
+  if (!inventory.methods.some((m) => m.selectedDefault && m.vendor === "google-gboard"))
+    throw Error("ANDROID_IME_REFERENCE_GBOARD_DEFAULT_REQUIRED");
+  const lines = raw.trimEnd().split(/\r?\n/),
+    start = lines.indexOf(`${selected.trim()}:`),
+    next = lines.findIndex(
+      (line, i) => i > start && component.test(line.slice(0, -1)) && line.endsWith(":"),
+    ),
+    block = lines.slice(start + 1, next < 0 ? lines.length : next).join("\n"),
+    settings = [...block.matchAll(/\bmSettingsActivityName=([^\s]+)/g)],
+    activity = settings[0]?.[1],
+    pkg = selected.trim().split("/")[0];
+  if (
+    start < 0 ||
+    settings.length !== 1 ||
+    !activity ||
+    activity === "null" ||
+    activity.length > 256 ||
+    !/^(?:\.[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)*$/.test(activity)
+  )
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_ACTIVITY_REQUIRED");
+  return `${pkg}/${activity.startsWith(".") ? pkg + activity : activity}`;
+}
+/** Fixed public OS menu counts only, scoped to the observed SDK Gboard Settings activity. */
+export function androidGboardSettingsControls(xml: string, foreground: string, activity: string) {
+  if (
+    foreground.length > 4_000_000 ||
+    !component.test(activity) ||
+    !activity.startsWith("com.google.android.inputmethod.latin/")
+  )
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+  const lines = foreground.split(/\r?\n/),
+    top = lines.filter((line) => /\btopResumedActivity\s*[=:]/.test(line)),
+    resumed = top.length ? top : lines.filter((line) => /\bmResumedActivity\s*[=:]/.test(line)),
+    observed =
+      resumed.length === 1
+        ? resumed[0]?.match(/\bu\d+\s+([A-Za-z][\w.]*)\/([A-Za-z.][\w.$]*)\s/)
+        : null,
+    expected = activity.split("/");
+  const observedClass = observed?.[2]?.startsWith(".") ? observed[1] + observed[2] : observed?.[2];
+  if (!observed || observed[1] !== expected[0] || observedClass !== expected[1])
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_FOREGROUND_REQUIRED");
+  if (
+    xml.length > 1_000_000 ||
+    !xml.startsWith("<?xml") ||
+    /<!DOCTYPE|<!ENTITY/.test(xml) ||
+    !/<\/(?:hierarchy|displays)>\s*$/.test(xml)
+  )
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+  const rows = [...xml.matchAll(/<node\b([^>]*)>/g)];
+  if (!rows.length || rows.length > 10000 || [...xml.matchAll(/<node\b/g)].length !== rows.length)
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+  let depth = 0;
+  for (const token of xml.matchAll(/<(\/?)(node)\b([^>]*)>/g)) {
+    if (token[1]) {
+      if (token[3]?.trim() || depth === 0)
+        throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+      depth--;
+    } else if (!token[3]?.trimEnd().endsWith("/")) {
+      if (++depth > 128) throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+    }
+  }
+  if (depth !== 0) throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+  const nodes = rows
+    .map((row) => {
+      const pairs = [...(row[1] ?? "").matchAll(/([\w:-]+)="([^"]*)"/g)];
+      const residue = (row[1] ?? "").replace(/([\w:-]+)="([^"]*)"/g, "").trim();
+      if (
+        new Set(pairs.map((p) => p[1])).size !== pairs.length ||
+        (residue !== "" && residue !== "/") ||
+        pairs.some((p) => p[2]?.includes("<"))
+      )
+        throw Error("ANDROID_IME_REFERENCE_SETTINGS_HIERARCHY_INVALID");
+      return Object.fromEntries(pairs.map((p) => [p[1], p[2]]));
+    })
+    .filter(
+      (node) =>
+        node.package === expected[0] &&
+        ["android.widget.TextView", "android.widget.Button"].includes(node.class ?? "") &&
+        node.enabled === "true" &&
+        node["visible-to-user"] !== "false",
+    );
+  const menuLabels = {
+    languages: "Languages",
+    preferences: "Preferences",
+    textCorrection: "Text correction",
+    theme: "Theme",
+    glideTyping: "Glide typing",
+    voiceTyping: "Voice typing",
+    clipboard: "Clipboard",
+    dictionary: "Dictionary",
+    privacy: "Privacy",
+    advanced: "Advanced",
+  };
+  const count = (label: string) =>
+    nodes.filter((node) => node.text === label || node["content-desc"] === label).length;
+  const titleCount = count("Gboard"),
+    menuCounts = Object.fromEntries(
+      Object.entries(menuLabels).map(([key, label]) => [key, count(label)]),
+    );
+  if (
+    titleCount < 1 ||
+    titleCount > 8 ||
+    Object.values(menuCounts).some((n) => n > 8) ||
+    Object.values(menuCounts).filter((n) => n > 0).length < 2
+  )
+    throw Error("ANDROID_IME_REFERENCE_SETTINGS_SCOPE_REQUIRED");
+  return {
+    kind: "android-owned-gboard-settings-controls-reference-only" as const,
+    settingsActivityForegroundVerified: true as const,
+    gboardTitleObserved: true as const,
+    menuCounts,
+    languageSelectionVerified: false as const,
+    productInputVerified: false as const,
+    koreanKeyboardVerified: false as const,
+    rawLabelsExported: false as const,
+    rawHierarchyExported: false as const,
+  };
 }
 async function main() {
   if (
@@ -126,7 +251,7 @@ async function main() {
   )
     throw Error("ANDROID_IME_REFERENCE_FRESH_LINUX_CI_REQUIRED");
   const root = process.cwd(),
-    { env, sdk, source } = androidImeReferenceConfiguration(process.env),
+    { env, sdk, source, mode } = androidImeReferenceConfiguration(process.env),
     base = resolve(root, ".wrangler/mobile-android-ime-reference"),
     owned = resolve(base, `owned-${randomUUID()}`),
     paths = ownedAndroidPaths(owned),
@@ -144,6 +269,7 @@ async function main() {
     avdCreationAttempted = false,
     receipt: Record<string, unknown> | undefined;
   const log = resolve(owned, "private-emulator.log");
+  let hierarchyOutcome: AndroidHierarchyDumpOutcome | null = null;
   async function command(args: string[], input?: string, timeoutMs?: number) {
     return new TextDecoder().decode(
       await runAndroidHomeCommand({
@@ -153,6 +279,9 @@ async function main() {
         ...(input === undefined ? {} : { input }),
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
         onFailure: (value) => failures.record(value),
+        onHierarchyDump: (value) => {
+          hierarchyOutcome = value;
+        },
       }),
     );
   }
@@ -210,6 +339,37 @@ async function main() {
     const raw = await shell(["ime", "list", "-a", "--user", "0"]),
       selected = await shell(["settings", "--user", "0", "get", "secure", "default_input_method"]),
       inventory = inspectAndroidImeInventory(raw, selected);
+    let settingsReference: ReturnType<typeof androidGboardSettingsControls> | undefined;
+    if (mode === "settings") {
+      phase = "gboard-settings-reference";
+      const activity = androidGboardSettingsActivity(raw, selected);
+      await shell(["am", "start", "-W", "-a", "android.intent.action.MAIN", "-n", activity]);
+      const file = `/sdcard/baro-ime-${randomUUID()}.xml`;
+      try {
+        const foreground = await shell(["dumpsys", "activity", "activities"]);
+        hierarchyOutcome = null;
+        await shell(["uiautomator", "dump", "--compressed", file]);
+        if (hierarchyOutcome !== "saved")
+          throw Error("ANDROID_IME_REFERENCE_SETTINGS_DUMP_UNCONFIRMED");
+        const xml = await shell(["cat", file]);
+        settingsReference = androidGboardSettingsControls(xml, foreground, activity);
+        // Bind the observation to the foreground after the dump as well.
+        androidGboardSettingsControls(
+          xml,
+          await shell(["dumpsys", "activity", "activities"]),
+          activity,
+        );
+      } finally {
+        await shell(["rm", "-f", file]);
+        await shell(["test", "!", "-e", file]);
+      }
+      if (
+        (
+          await shell(["settings", "--user", "0", "get", "secure", "default_input_method"])
+        ).trim() !== selected.trim()
+      )
+        throw Error("ANDROID_IME_REFERENCE_DEFAULT_CHANGED");
+    }
     const apiLevel = (await shell(["getprop", "ro.build.version.sdk"])).trim(),
       osVersion = (await shell(["getprop", "ro.build.version.release"])).trim(),
       model = (await shell(["getprop", "ro.product.model"])).trim();
@@ -222,7 +382,11 @@ async function main() {
     assertAndroidImeProductAbsent(await shell(["pm", "list", "packages", "--user", "0"]));
     receipt = {
       version: 1,
-      kind: "android-owned-ime-metadata-reference-only",
+      kind:
+        mode === "settings"
+          ? "android-owned-gboard-settings-reference-receipt"
+          : "android-owned-ime-metadata-reference-only",
+      referenceMode: mode,
       toolingSourceSha: source,
       observedAt: new Date().toISOString(),
       image: "system-images;android-35;google_apis;x86_64",
@@ -231,8 +395,11 @@ async function main() {
       productInstalled: false,
       packageReadiness: readiness,
       inventory,
+      ...(settingsReference ? { settingsReference, hierarchyFileRemoved: true } : {}),
       metadataSha256: createHash("sha256").update(raw).digest("hex"),
-      settingsChanged: false,
+      ...(mode === "metadata"
+        ? { settingsChanged: false }
+        : { keyboardPreferenceChangeRequested: false, selectedDefaultUnchanged: true }),
       softwareKeyTaps: 0,
       userAccountEntered: false,
       screenshotsExported: false,

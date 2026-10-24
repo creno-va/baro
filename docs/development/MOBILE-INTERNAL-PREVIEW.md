@@ -1743,3 +1743,34 @@ decoded RGBA/투명 여백까지 일치하며 재compile/resign·Metro 재생성
 이 원본 pin은 Android SDK metadata/서명 재검증과 실제 앱 관측의 입력이다. 이번 단계는
 설치/화면/계정·한국어 IME·실물/store 성공이 아니다. iOS compiler40120706028은 별도 진행 중이며
 기존 iOS pin/sourcec821를 새 source로 바꾸지 않는다. 양쪽 기존 성공/실패는 해당 source에 남긴다.
+
+### 같은 source의 새 iOS 원본
+
+이후 [iOS compiler40120706028](https://github.com/creno-va/baro/actions/runs/40120706028)도
+SUCCESS로 완료됐다. artifact12571538139의 [원래 receipt](../quality/mobile-native-92f4232/receipt-ios.json),
+[전체 원본/자산 대조](../quality/mobile-native-92f4232/ios-local-original-verification.json),
+[실제 control 대조](../quality/mobile-native-92f4232/ios-control-verification.json)를 보존했다.
+ZIP21,580,771bytes·SHA `c5507bb4711885f9e2f02d0304cb799c4ad594e180e6dcb8a6220ff017270c55`,
+HBC3,666,184bytes·SHA `1df73ab5ecee50b90fcca8887de40caac8a67fbc826f4e13e50dd79ab11ec13e`와
+font·Apple3PNG를 대조했다. 원본을 다시 서명하지 않고 codesign strict·두 architecture의
+Simulator platform/XML·DER/control·Info.plist와 원래 receipt를 비교했다.
+
+결과는 ad-hoc/team not set·x86_64+arm64이며 RN TextInput의 양 architecture source compile
+witness를 보존한다. iPhone/iPad family와 최소 OS16.4 metadata는 확인했지만 physical/store
+서명·실제 앱 입력/계정·한국어 IME 성공은 아니다. 새 iOS pin과 exact green main 뒤 실제
+Korean 조합을 실행하며 기존 다섯 실패와 setup-only 성공은 각각의 범위로 유지한다.
+
+### 새 Android 원본의 첫 실제 실행은 제품 시작 전 실패
+
+source92f 앱·toolingae73f46의 [40123131797](https://github.com/creno-va/baro/actions/runs/40123131797)은
+FAILURE다. SDK37 tools로 원본 APK/서명/HBC/font 재검증은 통과했지만 PackageManager의 두 handler
+완료 뒤 첫 Launcher baseline sample에서 system error dialog를 관측해 중단했다.
+원래 [실패](../quality/mobile-native-92f4232/android-runtime-40123131797/failure.json),
+[SDK 재검증](../quality/mobile-native-92f4232/android-runtime-40123131797/verification.json),
+[독립 결합](../quality/mobile-native-92f4232/android-runtime-40123131797/local-preservation.json)을 보존한다.
+
+`ANDROID_LAUNCHER_SYSTEM_ERROR_DIALOG`·pixel kind·sample1/root false를 확인했지만 ANR의 실제
+원인은 확정하지 않는다. 앱 Home/입력 검사는 도달하지 않았으며 이를 제품 입력 실패로
+분류하지 않는다. 실패 이미지도 여기 보존하지 않았다. dialog dismiss·Launcher 전환/종료·
+준비 조건 완화로 성공 처리하지 않고, 같은 실행 조건을 반복하지 않는다. 다른 실제 runtime
+조건의 준비·iOS Korean 실제 검증과 Gboard 제품 없는 참고 관측을 구분해 진행한다.
