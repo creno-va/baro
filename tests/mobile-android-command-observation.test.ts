@@ -212,3 +212,19 @@ test("auth dump classification accepts only its fresh owned sdcard file, includi
     ),
   ).toBe("unknown");
 });
+
+test("IME references confirm only their exact owned UUID dump path and retain failure outcomes", () => {
+  const ime = file.replace("baro-directory-", "baro-ime-");
+  expect(androidHierarchyDumpOutcome(`UI hierchary dumped to: ${ime}`, "", ime)).toBe("saved");
+  expect(androidHierarchyDumpOutcome(`UI hierchary dumped to: ${ime}`, "", file)).toBe("unknown");
+  expect(androidHierarchyDumpOutcome("ERROR: could not get idle state.", "", ime)).toBe(
+    "idle-timeout",
+  );
+  expect(
+    androidHierarchyDumpOutcome(
+      `UI hierchary dumped to: ${ime}`,
+      "",
+      ime.replace("00000000", "invalid"),
+    ),
+  ).toBe("unknown");
+});
