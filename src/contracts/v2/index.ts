@@ -5,5 +5,6 @@ export * from "./intake";
 export * from "./lawyers";
 export * from "./reports";
 export * from "./sources";
+export * from "./tools";
 export * from "./usage";
 export * from "./workspace";
