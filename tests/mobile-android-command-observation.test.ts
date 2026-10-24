@@ -186,3 +186,29 @@ test("bounded real subprocesses preserve output and stdin in memory while failur
     await rm(directory, { recursive: true, force: true });
   }
 }, 15000);
+
+test("auth dump classification accepts only its fresh owned sdcard file, including errors on stderr", () => {
+  const auth = file.replace("baro-directory-", "baro-auth-");
+  expect(androidHierarchyDumpOutcome(`UI hierchary dumped to: ${auth}\n`, "", auth)).toBe("saved");
+  expect(
+    androidHierarchyDumpOutcome(
+      `UI hierchary dumped to: ${auth}\n`,
+      "ERROR: could not get idle state.",
+      auth,
+    ),
+  ).toBe("unknown");
+  expect(
+    androidHierarchyDumpOutcome(
+      "",
+      "ERROR: null root node returned by UiTestAutomationBridge.\n",
+      auth,
+    ),
+  ).toBe("root-unavailable");
+  expect(
+    androidHierarchyDumpOutcome(
+      `UI hierchary dumped to: ${auth}`,
+      "",
+      auth.replace("/sdcard/", "/data/local/tmp/"),
+    ),
+  ).toBe("unknown");
+});

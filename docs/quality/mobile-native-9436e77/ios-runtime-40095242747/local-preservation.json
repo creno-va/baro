@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "kind": "local-preserved-ios-auth-cancellation-verification",
+  "verifiedAt": "2026-10-24T13:01:20.932Z",
+  "workflowRunId": 40095242747,
+  "workflowConclusion": "success",
+  "artifactId": 12561201211,
+  "binarySourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "toolingSourceSha": "ff52c4dd266fb8880ecd2474f3f63b4cbd2a6cce",
+  "originalCompilerRunId": 40092729846,
+  "originalArchiveUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "40e2e838c253d4a78074b48de8cf5dc46282944a3b7d092afed7ea4d8edb51fb",
+  "homeReceiptSha256": "fe5e1a153fcaf5a8ba27d536a7681db4a9e6232ca7e57b427f3ee954af5aa5a2",
+  "authReceiptSha256": "2e1961b95e84cfff70c6b551bf1633573d1217cd7bf1cfebf5491876750db604",
+  "homePng": {
+    "bytes": 220823,
+    "sha256": "c008bc446daa0a63cc1644c412c5528c89436bf46d8cb3d4444ed1815d7f3e6e",
+    "width": 1179,
+    "height": 2556
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldNativeLaunches": 2,
+  "providers": [
+    "google",
+    "naver",
+    "kakao"
+  ],
+  "strictAuthCancellationIdentityVerified": true,
+  "originalHomeContentVerified": false,
+  "visualReviewRequiredInOriginal": true,
+  "recompiled": false,
+  "resigned": false,
+  "credentialsEntered": false,
+  "callbackExchangeVerified": false,
+  "providerAcceptanceVerified": false,
+  "oauthVerified": false,
+  "privateDataAccess": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

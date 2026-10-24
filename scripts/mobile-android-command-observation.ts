@@ -37,7 +37,7 @@ export function androidHierarchyDumpOutcome(
 ): AndroidHierarchyDumpOutcome {
   if (
     stdout.length + stderr.length > 65536 ||
-    !/^\/sdcard\/baro-(?:directory|launcher)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.xml$/.test(
+    !/^\/sdcard\/baro-(?:directory|launcher|auth)-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.xml$/.test(
       expectedFile,
     )
   )
