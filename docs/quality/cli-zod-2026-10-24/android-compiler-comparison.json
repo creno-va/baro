@@ -1,0 +1,14 @@
+{
+  "observedAt": "2026-10-24T05:07:59.548Z",
+  "sourceSha": "6201112438fea33ef761c053dfdc9fa500cbd407",
+  "platform": "android",
+  "localExportHbcBytes": 3572976,
+  "localExportHbcSha256": "747df74d5ee76e751eb843ea2fd7acba85b37c0f557168360794c66b546b8c8d",
+  "compilerHbcBytes": 3572932,
+  "compilerHbcSha256": "a767b40da38b76b2679cfbbcf3e5ae7b3fb9d9b33b1643124c32a7d385bb155a",
+  "fullByteMatch": false,
+  "normalizationApplied": false,
+  "localGraphTransferredToCompilerProof": false,
+  "causeOfDifferenceConfirmed": false,
+  "appRuntimeVerified": false
+}

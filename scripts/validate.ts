@@ -28,6 +28,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "test",
       "tests/workflows.test.ts",
       "tests/dependency-security-updates.test.ts",
+      "tests/cli-zod-observation.test.ts",
       "tests/ai-preflight-workflow.test.ts",
       "tests/session-owner-fence.test.ts",
       "scripts/validate.test.ts",
