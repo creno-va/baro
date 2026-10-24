@@ -11,6 +11,7 @@ import {
 } from "../../../../contracts/v2";
 import { sourceClaimSchema } from "../../citation/v2-validate";
 import { workspaceSourceRequestSchema } from "../../legal-retrieval/v2/workspace-plans";
+import { materialWindowRequestSchema } from "../../workspace/materials";
 
 export const workspaceQuestionsOutputSchema = z.strictObject({
   questions: v2QuestionsSchema.max(V2_INTAKE_POLICY.questionsPerBatch),
@@ -30,6 +31,7 @@ export const workspaceChatOutputSchema = z.strictObject({
   actions: z.array(v2ActionSchema).max(5),
   parties: v2SummarySchema.shape.parties.max(5),
   requestedSources: z.array(workspaceSourceRequestSchema).max(2),
+  requestedMaterials: z.array(materialWindowRequestSchema).max(2).default([]),
   sourceClaims: z.array(sourceClaimSchema).max(50).default([]),
   timeline: z.array(v2TimelineEntrySchema).max(5),
 });
