@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "candidateSha": "9c5401103e94244c270f5d80d6d2f679132638e9",
+  "status": "component_passed",
+  "component": "pinned-linux-native-video",
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40082253954",
+  "job": "https://github.com/creno-va/baro/actions/runs/40082253954/job/120838302578",
+  "step": {
+    "completed_at": "2026-10-24T09:37:55Z",
+    "conclusion": "success",
+    "name": "Prepare video frames and audio with the pinned native image",
+    "started_at": "2026-10-24T09:32:31Z",
+    "status": "completed"
+  },
+  "decodedFrames": 80,
+  "oneSecondFrames": 8,
+  "sceneFrames": 2,
+  "selectedFrames": 2,
+  "audioSeconds": 8,
+  "workflowConclusion": "failure",
+  "gatewayVision": "first_frame_timeout_60000ms",
+  "deployedProduct": false
+}

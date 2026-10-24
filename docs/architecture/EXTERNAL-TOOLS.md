@@ -13,7 +13,7 @@
 | 도구 | 공개 문서로 확인한 범위 | 남은 외부 입력 |
 | --- | --- | --- |
 | 홈택스/국세청 | [사업자 상태 서비스](https://www.data.go.kr/data/15081808/openapi.do), [공식 Swagger](https://infuser.odcloud.kr/api/stages/28493/api-docs?1728017570963). POST `/api/nts-businessman/v1/status`, 요청 번호와 응답 번호 일치 검사 | 활용 신청·운영 인증키. 개인의 납세·체납/세무 서류 조회는 이 계약에 포함하지 않음 |
-| 더치트 | [공통 인증·복호화](https://apidocs.thecheat.co.kr/docs/api-usage/api-common/), [피해 등록 조회](https://apidocs.thecheat.co.kr/docs/api-usage/api-search-plain/). X-TheCheat-ApiKey, AES256-CBC, keyword/type/은행코드·기간 일치 검사 | API/ENC 키·제휴·허용 IP. `success (test)`는 실제 등록 여부로 표시하지 않음 |
+| 더치트 | [공통 인증·복호화](https://apidocs.thecheat.co.kr/docs/api-usage/api-common/), [피해 등록 조회](https://apidocs.thecheat.co.kr/docs/api-usage/api-search-plain/), [공식 준비사항](https://apidocs.thecheat.co.kr/docs/api-prerequisite/). X-TheCheat-ApiKey, AES256-CBC, keyword/type/은행코드·기간 일치 검사 | 기업 회원·사업자등록증·앱 등록 후 API/ENC 키. `success (test)`는 실제 등록 여부로 표시하지 않음. 추가 네트워크 정책은 실제 발급 계약에서 확인하며 임의 필수 조건으로 만들지 않음 |
 | 등기정보광장 | [서비스별 신청 안내](https://data.iros.go.kr/rp/oa/openOapiIntro.do). 별도 회원/서비스별 인증과 승인 명세 필요 | 발급 대상 서비스의 정확한 endpoint·요청/응답 계약·인증키. 주소/소유권/등본 API로 임의 대체하지 않음 |
 | 데이터허브 | [공통 인증·production 도메인](https://dataapi.co.kr/dLab/mdh_api.do), [부동산 사전주소](https://dataapi.co.kr/upload/dLab/20260831-151849-35382.html), [건축물 총괄표제부](https://dataapi.co.kr/upload/dLab/20231102-132305-87364.html) | 승인 Token·상품 사용 권한·실제 응답 인수. 공개 가이드의2022/2025 개정일은 그대로 보존 |
 

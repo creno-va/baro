@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ProcessingCosts } from "../src/server/modules/file-processing/transport";
 import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
 import { createMediaGateway, WHISPER_MODEL } from "../src/server/modules/llm-gateway/transcription";
+import { documentedVisionSupport } from "../src/server/modules/llm-gateway/vision-wire";
 
 const wav = () => {
   const bytes = new Uint8Array(32044);
@@ -34,6 +35,74 @@ const valid = {
     },
   ],
 };
+test("native JPEG observations use explicit LOW settings and retain the original provider receipt", async () => {
+  const raw = {
+    candidates: [
+      {
+        content: {
+          parts: [
+            {
+              text: JSON.stringify({
+                texts: ["[보이는 상태] 합성 원형 표식"],
+                quality: "processed",
+              }),
+            },
+          ],
+        },
+        finishReason: "STOP",
+      },
+    ],
+    usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 10, totalTokenCount: 30 },
+  };
+  const jpeg = new Uint8Array([255, 216, 255, 217]);
+  let reserved: Parameters<ProcessingCosts["before"]>[0] | undefined;
+  const receipts: unknown[] = [];
+  const gateway = createMediaGateway(
+    {
+      AI_GATEWAY_ID: "synthetic",
+      AI: {
+        run: async (model, wire, options) => {
+          expect(model).toBe(MODEL_ID);
+          if (!reserved?.wire) throw new Error("Dispatch preceded reservation");
+          expect(wire).toEqual(reserved.wire);
+          expect(wire).toMatchObject({
+            contents: [{ parts: [{ inlineData: { mimeType: "image/jpeg", data: "/9j/2Q==" } }] }],
+            generationConfig: {
+              thinkingConfig: { thinkingLevel: "LOW", includeThoughts: false },
+              mediaResolution: "MEDIA_RESOLUTION_LOW",
+              maxOutputTokens: 4000,
+              responseMimeType: "application/json",
+            },
+          });
+          for (const key of ["messages", "reasoning_effort", "response_format"])
+            expect(wire).not.toHaveProperty(key);
+          expect(options.gateway).toEqual({ id: "synthetic", collectLog: false, skipCache: true });
+          return raw;
+        },
+      },
+    },
+    {
+      costs: {
+        before: async (input) => {
+          reserved = input;
+          return { attemptId: "synthetic-native", dispatchToken: null };
+        },
+        after: async (_permit, receipt) => {
+          receipts.push(receipt);
+        },
+      },
+      waitUntil: () => {},
+      visionCapability: async () => documentedVisionSupport(),
+    },
+  );
+  expect(
+    await gateway.observe(jpeg, {
+      authorize: async () => true,
+      signal: new AbortController().signal,
+    }),
+  ).toEqual({ texts: ["[보이는 상태] 합성 원형 표식"], quality: "processed" });
+  expect(receipts).toEqual([{ transport: "response", rawUsage: raw }]);
+});
 test("media HTTP failure diagnostics are finite and cannot replace the original processing failure", async () => {
   const failures: unknown[] = [];
   const s = setup({
@@ -106,7 +175,7 @@ function setup(
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       visionCapability: async () =>
         capable
-          ? { model: MODEL_ID, wire: "chat_image_url", validUntil: "2099-01-01T00:00:00Z" }
+          ? { model: MODEL_ID, wire: "native_inline_data", validUntil: "2099-01-01T00:00:00Z" }
           : null,
       ...(options.observeFailure ? { observeFailure: options.observeFailure } : {}),
     },
@@ -183,9 +252,11 @@ test("missing confidence and empty text preserve low-quality coverage", async ()
 });
 
 test("timeout retains unknown charge exposure and observes the late real outcome", async () => {
+  const failures: unknown[] = [];
   let resolve!: (value: unknown) => void;
   const s = setup({
     timeoutMs: 1,
+    observeFailure: (failure) => failures.push(failure),
     run: () =>
       new Promise((r) => {
         resolve = r;
@@ -195,6 +266,7 @@ test("timeout retains unknown charge exposure and observes the late real outcome
     code: "JOB_TIMEOUT",
   });
   expect(s.receipts).toEqual([{ transport: "unknown" }]);
+  expect(failures).toEqual([{ phase: "asr", category: "provider_timeout", httpStatus: null }]);
   resolve(valid);
   await Promise.all(s.pending);
   expect(s.receipts).toEqual([
@@ -277,7 +349,7 @@ test("vision dispatch follows observer registration and preserves actual respons
   expect(await s.gateway.observe(new Uint8Array([255, 216, 255, 217]), s.access)).toEqual(output);
   expect(events).toEqual(["registered", "run"]);
   expect(s.models).toEqual([MODEL_ID]);
-  expect(s.wires[0]?.service_tier).toBe("default");
+  expect(s.wires[0]).not.toHaveProperty("service_tier");
   expect(s.receipts).toEqual([{ transport: "response", rawUsage: envelope }]);
   await Promise.all(s.pending);
 });
