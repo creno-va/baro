@@ -14,7 +14,11 @@ import {
 import * as schema from "../../db/schema";
 import { fragmentText, utf8Bytes, type V2Core, type WorkspaceGuard } from "../../db/v2-core";
 import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
-import { createV2FileStagingRepository } from "../../db/v2-file-staging";
+import {
+  createV2FileStagingRepository,
+  type FilePublicationContext,
+  filePublicationContextSchema,
+} from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2JobsRepository, jobAlive } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
@@ -81,6 +85,7 @@ const publicationSchema = z.strictObject({
   parts: z.array(opaqueIdSchema).max(1000),
   observationCount: z.number().int().min(0).max(10000),
   derivativeCount: z.number().int().min(0).max(20000),
+  context: filePublicationContextSchema.optional(),
 });
 function initialCoverage(probe: V2FileProbe): V2Coverage {
   if (probe.category === "document")
@@ -118,7 +123,13 @@ function initialCoverage(probe: V2FileProbe): V2Coverage {
     sceneFrameCount: null,
   };
 }
-type JobContext = { lease: JobLease; guard: WorkspaceGuard };
+type JobContext = { lease: JobLease; guard: WorkspaceGuard; context: FilePublicationContext };
+const samePublicationContext = (left: FilePublicationContext, right: FilePublicationContext) =>
+  left.status === right.status &&
+  left.intakeRevision === right.intakeRevision &&
+  left.summaryRevision === right.summaryRevision &&
+  left.currentJobId === right.currentJobId &&
+  left.manifestSnapshotId === right.manifestSnapshotId;
 const receiptSchema = z.strictObject({ opaqueIds: z.array(opaqueIdSchema).max(100) });
 
 /** Each native unit (one page / 30 seconds) and each provider artifact is a
@@ -163,7 +174,7 @@ export function createFileProcessingExecution(
     // Every transport, stream and publication caller keeps its existing check.
     const row = await core
       .statement(
-        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision,w.status AS workspace_status,w.intake_revision,w.confirmed_summary_revision,w.current_job_id,f.manifest_snapshot_id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND f.manifest_snapshot_id IS NOT NULL AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
         [
           params.jobId,
           params.ownerId,
@@ -183,11 +194,24 @@ export function createFileProcessingExecution(
         lease_until: string;
         status: string;
         revision: number;
+        workspace_status: "intake" | "active";
+        intake_revision: number;
+        confirmed_summary_revision: number | null;
+        current_job_id: string | null;
+        manifest_snapshot_id: string;
       }>();
     return row
       ? {
           lease: { jobId: params.jobId, token: row.lease_token, fencing: row.fencing },
           guard: { ...a, workspaceId: params.workspaceId, expectedRevision: row.revision },
+          context: {
+            revision: row.revision,
+            status: row.workspace_status,
+            intakeRevision: row.intake_revision,
+            summaryRevision: row.confirmed_summary_revision,
+            currentJobId: row.current_job_id,
+            manifestSnapshotId: row.manifest_snapshot_id,
+          },
         }
       : null;
   };
@@ -212,6 +236,42 @@ export function createFileProcessingExecution(
     )
       throw new ProcessingError("STALE_REVISION");
     return guard();
+  };
+  const publicationWrite = async (
+    publication: z.infer<typeof publicationSchema>,
+    initial: JobContext,
+    action: (context: JobContext) => Promise<boolean>,
+    signal: AbortSignal,
+  ) => {
+    let c = initial;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (signal.aborted) throw new ProcessingError("JOB_TIMEOUT");
+      const baseline = publication.context;
+      let refreshed = true;
+      if (baseline) {
+        if (!samePublicationContext(baseline, c.context))
+          throw new ProcessingError("STALE_REVISION");
+        if (c.guard.expectedRevision !== baseline.revision)
+          refreshed = await fileStaging.refreshWorkspace(
+            c.guard,
+            {
+              fileId: params.fileId,
+              fileRevision: params.fileRevision,
+              coverageSnapshotId: publication.coverageId,
+              context: baseline,
+            },
+            c.lease,
+          );
+      }
+      if (refreshed && (await action(c))) return;
+      const next = await guard();
+      // Retry only an observed revision race, never an ambiguous DB failure,
+      // integrity refusal or any native/model call. Older plans stay strict.
+      if (!baseline || next.guard.expectedRevision === c.guard.expectedRevision)
+        throw new ProcessingError("STALE_REVISION");
+      c = next;
+    }
+    throw new ProcessingError("STALE_REVISION");
   };
   const checkpoint = async (
     scope: string,
@@ -904,7 +964,14 @@ export function createFileProcessingExecution(
       return { artifactCount: results.length };
     },
     async preparePublication(totalUnits: number, signal: AbortSignal) {
-      await renew();
+      const initial = await renew();
+      const previousIds = await receipt("publication");
+      const previous = previousIds?.[0]
+        ? await json(previousIds[0], publicationSchema, "publication:previous")
+        : null;
+      // A lost step ACK must reuse its encrypted immutable plan, including the
+      // original context. Revision-only progress cannot change its content hash.
+      const publicationContext = previous ? previous.context : initial.context;
       let coverage: V2Coverage | null = null;
       let observations = 0,
         derivatives = 0;
@@ -1024,10 +1091,13 @@ export function createFileProcessingExecution(
         parts: partIds,
         observationCount: observations,
         derivativeCount: derivatives,
+        ...(publicationContext ? { context: publicationContext } : {}),
       });
       const publicationId = await saveJson(await idFor("publication-plan"), publication, signal);
       await checkpoint("publication", 1, "assembling", [publicationId]);
       const c = await guard();
+      if (publicationContext && !samePublicationContext(publicationContext, c.context))
+        throw new ProcessingError("STALE_REVISION");
       const existing = await core
         .statement(
           "SELECT state,workspace_revision FROM v2_private_snapshots WHERE id=? AND owner_id=?",
@@ -1051,7 +1121,7 @@ export function createFileProcessingExecution(
       )
         throw new ProcessingError("STALE_REVISION");
       if (existing && existing.workspace_revision !== c.guard.expectedRevision)
-        throw new ProcessingError("STALE_REVISION");
+        await publicationWrite(publication, c, async () => true, signal);
       return { partCount: parts.length };
     },
     async stageCoveragePart(index: number, signal: AbortSignal) {
@@ -1065,11 +1135,12 @@ export function createFileProcessingExecution(
       try {
         const part = new TextDecoder("utf-8", { fatal: true }).decode(bytes),
           c = await renew();
-        if (
-          signal.aborted ||
-          !(await staging.append(c.guard, publication.coverageId, index, part, c.lease))
-        )
-          throw new ProcessingError("STALE_REVISION");
+        await publicationWrite(
+          publication,
+          c,
+          (next) => staging.append(next.guard, publication.coverageId, index, part, next.lease),
+          signal,
+        );
       } finally {
         bytes.fill(0);
       }
@@ -1118,22 +1189,26 @@ export function createFileProcessingExecution(
         plan.derivativeOrdinal +
         plan.results.slice(0, index).reduce((n, r) => n + r.derivatives, 0) +
         Math.min(start, result.derivatives.length);
-      if (
-        !(await fileStaging.stagePage(
-          c.guard,
-          {
-            fileId: params.fileId,
-            fileRevision: params.fileRevision,
-            coverageSnapshotId: publication.coverageId,
-            observationOrdinal,
-            observations: result.observations.slice(start, start + 4),
-            derivativeOrdinal,
-            derivatives: result.derivatives.slice(start, start + 4),
-          },
-          c.lease,
-        ))
-      )
-        throw new ProcessingError("STALE_REVISION");
+      await publicationWrite(
+        publication,
+        c,
+        (next) =>
+          fileStaging.stagePage(
+            next.guard,
+            {
+              fileId: params.fileId,
+              fileRevision: params.fileRevision,
+              coverageSnapshotId: publication.coverageId,
+              observationOrdinal,
+              observations: result.observations.slice(start, start + 4),
+              derivativeOrdinal,
+              derivatives: result.derivatives.slice(start, start + 4),
+              ...(publication.context ? { context: publication.context } : {}),
+            },
+            next.lease,
+          ),
+        signal,
+      );
       return { status: "saved" as const };
     },
     async publish(signal: AbortSignal) {
@@ -1147,35 +1222,41 @@ export function createFileProcessingExecution(
       if (!ids?.[0]) throw new ProcessingError("FILE_PROCESSING_FAILED");
       const p = await json(ids[0], publicationSchema, "publish:publication"),
         c = await renew();
-      if (
-        signal.aborted ||
-        !(await staging.seal(
-          c.guard,
-          p.coverageId,
-          {
-            schemaVersion: "2",
-            purpose: "file_coverage",
-            targetId: params.fileId,
-            revision: params.fileRevision + 1,
-          },
-          c.lease,
-        )) ||
-        signal.aborted ||
-        !(await fileStaging.publish(
-          (
-            await guard()
-          ).guard,
-          {
-            fileId: params.fileId,
-            fileRevision: params.fileRevision,
-            coverageSnapshotId: p.coverageId,
-            observationCount: p.observationCount,
-            derivativeCount: p.derivativeCount,
-          },
-          c.lease,
-        ))
-      )
-        throw new ProcessingError("STALE_REVISION");
+      await publicationWrite(
+        p,
+        c,
+        (next) =>
+          staging.seal(
+            next.guard,
+            p.coverageId,
+            {
+              schemaVersion: "2",
+              purpose: "file_coverage",
+              targetId: params.fileId,
+              revision: params.fileRevision + 1,
+            },
+            next.lease,
+          ),
+        signal,
+      );
+      await publicationWrite(
+        p,
+        await guard(),
+        (next) =>
+          fileStaging.publish(
+            next.guard,
+            {
+              fileId: params.fileId,
+              fileRevision: params.fileRevision,
+              coverageSnapshotId: p.coverageId,
+              observationCount: p.observationCount,
+              derivativeCount: p.derivativeCount,
+              ...(p.context ? { context: p.context } : {}),
+            },
+            next.lease,
+          ),
+        signal,
+      );
       return { status: "ready" as const, fileId: params.fileId, revision: params.fileRevision + 1 };
     },
     async fail(error: unknown) {
