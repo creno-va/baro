@@ -22,6 +22,7 @@ const config: ExpoConfig = {
     "expo-dev-client",
     "expo-secure-store",
     "expo-web-browser",
+    ["expo-build-properties", { ios: { buildReactNativeFromSource: true } }],
     [
       "expo-font",
       {

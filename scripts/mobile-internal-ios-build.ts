@@ -1,11 +1,25 @@
 import { createHash, randomUUID } from "node:crypto";
-import { copyFile, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   inspectEmbeddedIosBundle,
   verifyInternalIosArtifact,
 } from "./mobile-internal-ios-artifact";
 import { simulatorIdentity } from "./mobile-ios-simulator-signing";
+import {
+  nativeTextInputCompileSchema,
+  verifyNativeTextInputCompilation,
+} from "./mobile-ios-text-input-patch";
 import {
   attestXcodeSimulatorControl,
   configureGeneratedXcodeControl,
@@ -16,6 +30,7 @@ import {
 import { verifyCompiledMobileFont } from "./mobile-native-assets";
 import { observePreviewApi } from "./mobile-preview-artifact";
 import { metroNodeOptions } from "./mobile-runtime-host";
+import { verifyToolchainPatches } from "./toolchain-patches";
 
 export function internalIosEnvironment(input: Record<string, string | undefined>) {
   if (input.ENTRY_FILE || input.SKIP_BUNDLING || input.FORCE_BUNDLING || input.SOURCEMAP_FILE)
@@ -24,6 +39,8 @@ export function internalIosEnvironment(input: Record<string, string | undefined>
     ...xcodeControlEnvironment(input),
     NODE_ENV: "production",
     NODE_OPTIONS: metroNodeOptions(undefined),
+    RCT_USE_PREBUILT_RNCORE: "0",
+    RCT_USE_RN_DEP: "0",
   };
 }
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
@@ -86,6 +103,7 @@ async function main() {
   const text = async (args: string[], cwd = root, timeout = 120000) =>
     (await command(args, cwd, timeout)) as string;
   try {
+    await verifyToolchainPatches(root);
     if ((await text(["git", "rev-parse", "HEAD"])) !== source)
       throw new Error("INTERNAL_IOS_CHECKOUT_MISMATCH");
     await text(["git", "diff", "--quiet", "HEAD"]);
@@ -120,6 +138,11 @@ async function main() {
       mobile,
     );
     const ios = resolve(mobile, "ios");
+    const sourceBuildProperties = JSON.parse(
+      await readFile(resolve(ios, "Podfile.properties.json"), "utf8"),
+    );
+    if (sourceBuildProperties["ios.buildReactNativeFromSource"] !== "true")
+      throw Error("NATIVE_INPUT_SOURCE_BUILD_PROPERTY_REQUIRED");
     phase = "pods";
     console.log("INTERNAL_IOS_STAGE", phase);
     await text(["pod", "install"], ios, 300000);
@@ -131,7 +154,7 @@ async function main() {
     await configureGeneratedXcodeControl(ios, name);
     phase = "compile";
     console.log("INTERNAL_IOS_STAGE", phase);
-    await text(
+    const compileOutput = await text(
       [
         "xcodebuild",
         "-workspace",
@@ -153,6 +176,26 @@ async function main() {
       mobile,
       2400000,
     );
+    verifyNativeTextInputCompilation(
+      compileOutput,
+      [
+        resolve(root, "node_modules/react-native"),
+        resolve(work, "node_modules/react-native"),
+        await realpath(resolve(root, "node_modules/react-native")),
+      ],
+      sourceBuildProperties,
+    );
+    const nativeTextInputPatch = nativeTextInputCompileSchema.parse({
+      kind: "ios-text-input-patched-source-compile-only",
+      reactNative: "0.88.0",
+      patchSha256: hash(await readFile(resolve(root, "patches/react-native@0.88.0.patch"))),
+      manifestSha256: hash(await readFile(resolve(root, "patches/react-native-ios-input.json"))),
+      generatedSourceBuildPropertyVerified: true,
+      prebuiltRnCoreDisabled: true,
+      compiledArchitectures: ["arm64", "x86_64"],
+      bothSourcesObservedForEveryArchitecture: true,
+      nativeRuntimeVerified: false,
+    });
     phase = "preserve-compiled-output";
     console.log("INTERNAL_IOS_STAGE", phase);
     const products = resolve(
@@ -215,6 +258,7 @@ async function main() {
         architectures: control.architectures,
         signing: { kind: "simulator-only", codeSignature: "ad-hoc" },
         control,
+        nativeTextInputPatch,
         artifact: { name: artifactName, bytes: archived.length, sha256: hash(archived) },
         compiledFont: font,
         nativeConfiguration: "Release",
@@ -253,6 +297,8 @@ async function main() {
         "INTERNAL_IOS_ARTIFACT_IDENTITY_MISMATCH",
         "INTERNAL_IOS_ARCHIVE_CHANGED",
         "COMPILED_FONT_BYTES_OR_LICENSE_CHANGED",
+        "NATIVE_INPUT_SOURCE_BUILD_PROPERTY_REQUIRED",
+        "NATIVE_INPUT_PATCHED_SOURCE_COMPILE_REQUIRED",
       ]);
     await writeFile(
       resolve(base, "failure-ios.json"),
