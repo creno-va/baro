@@ -104,8 +104,10 @@ Apple 4.8의 추가 로그인 선택지 요구와 예외를 검토하고, 필요
 [Apple App Review Guidelines 4.8](https://developer.apple.com/app-store/review/guidelines/#login-services)
 
 2026-10-24 KST에 현행 정책·현재3사/strict 계약·token 폐기/삭제를 대조한
-[Apple 로그인 결정안](./MOBILE-APPLE-LOGIN-DECISION.md)을 준비했다. 상태는 제안/사용자 승인 대기이며,
-문서 병합을 새 공급자·token 장기 보관·공개 출시 승인으로 해석하지 않는다. 기존3사 검증은 계속한다.
+[Apple 로그인 결정안](./MOBILE-APPLE-LOGIN-DECISION.md)을 준비했고 같은 날 사용자 직접 응답으로
+Apple 추가가 승인됐다. 기존3사·계정·이전 앱 호환을 유지하며 token 장기 보관·공개 출시는
+승인 범위에서 제외한다. 명시적 v2 계약→서버 callback/revoke→모바일 소비·실제 설정/기기 검증
+순서로 진행하고 기존3사 검증을 계속한다.
 
 ### M4~M6: 기본 화면으로 실제 흐름 완성
 

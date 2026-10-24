@@ -38,6 +38,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/native-auth-http.test.ts",
       "tests/native-reauth.test.ts",
       "tests/native-reauth-http.test.ts",
+      "tests/mobile-auth-versioning.test.ts",
       "tests/mobile-ios-accessibility.test.ts",
       "tests/mobile-ios-auth-cancel.test.ts",
       "tests/mobile-ios-directory-ui.test.ts",
