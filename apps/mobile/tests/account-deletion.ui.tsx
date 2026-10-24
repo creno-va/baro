@@ -137,3 +137,37 @@ test("accepted, local cleanup and Apple revocation are independent; only anonymo
   await fireEvent.press(screen.getByRole("button", { name: "1번 결과 확인 정보 기기에서 지우기" }));
   expect(handlers.acknowledge).toHaveBeenCalledWith(id);
 });
+
+test("inactive observation clearly leaves deletion unknown and offers explicit local proof removal without showing proof identifiers", async () => {
+  const handlers = actions();
+  await render(
+    <AccountDeletionScreen
+      state={{
+        ...initial,
+        history: [
+          {
+            attemptId: id,
+            relation: "current",
+            state: "inactive",
+            localSaved: true,
+            observedAt: "2026-10-24T12:00:00.000Z",
+          },
+        ],
+      }}
+      actions={handlers}
+      onSession={jest.fn()}
+      onLegacy={jest.fn()}
+    />,
+  );
+  expect(screen.getByText(/삭제 결과는 미확인/)).toBeTruthy();
+  expect(screen.getByText(/계정 삭제 성공·실패·취소를 뜻하지/)).toBeTruthy();
+  expect(screen.getByText(/기기에서 지우면 이 요청의 결과를 다시 조회할 수 없어요/)).toBeTruthy();
+  expect(screen.queryByText("서버에서 계정 삭제 접수를 확인했어요.")).toBeNull();
+  expect(screen.queryByText("서버에서 이 인증 시도의 취소를 확인했어요.")).toBeNull();
+  expect(screen.queryByText(id)).toBeNull();
+  expect(screen.queryByRole("button", { name: "1번 인증 시도 취소 확인" })).toBeNull();
+  await fireEvent.press(
+    screen.getByRole("button", { name: "1번 미확정 결과 확인 정보 기기에서 지우기" }),
+  );
+  expect(handlers.acknowledge).toHaveBeenCalledWith(id);
+});

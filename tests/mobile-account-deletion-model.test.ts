@@ -84,7 +84,7 @@ function fixture() {
       calls.push(request.path);
       if (request.path.endsWith("capabilities")) {
         if (legacy) throw new ApiError("NOT_FOUND", "합성 이전 서버", false, 404);
-        return { contractVersion: 2, providers: ["google", "apple"] } as T;
+        return { contractVersion: 2, providers: ["google", "apple"], deletionActivity: 1 } as T;
       }
       expect(request.path).toBe("/api/me/deletion");
       return {
@@ -135,6 +135,7 @@ function fixture() {
       calls.push("status");
       return { type: "unknown", attemptId: id };
     },
+    reconcile: async (id) => native.status(id),
     cancel: async () => {
       calls.push("cancel");
       return { type: "unknown", attemptId: id };
@@ -361,5 +362,57 @@ test("manual cold cleanup is unavailable to a logged-in owner and cannot remove 
   await model.clearAnonymous(id);
   expect(f.calls).toContain("cleanup");
   expect(model.getSnapshot().history[0]).toMatchObject({ state: "accepted", cleanup: "complete" });
+  stop();
+});
+
+test("signed inactive history releases only its owner's pending block, keeps outcome unknown and requires a new DELETE", async () => {
+  const f = fixture(),
+    signed = { ...pending, activity: { startedAt: 123, activityProof: "d".repeat(64) } },
+    observedAt = "2026-10-24T12:00:00.000Z";
+  await f.store.put(signed);
+  f.native.reconcile = async () => {
+    await f.store.observeInactive(id, {
+      contractVersion: 2,
+      attemptId: id,
+      status: "inactive",
+      outcome: "unknown",
+      observedAt,
+    });
+    return { type: "inactive", attemptId: id, ownerId, observedAt };
+  };
+  const model = f.create(),
+    stop = model.activate();
+  await until(() => model.getSnapshot().gate === "ready");
+  model.select("apple");
+  model.confirm("DELETE");
+  expect(model.getSnapshot().hasOpenRequest).toBe(true);
+  await model.checkResult(id);
+  expect(model.getSnapshot()).toMatchObject({
+    hasOpenRequest: false,
+    confirmation: "",
+    history: [{ state: "inactive", observedAt, localSaved: true }],
+  });
+  await model.startDeletion();
+  expect(f.calls).not.toContain("start");
+  const serialized = JSON.stringify(model.getSnapshot());
+  for (const secret of [ownerId, tag, verifier, signed.activity.activityProof])
+    expect(serialized).not.toContain(secret);
+  expect(await f.store.list()).toEqual([{ ...signed, state: "inactive", observedAt }]);
+  await model.acknowledge(id);
+  expect(model.getSnapshot().history).toEqual([]);
+  stop();
+});
+
+test("bare v2 without activity negotiation is unavailable, never legacy or a new delete action", async () => {
+  const f = fixture();
+  f.client.capabilities = async () => ({ contractVersion: 2, providers: ["apple"] });
+  const model = f.create(),
+    stop = model.activate();
+  await until(() => model.getSnapshot().gate === "error");
+  expect(f.calls).not.toContain("/api/me/deletion");
+  model.confirm("DELETE");
+  await model.startDeletion();
+  expect(f.calls).not.toContain("start");
+  expect(model.getSnapshot().history).toEqual([]);
   stop();
 });

@@ -65,7 +65,15 @@ const owner = (id = "synthetic-a"): SessionState => ({
   consent: null,
   error: null,
 });
-async function fixture(mode: "normal" | "new-owner" | "lost-browser" = "normal") {
+async function fixture(
+  mode:
+    | "normal"
+    | "new-owner"
+    | "lost-browser"
+    | "expired"
+    | "prepare-lost"
+    | "unsigned-prepare" = "normal",
+) {
   const disk = new Map<string, string>([["operations", "SYNTHETIC_UNSETTLED"]]),
     requests: string[] = [];
   let reads = 0,
@@ -152,7 +160,11 @@ async function fixture(mode: "normal" | "new-owner" | "lost-browser" = "normal")
     const headers = new Headers(init.headers);
     if (path.endsWith("capabilities")) {
       expect(headers.get("cookie")).toBeNull();
-      return Response.json({ contractVersion: 2, providers: ["google", "apple"] });
+      return Response.json({
+        contractVersion: 2,
+        providers: ["google", "apple"],
+        deletionActivity: 1,
+      });
     }
     if (path === "/api/me/deletion") {
       expect(headers.get("cookie")).toContain("SYNTHETIC_A");
@@ -165,11 +177,21 @@ async function fixture(mode: "normal" | "new-owner" | "lost-browser" = "normal")
       });
     }
     if (path.endsWith("/prepare")) {
-      expect((await mockDeletionStore.list())[0]?.state).toBe("pending");
+      expect(await mockDeletionStore.list()).toEqual([]);
+      expect(headers.get("x-baro-deletion-activity")).toBe("1");
       expect(headers.get("x-baro-expected-owner")).toBe("synthetic-a");
-      return Response.json({ ownerTag: tag, startedAt: Date.now() });
+      if (mode === "prepare-lost") throw new Error("SYNTHETIC_PREPARE_RESPONSE_LOST");
+      return Response.json({
+        ownerTag: tag,
+        startedAt: Date.now(),
+        ...(mode === "unsigned-prepare" ? {} : { activityProof: "d".repeat(64) }),
+      });
     }
     if (path === "/api/auth/sign-in/social") {
+      expect((await mockDeletionStore.list())[0]).toMatchObject({
+        state: "pending",
+        activity: { activityProof: "d".repeat(64) },
+      });
       const body = JSON.parse(String(init.body));
       expect(body.provider).toBe("apple");
       expect(body.disableRedirect).toBe(true);
@@ -185,14 +207,39 @@ async function fixture(mode: "normal" | "new-owner" | "lost-browser" = "normal")
         },
       );
     }
-    expect(["/api/mobile/auth/deletion/exchange", "/api/mobile/auth/deletion/status"]).toContain(
-      path,
-    );
+    expect([
+      "/api/mobile/auth/deletion/exchange",
+      "/api/mobile/auth/deletion/status",
+      "/api/mobile/auth/deletion/activity",
+    ]).toContain(path);
     expect(headers.get("cookie")).toBeNull();
     expect(headers.get("authorization")).toBeNull();
     expect(headers.get("origin")).toBe(config.apiBaseUrl);
     expect(init.credentials).toBe("omit");
     expect(init.redirect).toBe("error");
+    if (mode === "expired") {
+      if (path.endsWith("/activity")) {
+        const record = (await mockDeletionStore.list())[0];
+        if (record?.state !== "pending") throw new Error("SYNTHETIC_NO_PROOF");
+        expect(JSON.parse(String(init.body))).toEqual({
+          attemptId: id,
+          verifier,
+          ownerTag: tag,
+          ...record.activity,
+        });
+        return Response.json({
+          contractVersion: 2,
+          attemptId: id,
+          status: "inactive",
+          outcome: "unknown",
+          observedAt: "2026-10-24T12:00:00.000Z",
+        });
+      }
+      return Response.json(
+        { error: { code: "UNAUTHENTICATED", message: "SYNTHETIC_EXPIRED" } },
+        { status: 401 },
+      );
+    }
     return Response.json(
       { contractVersion: 2, status: "accepted", ownerTag: tag, appleRevocation: "confirmed" },
       { headers: { "set-cookie": "better-auth.session_token=SYNTHETIC_STALE_A; Max-Age=600" } },
@@ -217,7 +264,7 @@ async function fixture(mode: "normal" | "new-owner" | "lost-browser" = "normal")
     .spyOn(globalThis, "fetch")
     .mockImplementation((url, init) => network(String(url), init ?? {}));
   const browser = jest.spyOn(WebBrowser, "openAuthSessionAsync").mockImplementation(async () => {
-    if (mode === "lost-browser") throw new Error("SYNTHETIC_RETURN_LOST");
+    if (mode === "lost-browser" || mode === "expired") throw new Error("SYNTHETIC_RETURN_LOST");
     if (mode === "new-owner") {
       await credentials.reset();
       await credentials
@@ -298,7 +345,10 @@ test("cold recovery keeps accepted distinct from unknown cleanup and requires ve
     expect(await createNativeDeletionCoordinator().start("apple", "DELETE", "synthetic-a")).toEqual(
       { type: "unknown", attemptId: id },
     );
-    expect((await mockDeletionStore.list())[0]?.state).toBe("pending");
+    expect((await mockDeletionStore.list())[0]).toMatchObject({
+      state: "pending",
+      activity: { activityProof: "d".repeat(64) },
+    });
     mockSession = { ...mockSession, phase: "checking", session: null };
     const cold = createNativeDeletionCoordinator(),
       before = f.stats();
@@ -324,3 +374,53 @@ test("cold recovery keeps accepted distinct from unknown cleanup and requires ve
     f.close();
   }
 });
+
+test("actual completion transport observes an expired proof without reading/resetting the current SDK jar or files", async () => {
+  const f = await fixture("expired");
+  try {
+    const coordinator = createNativeDeletionCoordinator();
+    expect(await coordinator.start("apple", "DELETE", "synthetic-a")).toEqual({
+      type: "unknown",
+      attemptId: id,
+    });
+    const original = (await mockDeletionStore.list())[0],
+      before = f.stats();
+    expect(await coordinator.reconcile(id)).toEqual({
+      type: "inactive",
+      attemptId: id,
+      ownerId: "synthetic-a",
+      observedAt: "2026-10-24T12:00:00.000Z",
+    });
+    expect(f.requests.slice(-3)).toEqual([
+      "/api/mobile/auth/deletion/status",
+      "/api/mobile/auth/deletion/activity",
+      "/api/mobile/auth/deletion/status",
+    ]);
+    expect(f.stats()).toEqual(before);
+    expect(await mockDeletionStore.list()).toEqual([
+      { ...original, state: "inactive", observedAt: "2026-10-24T12:00:00.000Z" },
+    ]);
+    expect(f.disk.get("operations")).toBe("SYNTHETIC_UNSETTLED");
+    expect(f.requests).not.toContain("/api/mobile/auth/deletion/exchange");
+  } finally {
+    f.close();
+  }
+});
+
+for (const mode of ["prepare-lost", "unsigned-prepare"] as const) {
+  test(`actual coordinator refuses OAuth and leaves no unsigned pending on ${mode}`, async () => {
+    const f = await fixture(mode);
+    try {
+      await expect(
+        createNativeDeletionCoordinator().start("apple", "DELETE", "synthetic-a"),
+      ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+      expect(await mockDeletionStore.list()).toEqual([]);
+      expect(f.requests).not.toContain("/api/auth/sign-in/social");
+      expect(f.requests).not.toContain("/api/mobile/auth/deletion/exchange");
+      expect(f.stats().files).toBe(0);
+      expect(await f.credentials.capture().cookie()).toContain("SYNTHETIC_A");
+    } finally {
+      f.close();
+    }
+  });
+}

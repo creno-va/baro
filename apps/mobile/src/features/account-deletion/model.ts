@@ -12,7 +12,8 @@ import type { SessionModel } from "../session/model";
 export interface DeletionHistory {
   attemptId: string;
   relation: "current" | "previous" | "unverified";
-  state: "pending" | "accepted" | "cancelled";
+  state: "pending" | "accepted" | "cancelled" | "inactive";
+  observedAt?: string;
   cleanup?: "pending" | "complete" | "skipped" | "failed";
   appleRevocation?: "not_linked" | "confirmed" | "unconfirmed";
   localSaved: boolean;
@@ -80,7 +81,9 @@ export function createAccountDeletionModel(dependencies: {
       busy: working ? actionKind : incoming ? "result" : authorizing ? "authorizing" : null,
       anonymous: dependencies.session.getSnapshot().phase === "anonymous",
       hasOpenRequest: [...facts.values()].some(
-        (record) => record.ownerId === user?.id && record.state !== "cancelled",
+        (record) =>
+          record.ownerId === user?.id &&
+          (record.state === "pending" || record.state === "accepted"),
       ),
       history: [...facts.values()].map(({ ownerId, ...record }) => ({
         ...record,
@@ -104,6 +107,7 @@ export function createAccountDeletionModel(dependencies: {
             ownerId: record.ownerId,
             state: record.state,
             localSaved: true,
+            ...(record.state === "inactive" ? { observedAt: record.observedAt } : {}),
             ...(record.state === "accepted"
               ? { cleanup: record.cleanup, appleRevocation: record.outcome.appleRevocation }
               : {}),
@@ -130,6 +134,8 @@ export function createAccountDeletionModel(dependencies: {
       else unsaved.delete(result.attemptId);
       facts.set(result.attemptId, fact);
       publish({ ...state, confirmation: "" });
+    } else if (result.type === "inactive" || result.type === "cancelled") {
+      publish({ ...state, confirmation: "", error: null });
     } else if (result.type === "unknown") {
       publish({
         ...state,
@@ -189,6 +195,12 @@ export function createAccountDeletionModel(dependencies: {
         publish({ ...state, gate: "legacy", accountName: user.name, loading: false });
         return;
       }
+      if (protocol.deletionActivity !== 1)
+        throw new ApiError(
+          "UNAVAILABLE",
+          "서버의 삭제 복구 기능을 확인하지 못했어요. 다시 확인해 주세요.",
+          true,
+        );
       privateRead = true;
       const access = await dependencies.client.deletionAccess(protocol, user.id);
       if (!active || captured !== version || owner()?.id !== user.id) return;
@@ -356,7 +368,7 @@ export function createAccountDeletionModel(dependencies: {
       }
     },
     checkResult: (attemptId: string) =>
-      act("result", attemptId, () => dependencies.native.status(attemptId)),
+      act("result", attemptId, () => dependencies.native.reconcile(attemptId)),
     cancelAttempt: (attemptId: string) =>
       act("cancel", attemptId, () => dependencies.native.cancel(attemptId)),
     async clearAnonymous(attemptId: string) {

@@ -164,6 +164,7 @@ export function AccountDeletionScreen({
           accepted = record.state === "accepted";
         const mayForget =
           record.state === "cancelled" ||
+          record.state === "inactive" ||
           (accepted && record.localSaved && ["complete", "skipped"].includes(record.cleanup ?? ""));
         return (
           <Card key={record.attemptId}>
@@ -180,8 +181,31 @@ export function AccountDeletionScreen({
                 ? "서버에서 계정 삭제 접수를 확인했어요."
                 : record.state === "cancelled"
                   ? "서버에서 이 인증 시도의 취소를 확인했어요."
-                  : "삭제 접수나 취소 결과를 아직 확인하지 못했어요."}
+                  : record.state === "inactive"
+                    ? "서버에서 확인한 시각에는 활성 인증 시도가 없었어요. 삭제 결과는 미확인이에요."
+                    : "삭제 접수나 취소 결과를 아직 확인하지 못했어요."}
             </Text>
+            {record.state === "inactive" ? (
+              <>
+                <Text>
+                  확인 시각:{" "}
+                  {record.observedAt
+                    ? new Date(record.observedAt).toLocaleString("ko-KR")
+                    : "미확인"}
+                  . 계정 삭제 성공·실패·취소를 뜻하지 않아요. 현재 계정 상태를 확인해 주세요. 새
+                  삭제가 필요하면 위에서 DELETE를 입력하고 별도 인증을 진행해 주세요. 이전 요청을
+                  자동으로 다시 보내지 않아요.
+                </Text>
+                <Text>이 확인 정보를 기기에서 지우면 이 요청의 결과를 다시 조회할 수 없어요.</Text>
+                <Button
+                  label={`${number}번 요청 결과 다시 확인`}
+                  disabled={proofBusy}
+                  onPress={() => {
+                    void actions.checkResult(record.attemptId);
+                  }}
+                />
+              </>
+            ) : null}
             {record.state === "pending" ? (
               <>
                 <Text>
@@ -262,9 +286,17 @@ export function AccountDeletionScreen({
             ) : null}
             {mayForget ? (
               <Button
-                label={`${number}번 결과 확인 정보 기기에서 지우기`}
+                label={
+                  record.state === "inactive"
+                    ? `${number}번 미확정 결과 확인 정보 기기에서 지우기`
+                    : `${number}번 결과 확인 정보 기기에서 지우기`
+                }
                 disabled={busy}
-                accessibilityHint="확인된 결과만 기기에서 지워요. 서버의 삭제 상태를 바꾸거나 새 요청을 보내지 않아요."
+                accessibilityHint={
+                  record.state === "inactive"
+                    ? "삭제 결과는 여전히 미확정이에요. 기기에서 지우면 이 요청의 결과를 다시 조회할 수 없어요. 서버 상태를 바꾸거나 새 삭제 요청을 보내지 않아요."
+                    : "확인된 결과만 기기에서 지워요. 서버의 삭제 상태를 바꾸거나 새 요청을 보내지 않아요."
+                }
                 onPress={() => {
                   void actions.acknowledge(record.attemptId);
                 }}

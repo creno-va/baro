@@ -182,3 +182,75 @@ test("bounded storage capacity never evicts an older unresolved proof", async ()
   expect(f.disk.get("delete_proof")).toBe(before);
   expect((await f.store.list()).length).toBe(4);
 });
+
+test("inactive observations preserve the original proof and never overwrite a positive result; only explicit acknowledgement erases unknown history", async () => {
+  const f = fixture(),
+    signed = { ...input, activity: { startedAt: 123, activityProof: "d".repeat(64) } },
+    observation = {
+      contractVersion: 2,
+      attemptId: id,
+      status: "inactive",
+      outcome: "unknown",
+      observedAt: "2026-10-24T12:00:00.000Z",
+    };
+  await f.store.put(signed);
+  await expect(
+    f.store.observeInactive(id, { ...observation, attemptId: other }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(
+    f.store.observeInactive(id, { ...observation, status: "active" }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  await f.store.observeInactive(id, observation);
+  const record = (await f.store.list())[0];
+  expect(record).toEqual({ ...signed, state: "inactive", observedAt: observation.observedAt });
+  const cold = createDeletionAttemptStore({ key: "delete_proof", storage: f.storage });
+  expect(await cold.list()).toEqual([
+    { ...signed, state: "inactive", observedAt: observation.observedAt },
+  ]);
+  await cold.accept(id, outcome);
+  expect((await cold.observeInactive(id, observation)).state).toBe("accepted");
+  expect((await cold.cancel(id)).state).toBe("accepted");
+  await cold.markCleanup(id, "complete");
+  await cold.acknowledge(id);
+  await cold.put(signed);
+  await cold.observeInactive(id, observation);
+  await cold.acknowledge(id);
+  expect(await cold.list()).toEqual([]);
+  expect(f.disk.get("auth_cookie")).toBe("SYNTHETIC_COOKIE");
+});
+
+test("signed pending capacity reserves every later observation and never persists provisional preflight data", async () => {
+  const f = fixture();
+  let admitted = 0;
+  for (let index = 1; index <= 4; index++) {
+    const record = {
+      ...input,
+      attemptId: `15a64c18-fd51-4f83-8205-${String(index).padStart(12, "0")}`,
+      ownerId: `synthetic-${index}-${"a".repeat(110)}`,
+      activity: { startedAt: 1792843200000, activityProof: "d".repeat(64) },
+    };
+    const before = f.disk.get("delete_proof");
+    try {
+      await f.store.preflight(record);
+    } catch {
+      expect(f.disk.get("delete_proof")).toBe(before);
+      break;
+    }
+    expect(f.disk.get("delete_proof")).toBe(before);
+    await f.store.put(record);
+    admitted++;
+  }
+  expect(admitted).toBeGreaterThan(0);
+  for (const record of await f.store.list()) {
+    await f.store.observeInactive(record.attemptId, {
+      contractVersion: 2,
+      attemptId: record.attemptId,
+      status: "inactive",
+      outcome: "unknown",
+      observedAt: "2026-10-24T12:00:00.000Z",
+    });
+  }
+  expect((await f.store.list()).every((record) => record.state === "inactive")).toBe(true);
+  expect(new TextEncoder().encode(f.disk.get("delete_proof")).length).toBeLessThanOrEqual(1900);
+  expect(f.disk.get("delete_proof")).not.toContain('"activityProof":"000000');
+});

@@ -357,7 +357,8 @@ production build/local workerd와 양 OS Metro export다. native proof/기존 �
 
 ## native UI 조립 초안 — 아직 병합/실제 인수 전
 
-`codex/346-native-apple-ui`는 main8fb0db3을 통합했다. 공식 Apple PNG 1x/2x/3x를
+`codex/346-native-apple-ui`는 선행 auth PR484/main65cc78c와 독립 웹 업로드 PR485/main
+d3f4e49를 통합했다. 공식 Apple PNG 1x/2x/3x를
 변경하지 않고 `AppleSignInButton`에서 사용하며, 자산 출처/DMG hash/라이선스는
 `apps/mobile/assets/auth/APPLE-ARTWORK.txt`에 보존한다. 광고된 provider만 표시하고
 공개 capability 조회는 credential/scope와 분리한다. 공개 조회 오류가 별도로 확인한
@@ -377,12 +378,10 @@ Apple 연결 해제와 기기 정리·저장 실패를 따로 표시한다. norm
 Expo Router에는 고정 화면 경로만 전달하며 code/verifier/owner ID를 route param에 넣지
 않는다. 이전 서버와 이전 방식의 미확정 삭제 복구 수단은 유지한다.
 
-현재 **만료된 미확정 proof가 동일 owner의 새 삭제 시도를 막는 경로가 남아 있어 UI를
-병합하지 않는다.** 다음 auth producer에서 활성 인증의 종료와 실제 계정 삭제 결과를
-분리하는 additive activity 계약을 추가한다. 만료 intent는 exact-row CAS로 종료하고
-삭제 결과는 unknown으로 보존하며, 종료를 취소/접수로 꾸미지 않는다. 기존 OAuth/교환·
-영수증 TTL과 owner·PKCE 검증은 유지한다. 새 capability는 명시적 feature 협의로만
-광고하여 이전 strict v2 응답을 보존한다. producer의 CI/main 통합 뒤 소비한다.
+초기 초안의 blocker였던 만료 미확정 proof는 PR484의 관측 계약을 소비해 복구한다.
+새 삭제는 `deletionActivity: 1`을 실제 협의해야 한다. 기본 v2에 flag가 없으면 안전한
+오류이며 legacy 삭제로 바꾸지 않는다. 공개 provider 로그인은 기존 capability를 따른다.
+기존 OAuth/교환·영수증 TTL과 owner·PKCE 검증은 유지한다.
 
 현재 초안의 검증은 frozen/quick(공통501/60files·RN102/24suites·server243),
 production build/local workerd, 양 OS Metro export다. 설치된 SDK를 이용한 합성
@@ -426,3 +425,38 @@ prepare 응답 유실이나 저장 실패 때는 OAuth를 시작하지 않는다
 검사한다. frozen install, quick(공통487·RN90·server262), 전체 unit4071/377파일/
 171751 assertions, production build/local workerd, 양 OS Metro export가 통과했다.
 실제 Apple 로그인·SecureStore·OS callback 성공이나 공개 출시 증거는 아니다.
+
+## native 관측 소비와 새 요청 순서
+
+새 삭제는 일반 로그인과 별도 journal에서 중복 UUID·같은 owner pending·최대4개와
+1900 UTF-8 byte 상한을 먼저 검사한다. signed pending이 나중에 inactive 관측을 저장할
+공간까지 예약 계산하며, 임시 서명이나 가상의 관측은 실제 저장하지 않는다.
+원래 owner guard로 prepare한 signed receipt를 받은 뒤 실제 startedAt·activityProof를
+원래 verifier와 함께 저장하고 정확한 readback을 마쳐야 SDK authorize/브라우저를 연다.
+준비 응답 유실·서명 누락·owner 교체·저장 실패는 OAuth 전에 중단한다. 이때 OAuth를
+시작하지 않은 미저장 준비를 삭제 접수/취소나 복구 불능의 unsigned pending으로 꾸미지 않는다.
+
+사용자가 결과 재확인을 누르면 같은 proof의 status 한 번, 서명이 있는 pending의 activity
+한 번만 실행한다. active/오류/서명 없는 과거 기록은 미확정으로 보존한다. inactive이면
+commit 경합 승자의 영수증을 한 번 더 확인하고, 긍정 결과가 없으면 원래 proof와 서버의
+observedAt을 보존한 inactive 기록으로 저장한다. 조회는 cookie·현재 owner scope를 쓰지
+않으며 OAuth/삭제 exchange를 재실행하지 않는다. 동시에 저장한 accepted/cancelled가
+관측보다 우선하고, inactive에도 아직 유효한 영수증이 오면 실제 accepted로 복구한다.
+
+inactive UI는 관측 시각의 활성 인증 부재와 **삭제 결과 미확인**을 함께 표시한다.
+새 삭제는 별도 UUID·현재 계정 검증·새 DELETE 입력으로만 시작한다. 원래 createdAt과
+서버 startedAt을 현재 시각으로 바꾸거나 만료만으로 결과를 확정하지 않는다. 기록 삭제는
+사용자가 결과 재조회 불가 안내를 읽고 명시적으로 선택한 경우에만 가능하다.
+accepted의 기기 정리/저장 실패와 Apple 철회 미확인도 별도 상태로 유지한다.
+
+설치된 SDK와 실제 native 조립을 사용한 합성 포트 검증은 정상 정리·새 owner 보존·cold
+정리·만료 관측 및 prepare 응답 유실/서명 누락을 검사한다. SecureStore는 주입한 대역이며
+실제 Apple 계정 로그인·OS cookie jar·물리 기기·스토어 성공을 뜻하지 않는다.
+
+PR484 exact head6586223의 CI40091147033와 병합 main65cc78c의 CI40091361352가
+성공한 뒤 소비 코드를 구현했다. PR485/main d3f4e49·CI40091786099도 통합했으며,
+최종 소비 검증은 frozen install, quick(공통523/60파일·RN106/24suites·server262),
+전체 unit4117/379파일/172020 assertions, production build/local workerd와 양 OS Metro
+export다. 새 signed 순서·관측·모델/저장소 회귀38건/597 assertions와 실제 SDK 조립/
+화면 회귀10건도 포함한다. 웹 UI 소유 경로는 수정하지 않았다. 새 JS/자산의 native
+컴파일·runtime 검증은 후속이며 이전 source6201112 앱을 이 변경의 증거로 쓰지 않는다.
