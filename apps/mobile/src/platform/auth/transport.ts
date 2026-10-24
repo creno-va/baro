@@ -4,7 +4,7 @@ import type { NativeCredentialFrame, NativeCredentials } from "./credentials";
 
 const denied = () => new ApiError("UNAVAILABLE", "안전한 서버 연결을 확인하지 못했어요.", true);
 
-function withoutSetCookie(response: Response): Response {
+export function withoutSetCookie(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete("set-cookie");
   // Expo's native fetch supports streams, while RN's global Response constructor
