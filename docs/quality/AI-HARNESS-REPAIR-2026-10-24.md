@@ -509,3 +509,51 @@ tests across actual SQL/AES/R2-adapter uploads, signed-session revocation, paid-
 boundaries, shared file clients and persisted upload recovery. Fresh CI/deployment and
 the interrupted actual batch remain required; no schema/existing DTO/mobile change is
 part of this repair.
+
+## Actual d3f upload recovery and native capacity
+
+PR485 merged after exact2d77f04 CI to d3f4e493. Main CI40091786099 and
+[preview40091957950](https://github.com/creno-va/baro/actions/runs/40091957950)
+passed; the [configuration receipt](./ai-harness-2026-10-24/preview-d3f4e49.json)
+retains checkedAt12:02:21.055Z, matching SHA/schema0016 and observation-only warnings.
+This is deployment/configuration evidence, not multimedia completion or a full pass.
+
+In the existing synthetic case with the fresh d3f web client, reselecting the exact
+remaining fixtures finalized the existing video upload and admitted the next audio
+file. The previous upload session/file was reused; no video duplicate was created.
+The later video Workflow failed at extract0, before interpret, at12:06:15UTC after
+30.610 seconds. The application output was FILE_PROCESSING_FAILED even though the
+platform marked the caught Workflow completed. Worker telemetry showed startup/unknown
+(10,626ms); native instance history showed VMStopped afterward. No Gemini/Whisper
+interpretation was reached. Audio completion stopped with503; PDF was not admitted.
+The exact upstream startup cause remains unclassified. Preserve both failed work
+and the previous successful JPEG/TXT receipts; no unchanged-condition retry was used.
+
+Code inspection independently confirmed that upload probing and background extraction
+use distinct named Container attempts and may start concurrently under max_instances=1.
+The capacity repair keeps that physical limit, attempt identities, existing request/job
+deadlines and all cost records. A persisted namespace-wide slot serializes starts;
+native destruction must finish before its exact token is released. Elapsed time alone
+never frees capacity. Abandoned holders require a confirmed stop, and failed cleanup
+retains the slot. Caller-side preparation waits before opening the original stream,
+then repeats current authorization; deletion/abort interrupts waiting. No schema,
+old DTO, RN/auth or bundled native input changes are part of this repair.
+
+Local coverage includes competing probe/extract streams, durable reconstruction,
+stale releases, failed and concurrent orphan recovery, queued revocation, late claim
+cancellation and post-wait consent loss before source open. The actual shipped
+Container subclass and its real SQLite DO/RPC wiring also run in workerd with only the
+native process stubbed, including the coordinator-to-old-attempt cleanup RPC cycle.
+That local process stub is not an actual Cloudflare Container success receipt.
+New preparation and post-wait fences add two fresh job/consent reads per native unit;
+measured source-boundary tests retain all earlier five original-source fences.
+The first broad local run exposed missing prepareCapacity in old native test adapters;
+those synthetic adapters now explicitly grant a local test slot. Earlier failure logs
+are preserved and are not real supplier failures. Exact-head CI, preview deployment
+and actual resumed video/audio/PDF processing are still required.
+
+The user also confirmed no existing accounts for the four unissued external APIs.
+Operating identity, actual membership, required terms and service approvals remain
+unprovided. The public DataHub guide search did not identify a current building address
+search contract; absence of a guide does not establish discontinuation. Keep these
+lookups unconfigured and the target/recipient-consent durable producer visibly pending.

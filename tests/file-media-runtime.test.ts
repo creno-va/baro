@@ -128,6 +128,7 @@ async function setupImage(
     FILE_PROCESSOR: {
       idFromName: (id: string) => id,
       get: () => ({
+        prepareCapacity: async () => true,
         stopProcessing: async () => {
           calls.stop++;
         },

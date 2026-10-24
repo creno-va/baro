@@ -87,6 +87,7 @@ async function setup(pageCount = 1) {
     FILE_PROCESSOR: {
       idFromName: (id: string) => id,
       get: () => ({
+        prepareCapacity: async () => true,
         stopProcessing: async () => {
           calls.stop++;
         },
@@ -273,12 +274,14 @@ for (const pageCount of [1, 2])
     // Atomic dispatch removes 21/38 calls and 63/114 SQL without removing the
     // fresh post-dispatch read or any authorization boundary.
     // Counts are local method calls, not network time or native rows read.
-    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 645 : 1148);
+    // Native capacity admission and its post-wait fence add two fresh
+    // authorization reads per extracted unit, without removing earlier guards.
+    expect(stages.reduce((sum, stage) => sum + stage.calls, 0)).toBe(pageCount === 1 ? 647 : 1152);
     expect(stages.reduce((sum, stage) => sum + stage.statements, 0)).toBe(
-      pageCount === 1 ? 821 : 1443,
+      pageCount === 1 ? 823 : 1447,
     );
     expect(stages.reduce((sum, stage) => sum + stage.authorizations, 0)).toBe(
-      pageCount === 1 ? 308 : 555,
+      pageCount === 1 ? 310 : 559,
     );
     // The exact existing SQLite/AES/R2 runtime keeps all calls and guards. Phase
     // observation counts method awaits only, including their ledger/fence work.

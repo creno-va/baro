@@ -364,6 +364,7 @@ for (const result of ["success", "refused", "protocol", "unavailable"] as const)
           return {};
         },
         get: () => ({
+          prepareCapacity: async () => true,
           fetch: async (request: Request) => {
             calls++;
             expect(

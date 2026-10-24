@@ -229,6 +229,7 @@ test("actual asset runtime restores the current same-clock retry after null fund
     FILE_PROCESSOR: {
       idFromName: (name: string) => name,
       get: () => ({
+        prepareCapacity: async () => true,
         fetch: () => {
           throw new Error("Unexpected processor call");
         },

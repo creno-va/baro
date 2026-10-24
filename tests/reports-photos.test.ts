@@ -220,6 +220,7 @@ test("real report renderer composition admits bounded native work with missing c
         return name;
       },
       get: () => ({
+        prepareCapacity: async () => true,
         fetch: async (request: Request) => {
           expect(new URL(request.url).pathname).toBe("/report");
           requests.push(await request.text());
