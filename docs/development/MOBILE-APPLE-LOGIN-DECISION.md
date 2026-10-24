@@ -101,6 +101,9 @@ Apple Developer Program 회원 계정 보유는 사용자에게 확인했다. �
 설정은 미확인이다. private key·client secret을
 채팅/이슈/PR/artifact에 올리지 않는다. preview/production 환경과 app identifier·callback을 각각 대조한다.
 
+콘솔의 정확한 항목·preview 값·비공개 credential 인계와 실제 검증 순서는
+[설정 인계](./MOBILE-APPLE-SETUP.md)를 따른다. 회원 확인을 실제 설정 완료로 바꾸지 않는다.
+
 사용자가 **Apple 로그인 추가 승인 (권장)**으로 응답했다. 위1→2/5→3/4/6 순서로
 계약·서버·모바일 PR을 인수한다. 실제 계정 설정과 배포는 기존 권한/preview·최종 full/#71
 게이트를 따른다. 이 승인 기록과 계약 선행 PR만으로 Apple을 가용 공급자로 노출하지 않는다.

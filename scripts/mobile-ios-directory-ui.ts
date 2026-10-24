@@ -117,6 +117,7 @@ const assertionCodes = [
   "BARO_DIRECTORY_HOME_RETURN_MISSING",
   "BARO_KOREAN_SETTINGS_MISSING",
   "BARO_KOREAN_SETTINGS_CONTROL_MISSING",
+  "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED",
   "BARO_KOREAN_LAYOUT_MISSING",
   "BARO_KOREAN_SETTINGS_DONE_MISSING",
   "BARO_KOREAN_SETTINGS_READBACK_MISSING",
@@ -234,6 +235,31 @@ const koreanStatusSchema = z.strictObject({
   expectedValueMatches: z.boolean(),
   keyboardObserved: z.boolean(),
 });
+const koreanSetupControlSchema = z
+  .strictObject({
+    stage: z.enum(["general", "keyboard", "keyboard-list", "add-keyboard", "korean"]),
+    cellCount: z.number().int().min(0).max(8),
+    buttonCount: z.number().int().min(0).max(8),
+    textCount: z.number().int().min(0).max(8),
+    selection: z.enum(["cell", "button", "text", "none", "ambiguous"]),
+    scrolls: z.number().int().min(0).max(12),
+  })
+  .refine((v) => {
+    const sum = v.cellCount + v.buttonCount + v.textCount;
+    if (v.selection === "none") return sum === 0;
+    if (v.selection === "ambiguous") return sum >= 2;
+    if ([v.cellCount, v.buttonCount, v.textCount].some((n) => n > 1)) return false;
+    return (
+      v.selection ===
+      (v.cellCount === 1
+        ? "cell"
+        : v.buttonCount === 1
+          ? "button"
+          : v.textCount === 1
+            ? "text"
+            : "none")
+    );
+  });
 export function observeIosKoreanDirectoryFailure(output: string) {
   const prefix = "BARO_KOREAN_UI_STATUS:",
     history: z.infer<typeof koreanStatusSchema>[] = [];
@@ -264,8 +290,24 @@ export function observeIosKoreanDirectoryFailure(output: string) {
       .filter((line) => line.startsWith(setupPrefix))
       .at(-1)
       ?.slice(setupPrefix.length);
+  const controlPrefix = "BARO_KOREAN_SETUP_CONTROL:";
+  let setupControl: z.infer<typeof koreanSetupControlSchema> | null = null;
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(controlPrefix))
+    .slice(-5)) {
+    try {
+      const parsed = koreanSetupControlSchema.safeParse(
+        JSON.parse(line.slice(controlPrefix.length)),
+      );
+      if (parsed.success) setupControl = parsed.data;
+    } catch {
+      /* Known counts only; never retain native labels or paths. */
+    }
+  }
   return {
     history,
+    setupControl,
     setupStage: setupStages.find((stage) => stage === lastSetup) ?? null,
     assertionCode: observeIosDirectoryFailure(output).assertionCode,
   };

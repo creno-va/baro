@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-24 / #379·#334. 현재 상태는 **도구 준비, 실제 실행 미검증**이다.
+2026-10-24 / #379·#334. 현재 상태는 **첫 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -43,3 +43,32 @@ Android의 실제 한글 software IME 조합은 아직 준비/검증하지 않�
 private 화면 전체·첨부 bar·긴 문장·초점/키보드·reader·물리 기기를 이 검사로 완료 처리하지
 않는다. 실패 시 고정 단계/원인을 먼저 확인하고 조건 변경 전 같은 실행을 반복하지 않는다.
 Apple 로그인 설정/계정·전체 #346/#339/#71/#334의 미완료 gate도 유지한다.
+
+현재 source9436 anonymous Home의 두 OS PNG에서는 문단 끝 `요`가 한 행에 남는 줄바꿈도
+관찰했다. glyph 표시·native launch와 문단 가독성 인수는 구분하며, 후속 M7에서 화면 크기/
+글자 확대에 따른 줄바꿈을 개선·재검증한다. 이번 도구 변경으로 제품 UI를 고쳤다고 표시하지 않는다.
+
+## 첫 실제 실행과 후속 조건
+
+PR493/head6710f03의 CI40100949478 성공 뒤 main808a643/main CI40101102035에서
+[actual40101331106](https://github.com/creno-va/baro/actions/runs/40101331106)을 실행했다.
+원본9436 Simulator ZIP/receipt/metadata가 일치했고 iPhone16/iOS26.5의 cold native launch2회를
+확인했다. Settings의 general→keyboard→keyboard-list 다음 `add-keyboard`에서
+`BARO_KOREAN_SETTINGS_CONTROL_MISSING`으로 **FAILURE**다. 제품 검색창/조합 checkpoint는
+미도달이며 BARO 입력 실패 또는 특정 ellipsis가 원인이라고 확정하지 않는다.
+
+[원래 실패](./mobile-native-9436e77/ios-korean-40101331106/failure.json),
+[Home 영수증](./mobile-native-9436e77/ios-korean-40101331106/home.json),
+[metadata 재검증](./mobile-native-9436e77/ios-korean-40101331106/verification.json),
+[탐색 전 PNG](./mobile-native-9436e77/ios-korean-40101331106/home-ios.png)와
+[로컬 원본 결합](./mobile-native-9436e77/ios-korean-40101331106/local-preservation.json)을 보존한다.
+PNG는 별도로 읽어 anonymous Home을 검토했으나 원래 homeContentVerified=false와
+visualReviewRequired=true를 수정하지 않는다. 이후 raw hierarchy/xcresult/설정 화면 캡처는 없다.
+
+후속 도구는 Add New Keyboard의 ellipsis/세 점/생략 표기만 허용하는 고정 목록을 사용한다.
+기존 cell/button과 같은 제어의 유일한 caption text를 조회하며, 복수 후보·서로 겹치지 않는
+별도 제어·hittable 부재는 실패다. known label 밖의 fuzzy selector나 임의 좌표 탭은 없다.
+기존12회 scroll 상한을 유지하고 매 단계 후보8개를 넘으면 즉시 실패한다. 최종 후보의
+종류/개수·scroll 수만 제한된 diagnostic으로 남기며 raw label/frame/개인정보는 내보내지
+않는다. 제품 앱·타이핑 값·조합 checkpoint·회전·성공 조건을 바꾸지 않는다. 새 조건의 실제
+성공은 CI/main 이후 후속이며, 원본 실패를 지우거나 같은 조건으로 재실행하지 않았다.

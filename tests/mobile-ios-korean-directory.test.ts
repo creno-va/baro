@@ -105,6 +105,7 @@ test("native failure retains bounded fixed stages and booleans; malformed rows a
   expect(observed).toEqual({
     history: [safe],
     setupStage: null,
+    setupControl: null,
     assertionCode: "BARO_KOREAN_COMPOSITION_MISMATCH",
   });
   expect(JSON.stringify(observed)).not.toContain("private");
@@ -204,4 +205,41 @@ test("manual workflow isolates Korean mode and requires the scoped proof, while 
   expect(await Bun.file("scripts/validate.ts").text()).toContain(
     '"tests/mobile-ios-korean-directory.test.ts"',
   );
+});
+
+test("Settings caption diagnostics accept only bounded consistent candidate counts without native labels", () => {
+  const prefix = "BARO_KOREAN_SETUP_CONTROL:",
+    value = {
+      stage: "add-keyboard",
+      cellCount: 0,
+      buttonCount: 0,
+      textCount: 1,
+      selection: "text",
+      scrolls: 2,
+    },
+    parseControl = (v: unknown) =>
+      observeIosKoreanDirectoryFailure(prefix + JSON.stringify(v)).setupControl;
+  expect<unknown>(parseControl(value)).toEqual(value);
+  for (const patch of [
+    { label: "private" },
+    { rawHierarchy: "private" },
+    { stage: "private" },
+    { cellCount: 9 },
+    { cellCount: -1 },
+    { textCount: 1.1 },
+    { textCount: "1" },
+    { scrolls: 13 },
+    { scrolls: -1 },
+    { selection: "none" },
+    { selection: "button" },
+    { selection: "ambiguous" },
+    { cellCount: 1 },
+  ])
+    expect(parseControl({ ...value, ...patch })).toBeNull();
+  expect(parseControl({ ...value, cellCount: 1, selection: "cell" })?.selection).toBe("cell");
+  expect(parseControl({ ...value, cellCount: 2, selection: "ambiguous" })?.selection).toBe(
+    "ambiguous",
+  );
+  expect(parseControl({ ...value, textCount: 0, selection: "none" })?.selection).toBe("none");
+  expect(parseControl({ ...value, cellCount: 2, selection: "cell" })).toBeNull();
 });

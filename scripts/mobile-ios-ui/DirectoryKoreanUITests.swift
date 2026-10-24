@@ -1,7 +1,33 @@
 import XCTest
+import UIKit
 
 // Appended to DirectoryUITests.swift in the owned runner only. No product changes.
 extension BaroDirectoryUITests {
+  @MainActor
+  private func settingsControl(_ aliases: [String], in settings: XCUIApplication) -> (element: XCUIElement?, cells: Int, buttons: Int, texts: Int, selection: String) {
+    let predicates = aliases.flatMap { label in [NSPredicate(format: "label == %@", label), NSPredicate(format: "label BEGINSWITH %@", label + ",")] }
+    let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
+    let cellQuery = settings.cells.matching(predicate), buttonQuery = settings.buttons.matching(predicate)
+    let textQuery = settings.staticTexts.matching(NSPredicate(format: "label IN %@", aliases))
+    XCTAssertTrue([cellQuery.count, buttonQuery.count, textQuery.count].allSatisfy { $0 <= 8 }, "BARO_KOREAN_SETTINGS_CANDIDATES_EXCEEDED")
+    @MainActor
+    func visible(_ query: XCUIElementQuery) -> [XCUIElement] {
+      guard query.count <= 8 else { return [] }
+      return (0..<query.count).map { query.element(boundBy: $0) }.filter { self.fullyHittable($0, in: settings) }
+    }
+    let cells = visible(cellQuery), buttons = visible(buttonQuery), texts = visible(textQuery)
+    let counts = (cells.count, buttons.count, texts.count)
+    guard [counts.0, counts.1, counts.2].allSatisfy({ $0 <= 1 }) else { return (nil, counts.0, counts.1, counts.2, "ambiguous") }
+    guard let primary = cells.first ?? buttons.first ?? texts.first else { return (nil, 0, 0, 0, "none") }
+    // Same-control aliases must overlap. A matching title elsewhere is not a fallback target.
+    let sameControl = (cells + buttons + texts).allSatisfy { candidate in
+      let frame = candidate.frame, area = frame.width * frame.height, shared = frame.intersection(primary.frame)
+      return area > 0 && shared.width * shared.height >= min(area, primary.frame.width * primary.frame.height) * 0.95
+    }
+    guard sameControl else { return (nil, counts.0, counts.1, counts.2, "ambiguous") }
+    return (primary, counts.0, counts.1, counts.2, !cells.isEmpty ? "cell" : (!buttons.isEmpty ? "button" : "text"))
+  }
+
   @MainActor
   private func koreanStatus(_ stage: String, matches: Bool, keyboard: Bool) {
     let status: [String: Any] = ["stage": stage, "expectedValueMatches": matches, "keyboardObserved": keyboard]
@@ -17,21 +43,23 @@ extension BaroDirectoryUITests {
     XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 30), "BARO_KOREAN_SETTINGS_MISSING")
     // Official Settings navigation, only on the fresh owned CI Simulator.
     // No preferences database edits, keyboard extensions, account entry or shortcuts.
-    for (index, label) in ["General", "Keyboard", "Keyboards", "Add New Keyboard…", "Korean"].enumerated() {
-      print("BARO_KOREAN_SETUP_STAGE:" + ["general", "keyboard", "keyboard-list", "add-keyboard", "korean"][index])
-      let cells = settings.cells.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", label, label + ","))
-      let buttons = settings.buttons.matching(NSPredicate(format: "label == %@", label))
+    for (index, aliases) in [["General"], ["Keyboard"], ["Keyboards"], ["Add New Keyboard…", "Add New Keyboard...", "Add New Keyboard"], ["Korean"]].enumerated() {
+      let stage = ["general", "keyboard", "keyboard-list", "add-keyboard", "korean"][index]
+      print("BARO_KOREAN_SETUP_STAGE:" + stage)
+      var control = settingsControl(aliases, in: settings)
       var scrolls = 0
-      while !((cells.count == 1 && cells.firstMatch.isHittable) || (buttons.count == 1 && buttons.firstMatch.isHittable)) && scrolls < 12 {
+      while control.selection == "none" && scrolls < 12 {
         settings.swipeUp()
         scrolls += 1
+        control = settingsControl(aliases, in: settings)
       }
-      // A cell/button alias may share bounds. The cell is the single navigation owner.
-      if cells.count == 1 && cells.firstMatch.isHittable { cells.firstMatch.tap() }
-      else {
-        XCTAssertTrue(buttons.count == 1 && buttons.firstMatch.isHittable, "BARO_KOREAN_SETTINGS_CONTROL_MISSING")
-        buttons.firstMatch.tap()
+      let diagnostic: [String: Any] = ["stage": stage, "cellCount": control.cells, "buttonCount": control.buttons, "textCount": control.texts, "selection": control.selection, "scrolls": scrolls]
+      if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]) {
+        print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
       }
+      XCTAssertNotNil(control.element, "BARO_KOREAN_SETTINGS_CONTROL_MISSING")
+      guard let element = control.element else { return }
+      element.tap()
     }
     print("BARO_KOREAN_SETUP_STAGE:layout")
     let layout = settings.cells.matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "2-Set", "2-Set,"))

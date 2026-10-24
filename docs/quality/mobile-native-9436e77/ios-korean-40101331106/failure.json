@@ -1,0 +1,31 @@
+{
+  "toolingSourceSha": "808a64383309616909ced22e6363fff0c0cfd094",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": null,
+    "history": [],
+    "searchControl": null,
+    "assertionCode": "BARO_KOREAN_SETTINGS_CONTROL_MISSING"
+  },
+  "koreanDirectoryFailure": {
+    "history": [],
+    "setupStage": "add-keyboard",
+    "assertionCode": "BARO_KOREAN_SETTINGS_CONTROL_MISSING"
+  },
+  "inputReferenceFailure": null,
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
