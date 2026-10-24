@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mobileReauthPrepareSchema, mobileReauthProofSchema } from "../../contracts/mobile-auth";
+import { mobileReauthPrepareV2Schema, mobileReauthProofSchema } from "../../contracts/mobile-auth";
 import { AuthConfigurationError } from "./env";
 import { NativeAuthProofError, nativeAuthChallenge } from "./native-codes";
 import { AUTH_RETENTION_MS, RECENT_OAUTH_MS } from "./policy";
@@ -19,7 +19,7 @@ const envelopeSchema = z.strictObject({
     .max(8192)
     .regex(/^[A-Za-z0-9_-]+$/),
 });
-const payloadSchema = mobileReauthPrepareSchema.extend({
+const payloadSchema = mobileReauthPrepareV2Schema.extend({
   startedAt: z.number().int().nonnegative(),
   newSessionId: z.string().min(1).max(128).nullable(),
 });
@@ -156,7 +156,7 @@ export function createNativeReauthentication(dependencies: {
   }
   return {
     async prepare(raw: unknown, actor: Actor) {
-      const input = mobileReauthPrepareSchema.parse(raw),
+      const input = mobileReauthPrepareV2Schema.parse(raw),
         time = now(),
         name = await storageKey(input.attemptId);
       const value = await seal(

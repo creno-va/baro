@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  MOBILE_AUTH_CONTRACT_HEADER,
   mobileAuthExchangeResponseSchema,
   mobileReauthReceiptSchema,
 } from "../src/contracts/mobile-auth";
@@ -10,7 +11,7 @@ import { createOAuthFixture, responseCookies, type SyntheticProvider } from "./h
 import { seedTestSession } from "./helpers/session";
 
 const verifier = "a".repeat(43);
-async function fixture(provider: SyntheticProvider = "google") {
+async function fixture(provider: SyntheticProvider = "google", contractVersion?: "2") {
   const f = await createOAuthFixture(provider);
   const start = await f.begin();
   const loggedIn = await f.callback(start.state, start.cookie);
@@ -33,6 +34,7 @@ async function fixture(provider: SyntheticProvider = "google") {
           "content-type": "application/json",
           cookie: signedCookie,
           ...(origin ? { origin } : {}),
+          ...(contractVersion ? { [MOBILE_AUTH_CONTRACT_HEADER]: contractVersion } : {}),
         },
         body: JSON.stringify(body),
       },
@@ -52,64 +54,65 @@ async function fixture(provider: SyntheticProvider = "google") {
   return { ...f, cookie, original, attemptId, challenge, call, prepare, authorize };
 }
 for (const provider of ["google", "naver", "kakao"] as const)
-  test(`${provider}: original native owner preparation, real OAuth callback, purpose-bound exchange and exact new-session proof`, async () => {
-    const f = await fixture(provider);
-    try {
-      const prepared = await f.prepare();
-      expect(prepared.status).toBe(200);
-      const receipt = mobileReauthReceiptSchema.parse(await prepared.json());
-      const callback = await f.authorize(),
-        returned = new URL(callback.headers.get("location") ?? "");
-      expect([...returned.searchParams.keys()].sort()).toEqual(["attemptId", "code"]);
-      const input = {
-        attemptId: f.attemptId,
-        code: returned.searchParams.get("code"),
-        verifier,
-        purpose: "reauthenticate",
-      };
-      const proof = { attemptId: f.attemptId, verifier };
-      expect((await f.call("reauth/verify", proof)).status).toBe(401);
-      const peer = await seedTestSession(f.database);
-      const denied = await f.call("exchange", input, peer.cookie);
-      expect(denied.status).toBe(401);
-      if (denied.headers.has("set-cookie")) {
-        const refreshed = await f.auth.api.getSession({
-          headers: new Headers({ cookie: responseCookies(denied) }),
+  for (const contractVersion of [undefined, "2"] as const)
+    test(`${provider}/${contractVersion ?? "legacy"}: original native owner preparation, real OAuth callback, purpose-bound exchange and exact new-session proof`, async () => {
+      const f = await fixture(provider, contractVersion);
+      try {
+        const prepared = await f.prepare();
+        expect(prepared.status).toBe(200);
+        const receipt = mobileReauthReceiptSchema.parse(await prepared.json());
+        const callback = await f.authorize(),
+          returned = new URL(callback.headers.get("location") ?? "");
+        expect([...returned.searchParams.keys()].sort()).toEqual(["attemptId", "code"]);
+        const input = {
+          attemptId: f.attemptId,
+          code: returned.searchParams.get("code"),
+          verifier,
+          purpose: "reauthenticate",
+        };
+        const proof = { attemptId: f.attemptId, verifier };
+        expect((await f.call("reauth/verify", proof)).status).toBe(401);
+        const peer = await seedTestSession(f.database);
+        const denied = await f.call("exchange", input, peer.cookie);
+        expect(denied.status).toBe(401);
+        if (denied.headers.has("set-cookie")) {
+          const refreshed = await f.auth.api.getSession({
+            headers: new Headers({ cookie: responseCookies(denied) }),
+          });
+          expect(refreshed?.user.id).toBe(peer.userId);
+        }
+        const { purpose: _purpose, ...downgraded } = input;
+        expect((await f.call("exchange", downgraded)).status).toBe(401);
+        const accepted = await f.call("exchange", input);
+        expect(accepted.status).toBe(200);
+        expect(mobileAuthExchangeResponseSchema.parse(await accepted.clone().json())).toEqual({
+          status: "accepted",
         });
-        expect(refreshed?.user.id).toBe(peer.userId);
+        const currentCookie = responseCookies(accepted);
+        expect((await f.call("exchange", input, currentCookie)).status).toBe(401);
+        expect(
+          (await f.call("reauth/verify", { ...proof, verifier: "b".repeat(43) }, currentCookie))
+            .status,
+        ).toBe(401);
+        const verified = await f.call("reauth/verify", proof, currentCookie);
+        expect(verified.status).toBe(200);
+        expect(mobileReauthReceiptSchema.parse(await verified.json())).toEqual(receipt);
+        const current = await f.auth.api.getSession({
+          headers: new Headers({ cookie: currentCookie }),
+        });
+        expect(current?.user.id).toBe(f.original.user.id);
+        expect(current?.session.id).not.toBe(f.original.session.id);
+        expect(verified.headers.get("cache-control")).toContain("no-store");
+        const rows = f.database.sqlite
+          .query("SELECT value FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
+          .all();
+        expect(rows).toHaveLength(1);
+        expect(JSON.stringify(rows)).not.toContain(verifier);
+        expect(JSON.stringify(rows)).not.toContain(f.challenge);
+      } finally {
+        f.database.close();
       }
-      const { purpose: _purpose, ...downgraded } = input;
-      expect((await f.call("exchange", downgraded)).status).toBe(401);
-      const accepted = await f.call("exchange", input);
-      expect(accepted.status).toBe(200);
-      expect(mobileAuthExchangeResponseSchema.parse(await accepted.clone().json())).toEqual({
-        status: "accepted",
-      });
-      const currentCookie = responseCookies(accepted);
-      expect((await f.call("exchange", input, currentCookie)).status).toBe(401);
-      expect(
-        (await f.call("reauth/verify", { ...proof, verifier: "b".repeat(43) }, currentCookie))
-          .status,
-      ).toBe(401);
-      const verified = await f.call("reauth/verify", proof, currentCookie);
-      expect(verified.status).toBe(200);
-      expect(mobileReauthReceiptSchema.parse(await verified.json())).toEqual(receipt);
-      const current = await f.auth.api.getSession({
-        headers: new Headers({ cookie: currentCookie }),
-      });
-      expect(current?.user.id).toBe(f.original.user.id);
-      expect(current?.session.id).not.toBe(f.original.session.id);
-      expect(verified.headers.get("cache-control")).toContain("no-store");
-      const rows = f.database.sqlite
-        .query("SELECT value FROM app_metadata WHERE key LIKE 'native-reauth:v1:%'")
-        .all();
-      expect(rows).toHaveLength(1);
-      expect(JSON.stringify(rows)).not.toContain(verifier);
-      expect(JSON.stringify(rows)).not.toContain(f.challenge);
-    } finally {
-      f.database.close();
-    }
-  });
+    });
 test("a different browser account cannot issue a reauthentication grant or replace the original native session", async () => {
   const f = await fixture();
   try {
