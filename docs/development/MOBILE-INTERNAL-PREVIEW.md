@@ -4,8 +4,8 @@
 경로는 실제 Release 설정에서 JS/Hermes bundle을 APK에 포함하되 기존 Expo template의
 공개 개발용 인증서만 사용하는 별도 내부 전달물이다. Google Play upload/store key를
 생성하거나 바꾸지 않고 외부 업로드·공개 배포도 하지 않는다. 실제 원격 API가 필요한
-기능을 offline 지원으로 표현하지 않는다. iOS bundled 전달물은 후속 범위이며 #394의
-실제 SDK 서명 인수 전 일반 iOS build/sign 설정을 바꾸지 않는다.
+기능을 offline 지원으로 표현하지 않는다. iOS bundled Simulator와 unsigned iPhone SDK의
+별도 경로·인수 기록은 아래를 따른다. Simulator 서명은 실제 iPhone 설치·스토어 서명과 구분한다.
 
 ## 수동 빌드와 검사
 
@@ -1106,3 +1106,50 @@ iOS Simulator40051996500은 이 기록 시점 같은 run에서 컴파일 중이�
 실제 키보드·소프트 Search/회전을 검증한다. iOS는 성공 원본 receipt/ZIP를 대조하고 pin을 별도
 통합한 뒤 검증하며 기존 pin에 대한 parity guard를 완화하지 않는다. 기존171989e의 성공/실패/원본은
 보존하며 새 앱의 실제 안정성·한국어/reader·계정/API/physical/store 인수로 적용하지 않는다.
+
+## 새 검색 앱 iOS Simulator compiler 원본 인수 (#379)
+
+PR446 head `3a706311de8bb5c6f6b16fa8430f0da5e71d1325`의 CI40053292017 SUCCESS 뒤
+정상 통합한 main `ae6aeccaba21534c011d72fdc2d810b186757d0f`의 CI40053476538도 SUCCESS다.
+새 Android 원본에 대한 [actual40053634921](https://github.com/creno-va/baro/actions/runs/40053634921)의
+fresh SDK·소프트 Search/입력/회전 검증을 시작했다. 최종 실패와 좁은 SDK/Home 결과는 아래에 구분한다.
+
+같은 제품 sourceb3eea74의 [iOS compiler40051996500](https://github.com/creno-va/baro/actions/runs/40051996500)이
+terminal SUCCESS로 완료됐다. 성공 run/source·artifact12544251875/name·만료 아님과 원본
+[receipt](../quality/mobile-internal-ios-2026-10-24/compiler-receipt-b3eea74.json)의 SHA256
+`dc67f480fffe8b2300a2f75b292332d3727c132bbfc50fd99b0cc1aa1723533a`를 확인했다.
+ZIP24,102,692bytes의 전체 SHA256은 `07ea44d1fe992848048f068e59509c8634d805a1c51a8c568d97729eda4f7fe4`다.
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/compiler-independent-b3eea74.json)는 02:20:04.759Z에
+원본을 소유 임시 디렉터리에 추출하여 실제 codesign strict/all-architectures·ad-hoc/No-Team,
+arm64/x86_64 Simulator platform과 Mach-O XML/DER entitlement section·signature entitlements,
+Info.plist/실행 파일 hash를 원본 control과 대조했다. 앱을 재컴파일/재서명하지 않았고 임시 사본은 삭제했다.
+
+실제 HBC3,583,012bytes/fb561553…·graph1465·font byte/400·600·700·min16.4/phone+tablet·
+0.1.0/build1과 map/key/profile 부재도 대조했다. [compile 중간 inspection](../quality/mobile-internal-ios-2026-10-24/compiler-inspection-b3eea74.json)의
+accepted=false는 원래 상태로 보존하고 최종 성공 receipt와 구분한다. 내부 전달 폴더
+`.wrangler/mobile-delivery/b3eea74/ios`에도 원본 ZIP/receipt를 보존한다.
+
+성공한 원본 pin을 정상 PR로 통합하고 exact tooling main CI 뒤 새 앱의 실제 입력·소프트
+Search 탭·키보드/회전을 검사한다. 이 compiler/metadata 인수 자체는 앱 실행·입력 누락 해결·
+한국어 조합/VoiceOver·계정/API·실기기/스토어 인수가 아니다. 이전171989e 기록과 전체
+#334/#379/#346/#339/#71, 웹 소유권·공통 계약/DB·공급자/비용 정책을 보존한다.
+
+### 새 Android 실제 준비 단계 명령 실패
+
+40053634921은 terminal FAILURE다. [원본 실패](../quality/mobile-internal-android-2026-10-24/directory-failure-ae6aecc.json)의
+SHA256은 `b30fae5fbdf215b38b2142c8a01164d36edcbd1b80c06a9dcc39bff8c9cbe26e`다.
+phase/stage는 directory-input-ready/ready, code는 ANDROID_DIRECTORY_COMMAND_FAILED이며
+softwareSearchBeforeTap/input은 null이다. 소프트 Search 제어를 검사하거나 입력을 타이핑한
+단계에 도달하지 않았으므로 Search 선택 실패·앱 입력 수정 실패로 원인을 확정하지 않는다.
+현재 generic command code만으로 정확 명령/exit/timeout은 알 수 없다.
+
+별도 [SDK 재검증](../quality/mobile-internal-android-2026-10-24/directory-verification-ae6aecc.json)은
+02:19:13.341Z에 fresh build-tools37.0.0의 실제 cert fac61745…·package/SDK·HBC 검증을
+완료했다. compiler 원본 receipt/APK·[Home receipt](../quality/mobile-internal-android-2026-10-24/directory-home-ae6aecc.json)와
+pre-public PNG/hash 및 metadata SHA도 [독립 대조](../quality/mobile-internal-android-2026-10-24/directory-failure-independent-ae6aecc.json)했다.
+Home PNG는 새 앱의 고정 익명 화면을 육안 확인했으며 공개 진입 뒤 screenshot/raw XML/window
+출력은 없었다. 이러한 SDK/signature/Home 관측을 전체 workflow 성공으로 표현하지 않는다.
+
+원본 실패를 보존하고 native 명령의 고정 category/exit/timeout 진단을 보강한 뒤 바뀐 조건을
+검증한다. 같은 조건을 즉시 반복하지 않으며 이전171989e hardware Enter 성공을 새 source의
+입력/소프트 Search·회전 성공으로 적용하지 않는다. 새 iOS 원본 pin/actual 검증은 독립 진행한다.
