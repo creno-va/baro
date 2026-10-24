@@ -1,5 +1,37 @@
 import { rememberDependencyFailure } from "../../dependency-diagnostics";
 
+export type GatewayRequestIssue =
+  | "thinking_configuration"
+  | "thinking_output_limit"
+  | "unsupported_parameter"
+  | "schema_constraint";
+const requestIssues = new WeakMap<object, GatewayRequestIssue>();
+export const gatewayRequestIssue = (error: unknown) =>
+  error && typeof error === "object" ? requestIssues.get(error) : undefined;
+function rememberRequestIssue(error: object, raw: unknown) {
+  const message =
+    raw && typeof raw === "object" && "message" in raw && typeof raw.message === "string"
+      ? raw.message
+      : "";
+  const issue =
+    /(?:thinking|reasoning).*(?:budget|token).*(?:exceed|less than|greater than|max.output|max_completion)|(?:max.output|max_completion).*(?:thinking|reasoning)/i.test(
+      message,
+    )
+      ? "thinking_output_limit"
+      : /reasoning_effort|thinking_level|thinkingBudget|thinking_config|thinking.*(?:unsupported|not supported)/i.test(
+            message,
+          )
+        ? "thinking_configuration"
+        : /(?:unsupported|unknown|unrecognized|not supported).*(?:parameter|field)|(?:parameter|field).*(?:unsupported|unknown|unrecognized|not supported)/i.test(
+              message,
+            )
+          ? "unsupported_parameter"
+          : /response_format|json.?schema|additionalProperties|anyOf|oneOf/i.test(message)
+            ? "schema_constraint"
+            : undefined;
+  if (issue) requestIssues.set(error, issue);
+}
+
 async function boundedJson(response: Response, maximumBytes: number): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) return null;
@@ -34,6 +66,7 @@ export async function gatewayResponse(value: unknown): Promise<unknown> {
       const envelope = body as Record<string, unknown>;
       if (envelope.success === false) {
         const failure = new Error("GATEWAY_PROVIDER_ERROR");
+        rememberRequestIssue(failure, Array.isArray(envelope.errors) ? envelope.errors[0] : null);
         rememberDependencyFailure(
           failure,
           Array.isArray(envelope.errors) ? envelope.errors[0] : null,
@@ -57,6 +90,7 @@ export async function gatewayResponse(value: unknown): Promise<unknown> {
   const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   const nested = record.error ?? (Array.isArray(record.errors) ? record.errors[0] : null);
   const failure = Object.assign(new Error("GATEWAY_HTTP_ERROR"), { status: value.status });
+  rememberRequestIssue(failure, nested);
   const retryAfter = value.headers.get("retry-after");
   if (retryAfter !== null && /^\d+(?:\.\d+)?$/.test(retryAfter))
     Object.assign(failure, { retryAfter: Math.min(30, Number(retryAfter)) });

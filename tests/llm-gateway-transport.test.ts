@@ -2,7 +2,26 @@ import { expect, test } from "bun:test";
 import { dependencyCategory } from "../src/server/dependency-diagnostics";
 import { providerStatus } from "../src/server/modules/llm-gateway/attempts";
 import { createLlmGateway } from "../src/server/modules/llm-gateway/service";
-import { gatewayResponse } from "../src/server/modules/llm-gateway/transport";
+import { gatewayRequestIssue, gatewayResponse } from "../src/server/modules/llm-gateway/transport";
+
+test("HTTP request diagnostics classify thinking and schema settings without retaining provider text", async () => {
+  for (const [message, issue] of [
+    ["reasoning_effort medium is not supported private sentinel", "thinking_configuration"],
+    [
+      "thinking budget must be less than max_output_tokens private sentinel",
+      "thinking_output_limit",
+    ],
+    ["Unknown parameter private sentinel", "unsupported_parameter"],
+    ["Invalid response_format JSON schema private sentinel", "schema_constraint"],
+  ] as const) {
+    const error = await gatewayResponse(
+      Response.json({ error: { message } }, { status: 400 }),
+    ).catch((error) => error);
+    expect(gatewayRequestIssue(error)).toBe(issue);
+    expect(JSON.stringify(error)).not.toContain("sentinel");
+    expect(String(error)).toBe("Error: GATEWAY_HTTP_ERROR");
+  }
+});
 
 for (const [status, body, category] of [
   [

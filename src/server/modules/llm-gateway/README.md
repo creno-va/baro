@@ -1,7 +1,7 @@
 # LLM Gateway
 
 Pinned model: `google/gemini-3.8-flash`, Cloudflare AI binding / AI Gateway Unified Billing, Chat Completions.
-Text generation and vision use `reasoning_effort=low`; independent workspace audit and v1 validation use `medium`. Thinking remains internal. No fallback model, provider key, external search tool or unvalidated token streaming is enabled.
+Text generation and vision use `reasoning_effort=low`; independent workspace audit and v1 validation use Google's explicit `extra_body.google.thinking_config.thinking_level=medium` with `include_thoughts=false`. The mutually exclusive `reasoning_effort` field is omitted on those audit requests. Thinking remains internal. No fallback model, provider key, external search tool or unvalidated token streaming is enabled.
 
 Official support checked 2026-10-21:
 - https://developers.cloudflare.com/ai/models/google/gemini-3.8-flash/
