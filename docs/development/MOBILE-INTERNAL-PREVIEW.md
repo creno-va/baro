@@ -1199,3 +1199,31 @@ TextInput synchronization에서 string value가 native text를 다시 맞추는 
 새 구현은 확정 query/필터가 바뀔 때만 초기화하고, 목록/로컬 필터 변경 중 입력·composition과
 최신 검색 버튼/native 제출 원문을 보존해야 한다. global TextField나 비교 literal·키보드 locale/
 타이핑 속도를 바꾸지 않는다. 제품 수정·새 compiler/원본 pin/actual 검증 전 해결 성공을 주장하지 않는다.
+
+## native가 소유하는 검색 draft의 후속 제품 수정 (#379)
+
+PR448 head a8967a53…의 CI40055541365/Android host40055541370 SUCCESS 뒤 main
+`139fd49c296c75dc9765b79d17e6ab8849b391e7`로 정상 통합했고 main CI40055749791도 SUCCESS다.
+바뀐 고정 진단의 [Android actual40055905132](https://github.com/creno-va/baro/actions/runs/40055905132)을
+그 source139fd49/앱b3eea74로 한 차례 시작했다. 현재 같은 run native 관측 진행 중이며 이
+진단 관측을 아래 후속 제품 수정의 실제 입력 성공으로 적용하지 않는다.
+
+`DirectoryQueryField`는 committedQuery를 TextField의 defaultValue로만 전달하고 native가
+편집 중인 draft를 소유한다. 앱은 per-key controlled value를 되쓰거나 draft setState를 하지
+않는다. onChangeText는 부모의 최신 ref만 갱신하고, 키보드 제출은 nativeEvent.text 원문을
+ref와 검색 callback에 전달한다. 버튼은 같은 최신 ref를 사용한다. committedQuery와 확정
+필터 key가 바뀔 때만 입력을 새로 mount해 초기화한다. 목록 phase/로컬 필터/타이핑 중에는
+같은 입력 인스턴스를 유지한다. global TextField·검색 wire/model·최대100자·label/접근성·
+키보드 locale/capitalization·비교 literal·타이핑 속도는 변경하지 않는다.
+
+이것은 [RN defaultValue와 value의 공개 계약](https://reactnative.dev/docs/textinput#defaultvalue)을
+사용한 소비 경계 변경이다. 설치된 RN0.88의 string value→native text synchronization 조건을
+읽었으나 해당 분기가 이번 누락의 유일한 원인이라고 확정하지 않는다. 기존 목록 렌더 분리도
+유지하며 b3eea74의 실패 관측은 삭제하지 않는다.
+
+RN UI 회귀는 controlled value가 없는 상태에서 최신 원문/native submit·버튼 값과 입력의
+React 인스턴스 유지/확정 query·필터 변경 및 empty reset을 검사한다. RN renderer의 props나
+인스턴스 검사는 실제 native 값·IME composition 보존의 증거가 아니다. 실제 literal/키보드/
+회전 검사는 그대로 유지한다. 새 제품의 exact PR/main CI 뒤 양 OS compiler·성공 원본 pin을
+갱신하고 새 바이너리로 검증해야 한다. compiler/SDK/과거171989e·b3eea74 관측을 이 제품의
+실제 성공으로 재명명하지 않는다. 웹 UI·계약/DB·공급자/비용 정책과 전체 gate를 보존한다.

@@ -67,7 +67,7 @@ export function DirectoryScreen({
               onChange={setPracticeArea}
             />
             <DirectoryQueryField
-              value={state.query}
+              committedQuery={state.query}
               committedFilterKey={JSON.stringify([state.region, state.practiceArea])}
               onDraftChange={updateQueryDraft}
               onSubmit={submitQuery}
