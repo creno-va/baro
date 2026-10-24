@@ -1,0 +1,101 @@
+{
+  "toolingSourceSha": "5c7442f8892b26e4eb854d5454f0116ac37fe664",
+  "binarySourceSha": "9436e770240fcebd03f3ab66c42222c5343cf412",
+  "binary": {
+    "name": "baro-internal-preview-android-9436e770240fcebd03f3ab66c42222c5343cf412.apk",
+    "bytes": 57219314,
+    "sha256": "a7b048e099ca9cf64a9865370ea035685c4f3f21505ab870628998c387ea5d30"
+  },
+  "verificationSha256": "f223758a38ed81e7207f7432867fd4df15af77c416fc1bbab389998d05fbf6c4",
+  "baselineReceiptSha256": "9d48789da6f9ddd0c98c281900d734365e69752409675ee43ab92d65ddcb0cea",
+  "device": {
+    "kind": "owned-emulator",
+    "model": "sdk_gphone64_x86_64",
+    "osVersion": "15"
+  },
+  "version": 1,
+  "kind": "android-anonymous-custom-tab-cancellation",
+  "observedAt": "2026-10-24T13:53:53.153Z",
+  "applicationId": "site.baro.app.preview",
+  "browserPackage": "com.android.chrome",
+  "browserFixture": {
+    "kind": "owned-emulator-preinstalled-chrome-test-fixture",
+    "buildType": "userdebug",
+    "chromeVersion": "124.0.6367.219",
+    "switches": [
+      "--disable-fre"
+    ],
+    "commandLineSha256": "51f795358d9763ded89e91dd7b2729f9b64b022c60348161fc63f6f21b2accff",
+    "commandLineReadbackVerified": true,
+    "commandLineRemovedVerified": true,
+    "consumerFirstRunVerified": false,
+    "consentUiUsed": false,
+    "accountsConfigured": false,
+    "rootAdbUsed": false,
+    "debugAppSettingsChanged": false,
+    "tlsChecksChanged": false,
+    "webSecurityChanged": false
+  },
+  "providers": [
+    {
+      "provider": "google",
+      "initialAnonymousObserved": true,
+      "providerButtonObserved": true,
+      "chromeCustomTabForeground": true,
+      "webViewGeometryVerified": true,
+      "uniqueNativeCloseControl": true,
+      "closeControlOutsideEveryWebView": true,
+      "systemBackPresses": 1,
+      "appForegroundReturned": true,
+      "anonymousReturnObserved": true,
+      "errorStateAbsent": true,
+      "consentStateAbsent": true
+    },
+    {
+      "provider": "naver",
+      "initialAnonymousObserved": true,
+      "providerButtonObserved": true,
+      "chromeCustomTabForeground": true,
+      "webViewGeometryVerified": true,
+      "uniqueNativeCloseControl": true,
+      "closeControlOutsideEveryWebView": true,
+      "systemBackPresses": 1,
+      "appForegroundReturned": true,
+      "anonymousReturnObserved": true,
+      "errorStateAbsent": true,
+      "consentStateAbsent": true
+    },
+    {
+      "provider": "kakao",
+      "initialAnonymousObserved": true,
+      "providerButtonObserved": true,
+      "chromeCustomTabForeground": true,
+      "webViewGeometryVerified": true,
+      "uniqueNativeCloseControl": true,
+      "closeControlOutsideEveryWebView": true,
+      "systemBackPresses": 1,
+      "appForegroundReturned": true,
+      "anonymousReturnObserved": true,
+      "errorStateAbsent": true,
+      "consentStateAbsent": true
+    }
+  ],
+  "coldAnonymousReturnObserved": true,
+  "explicitScreenshotsSuppressedBeforeNavigation": true,
+  "adbCommandOutputPersisted": false,
+  "rawHierarchyExported": false,
+  "rawLogcatRead": false,
+  "accountLoginPerformed": false,
+  "credentialsEntered": false,
+  "callbackExchangeVerified": false,
+  "providerAcceptanceVerified": false,
+  "privateDataAccess": false,
+  "publicDataNavigation": false,
+  "authenticationNavigation": true,
+  "metroRequests": 0,
+  "physicalDeviceVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

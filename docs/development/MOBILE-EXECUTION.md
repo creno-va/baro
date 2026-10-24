@@ -134,6 +134,10 @@ M5는 우선 사진·문서의 전체 흐름을 연결하고 기존 지원 음�
 큰 글자·screen reader·대비·reduced motion을 포함한다. screenshot만으로 기능 또는
 접근성 인수를 대신하지 않는다. M4~M6의 같은 시나리오가 UI 교체 전후 통과해야 한다.
 
+한국어 IME는 [독립 실행 절차와 미완료 범위](../quality/MOBILE-KOREAN-INPUT.md)로
+추적한다. 현재 iOS software 자모 조합 검사는 도구 준비 단계이며, 기존 ASCII 입력·
+3사 인증 취소 성공을 한글/reader·전체 화면 인수로 확대하지 않는다.
+
 ## 4. 검증과 릴리스
 
 M8 내부 전달은 기존 수동 native preview 빌드에서 APK/Simulator app ZIP과 실제 binary
