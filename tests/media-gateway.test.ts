@@ -242,7 +242,9 @@ test("registration-side consent/capability revocation is rechecked before AI dis
 test("vision dispatch follows observer registration and preserves actual response receipt", async () => {
   const events: string[] = [];
   const output = { texts: ["synthetic visible text"], quality: "processed" as const };
-  const envelope = { choices: [{ message: { content: JSON.stringify(output) } }] };
+  const envelope = {
+    choices: [{ message: { content: JSON.stringify(output) }, finish_reason: "stop" }],
+  };
   const s = setup({
     register: () => {
       events.push("registered");

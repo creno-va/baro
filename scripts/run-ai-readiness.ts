@@ -28,9 +28,10 @@ try {
     await git([
       "ls-files",
       "scripts/ai-readiness-worker.ts",
+      "scripts/ai-readiness-fixture.ts",
       "scripts/ai-readiness-control.ts",
       "scripts/ai-readiness.wrangler.jsonc",
-      "src/server/modules/llm-gateway",
+      "src/server",
       "src/contracts",
     ])
   )
@@ -152,7 +153,7 @@ try {
   );
   console.log(
     JSON.stringify({
-      check: "live-synthetic-worker-screening",
+      check: "live-synthetic-worker-intake-and-audit",
       status: report.status,
       failure: report.failure,
       attempts: report.attempts,
