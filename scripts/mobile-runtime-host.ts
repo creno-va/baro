@@ -1,6 +1,35 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+export function androidRuntimeProfile(value = "google-apis-api35") {
+  if (value === "google-apis-api35")
+    return {
+      kind: "google-apis-api35",
+      systemImage: "system-images;android-35;google_apis;x86_64",
+      apiLevel: 35,
+      abi: "x86_64",
+    } as const;
+  if (value === "aosp-api35")
+    return {
+      kind: "aosp-api35",
+      systemImage: "system-images;android-35;default;x86_64",
+      apiLevel: 35,
+      abi: "x86_64",
+    } as const;
+  throw Error("RUNTIME_ANDROID_PROFILE_REQUIRED");
+}
+export function verifyOwnedAndroidImage(config: string, sdk: string, profileName: string) {
+  const profile = androidRuntimeProfile(profileName);
+  if (config.length > 65536) throw Error("RUNTIME_AVD_SYSTEM_IMAGE_MISMATCH");
+  const rows = [...config.matchAll(/^image\.sysdir\.1[ \t]*=[ \t]*([^\r\n]+)$/gm)];
+  if (
+    rows.length !== 1 ||
+    !rows[0]?.[1] ||
+    resolve(sdk, rows[0][1].trim()) !== resolve(sdk, profile.systemImage.replaceAll(";", "/"))
+  )
+    throw Error("RUNTIME_AVD_SYSTEM_IMAGE_MISMATCH");
+  return profile;
+}
 export function ownedAndroidPaths(out: string) {
   const avdHome = resolve(out, "android/avd"),
     userHome = resolve(out, "android/user");
@@ -19,8 +48,10 @@ export async function createOwnedAndroidAvd(
   out: string,
   avd: string,
   command: (args: string[], input?: string) => Promise<string>,
+  profileName = "google-apis-api35",
 ) {
   androidRuntimeOptions(avd);
+  const profile = androidRuntimeProfile(profileName);
   const paths = ownedAndroidPaths(out);
   await mkdir(paths.avdHome, { recursive: true });
   await mkdir(paths.userHome, { recursive: true });
@@ -32,7 +63,7 @@ export async function createOwnedAndroidAvd(
       "-n",
       avd,
       "-k",
-      "system-images;android-35;google_apis;x86_64",
+      profile.systemImage,
       "--device",
       "pixel_6",
       "--path",
@@ -45,6 +76,13 @@ export async function createOwnedAndroidAvd(
     .map((line) => line.trim());
   if (!discovered.includes(avd) || !(await Bun.file(resolve(paths.avdHome, `${avd}.ini`)).exists()))
     throw new Error("RUNTIME_AVD_DISCOVERY_FAILED");
+  let config: string;
+  try {
+    config = await readFile(resolve(paths.avdHome, `${avd}.avd/config.ini`), "utf8");
+  } catch {
+    throw Error("RUNTIME_AVD_IMAGE_READBACK_REQUIRED");
+  }
+  verifyOwnedAndroidImage(config, sdk, profile.kind);
   return paths;
 }
 export function runtimeDevelopmentUrl(profile: "dev" | "preview" = "dev") {

@@ -1,0 +1,62 @@
+{
+  "toolingSourceSha": "2327b2af8acf8724d09895003824d2daf94fd6e1",
+  "phase": "public-directory-xcuitest",
+  "code": "INTERNAL_IOS_VERIFICATION_COMMAND_FAILED",
+  "lastCommand": {
+    "exitCode": 65,
+    "timedOut": false,
+    "category": "COMMAND_FAILED"
+  },
+  "uiTestFailure": null,
+  "authCancelFailure": null,
+  "directoryFailure": {
+    "status": null,
+    "history": [],
+    "searchControl": null,
+    "assertionCode": "BARO_KOREAN_SWITCH_MISSING"
+  },
+  "koreanDirectoryFailure": {
+    "history": [],
+    "separateChoice": {
+      "koreanTitleObserved": true,
+      "promptObserved": true,
+      "scopeKind": "table",
+      "scopeCount": 1,
+      "cellCount": 1,
+      "buttonCount": 0,
+      "ownersOverlap": true,
+      "selection": "cell",
+      "decision": "separate-keyboard"
+    },
+    "layoutStatus": {
+      "stage": "after-selection",
+      "traitSelected": true,
+      "valueClass": "empty",
+      "doneButtonCount": 1,
+      "doneHittable": true,
+      "doneInNavigationBar": true,
+      "standardObserved": false,
+      "tenKeyObserved": true,
+      "koreanTitleObserved": true
+    },
+    "setupControl": {
+      "stage": "done",
+      "cellCount": 0,
+      "buttonCount": 1,
+      "textCount": 0,
+      "ownersOverlap": true,
+      "selection": "button",
+      "scrolls": 0
+    },
+    "setupStage": "readback",
+    "assertionCode": "BARO_KOREAN_SWITCH_MISSING"
+  },
+  "inputReferenceFailure": null,
+  "nativeProcessLaunchVerified": false,
+  "homeContentVerified": false,
+  "remoteApiVerified": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}
