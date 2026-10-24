@@ -2,7 +2,12 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
-import { createAppleIdentityBinding } from "./apple-identity";
+import {
+  appleLinkedAccountUpdateAllowed,
+  appleLinkedSessionAllowed,
+  createAppleIdentityBinding,
+  isAppleLinkedCallback,
+} from "./apple-identity";
 import { parseAuthEnvironment } from "./env";
 import { createNativeExpoIntegration, nativeAuthCallbackBase } from "./native-expo";
 import { AUTH_RETENTION_MS, SESSION_EXPIRES_SECONDS, SESSION_UPDATE_SECONDS } from "./policy";
@@ -29,7 +34,7 @@ function createConfiguredAuth(env: Env) {
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [origin, ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : [])],
-    plugins: [createAppleIdentityBinding(), createNativeExpoIntegration(env)],
+    plugins: [createAppleIdentityBinding(env.DB), createNativeExpoIntegration(env)],
     onAPIError: { errorURL: `${origin}/login` },
     // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
     logger: { disabled: true },
@@ -74,21 +79,55 @@ function createConfiguredAuth(env: Env) {
       },
     },
     databaseHooks: {
+      user: {
+        create: {
+          before: async (_user, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
+            return undefined;
+          },
+        },
+        update: {
+          before: async (_user, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
+            return undefined;
+          },
+        },
+      },
       session: {
         create: {
-          before: async (session, context) => ({
-            data: {
-              ...session,
-              ipAddress: null,
-              userAgent: null,
-              // Only a completed provider callback can establish recent OAuth authentication.
-              oauthAuthenticatedAt:
-                context?.path === "/callback/:id" &&
-                ["google", "naver", "kakao"].includes(context.params?.id ?? "")
-                  ? new Date()
-                  : null,
-            },
-          }),
+          before: async (session, context) => {
+            if (
+              !(await appleLinkedSessionAllowed(
+                env.DB,
+                session.userId,
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              ))
+            )
+              return false;
+            return {
+              data: {
+                ...session,
+                ipAddress: null,
+                userAgent: null,
+                // Only a completed provider callback can establish recent OAuth authentication.
+                oauthAuthenticatedAt:
+                  context?.path === "/callback/:id" &&
+                  ["google", "naver", "kakao"].includes(context.params?.id ?? "")
+                    ? new Date()
+                    : null,
+              },
+            };
+          },
         },
         update: {
           before: async (session, context) => {
@@ -109,10 +148,27 @@ function createConfiguredAuth(env: Env) {
       },
       account: {
         create: {
-          before: async (account) => ({ data: discardProviderCredentials(account) }),
+          before: async (account, context) => {
+            if (
+              await isAppleLinkedCallback(
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              )
+            )
+              return false;
+            return { data: discardProviderCredentials(account) };
+          },
         },
         update: {
-          before: async (account) => ({ data: discardProviderCredentials(account) }),
+          before: async (account, context) => {
+            if (
+              !(await appleLinkedAccountUpdateAllowed(
+                env.DB,
+                context?.path === "/callback/:id" && context.params?.id === "apple",
+              ))
+            )
+              return false;
+            return { data: discardProviderCredentials(account) };
+          },
         },
       },
     },
