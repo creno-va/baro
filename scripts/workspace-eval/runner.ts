@@ -4,7 +4,6 @@ import { MODEL_ID, type Phase, prompts } from "../../src/server/modules/llm-gate
 import {
   createLlmGateway,
   gatewayTransportIdentity,
-  gatewayWireIdentity,
   ModelError,
   prepareGatewayWireInput,
 } from "../../src/server/modules/llm-gateway/service";
