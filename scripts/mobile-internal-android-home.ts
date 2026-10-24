@@ -584,7 +584,7 @@ async function main() {
       const proof = verifyAndroidDirectoryReceipt(
         {
           version: 1,
-          kind: "bundled-android-public-directory-input-ui-only",
+          kind: "bundled-android-public-directory-software-search-ui-only",
           ...identity,
           observedAt: new Date().toISOString(),
           applicationId: appId,

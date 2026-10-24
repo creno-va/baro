@@ -1050,3 +1050,26 @@ literal 검사를 먼저 통과해야 한다. 진단은 고정 count/boolean만 
 result/receipt kind는 필수 탭 증거를 요구하며 기존 newline receipt를 재명명하지 않는다.
 로컬 schema/Swift syntax 검증과 실제 UIKit 컴파일·Search 탭 성공은 구분한다. 후자는 아직 미검증이다.
 웹 UI·공통 계약/DB·권한/공급자/비용 정책은 변경하지 않는다.
+
+## Android 소프트 IME Search 직접 탭 준비 (#379)
+
+PR444/main `b3eea741010b572158a01fc50b51e58aa13344c6`·CI40051831098 SUCCESS 뒤
+새 앱의 Android compiler40051994117·iOS compiler40051996500 및 unsigned iPhone SDK40052099884를
+시작했다. 이 세 실행의 terminal 성공·원본 산출물·새 입력 해결은 아직 인수하지 않았다.
+기존171989e 원본 pin은 성공 compiler 증거를 대조한 후에만 갱신한다.
+
+Android15r5의 [DumpCommand](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/cmds/uiautomator/cmds/uiautomator/src/com/android/commands/uiautomator/DumpCommand.java)와
+[AccessibilityNodeInfoDumper](https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-15.0.0_r5/cmds/uiautomator/library/core-src/com/android/uiautomator/core/AccessibilityNodeInfoDumper.java)의
+실제 `--windows`/default display·`TYPE_INPUT_METHOD` 구조를 기준으로 소프트 Search 관측을
+준비한다. 신선한 소유 Emulator의 공개 화면 capture 차단 뒤 current IME component를 읽고,
+default display의 유일 input-method window 안에서 해당 IME package의 Search/검색 node가
+하나인지 확인한다. enabled/clickable·양수 화면 bounds·IME window 내부·실제 IME top 아래를
+요구하고 IME component가 그대로인지 다시 확인한 후 tap한다. 키를 찾지 못하면 실패하며
+hardware Enter로 대체하지 않는다. 중첩 IME window 구조는 지원하지 않으며 안전하게 실패한다.
+
+XML은 메모리에서만 해석하고 device 임시 파일은 매회 finally에서 지운다. 진단은 고정
+count/boolean만 남기며 label/package/component/키 입력/계층은 출력하지 않는다. 새로운
+`software-keyboard-search` 결과·별도 receipt kind는 탭 증거를 요구한다. 기존 hardware
+Enter 원본 receipt는 그대로 읽되 재명명을 거부한다. 합성 parser/명령·복구 검증을 실제 키
+탭 성공으로 표현하지 않는다. 새 앱 pin/정확한 main CI 뒤 실제 Emulator에서 확인해야 한다.
+한국어 조합·TalkBack·실기기/전체 역할과 원격 API·OAuth·스토어 인수는 계속 별도다.
