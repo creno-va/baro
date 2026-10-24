@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import { getOAuthState } from "better-auth/api";
 import { type OAuthProvider, verifyProviderIdToken } from "better-auth/oauth2";
 import { z } from "zod";
+import type { AppleCallbackMaterial } from "./apple-revoke";
 
 const nonceSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/);
 const claimsSchema = z.object({
@@ -17,6 +18,35 @@ const linkedIdentitySchema = z.object({
 type LinkedIdentity = z.infer<typeof linkedIdentitySchema>;
 // Keys are SDK request-local state objects, never client-supplied marker fields or durable tokens.
 const linkedCallbacks = new WeakMap<object, { ownerId: string; subject: string }>();
+const verifiedCallbacks = new WeakMap<object, AppleCallbackMaterial>();
+export async function hasVerifiedAppleCallback(db: D1Database, ownerId: string) {
+  const state = await getOAuthState(),
+    material = state ? verifiedCallbacks.get(state) : null;
+  if (!material) return false;
+  return Boolean(
+    await db
+      .prepare(
+        "SELECT 1 AS ok FROM account a WHERE a.user_id=? AND a.provider_id='apple' AND a.account_id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE t.target_kind='account' AND t.target_id=a.user_id)",
+      )
+      .bind(ownerId, material.subject)
+      .first(),
+  );
+}
+export async function takeAppleCallbackMaterial() {
+  const state = await getOAuthState();
+  if (!state) return null;
+  const material = verifiedCallbacks.get(state) ?? null;
+  verifiedCallbacks.delete(state);
+  return material;
+}
+export async function clearAppleCallbackMaterial() {
+  try {
+    const state = await getOAuthState();
+    if (state) verifiedCallbacks.delete(state);
+  } catch {
+    /* No callback state was established. */
+  }
+}
 async function linkedCallback() {
   try {
     const state = await getOAuthState();
@@ -75,6 +105,10 @@ export async function findAppleLinkedIdentity(
 export function bindAppleIdentity(
   provider: OAuthProvider,
   resolveLinkedIdentity?: (subject: string) => Promise<LinkedIdentity | null>,
+  onVerified?: (
+    subject: string,
+    tokens: Parameters<OAuthProvider["getUserInfo"]>[0],
+  ) => Promise<void>,
 ): OAuthProvider {
   if (provider.id !== "apple") return provider;
   const config = provider.idToken;
@@ -126,17 +160,18 @@ export function bindAppleIdentity(
         !(await verifyProviderIdToken(verifier, tokens.idToken, tokens.expectedIdTokenNonce))
       )
         return null;
-      const info = await provider.getUserInfo(tokens);
-      if (!info || info.user.email || !resolveLinkedIdentity) return info;
+      let info = await provider.getUserInfo(tokens);
+      if (!info) return null;
       const claims = claimsSchema.safeParse(info.data);
       if (!claims.success) return null;
-      const linked = await resolveLinkedIdentity(claims.data.sub);
-      if (!linked) return null;
-      return {
-        ...info,
-        // A stored email is not a new Apple email-verification claim and cannot authorize implicit linking.
-        user: { ...info.user, email: linked.email, emailVerified: false },
-      };
+      if (!info.user.email && resolveLinkedIdentity) {
+        const linked = await resolveLinkedIdentity(claims.data.sub);
+        if (!linked) return null;
+        // A stored email is not a new Apple email-verification claim.
+        info = { ...info, user: { ...info.user, email: linked.email, emailVerified: false } };
+      }
+      await onVerified?.(claims.data.sub, tokens);
+      return info;
     },
   };
 }
@@ -149,14 +184,28 @@ export function createAppleIdentityBinding(db: D1Database): BetterAuthPlugin {
       return {
         context: {
           socialProviders: context.socialProviders.map((provider) =>
-            bindAppleIdentity(provider, async (subject) => {
-              const identity = await findAppleLinkedIdentity(db, subject);
-              if (!identity) return null;
-              const state = await getOAuthState();
-              if (!state) return null;
-              linkedCallbacks.set(state, { ownerId: identity.ownerId, subject });
-              return identity;
-            }),
+            bindAppleIdentity(
+              provider,
+              async (subject) => {
+                const identity = await findAppleLinkedIdentity(db, subject);
+                if (!identity) return null;
+                const state = await getOAuthState();
+                if (!state) return null;
+                linkedCallbacks.set(state, { ownerId: identity.ownerId, subject });
+                return identity;
+              },
+              async (subject, tokens) => {
+                const state = await getOAuthState();
+                if (!state) throw new Error("APPLE_LINKED_CALLBACK_CONTEXT_REQUIRED");
+                const material: AppleCallbackMaterial = { subject };
+                for (const name of ["accessToken", "refreshToken"] as const) {
+                  const value = tokens[name];
+                  if (typeof value === "string" && value.length > 0 && value.length <= 16384)
+                    material[name] = value;
+                }
+                verifiedCallbacks.set(state, material);
+              },
+            ),
           ),
         },
       };
