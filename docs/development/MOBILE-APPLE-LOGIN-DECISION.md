@@ -268,3 +268,9 @@ Apple 수락 credential이 아니며 provider token exchange/JWKS/revoke의 합�
 Apple 성공으로 표시하지 않는다. 실제 Safari/system browser의 cookie 전달·cold/warm 복귀와
 개발자 설정/두 OS 기기 인수는 여전히 별도다. 모바일 capability 소비·Apple 버튼·삭제 결과
 복구 UI가 후속이며 기존 웹 UI는 변경하지 않는다.
+
+선택적 설정/POST 연결의 통합 로컬 검증(main3e427aa 포함): frozen 설치 lock 변경 없음,
+`validate:quick`243개/31파일/2528 assertions, Apple 설정·callback·identity63개/465 assertions,
+auth·기존 삭제/복구 journal216개/1752 assertions와 `validate:build`/로컬 workerd 통과.
+이 변경은 server/config만 다루며 native source·모바일 bundle·DB schema/query를 추가하지 않는다.
+이전에 통과한 OS/DB 증거를 새 실제 로그인/기기·전체 security/#71 인수로 전이하지 않는다.
