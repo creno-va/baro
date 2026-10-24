@@ -128,7 +128,8 @@ const samePublicationContext = (left: FilePublicationContext, right: FilePublica
   left.status === right.status &&
   left.intakeRevision === right.intakeRevision &&
   left.summaryRevision === right.summaryRevision &&
-  left.currentJobId === right.currentJobId;
+  left.currentJobId === right.currentJobId &&
+  left.manifestSnapshotId === right.manifestSnapshotId;
 const receiptSchema = z.strictObject({ opaqueIds: z.array(opaqueIdSchema).max(100) });
 
 /** Each native unit (one page / 30 seconds) and each provider artifact is a
@@ -173,7 +174,7 @@ export function createFileProcessingExecution(
     // Every transport, stream and publication caller keeps its existing check.
     const row = await core
       .statement(
-        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision,w.status AS workspace_status,w.intake_revision,w.confirmed_summary_revision,w.current_job_id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision,w.status AS workspace_status,w.intake_revision,w.confirmed_summary_revision,w.current_job_id,f.manifest_snapshot_id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND f.manifest_snapshot_id IS NOT NULL AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
         [
           params.jobId,
           params.ownerId,
@@ -197,6 +198,7 @@ export function createFileProcessingExecution(
         intake_revision: number;
         confirmed_summary_revision: number | null;
         current_job_id: string | null;
+        manifest_snapshot_id: string;
       }>();
     return row
       ? {
@@ -208,6 +210,7 @@ export function createFileProcessingExecution(
             intakeRevision: row.intake_revision,
             summaryRevision: row.confirmed_summary_revision,
             currentJobId: row.current_job_id,
+            manifestSnapshotId: row.manifest_snapshot_id,
           },
         }
       : null;
@@ -1200,6 +1203,7 @@ export function createFileProcessingExecution(
               observations: result.observations.slice(start, start + 4),
               derivativeOrdinal,
               derivatives: result.derivatives.slice(start, start + 4),
+              ...(publication.context ? { context: publication.context } : {}),
             },
             next.lease,
           ),
@@ -1247,6 +1251,7 @@ export function createFileProcessingExecution(
               coverageSnapshotId: p.coverageId,
               observationCount: p.observationCount,
               derivativeCount: p.derivativeCount,
+              ...(p.context ? { context: p.context } : {}),
             },
             next.lease,
           ),

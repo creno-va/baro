@@ -625,3 +625,13 @@ reads. Extra work retains immutable-plan replay and atomic file-only fence check
 Fresh integrated CI/deployment and actual media acceptance remain required. Native
 startup is being investigated in the separate native-startup checkout; its underlying
 platform cause is still not established and there is no same-condition live retry.
+
+Self-review added explicit immutable manifest identity to that private context.
+Two additional regressions first demonstrated that a replaced manifest could pass
+the operational refresh. The manifest is now compared in the fresh source read and
+in SQL. A shared publication scope repeats exact source/context/file and current
+policy/file consent at observation staging and the final ready transaction, including
+revocations after the earlier refresh. Eight added cases cover before/after-guard
+manifest replacement and late file/policy consent loss at both write boundaries.
+All87 focused cases (35 execution cases) then passed. These are synthetic SQL/AES
+failure tests, not evidence of an actual customer source replacement or breach.

@@ -207,6 +207,7 @@ for (const mutation of [
   "workspace_job",
   "archive",
   "file_revision",
+  "file_manifest",
   "file_consent",
   "policy_consent",
   "lease_fencing",
@@ -221,7 +222,7 @@ for (const mutation of [
         )
         .get(f.u.session.fileId);
     const before = header();
-    await uploaded(f, new TextEncoder().encode("another synthetic source"));
+    const other = await uploaded(f, new TextEncoder().encode("another synthetic source"));
     const query = (sql: string, ...values: (string | number)[]) =>
       f.db.sqlite.query(sql).run(...values);
     if (mutation === "intake")
@@ -244,6 +245,12 @@ for (const mutation of [
       );
     if (mutation === "file_revision")
       query("UPDATE v2_files SET revision=revision+1 WHERE id=?", f.u.session.fileId);
+    if (mutation === "file_manifest")
+      query(
+        "UPDATE v2_files SET manifest_snapshot_id=(SELECT manifest_snapshot_id FROM v2_files WHERE id=?) WHERE id=?",
+        other.session.fileId,
+        f.u.session.fileId,
+      );
     if (mutation === "file_consent")
       query("DELETE FROM v2_consents WHERE file_id=?", f.u.session.fileId);
     if (mutation === "policy_consent")
@@ -263,7 +270,7 @@ for (const mutation of [
     expect(f.nativeCalls()).toBe(2);
   });
 
-for (const mutation of ["file_consent", "lease_fencing"] as const)
+for (const mutation of ["file_consent", "lease_fencing", "file_manifest"] as const)
   test(`atomic refresh rejects ${mutation} revoked after its fresh guard`, async () => {
     let measured!: ReturnType<typeof countD1Calls>;
     const f = await publicationFixture({
@@ -272,7 +279,7 @@ for (const mutation of ["file_consent", "lease_fencing"] as const)
         return measured.binding;
       },
     });
-    await uploaded(f, new TextEncoder().encode("another synthetic source"));
+    const other = await uploaded(f, new TextEncoder().encode("another synthetic source"));
     let changed = false;
     measured.before((statements) => {
       if (changed || !statements.some((sql) => sql.includes("s.workspace_revision BETWEEN")))
@@ -280,7 +287,14 @@ for (const mutation of ["file_consent", "lease_fencing"] as const)
       changed = true;
       if (mutation === "file_consent")
         f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.u.session.fileId);
-      else f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(f.jobId);
+      else if (mutation === "lease_fencing")
+        f.db.sqlite.query("UPDATE v2_jobs SET fencing=fencing+1 WHERE id=?").run(f.jobId);
+      else
+        f.db.sqlite
+          .query(
+            "UPDATE v2_files SET manifest_snapshot_id=(SELECT manifest_snapshot_id FROM v2_files WHERE id=?) WHERE id=?",
+          )
+          .run(other.session.fileId, f.u.session.fileId);
     });
     await expect(f.execution.stageCoveragePart(0, signal())).rejects.toMatchObject({
       code: "STALE_REVISION",
@@ -288,6 +302,62 @@ for (const mutation of ["file_consent", "lease_fencing"] as const)
     expect(changed).toBe(true);
     expect(f.nativeCalls()).toBe(2);
   });
+
+for (const phase of ["results", "publication"] as const)
+  for (const mutation of ["file_consent", "policy_consent", "file_manifest"] as const)
+    test(`atomic ${phase} refuses late ${mutation} before any ready output`, async () => {
+      let measured!: ReturnType<typeof countD1Calls>;
+      const f = await publicationFixture({
+        wrapDatabase: (database) => {
+          measured = countD1Calls(database);
+          return measured.binding;
+        },
+      });
+      const other = await uploaded(f, new TextEncoder().encode("another synthetic source"));
+      for (let part = 0; part < f.prepared.partCount; part++)
+        await f.execution.stageCoveragePart(part, signal());
+      if (phase === "publication") {
+        for (let unit = 0; unit < 2; unit++) {
+          const pages = await f.execution.resultPages(unit, 0);
+          for (let page = 0; page < pages.pageCount; page++)
+            await f.execution.stageResultPage(unit, 0, page, signal());
+        }
+      }
+      let changed = false;
+      measured.before((statements) => {
+        if (
+          changed ||
+          !statements.some((sql) =>
+            phase === "results"
+              ? sql.startsWith("INSERT INTO v2_file_observations")
+              : sql.startsWith("UPDATE v2_files SET revision=") && sql.includes("state='ready'"),
+          )
+        )
+          return;
+        changed = true;
+        if (mutation === "file_consent")
+          f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(f.u.session.fileId);
+        else if (mutation === "policy_consent")
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        else
+          f.db.sqlite
+            .query(
+              "UPDATE v2_files SET manifest_snapshot_id=(SELECT manifest_snapshot_id FROM v2_files WHERE id=?) WHERE id=?",
+            )
+            .run(other.session.fileId, f.u.session.fileId);
+      });
+      await expect(
+        phase === "results"
+          ? f.execution.stageResultPage(0, 0, 0, signal())
+          : f.execution.publish(signal()),
+      ).rejects.toMatchObject({ code: "STALE_REVISION" });
+      expect(changed).toBe(true);
+      const row = f.db.sqlite
+        .query("SELECT state FROM v2_files WHERE id=?")
+        .get(f.u.session.fileId) as { state: string };
+      expect(row.state).not.toBe("ready");
+      expect(f.nativeCalls()).toBe(2);
+    });
 
 for (const phase of ["refresh", "coverage", "publication", "continuous"] as const)
   test(`bounded ${phase} CAS races preserve the source and never repeat interpretation`, async () => {

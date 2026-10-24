@@ -31,8 +31,33 @@ export const filePublicationContextSchema = z.strictObject({
   intakeRevision: z.number().int().positive(),
   summaryRevision: z.number().int().positive().nullable(),
   currentJobId: opaqueIdSchema.nullable(),
+  manifestSnapshotId: opaqueIdSchema,
 });
 export type FilePublicationContext = z.infer<typeof filePublicationContextSchema>;
+
+const publicationScope = (context: FilePublicationContext | undefined, fileId: string) => {
+  if (!context) return { sql: "1", values: [] as unknown[] };
+  context = parse(filePublicationContextSchema, context);
+  return {
+    sql: `w.status=? AND w.intake_revision=? AND w.confirmed_summary_revision IS ? AND w.current_job_id IS ?
+      AND EXISTS(SELECT 1 FROM v2_files source WHERE source.id=? AND source.workspace_id=w.id AND source.manifest_snapshot_id=?)
+      AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=w.owner_id AND file_id=? AND kind='auto_processing' AND version=?)
+      AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=w.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+    values: [
+      context.status,
+      context.intakeRevision,
+      context.summaryRevision,
+      context.currentJobId,
+      fileId,
+      context.manifestSnapshotId,
+      fileId,
+      CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+      CURRENT_POLICY_VERSIONS.termsVersion,
+      CURRENT_POLICY_VERSIONS.privacyVersion,
+      CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+    ],
+  };
+};
 
 const metadataSchema = z.strictObject({
   name: v2FileSchema.shape.name,
@@ -80,23 +105,20 @@ export function createV2FileStagingRepository(core: V2Core) {
         parse(opaqueIdSchema, input.coverageSnapshotId);
         parse(z.number().int().positive(), input.fileRevision);
         const execution = leasePredicate(lease, input.fileId, input.fileRevision, g.now);
+        const scope = publicationScope(context, input.fileId);
         const claimId = crypto.randomUUID();
         return core.changed([
           core.claim(
             g,
             claimId,
-            `${execution.sql} AND w.status=? AND w.intake_revision=? AND w.confirmed_summary_revision IS ? AND w.current_job_id IS ?
+            `${execution.sql} AND ${scope.sql}
              AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=? AND o.owner_id=w.owner_id AND j.workspace_id=w.id AND ${jobAlive})
-             AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.current_job_id=? AND f.state IN ('queued','processing') AND f.manifest_snapshot_id IS NOT NULL)
+             AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.workspace_id=w.id AND f.revision=? AND f.current_job_id=? AND f.state IN ('queued','processing'))
              AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.purpose='file_coverage' AND s.target_id=? AND s.revision=? AND s.state IN ('staging','sealed') AND s.lease_job_id=? AND s.lease_fencing=? AND s.workspace_revision BETWEEN ? AND ?)
-             AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=w.owner_id AND file_id=? AND kind='auto_processing' AND version=?)
-             AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=w.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+             `,
             [
               ...execution.values,
-              context.status,
-              context.intakeRevision,
-              context.summaryRevision,
-              context.currentJobId,
+              ...scope.values,
               lease.jobId,
               input.fileId,
               input.fileRevision,
@@ -108,11 +130,6 @@ export function createV2FileStagingRepository(core: V2Core) {
               lease.fencing,
               context.revision,
               g.expectedRevision,
-              input.fileId,
-              CURRENT_POLICY_VERSIONS.aiNoticeVersion,
-              CURRENT_POLICY_VERSIONS.termsVersion,
-              CURRENT_POLICY_VERSIONS.privacyVersion,
-              CURRENT_POLICY_VERSIONS.aiNoticeVersion,
             ],
           ),
           core.statement(
@@ -133,6 +150,7 @@ export function createV2FileStagingRepository(core: V2Core) {
         observations: readonly V2FileObservation[];
         derivativeOrdinal: number;
         derivatives: readonly { value: V2Derivative; blobId: string }[];
+        context?: FilePublicationContext;
       },
       lease: JobLease,
     ) {
@@ -179,14 +197,16 @@ export function createV2FileStagingRepository(core: V2Core) {
           return false;
         const revision = file.revision + 1;
         const execution = leasePredicate(lease, file.id, file.revision, g.now);
+        const scope = publicationScope(input.context, file.id);
         const claimId = crypto.randomUUID();
         const statements = [
           core.claim(
             g,
             claimId,
-            `${execution.sql} AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.workspace_revision=w.revision AND s.target_id=? AND s.revision=? AND s.purpose='file_coverage' AND s.state IN ('staging','sealed') AND s.lease_job_id=? AND s.lease_fencing=?) AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.revision=? AND f.current_job_id=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?)`,
+            `${execution.sql} AND ${scope.sql} AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.workspace_revision=w.revision AND s.target_id=? AND s.revision=? AND s.purpose='file_coverage' AND s.state IN ('staging','sealed') AND s.lease_job_id=? AND s.lease_fencing=?) AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.revision=? AND f.current_job_id=?) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?)`,
             [
               ...execution.values,
+              ...scope.values,
               input.coverageSnapshotId,
               file.id,
               revision,
@@ -362,6 +382,7 @@ export function createV2FileStagingRepository(core: V2Core) {
         coverageSnapshotId: string;
         observationCount: number;
         derivativeCount: number;
+        context?: FilePublicationContext;
       },
       lease: JobLease,
     ) {
@@ -390,14 +411,16 @@ export function createV2FileStagingRepository(core: V2Core) {
         const revision = file.revision + 1;
         const encrypted = await core.encrypt("v2_files", file.id, g.ownerId, revision, metadata);
         const execution = leasePredicate(lease, file.id, file.revision, g.now);
+        const scope = publicationScope(input.context, file.id);
         const claimId = crypto.randomUUID();
         return core.changed([
           core.claim(
             g,
             claimId,
-            `${execution.sql} AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.revision=? AND f.current_job_id=? AND f.state IN ('queued','processing') AND f.encrypted_payload=? AND f.manifest_snapshot_id=?) AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.workspace_revision=w.revision AND s.target_id=? AND s.revision=? AND s.purpose='file_coverage' AND s.state='sealed' AND s.lease_job_id=? AND s.lease_fencing=?) AND (SELECT count(*) FROM v2_file_observations WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_file_derivatives WHERE snapshot_id=?)=? AND (?=0 OR (SELECT min(ordinal) FROM v2_file_observations WHERE snapshot_id=?)=0 AND (SELECT max(ordinal) FROM v2_file_observations WHERE snapshot_id=?)=?-1) AND (?=0 OR (SELECT min(ordinal) FROM v2_file_derivatives WHERE snapshot_id=?)=0 AND (SELECT max(ordinal) FROM v2_file_derivatives WHERE snapshot_id=?)=?-1) AND NOT EXISTS(SELECT 1 FROM v2_file_derivatives d JOIN v2_blobs b ON b.id=d.blob_id WHERE d.snapshot_id=? AND b.state!='stored') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?)`,
+            `${execution.sql} AND ${scope.sql} AND EXISTS(SELECT 1 FROM v2_files f WHERE f.id=? AND f.revision=? AND f.current_job_id=? AND f.state IN ('queued','processing') AND f.encrypted_payload=? AND f.manifest_snapshot_id=?) AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=w.owner_id AND s.workspace_id=w.id AND s.workspace_revision=w.revision AND s.target_id=? AND s.revision=? AND s.purpose='file_coverage' AND s.state='sealed' AND s.lease_job_id=? AND s.lease_fencing=?) AND (SELECT count(*) FROM v2_file_observations WHERE snapshot_id=?)=? AND (SELECT count(*) FROM v2_file_derivatives WHERE snapshot_id=?)=? AND (?=0 OR (SELECT min(ordinal) FROM v2_file_observations WHERE snapshot_id=?)=0 AND (SELECT max(ordinal) FROM v2_file_observations WHERE snapshot_id=?)=?-1) AND (?=0 OR (SELECT min(ordinal) FROM v2_file_derivatives WHERE snapshot_id=?)=0 AND (SELECT max(ordinal) FROM v2_file_derivatives WHERE snapshot_id=?)=?-1) AND NOT EXISTS(SELECT 1 FROM v2_file_derivatives d JOIN v2_blobs b ON b.id=d.blob_id WHERE d.snapshot_id=? AND b.state!='stored') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=?)`,
             [
               ...execution.values,
+              ...scope.values,
               file.id,
               file.revision,
               lease.jobId,
