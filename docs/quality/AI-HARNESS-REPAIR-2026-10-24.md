@@ -208,3 +208,11 @@ and does not rewrite the old proof. Actual workerd tests cover a legitimate cata
 configuration change between admission and dispatch in both cost modes: zero old
 model calls, unchanged old plan/payload/digest, successful new retry, and replay with
 no additional provider calls. Existing cost/unknown observations remain preserved.
+
+The full release gate remains blocked by the separately owned raw high audit
+advisories in mobile developer tooling (#339). Do not repeat that failed full run
+without a changed condition or bypass it. The same manual workflow offers
+native_materials (no model calls) to run the actual pinned Linux Container fixture
+profile where Docker is available. It is component evidence only and creates no
+full-validation/release/#71 receipt. The all-seven selector remains limited to the
+seven AI cases and max21 reservations.

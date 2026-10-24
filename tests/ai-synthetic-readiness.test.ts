@@ -32,7 +32,7 @@ test("live acceptance remains a separate manual action with exact candidate and 
         };
         if: string;
         environment: { name: string; deployment: boolean };
-        steps: { run?: string; uses?: string }[];
+        steps: { run?: string; uses?: string; if?: string }[];
       };
     };
   };
@@ -50,6 +50,12 @@ test("live acceptance remains a separate manual action with exact candidate and 
   expect(
     workflow.jobs.probe.steps.some((step) => step.run === "bun scripts/run-ai-readiness.ts"),
   ).toBe(true);
+  expect(
+    workflow.jobs.probe.steps.find((step) => step.run === "bun scripts/run-ai-readiness.ts")?.if,
+  ).toBe("matrix.feature_case != 'native_materials'");
+  expect(workflow.jobs.probe.steps.find((step) => step.run === "bun run validate:native")?.if).toBe(
+    "matrix.feature_case == 'native_materials'",
+  );
   const automatic = await Bun.file(".github/workflows/ci.yml").text();
   const full = await Bun.file(".github/workflows/full-validation.yml").text();
   expect(automatic + full).not.toContain("run-ai-readiness.ts");

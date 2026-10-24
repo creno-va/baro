@@ -1035,7 +1035,7 @@ async function exerciseNativeRuntime(
             "SELECT id,evidence_hash,payload_json,digest FROM v2_execution_job_plans WHERE id=?",
           )
           .bind(oldPlan.id)
-          .first(),
+          .first<NonNullable<typeof oldPlan>>(),
       ).toEqual(oldPlan);
     const messages = await request(`/api/v2/cases/${workspace.id}/messages`);
     expect(messages.status).toBe(200);
