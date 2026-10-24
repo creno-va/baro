@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "kind": "local-preserved-ios-korean-language-switch-failure",
+  "verifiedAt": "2026-10-24T19:32:09.568Z",
+  "workflowRunId": 40124377850,
+  "workflowConclusion": "failure",
+  "artifactId": 12572414968,
+  "referenceWorkflowProvenanceVerified": true,
+  "binarySourceSha": "92f4232f5eeeace39973992193952fdad8e79903",
+  "toolingSourceSha": "2327b2af8acf8724d09895003824d2daf94fd6e1",
+  "originalCompilerRunId": 40120706028,
+  "originalArchiveUnchanged": true,
+  "originalCompilerReceiptUnchanged": true,
+  "verificationSha256": "6200c496a47c35d535568b77127549fdb0840d0b2bcee193e3cb142c7759983f",
+  "homeReceiptSha256": "42ac5d28ff0d0cb43e6cb6f561422279cbd92945b4fd91a21649231207260fc8",
+  "failureSha256": "4d7587252e6b94ff0a594be6ce173bf1130e106b35805ae2ca987dd9164c0480",
+  "homePng": {
+    "bytes": 221548,
+    "sha256": "1d2fe2acb73a63a98250ac8d0e91d7adafe06f332a5e3fbb89ff3fd28f06e5a4"
+  },
+  "device": {
+    "kind": "simulator",
+    "model": "iPhone 16",
+    "osVersion": "26.5"
+  },
+  "coldNativeLaunches": 2,
+  "setupStage": "readback",
+  "assertionCode": "BARO_KOREAN_SWITCH_MISSING",
+  "compositionCheckpointsObserved": 0,
+  "setupControl": {
+    "stage": "done",
+    "cellCount": 0,
+    "buttonCount": 1,
+    "textCount": 0,
+    "ownersOverlap": true,
+    "selection": "button",
+    "scrolls": 0
+  },
+  "layoutStatus": {
+    "stage": "after-selection",
+    "traitSelected": true,
+    "valueClass": "empty",
+    "doneButtonCount": 1,
+    "doneHittable": true,
+    "doneInNavigationBar": true,
+    "standardObserved": false,
+    "tenKeyObserved": true,
+    "koreanTitleObserved": true
+  },
+  "separateChoice": {
+    "koreanTitleObserved": true,
+    "promptObserved": true,
+    "scopeKind": "table",
+    "scopeCount": 1,
+    "cellCount": 1,
+    "buttonCount": 0,
+    "ownersOverlap": true,
+    "selection": "cell",
+    "decision": "separate-keyboard"
+  },
+  "keyboardSettingsPathReachedReadback": true,
+  "languageSwitchControlUsable": false,
+  "exactSwitchFailureCauseConfirmed": false,
+  "koreanKeyboardVerified": false,
+  "productInputFailureConfirmed": false,
+  "rootCauseConfirmed": false,
+  "rawHierarchyExported": false,
+  "rawXcresultExported": false,
+  "physicalDeviceVerified": false,
+  "oauthVerified": false,
+  "storeSigned": false,
+  "deployed": false,
+  "anonymousHomeVisualReview": {
+    "reviewedAt": "2026-10-24T19:33:35.133679+00:00",
+    "initialHomeReadabilityReviewed": true,
+    "allControlsOrJourneysReviewed": false,
+    "originalHomeContentVerifiedRewritten": false
+  }
+}

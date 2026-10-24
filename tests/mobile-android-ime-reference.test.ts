@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 import {
+  type AndroidImeRegistrationDiagnostic,
+  androidDefaultImeState,
   androidGboardSettingsActivity,
   androidGboardSettingsControls,
   androidImeReferenceConfiguration,
   assertAndroidImeProductAbsent,
   inspectAndroidImeInventory,
+  observeAndroidImeRegistration,
 } from "../scripts/mobile-android-ime-reference";
 
 const google = "com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME";
@@ -239,4 +242,125 @@ test("unsupported or oversized hierarchy and duplicate attributes fail, and the 
   expect(() =>
     androidImeReferenceConfiguration({ ...input, BARO_ANDROID_IME_REFERENCE_MODE: "other" }),
   ).toThrow("ANDROID_IME_REFERENCE_MODE_REQUIRED");
+});
+
+function registrationFixture(defaults: string[], inventories: string[]) {
+  let clock = 0,
+    defaultReads = 0,
+    inventoryReads = 0;
+  const diagnostics: AndroidImeRegistrationDiagnostic[] = [];
+  const context = {
+    deviceSerial: "emulator-5580",
+    avdName: "baro_runtime_012345abcdef",
+    freshOwnedEmulator: true,
+    productInstalled: false,
+    now: () => clock,
+    pause: async (ms: number) => {
+      clock += ms;
+    },
+    readDefault: async (timeout: number) => {
+      expect(timeout).toBeGreaterThan(0);
+      expect(timeout).toBeLessThanOrEqual(15000);
+      return defaults[Math.min(defaultReads++, defaults.length - 1)] ?? "null";
+    },
+    readInventory: async (timeout: number) => {
+      expect(timeout).toBeGreaterThan(0);
+      expect(timeout).toBeLessThanOrEqual(15000);
+      return inventories[Math.min(inventoryReads++, inventories.length - 1)] ?? "";
+    },
+    diagnostic: (value: AndroidImeRegistrationDiagnostic) => {
+      diagnostics.push(value);
+    },
+  };
+  return {
+    context,
+    diagnostics,
+    counts: () => ({ defaultReads, inventoryReads, clock }),
+    setClock: (value: number) => {
+      clock = value;
+    },
+  };
+}
+test("IME registration waits for only known unset/empty/unregistered states and binds one complete registered default without exporting raw values", async () => {
+  expect(androidDefaultImeState("null\n")).toBe("uninitialized");
+  expect(androidDefaultImeState(" ")).toBe("uninitialized");
+  expect(androidDefaultImeState(google)).toBe("component");
+  expect(androidDefaultImeState("synthetic-private")).toBe("invalid");
+  expect(androidDefaultImeState(" ".repeat(513))).toBe("invalid");
+  const fixture = registrationFixture(
+    ["null", "", google, google, google],
+    ["", dump(aosp, []), settingsDump()],
+  );
+  const result = await observeAndroidImeRegistration(fixture.context);
+  expect(result.readiness).toMatchObject({
+    samples: 5,
+    uninitializedSamples: 2,
+    emptyInventoryObserved: true,
+    defaultUnregisteredObserved: true,
+    registeredDefaultVerified: true,
+    maxSamples: 20,
+    sharedBudgetMaxMs: 15000,
+  });
+  expect(result.inventory.methods[0]?.selectedDefault).toBe(true);
+  expect(result.defaultMethodMatches(google)).toBe(true);
+  expect(result.defaultMethodMatches(aosp)).toBe(false);
+  expect(result.settingsActivity()).toBe(settingsComponent);
+  expect(JSON.stringify(result)).not.toMatch(/private|LatinIME|SettingsActivity|com.google|en-US/);
+  expect(JSON.stringify(fixture.diagnostics)).not.toMatch(/private|com.google/);
+  expect(fixture.diagnostics.at(-1)?.stage).toBe("complete");
+});
+test("unknown format and malformed nonempty IME metadata fail immediately instead of becoming readiness waits or Korean-zero success", async () => {
+  const invalid = registrationFixture(["synthetic-private"], [settingsDump()]);
+  await expect(observeAndroidImeRegistration(invalid.context)).rejects.toThrow(
+    "ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID",
+  );
+  expect(invalid.counts()).toEqual({ defaultReads: 1, inventoryReads: 0, clock: 0 });
+  expect(invalid.diagnostics.at(-1)?.failureCode).toBe("DEFAULT_FORMAT_INVALID");
+  expect(JSON.stringify(invalid.diagnostics)).not.toContain("synthetic-private");
+  const malformed = registrationFixture([google], [settingsDump().replace("count=1", "count=2")]);
+  await expect(observeAndroidImeRegistration(malformed.context)).rejects.toThrow(
+    "ANDROID_IME_REFERENCE_SUBTYPE_INCOMPLETE",
+  );
+  expect(malformed.counts()).toEqual({ defaultReads: 1, inventoryReads: 1, clock: 0 });
+  expect(malformed.diagnostics.at(-1)?.failureCode).toBe("INVENTORY_INVALID");
+  const oversized = registrationFixture([google], [" ".repeat(4_000_001)]);
+  await expect(observeAndroidImeRegistration(oversized.context)).rejects.toThrow(
+    "ANDROID_IME_REFERENCE_INVENTORY_BOUND",
+  );
+  expect(oversized.counts()).toEqual({ defaultReads: 1, inventoryReads: 1, clock: 0 });
+});
+test("registration has finite samples and one monotonic budget, and a late complete response cannot pass", async () => {
+  for (const defaults of [["null"], [google]]) {
+    const fixture = registrationFixture(defaults, [""]);
+    await expect(observeAndroidImeRegistration(fixture.context)).rejects.toThrow(
+      "ANDROID_IME_REFERENCE_REGISTRATION_WAIT_EXPIRED",
+    );
+    expect(fixture.counts().defaultReads).toBe(20);
+    expect(fixture.counts().clock).toBeLessThanOrEqual(15000);
+    expect(fixture.diagnostics.at(-1)?.failureCode).toBe("WAIT_EXPIRED");
+    expect(fixture.diagnostics.some((d) => d.stage === "complete")).toBe(false);
+  }
+  const late = registrationFixture([google], [settingsDump()]);
+  late.context.readInventory = async () => {
+    late.setClock(15001);
+    return settingsDump();
+  };
+  await expect(observeAndroidImeRegistration(late.context)).rejects.toThrow(
+    "ANDROID_IME_REFERENCE_REGISTRATION_WAIT_EXPIRED",
+  );
+  expect(late.diagnostics.some((d) => d.stage === "complete")).toBe(false);
+});
+test("registration refuses unowned, already-installed or non-SDK contexts before any device read", async () => {
+  for (const change of [
+    { deviceSerial: "personal-phone" },
+    { avdName: "personal" },
+    { freshOwnedEmulator: false },
+    { productInstalled: true },
+  ]) {
+    const fixture = registrationFixture([google], [settingsDump()]);
+    await expect(observeAndroidImeRegistration({ ...fixture.context, ...change })).rejects.toThrow(
+      "ANDROID_IME_REFERENCE_OWNED_REGISTRATION_CONTEXT_REQUIRED",
+    );
+    expect(fixture.counts()).toEqual({ defaultReads: 0, inventoryReads: 0, clock: 0 });
+  }
 });

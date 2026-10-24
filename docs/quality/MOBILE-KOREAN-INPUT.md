@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-25 KST / #379·#334. 현재 상태는 **다섯 차례 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
+2026-10-25 KST / #379·#334. 현재 상태는 **다섯 차례 Settings 제어 탐색 실패와 여섯 번째 언어 전환 제어 실패, 한글 조합 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -294,3 +294,38 @@ raw label·EditText 값·resource ID·bounds·계층·화면·command log를 exp
 기본 metadata 모드는 그대로이고 실제 keyboard preference 변경은 요청하지 않는다.
 이 준비는 제품 없는 고정 count 참고이며 실제 SDK 실행 성공이나 조작 가능한 owner·
 언어 추가·한국어 조합 인수가 아니다. 실제 실행은 새 exact CI/main 뒤 별도로 확인한다.
+
+### Gboard 참고의 기본 IME 형식 실패와 등록 준비 구분
+
+source2327b2a의 [40124380021](https://github.com/creno-va/baro/actions/runs/40124380021)은 FAILURE다.
+`ime-metadata/ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID`로 Settings 진입 전에 멈췄다.
+[원래 실패](./mobile-keyboard-reference-40124380021/failure.json),
+[cleanup](./mobile-keyboard-reference-40124380021/cleanup.json),
+[source 결합](./mobile-keyboard-reference-40124380021/local-preservation.json)을 보존한다.
+raw default 값은 보존하지 않아 null/빈 값인지 잘못된 다른 형식인지와 정확한 원인은 미확정이다.
+
+후속 도구는 fresh owned Emulator에서만 최대20 sample/monotonic15초 안에 실제 등록을 읽는다.
+빈 값/문자열 null·빈 registry·아직 등록되지 않은 default만 준비 중으로 구분한다. 다른 잘못된
+형식·불완전한 nonempty metadata·크기 초과는 즉시 실패하며, 유효한 default와 완전한 registry가
+같이 확인돼야 진행한다. deadline 뒤 응답도 성공으로 받지 않고 고정 상태/횟수만 남긴다.
+default를 쓰거나 임의로 채우지 않고 Korean0으로 대체하지 않는다. Settings 방문의 기존
+foreground/제목/메뉴 scope·cleanup 조건은 유지하며 실제 변경 도구의 실행은 별도다.
+
+### 여섯 번째 제품 실행: 설정 readback 후 언어 전환 제어 실패
+
+새 source92f 앱·tooling2327b2a의 [40124377850](https://github.com/creno-va/baro/actions/runs/40124377850)은
+FAILURE다. prompt 포함 table1/cell1의 별도 키보드 추가, layout 선택 뒤 selected trait,
+Done button과 Korean 목록 readback까지 도달했다. 이후 `BARO_KOREAN_SWITCH_MISSING`으로
+멈췄고 composition checkpoint는0이다. 기존 query는 keyboard 하위의 `Next keyboard` button만
+사용하므로 그 제어가 없거나 조작 불가능했다는 범위이며, 전체 앱/system keyboard 영역의
+같은 제어 존재·키 입력 실패·정확한 원인을 확정하지 않는다.
+
+[실패](./mobile-native-92f4232/ios-korean-40124377850/failure.json),
+[Home](./mobile-native-92f4232/ios-korean-40124377850/home.json),
+[재검증](./mobile-native-92f4232/ios-korean-40124377850/verification.json),
+[탐색 전 PNG](./mobile-native-92f4232/ios-korean-40124377850/home-ios.png)와
+[독립 결합](./mobile-native-92f4232/ios-korean-40124377850/local-preservation.json)을 보존한다.
+iPhone16/iOS26.5의 cold2/Metro0·원본 ZIP/receipt와 익명 Home PNG221,548bytes/hash를 대조했다.
+원래 failure의 nativeProcessLaunchVerified=false 등은 고치지 않는다. 다음은 전환 제어의
+system keyboard 영역·유일한 조작 owner와 bounded diagnostic을 확인하는 도구 보완이며,
+실제6자모/4checkpoint·공백/삭제/추가·Search/회전 인수를 유지한다.

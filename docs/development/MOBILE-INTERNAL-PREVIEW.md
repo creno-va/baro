@@ -1774,3 +1774,23 @@ FAILURE다. SDK37 tools로 원본 APK/서명/HBC/font 재검증은 통과했지�
 분류하지 않는다. 실패 이미지도 여기 보존하지 않았다. dialog dismiss·Launcher 전환/종료·
 준비 조건 완화로 성공 처리하지 않고, 같은 실행 조건을 반복하지 않는다. 다른 실제 runtime
 조건의 준비·iOS Korean 실제 검증과 Gboard 제품 없는 참고 관측을 구분해 진행한다.
+
+### 격리된 Android ASCII 입력용 공식 AOSP image 준비
+
+Google의 [SDK system-image 정본](https://dl.google.com/android/repository/sys-img/android/sys-img2-4.xml)에서
+`system-images;android-35;default;x86_64`의 등록을 확인했다.
+[원래 metadata 관측](../quality/ANDROID-AOSP-RUNTIME-METADATA-2026-10-25.json)은 image를 실행한
+증거가 아니다. Pixel Launcher 오류의 같은 Google image를 다시 실행하는 대신 명시적인
+`runtime_profile=aosp-api35`로 다른 공식 SDK 조건을 준비한다. 기본 Google APIs profile과
+Gboard 참고/인증 경로는 유지하며 AOSP는 smoke+격리된 `directory_input`에만 허용한다.
+
+AVD 생성의 profile은 고정 enum만 허용하고 config.ini의 실제 image 경로가 선택한 SDK/API/
+tag/ABI와 일치해야 한다. boot 뒤 API35도 직접 읽는다. 새 Home receipt와 실패 기록에
+선택 profile·image/API readback 여부를 남기며 directory proof의 기존 baseline receipt hash가
+이 조건을 결합한다. 과거 receipt는 해당 source대로 보존한다.
+
+PackageManager 두 handler, Launcher3/Pixel의 기존 연속3 sample·오류 dialog 거절과 첫 Home
+공유120초, 메모리2GB/cores2/port5580은 바꾸지 않는다. dialog dismiss·Launcher 전환/종료·
+키보드 설치나 사용자 기기 설정 변경은 하지 않는다. 실제 성공은 exact CI/main 뒤 별도
+실행으로 검증하며 새 profile 준비를 ANR 원인 해결·Gboard/Korean·OAuth·물리 기기 인수로
+확대하지 않는다.

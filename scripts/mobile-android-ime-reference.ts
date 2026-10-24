@@ -13,6 +13,7 @@ import {
   createOwnedAndroidAvd,
   emulatorStartupIssues,
   ownedAndroidPaths,
+  quoteAdbShellArgument,
 } from "./mobile-runtime-host";
 
 const component = /^[A-Za-z][A-Za-z0-9_.]*\/[A-Za-z0-9_.$]+$/;
@@ -110,6 +111,148 @@ export function inspectAndroidImeInventory(raw: string, selected: string) {
     registeredSubtypeMetadataComplete: true as const,
     rawMetadataExported: false as const,
   };
+}
+export function androidDefaultImeState(value: string) {
+  if (value.length > 512) return "invalid" as const;
+  const selected = value.trim();
+  return !selected || selected === "null"
+    ? ("uninitialized" as const)
+    : selected.length <= 512 && component.test(selected)
+      ? ("component" as const)
+      : ("invalid" as const);
+}
+export type AndroidImeRegistrationDiagnostic = {
+  stage: "default" | "inventory" | "complete" | "failed";
+  defaultState: ReturnType<typeof androidDefaultImeState> | null;
+  samples: number;
+  uninitializedSamples: number;
+  emptyInventoryObserved: boolean;
+  defaultUnregisteredObserved: boolean;
+  failureCode:
+    | "DEFAULT_FORMAT_INVALID"
+    | "WAIT_EXPIRED"
+    | "INVENTORY_INVALID"
+    | "READ_FAILED"
+    | null;
+};
+/** Wait only for known uninitialized registration; malformed nonempty metadata still fails. */
+export async function observeAndroidImeRegistration(context: {
+  deviceSerial: string;
+  avdName: string;
+  freshOwnedEmulator: boolean;
+  productInstalled: boolean;
+  readDefault(timeoutMs: number): Promise<string>;
+  readInventory(timeoutMs: number): Promise<string>;
+  diagnostic(value: AndroidImeRegistrationDiagnostic): void;
+  now?: () => number;
+  pause?: (ms: number) => Promise<void>;
+}) {
+  if (
+    context.deviceSerial !== "emulator-5580" ||
+    !/^baro_runtime_[a-f0-9]{12}$/.test(context.avdName) ||
+    !context.freshOwnedEmulator ||
+    context.productInstalled
+  )
+    throw Error("ANDROID_IME_REFERENCE_OWNED_REGISTRATION_CONTEXT_REQUIRED");
+  const now = context.now ?? (() => performance.now()),
+    pause = context.pause ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    deadline = now() + 15000;
+  let samples = 0,
+    uninitializedSamples = 0,
+    emptyInventoryObserved = false,
+    defaultUnregisteredObserved = false,
+    defaultState: AndroidImeRegistrationDiagnostic["defaultState"] = null;
+  const report = (
+    stage: AndroidImeRegistrationDiagnostic["stage"],
+    failureCode: AndroidImeRegistrationDiagnostic["failureCode"] = null,
+  ) =>
+    context.diagnostic({
+      stage,
+      defaultState,
+      samples,
+      uninitializedSamples,
+      emptyInventoryObserved,
+      defaultUnregisteredObserved,
+      failureCode,
+    });
+  const budget = () => {
+    const left = deadline - now();
+    if (left <= 0) throw Error("ANDROID_IME_REFERENCE_REGISTRATION_WAIT_EXPIRED");
+    return Math.max(1, Math.min(15000, Math.floor(left)));
+  };
+  const next = async () => {
+    if (samples < 20 && now() < deadline) await pause(Math.min(500, deadline - now()));
+  };
+  try {
+    while (samples < 20 && now() < deadline) {
+      samples++;
+      const selected = await context.readDefault(budget());
+      defaultState = androidDefaultImeState(selected);
+      if (defaultState === "uninitialized") uninitializedSamples++;
+      report("default");
+      if (defaultState === "invalid") throw Error("ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID");
+      if (defaultState === "uninitialized") {
+        await next();
+        continue;
+      }
+      const raw = await context.readInventory(budget());
+      if (raw.length > 4_000_000) throw Error("ANDROID_IME_REFERENCE_INVENTORY_BOUND");
+      if (!raw.trim()) {
+        emptyInventoryObserved = true;
+        report("inventory");
+        await next();
+        continue;
+      }
+      let inventory: ReturnType<typeof inspectAndroidImeInventory>;
+      try {
+        inventory = inspectAndroidImeInventory(raw, selected);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "ANDROID_IME_REFERENCE_DEFAULT_NOT_REGISTERED"
+        ) {
+          defaultUnregisteredObserved = true;
+          report("inventory");
+          await next();
+          continue;
+        }
+        throw error;
+      }
+      budget();
+      report("complete");
+      return {
+        inventory,
+        metadataSha256: createHash("sha256").update(raw).digest("hex"),
+        settingsActivity: () => androidGboardSettingsActivity(raw, selected),
+        defaultMethodMatches: (value: string) => value.trim() === selected.trim(),
+        readiness: {
+          kind: "owned-android-ime-registration-readiness" as const,
+          samples,
+          uninitializedSamples,
+          emptyInventoryObserved,
+          defaultUnregisteredObserved,
+          registeredDefaultVerified: true as const,
+          sharedBudgetMaxMs: 15000 as const,
+          maxSamples: 20 as const,
+          rawDefaultValueExported: false as const,
+        },
+      };
+    }
+    throw Error("ANDROID_IME_REFERENCE_REGISTRATION_WAIT_EXPIRED");
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    report(
+      "failed",
+      code === "ANDROID_IME_REFERENCE_DEFAULT_FORMAT_INVALID"
+        ? "DEFAULT_FORMAT_INVALID"
+        : code === "ANDROID_IME_REFERENCE_REGISTRATION_WAIT_EXPIRED"
+          ? "WAIT_EXPIRED"
+          : code.startsWith("ANDROID_IME_REFERENCE_")
+            ? "INVENTORY_INVALID"
+            : "READ_FAILED",
+    );
+    throw error;
+  }
 }
 export function androidImeReferenceConfiguration(input: Record<string, string | undefined>) {
   const env = internalAndroidEnvironment(input),
@@ -270,6 +413,7 @@ async function main() {
     receipt: Record<string, unknown> | undefined;
   const log = resolve(owned, "private-emulator.log");
   let hierarchyOutcome: AndroidHierarchyDumpOutcome | null = null;
+  let imeRegistrationDiagnostic: AndroidImeRegistrationDiagnostic | null = null;
   async function command(args: string[], input?: string, timeoutMs?: number) {
     return new TextDecoder().decode(
       await runAndroidHomeCommand({
@@ -336,14 +480,32 @@ async function main() {
     phase = "product-absence";
     assertAndroidImeProductAbsent(await shell(["pm", "list", "packages", "--user", "0"]));
     phase = "ime-metadata";
-    const raw = await shell(["ime", "list", "-a", "--user", "0"]),
-      selected = await shell(["settings", "--user", "0", "get", "secure", "default_input_method"]),
-      inventory = inspectAndroidImeInventory(raw, selected);
+    const registration = await observeAndroidImeRegistration({
+        deviceSerial: serial,
+        avdName: avd,
+        freshOwnedEmulator: booted && emulator?.exitCode === null,
+        productInstalled: false,
+        readDefault: (timeout) =>
+          shell(["settings", "--user", "0", "get", "secure", "default_input_method"], timeout),
+        readInventory: (timeout) => shell(["ime", "list", "-a", "--user", "0"], timeout),
+        diagnostic: (value) => {
+          imeRegistrationDiagnostic = value;
+        },
+      }),
+      inventory = registration.inventory;
     let settingsReference: ReturnType<typeof androidGboardSettingsControls> | undefined;
     if (mode === "settings") {
       phase = "gboard-settings-reference";
-      const activity = androidGboardSettingsActivity(raw, selected);
-      await shell(["am", "start", "-W", "-a", "android.intent.action.MAIN", "-n", activity]);
+      const activity = registration.settingsActivity();
+      await shell([
+        "am",
+        "start",
+        "-W",
+        "-a",
+        "android.intent.action.MAIN",
+        "-n",
+        quoteAdbShellArgument(activity),
+      ]);
       const file = `/sdcard/baro-ime-${randomUUID()}.xml`;
       try {
         const foreground = await shell(["dumpsys", "activity", "activities"]);
@@ -364,9 +526,9 @@ async function main() {
         await shell(["test", "!", "-e", file]);
       }
       if (
-        (
-          await shell(["settings", "--user", "0", "get", "secure", "default_input_method"])
-        ).trim() !== selected.trim()
+        !registration.defaultMethodMatches(
+          await shell(["settings", "--user", "0", "get", "secure", "default_input_method"]),
+        )
       )
         throw Error("ANDROID_IME_REFERENCE_DEFAULT_CHANGED");
     }
@@ -396,7 +558,8 @@ async function main() {
       packageReadiness: readiness,
       inventory,
       ...(settingsReference ? { settingsReference, hierarchyFileRemoved: true } : {}),
-      metadataSha256: createHash("sha256").update(raw).digest("hex"),
+      metadataSha256: registration.metadataSha256,
+      imeRegistrationReadiness: registration.readiness,
       ...(mode === "metadata"
         ? { settingsChanged: false }
         : { keyboardPreferenceChangeRequested: false, selectedDefaultUnchanged: true }),
@@ -422,6 +585,7 @@ async function main() {
               ? error.message
               : "ANDROID_IME_REFERENCE_FAILED",
           commandFailures: failures.snapshot(),
+          imeRegistrationDiagnostic,
           emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")),
           rawCommandLogsExported: false,
           rawMetadataExported: false,

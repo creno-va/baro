@@ -58,6 +58,7 @@ import {
 } from "./mobile-public-directory-observation";
 import {
   androidRuntimeOptions,
+  androidRuntimeProfile,
   createOwnedAndroidAvd,
   emulatorStartupIssues,
   ownedAndroidPaths,
@@ -65,6 +66,13 @@ import {
 
 const appId = "site.baro.app.preview";
 const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+export function androidHomeRuntimeProfile(value: string | undefined, options: string[]) {
+  const mode = androidHomeObservationOptions(options),
+    profile = androidRuntimeProfile(value);
+  if (profile.kind === "aosp-api35" && !mode.directoryInput)
+    throw Error("BUNDLED_HOME_AOSP_DIRECTORY_ONLY");
+  return profile;
+}
 export function bundledAndroidHomeObservation(xml: string) {
   if (xml.length > 1_000_000 || !xml.startsWith("<?xml"))
     throw new Error("BUNDLED_HOME_HIERARCHY_REQUIRED");
@@ -95,6 +103,10 @@ async function main() {
   const { largeFont, publicDirectory, guideUi, authCancel, directoryInput } =
     androidHomeObservationOptions(process.argv.slice(2));
   const root = process.cwd(),
+    runtimeProfile = androidHomeRuntimeProfile(
+      process.env.BARO_ANDROID_RUNTIME_PROFILE,
+      process.argv.slice(2),
+    ),
     sourceSha = z
       .string()
       .regex(/^[a-f0-9]{40}$/)
@@ -127,6 +139,8 @@ async function main() {
     guard: ReturnType<typeof Bun.serve> | undefined,
     metroRequests = 0,
     bootCompleted = false,
+    avdImageReadbackVerified = false,
+    runtimeApiReadbackVerified = false,
     baseHomeVerified = false,
     receiptValidationFields: string[] = [],
     lastGuideObservation: ReturnType<typeof anonymousGuideUiObservation> | null = null,
@@ -217,7 +231,8 @@ async function main() {
     phase = "owned-avd";
     if ((await text([adb, "devices"])).split(/\r?\n/).some((l) => l.startsWith(`${device}\t`)))
       throw new Error("BUNDLED_HOME_EXISTING_DEVICE_REFUSED");
-    await createOwnedAndroidAvd(sdk, out, avd, text);
+    await createOwnedAndroidAvd(sdk, out, avd, text, runtimeProfile.kind);
+    avdImageReadbackVerified = true;
     emulator = Bun.spawn([resolve(sdk, "emulator/emulator"), ...androidRuntimeOptions(avd)], {
       env: childEnv,
       stdout: Bun.file(log),
@@ -233,6 +248,11 @@ async function main() {
         return false;
       }
     }, 240000);
+    if (
+      (await shell(["getprop", "ro.build.version.sdk"])).trim() !== String(runtimeProfile.apiLevel)
+    )
+      throw Error("BUNDLED_HOME_RUNTIME_API_MISMATCH");
+    runtimeApiReadbackVerified = true;
     await shell(["input", "keyevent", "82"]);
     if ((await text([adb, "-s", device, "reverse", "--list"])).trim())
       throw new Error("BUNDLED_HOME_ADB_REVERSE_REFUSED");
@@ -352,6 +372,11 @@ async function main() {
           applicationId: appId,
           binary: receipt.artifact,
           verificationSha256: hash(verificationBytes),
+          runtimeProfile: {
+            ...runtimeProfile,
+            avdImageReadbackVerified,
+            runtimeApiReadbackVerified,
+          },
           device: {
             kind: "owned-emulator",
             model: (await shell(["getprop", "ro.product.model"])).trim(),
@@ -839,6 +864,9 @@ async function main() {
         "BUNDLED_HOME_SCREENSHOT_REQUIRED",
         "BUNDLED_HOME_UNEXPECTED_METRO_REQUEST",
         "BUNDLED_HOME_COMMAND_FAILED",
+        "BUNDLED_HOME_RUNTIME_API_MISMATCH",
+        "RUNTIME_AVD_SYSTEM_IMAGE_MISMATCH",
+        "RUNTIME_AVD_IMAGE_READBACK_REQUIRED",
         "BUNDLED_HOME_FONT_SCALE_MISMATCH",
         "BUNDLED_GUIDE_FEATURE_COPY_NOT_OBSERVED",
         "BUNDLED_GUIDE_SCREENSHOT_GUARD_REQUIRED",
@@ -865,7 +893,7 @@ async function main() {
     }
     await writeFile(
       resolve(out, "failure.json"),
-      `${JSON.stringify({ toolingSourceSha: sourceSha, phase, code: phase.startsWith("package-manager-") ? androidPackageReadinessFailureCode(error) : phase.startsWith("launcher-baseline-") ? androidLauncherFailureCode(error) : phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", packageManagerReady, lastPackageManagerDiagnostic, launcherBaseline, lastLauncherBaselineDiagnostic, prePublicStartupCommandFailures: startupCommandFailures.snapshot(), lastLauncherHierarchyDump, lastHomeSystemErrorDialogObserved, postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
+      `${JSON.stringify({ toolingSourceSha: sourceSha, runtimeProfile: { ...runtimeProfile, avdImageReadbackVerified, runtimeApiReadbackVerified }, phase, code: phase.startsWith("package-manager-") ? androidPackageReadinessFailureCode(error) : phase.startsWith("launcher-baseline-") ? androidLauncherFailureCode(error) : phase.startsWith("directory-input") ? androidDirectoryFailureCode(error) : phase.startsWith("auth-cancel") ? androidAuthFailureCode(error) : known.has(message) ? message : "BUNDLED_HOME_FAILED", packageManagerReady, lastPackageManagerDiagnostic, launcherBaseline, lastLauncherBaselineDiagnostic, prePublicStartupCommandFailures: startupCommandFailures.snapshot(), lastLauncherHierarchyDump, lastHomeSystemErrorDialogObserved, postBoundaryCommandFailures: commandFailures.snapshot(), lastPostBoundaryHierarchyDump, emulatorBootVerified: bootCompleted, lastHomeObservation, lastPublicObservation, lastDirectoryInputObservation, lastGuideObservation, lastAuthObservation, lastChromeFixture, receiptValidationFields, publicScreenshotsSuppressed: !capture.allowed, emulatorStartupIssues: emulatorStartupIssues(await readFile(log, "utf8").catch(() => "")), sdkHomeLaunchVerified: baseHomeVerified, largeFontVerified: false, physicalDeviceVerified: false, storeSigned: false, deployed: false }, null, 2)}\n`,
       { flag: "wx" },
     );
     throw new Error("BUNDLED_HOME_FAILED");
