@@ -235,3 +235,16 @@ public SDK model/API·시각/metadata hash와 cleanup 사실뿐이다. raw metad
 owned Simulator에만 수행하고 이후 정리한다. setup 결과의 layout identity·실제 한국어
 키 입력·제품 input 검증은 모두 false로 유지한다. 이는 새 앱 compile/pin 대기 중 준비
 단계를 분리해 검증하는 보조 경로이며, 실제 RN 앱의6자모/4checkpoint 인수를 대체하지 않는다.
+
+### Android 참고 실행의 시작 실패
+
+[40120710320](https://github.com/creno-va/baro/actions/runs/40120710320)은 source92f4232의 실제
+FAILURE다. SDK 준비/CI 검사는 통과했지만 도구가 `ANDROID_IME_REFERENCE_BOOTSTRAP_FAILED`로
+종료했고 receipt/metadata/cleanup artifact는0개였다. [로컬 관측](./mobile-keyboard-reference-40120710320/local-observation.json)은
+원래 producer receipt가 아니며 IME 등록 정보·Korean 지원·기기 인수로 사용하지 않는다.
+
+원본 source를 확인하면 command용 `internalAndroidEnvironment` allowlist가 TARGET_SHA를
+제외하는데 도구가 그 child env에서 source를 읽어 owned 디렉터리 생성 전 실패했다. 수정은
+원래 입력의 full SHA를 별도로 검증·보존하면서 command env의 secret 제외를 유지한다.
+합성 회귀는 source 보존과 invalid/missing SHA·SDK 거절 및 credential 비전달을 함께 확인한다.
+새 exact CI/main 뒤 변경된 도구로 실행하며 같은 실패 조건을 재시도하지 않는다.

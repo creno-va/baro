@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "kind": "local-bootstrap-failure-observation",
+  "observedAt": "2026-10-24T18:30:53.460028+00:00",
+  "run": {
+    "id": 40120710320,
+    "head_sha": "92f4232f5eeeace39973992193952fdad8e79903",
+    "path": ".github/workflows/mobile-android-ime-reference.yml",
+    "event": "workflow_dispatch",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-10-24T18:26:29Z",
+    "updated_at": "2026-10-24T18:27:33Z",
+    "html_url": "https://github.com/creno-va/baro/actions/runs/40120710320"
+  },
+  "jobId": 120951425558,
+  "fixedLogMarkerObserved": "ANDROID_IME_REFERENCE_BOOTSTRAP_FAILED",
+  "artifactsObserved": 0,
+  "producerReceiptAvailable": false,
+  "sourceInspectionFinding": "target was read from child environment whose allowlist omits TARGET_SHA",
+  "metadataObserved": false,
+  "koreanKeyboardVerified": false,
+  "productInputVerified": false,
+  "physicalDeviceVerified": false,
+  "rawCommandLogsExported": false
+}

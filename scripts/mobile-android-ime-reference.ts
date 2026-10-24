@@ -110,6 +110,14 @@ export function inspectAndroidImeInventory(raw: string, selected: string) {
     rawMetadataExported: false as const,
   };
 }
+export function androidImeReferenceConfiguration(input: Record<string, string | undefined>) {
+  const env = internalAndroidEnvironment(input),
+    sdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT,
+    source = input.TARGET_SHA;
+  if (!sdk || !source || !/^[a-f0-9]{40}$/.test(source))
+    throw Error("ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED");
+  return { env, sdk, source };
+}
 async function main() {
   if (
     process.env.GITHUB_ACTIONS !== "true" ||
@@ -118,12 +126,8 @@ async function main() {
   )
     throw Error("ANDROID_IME_REFERENCE_FRESH_LINUX_CI_REQUIRED");
   const root = process.cwd(),
-    env = internalAndroidEnvironment(process.env),
-    sdk = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT,
-    source = env.TARGET_SHA;
-  if (!sdk || !source || !/^[a-f0-9]{40}$/.test(source))
-    throw Error("ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED");
-  const base = resolve(root, ".wrangler/mobile-android-ime-reference"),
+    { env, sdk, source } = androidImeReferenceConfiguration(process.env),
+    base = resolve(root, ".wrangler/mobile-android-ime-reference"),
     owned = resolve(base, `owned-${randomUUID()}`),
     paths = ownedAndroidPaths(owned),
     childEnv = { ...env, ...paths.environment },

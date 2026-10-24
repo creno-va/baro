@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  androidImeReferenceConfiguration,
   assertAndroidImeProductAbsent,
   inspectAndroidImeInventory,
 } from "../scripts/mobile-android-ime-reference";
@@ -110,4 +111,28 @@ test("product absence is checked on the fresh image, never silently accepting a 
     "package:com.android.settings\nprivate\n",
   ])
     expect(() => assertAndroidImeProductAbsent(text)).toThrow();
+});
+
+test("explicit tooling source survives the isolated child environment without forwarding unrelated credentials", () => {
+  const input = {
+    EXPO_PUBLIC_APP_ENV: "preview",
+    EXPO_PUBLIC_API_URL: "https://preview.baro.site",
+    ANDROID_HOME: "/synthetic/android-sdk",
+    TARGET_SHA: "a".repeat(40),
+    GITHUB_TOKEN: "synthetic-do-not-forward",
+    OTHER_SECRET: "synthetic-do-not-forward",
+  };
+  const config = androidImeReferenceConfiguration(input);
+  expect(config.source).toBe(input.TARGET_SHA);
+  expect(config.sdk).toBe(input.ANDROID_HOME);
+  expect(config.env.TARGET_SHA).toBeUndefined();
+  expect(config.env.GITHUB_TOKEN).toBeUndefined();
+  expect(config.env.OTHER_SECRET).toBeUndefined();
+  for (const TARGET_SHA of [undefined, "main", "a".repeat(39), "A".repeat(40)])
+    expect(() => androidImeReferenceConfiguration({ ...input, TARGET_SHA })).toThrow(
+      "ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED",
+    );
+  expect(() => androidImeReferenceConfiguration({ ...input, ANDROID_HOME: undefined })).toThrow(
+    "ANDROID_IME_REFERENCE_EXPLICIT_SDK_SOURCE_REQUIRED",
+  );
 });
