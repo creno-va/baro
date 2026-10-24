@@ -74,6 +74,58 @@ final class BaroDirectoryUITests: XCTestCase {
   }
 
   @MainActor
+  private func softwareSearchControl(keyboard: XCUIElement, app: XCUIApplication) -> (element: XCUIElement, kind: String)? {
+    let predicate = NSPredicate(format: "label ==[c] %@ OR label == %@", "Search", "\u{ac80}\u{c0c9}")
+    let buttons = keyboard.buttons.matching(predicate)
+    let keys = keyboard.keys.matching(predicate)
+    let buttonCount = buttons.count
+    let keyCount = keys.count
+    guard buttonCount <= 8 && keyCount <= 8 else { return nil }
+    @MainActor
+    func insideKeyboard(_ element: XCUIElement) -> Bool {
+      guard self.fullyHittable(element, in: app), keyboard.exists else { return false }
+      let frame = element.frame
+      let kb = keyboard.frame
+      guard [kb.minX, kb.minY, kb.width, kb.height].allSatisfy({ $0.isFinite }), kb.width > 0, kb.height > 0 else { return false }
+      let visible = frame.intersection(kb)
+      return visible.width >= frame.width * 0.95 && visible.height >= frame.height * 0.95
+    }
+    var buttonCandidates: [XCUIElement] = []
+    var keyCandidates: [XCUIElement] = []
+    for index in 0..<buttonCount {
+      let element = buttons.element(boundBy: index)
+      if insideKeyboard(element) { buttonCandidates.append(element) }
+    }
+    for index in 0..<keyCount {
+      let element = keys.element(boundBy: index)
+      if insideKeyboard(element) { keyCandidates.append(element) }
+    }
+    var aliasesShareBounds = true
+    if buttonCandidates.count == 1 && keyCandidates.count == 1 {
+      let buttonFrame = buttonCandidates[0].frame
+      let keyFrame = keyCandidates[0].frame
+      let shared = buttonFrame.intersection(keyFrame)
+      aliasesShareBounds = shared.width >= max(buttonFrame.width, keyFrame.width) * 0.95
+        && shared.height >= max(buttonFrame.height, keyFrame.height) * 0.95
+    }
+    let physicalUnique = buttonCandidates.count <= 1 && keyCandidates.count <= 1
+      && buttonCandidates.count + keyCandidates.count > 0 && aliasesShareBounds
+    let status: [String: Any] = [
+      "buttonCount": buttonCount, "keyCount": keyCount,
+      "buttonHittableCount": buttonCandidates.count, "keyHittableCount": keyCandidates.count,
+      "aliasesShareBounds": aliasesShareBounds, "uniquePhysicalControl": physicalUnique,
+      "keyboardVisible": keyboard.exists, "appForeground": app.state == .runningForeground
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: status, options: [.sortedKeys]) {
+      print("BARO_DIRECTORY_SEARCH_STATUS:" + String(decoding: data, as: UTF8.self))
+    }
+    guard physicalUnique && app.state == .runningForeground else { return nil }
+    if let button = buttonCandidates.first { return (button, "button") }
+    if let key = keyCandidates.first { return (key, "key") }
+    return nil
+  }
+
+  @MainActor
   private func reportInput(_ stage: String, input: XCUIElement, app: XCUIApplication) {
     let expected = "baro-mobile-smoke-20261024"
     let sentence = "Baro-mobile-smoke-20261024"
@@ -141,7 +193,10 @@ final class BaroDirectoryUITests: XCTestCase {
     let typedRetained = wait({ (input.value as? String) == synthetic }, seconds: 10)
     reportInput("typed-check", input: input, app: app)
     XCTAssertTrue(typedRetained, "BARO_DIRECTORY_TYPED_INPUT_MISMATCH")
-    input.typeText("\n")
+    let searchControl = softwareSearchControl(keyboard: keyboard, app: app)
+    XCTAssertNotNil(searchControl, "BARO_DIRECTORY_SOFTWARE_SEARCH_MISSING")
+    guard let searchControl else { return }
+    searchControl.element.tap()
     XCTAssertTrue(wait({ !keyboard.exists }, seconds: 10), "BARO_DIRECTORY_KEYBOARD_NOT_DISMISSED")
     XCTAssertTrue(wait({
       app.staticTexts["검색 결과가 없어요"].exists
@@ -171,8 +226,11 @@ final class BaroDirectoryUITests: XCTestCase {
     back.firstMatch.tap()
     XCTAssertTrue(home.waitForExistence(timeout: 30) && !input.exists, "BARO_DIRECTORY_HOME_RETURN_MISSING")
     let result: [String: Any] = [
-      "kind": "ios-public-directory-keyboard-rotation", "applicationId": "site.baro.app.preview",
+      "kind": "ios-public-directory-software-search-keyboard-rotation", "applicationId": "site.baro.app.preview",
       "initialReadyState": initialReadyState,
+      "searchSubmitMethod": "software-keyboard-search", "searchSubmitControlKind": searchControl.kind,
+      "searchSubmitUniquePhysicalControl": true, "searchSubmitControlFullyHittable": true,
+      "searchSubmitControlWithinKeyboard": true, "searchSubmitTapped": true,
       "inputFullyHittable": true, "keyboardObserved": true, "focusedInputAboveKeyboard": true,
       "syntheticAsciiInputRetained": true, "searchSubmittedByKeyboard": true,
       "keyboardDismissed": true, "filteredEmptyStateObserved": true,

@@ -368,7 +368,7 @@ async function main() {
       const proof = verifyIosDirectoryReceipt(
         {
           ...iosDirectoryBaseSchema.strip().parse(receipt),
-          kind: "ios-bundled-public-directory-input-observation",
+          kind: "ios-bundled-public-directory-software-search-observation",
           observedAt: new Date().toISOString(),
           ...observation,
           explicitScreenshotsSuppressedBeforeNavigation,

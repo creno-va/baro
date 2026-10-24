@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "apple-foundation-synthetic-signature-completed-step",
+  "recordedAt": "2026-10-24T01:18:35.562Z",
+  "toolingSourceSha": "45bc32fc56fbce7987fa089e4a864ab95fc3bb97",
+  "workflowRunId": "40048447226",
+  "workflowRunnerLabel": "macos-26",
+  "step": "Require actual Apple Foundation signature comparisons",
+  "startedAt": "2026-10-24T01:09:38Z",
+  "completedAt": "2026-10-24T01:09:52Z",
+  "conclusion": "success",
+  "requiredByWorkflow": true,
+  "scope": "completed-synthetic-step-only",
+  "nativeInputVerified": false,
+  "uiScenarioVerified": false,
+  "overallWorkflowAccepted": false,
+  "oauthVerified": false,
+  "physicalDeviceVerified": false
+}

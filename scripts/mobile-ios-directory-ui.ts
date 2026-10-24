@@ -34,12 +34,27 @@ export const iosDirectoryResultSchema = z.strictObject({
   voiceOverVerified: z.literal(false),
   httpTransportSeparatelyObserved: z.literal(false),
 });
+export const iosDirectorySoftwareSearchResultSchema = iosDirectoryResultSchema
+  .omit({ kind: true })
+  .extend({
+    kind: z.literal("ios-public-directory-software-search-keyboard-rotation"),
+    searchSubmitMethod: z.literal("software-keyboard-search"),
+    searchSubmitControlKind: z.enum(["button", "key"]),
+    searchSubmitUniquePhysicalControl: z.literal(true),
+    searchSubmitControlFullyHittable: z.literal(true),
+    searchSubmitControlWithinKeyboard: z.literal(true),
+    searchSubmitTapped: z.literal(true),
+  });
+const directoryResultSchema = z.discriminatedUnion("kind", [
+  iosDirectoryResultSchema,
+  iosDirectorySoftwareSearchResultSchema,
+]);
 export function parseIosDirectoryResult(output: string) {
   const prefix = "BARO_DIRECTORY_UI_RESULT:";
   const lines = output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
   const line = lines[0];
   if (lines.length !== 1 || !line) throw Error("INTERNAL_IOS_DIRECTORY_RESULT_REQUIRED");
-  return iosDirectoryResultSchema.parse(JSON.parse(line.slice(prefix.length)));
+  return directoryResultSchema.parse(JSON.parse(line.slice(prefix.length)));
 }
 const assertionCodes = [
   "BARO_DIRECTORY_HOME_MISSING",
@@ -53,6 +68,7 @@ const assertionCodes = [
   "BARO_DIRECTORY_INPUT_OCCLUDED",
   "BARO_DIRECTORY_INPUT_NOT_RETAINED",
   "BARO_DIRECTORY_INITIAL_INPUT_NOT_EMPTY",
+  "BARO_DIRECTORY_SOFTWARE_SEARCH_MISSING",
   "BARO_DIRECTORY_TYPED_INPUT_MISMATCH",
   "BARO_DIRECTORY_LANDSCAPE_INPUT_MISMATCH",
   "BARO_DIRECTORY_PORTRAIT_INPUT_MISMATCH",
@@ -99,9 +115,42 @@ const inputStatusSchema = z.strictObject({
   keyboardObserved: z.boolean(),
   inputSignature: inputSignatureSchema.optional(),
 });
+const searchControlSchema = z
+  .strictObject({
+    buttonCount: z.number().int().min(0).max(8),
+    keyCount: z.number().int().min(0).max(8),
+    buttonHittableCount: z.number().int().min(0).max(8),
+    keyHittableCount: z.number().int().min(0).max(8),
+    aliasesShareBounds: z.boolean(),
+    uniquePhysicalControl: z.boolean(),
+    keyboardVisible: z.boolean(),
+    appForeground: z.boolean(),
+  })
+  .refine((v) => v.buttonHittableCount <= v.buttonCount && v.keyHittableCount <= v.keyCount)
+  .refine(
+    (v) =>
+      v.uniquePhysicalControl ===
+      (v.buttonHittableCount <= 1 &&
+        v.keyHittableCount <= 1 &&
+        v.buttonHittableCount + v.keyHittableCount > 0 &&
+        (v.buttonHittableCount !== 1 || v.keyHittableCount !== 1 || v.aliasesShareBounds)),
+  );
 export function observeIosDirectoryFailure(output: string) {
   let status: z.infer<typeof inputStatusSchema> | null = null;
   const history: z.infer<typeof inputStatusSchema>[] = [];
+  let searchControl: z.infer<typeof searchControlSchema> | null = null;
+  const searchPrefix = "BARO_DIRECTORY_SEARCH_STATUS:";
+  for (const line of output
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith(searchPrefix))
+    .slice(-4)) {
+    try {
+      const parsed = searchControlSchema.safeParse(JSON.parse(line.slice(searchPrefix.length)));
+      if (parsed.success) searchControl = parsed.data;
+    } catch {
+      /* Only fixed native keyboard counts and booleans are retained. */
+    }
+  }
   const prefix = "BARO_DIRECTORY_UI_STATUS:";
   for (const line of output
     .split(/\r?\n/)
@@ -120,23 +169,39 @@ export function observeIosDirectoryFailure(output: string) {
   const code = output.match(
     /XCTAssert[A-Za-z]+ failed[^\r\n]*? - (BARO_DIRECTORY_[A-Z0-9_]+)(?:[^A-Z0-9_]|$)/,
   )?.[1];
-  return { status, history, assertionCode: assertionCodes.find((value) => value === code) ?? null };
+  return {
+    status,
+    history,
+    searchControl,
+    assertionCode: assertionCodes.find((value) => value === code) ?? null,
+  };
 }
 export const iosDirectoryBaseSchema = iosAuthCancelBaseSchema;
-export const iosDirectoryReceiptSchema = iosDirectoryBaseSchema.extend({
-  kind: z.literal("ios-bundled-public-directory-input-observation"),
-  swiftTestSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  projectGeneratorSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  projectGeneratorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
-  explicitScreenshotsSuppressedBeforeNavigation: z.literal(true),
-  hostRawCommandLogsPersistedAfterBoundary: z.literal(false),
-  rawXcresultExported: z.literal(false),
-  rawUiHierarchyExported: z.literal(false),
-  uiTestRunnerCompiled: z.literal(true),
-  productRecompiled: z.literal(false),
-  productResigned: z.literal(false),
-  result: iosDirectoryResultSchema,
-});
+export const iosDirectoryReceiptSchema = iosDirectoryBaseSchema
+  .extend({
+    kind: z.enum([
+      "ios-bundled-public-directory-input-observation",
+      "ios-bundled-public-directory-software-search-observation",
+    ]),
+    swiftTestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    projectGeneratorSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    projectGeneratorVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    explicitScreenshotsSuppressedBeforeNavigation: z.literal(true),
+    hostRawCommandLogsPersistedAfterBoundary: z.literal(false),
+    rawXcresultExported: z.literal(false),
+    rawUiHierarchyExported: z.literal(false),
+    uiTestRunnerCompiled: z.literal(true),
+    productRecompiled: z.literal(false),
+    productResigned: z.literal(false),
+    result: directoryResultSchema,
+  })
+  .refine(
+    (v) =>
+      (v.kind === "ios-bundled-public-directory-input-observation" &&
+        v.result.kind === "ios-public-directory-keyboard-rotation") ||
+      (v.kind === "ios-bundled-public-directory-software-search-observation" &&
+        v.result.kind === "ios-public-directory-software-search-keyboard-rotation"),
+  );
 export function verifyIosDirectoryReceipt(value: unknown, baselineValue: unknown) {
   const result = iosDirectoryReceiptSchema.parse(value),
     baseline = iosColdLaunchReceiptSchema.parse(baselineValue);
