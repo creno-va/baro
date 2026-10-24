@@ -1,5 +1,6 @@
 import { createFilesClient, type WorkspaceTransport } from "@baro/api-client";
 import { createSessionBoundClient } from "@baro/client-core";
+import { FILE_TARGET_UPLOAD_CONSISTENCY } from "@baro/contracts/v2";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { browserSessionScope } from "./context";
 
@@ -27,6 +28,7 @@ export function createFilesApi(request: WorkspaceTransport) {
     createFilesClient<File, Blob>({
       request,
       scope: browserSessionScope,
+      completionConsistency: FILE_TARGET_UPLOAD_CONSISTENCY,
       newKey: () => crypto.randomUUID(),
       openUpload: async (file, signal) => ({
         fingerprint: async () => {

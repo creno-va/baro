@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
-import type { V2ErrorCode } from "../../../contracts/v2";
+import {
+  FILE_TARGET_UPLOAD_CONSISTENCY,
+  UPLOAD_CONSISTENCY_HEADER,
+  type V2ErrorCode,
+} from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { DefinitiveFileRejection, ProcessingError } from "../../modules/file-processing/protocol";
@@ -109,6 +113,7 @@ export function createFilesApi(
     sessionId?: string,
     storagePart = false,
     afterComplete?: (task: () => Promise<void>) => void,
+    completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY,
   ) => {
     if (options.testOnlyMissingD1Meta && env.APP_ENV === "production")
       throw new FileError("PROCESSING_UNAVAILABLE");
@@ -121,6 +126,7 @@ export function createFilesApi(
       ...(await options.dependencies?.(env, core, ownerId, afterComplete)),
       environment: env.APP_ENV === "production" ? "production" : "preview",
       ...(sessionId ? { sessionId } : {}),
+      ...(completionConsistency ? { completionConsistency } : {}),
     });
   };
   app.get("/:caseId/files", async (c) => {
@@ -192,11 +198,19 @@ export function createFilesApi(
   app.post("/:caseId/files/:fileId/complete", async (c) => {
     const access = await caseAccess(c, true, true);
     if (access.response) return access.response;
+    const consistency = c.req.header(UPLOAD_CONSISTENCY_HEADER);
+    if (consistency && consistency !== FILE_TARGET_UPLOAD_CONSISTENCY)
+      throw new FileError("INVALID_FILE");
     const admittedTasks: Array<() => Promise<void>> = [];
     const response = c.json(
       await (
-        await service(c.env, access.ownerId, access.sessionId, false, (task) =>
-          admittedTasks.push(task),
+        await service(
+          c.env,
+          access.ownerId,
+          access.sessionId,
+          false,
+          (task) => admittedTasks.push(task),
+          consistency === FILE_TARGET_UPLOAD_CONSISTENCY ? consistency : undefined,
         )
       ).complete(access.ownerId, c.req.param("caseId"), c.req.param("fileId"), await c.req.json()),
     );

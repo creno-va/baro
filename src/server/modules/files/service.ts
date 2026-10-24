@@ -4,6 +4,7 @@ import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, timestampSchema } from "../../../contracts";
 import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
 import {
+  FILE_TARGET_UPLOAD_CONSISTENCY,
   V2_LIMITS,
   v2FileProbeSchema,
   v2OriginalManifestSchema,
@@ -60,6 +61,8 @@ export type FileStoragePermit = StoragePermit;
 export type FileStorageCosts = StorageCosts;
 export type FileServiceDependencies = {
   environment: "preview" | "production";
+  /** Explicit versioned protocol; absence preserves the installed clients' strict CAS. */
+  completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY;
   bucket?: PrivateBucket;
   clock?: () => string;
   /** Exact signed HTTP session for original downloads; internal jobs use their own leases. */
@@ -98,6 +101,10 @@ type Session = {
   reservation_id: string;
   operation_id: string;
   workspace_revision: number;
+  workspace_status: string;
+  workspace_job_id: string | null;
+  workspace_intake_revision: number;
+  workspace_summary_revision: number | null;
   file_revision: number;
   operation_revision: number;
   request_hash: string;
@@ -169,7 +176,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     const requestSession = requestSessionFence();
     const row = await core
       .statement(
-        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""} ${requestSession.sql}`,
+        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision,w.status AS workspace_status,w.current_job_id AS workspace_job_id,w.intake_revision AS workspace_intake_revision,w.confirmed_summary_revision AS workspace_summary_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""} ${requestSession.sql}`,
         [
           ownerId,
           workspaceId,
@@ -792,6 +799,20 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       }
       const u = await session(ownerId, workspaceId, fileId, request.uploadSession, true);
       if (u.workspace_revision !== request.expectedRevision) throw new FileError("CONFLICT");
+      const assertSameTarget = (current: Session) => {
+        if (
+          current.revision !== u.revision ||
+          current.file_revision !== u.file_revision ||
+          current.operation_id !== u.operation_id ||
+          current.reservation_id !== u.reservation_id ||
+          current.reserved_bytes !== u.reserved_bytes ||
+          current.workspace_status !== u.workspace_status ||
+          current.workspace_job_id !== u.workspace_job_id ||
+          current.workspace_intake_revision !== u.workspace_intake_revision ||
+          current.workspace_summary_revision !== u.workspace_summary_revision
+        )
+          throw new FileError("CONFLICT");
+      };
       if (!deps.probe) throw new FileError("PROCESSING_UNAVAILABLE");
       const manifest = v2OriginalManifestSchema.parse(request.manifest);
       const reserved = await files.metadata(actor(ownerId), fileId);
@@ -824,9 +845,11 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       );
       if (!validated || probe.byteLength !== u.reserved_bytes) throw new FileError("INVALID_FILE");
       await consent(ownerId);
-      await session(ownerId, workspaceId, fileId, u.id, true);
+      assertSameTarget(await session(ownerId, workspaceId, fileId, u.id, true));
       const metadata = await files.metadata(actor(ownerId), fileId);
       if (!metadata) throw new FileError("NOT_FOUND");
+      if (metadata.revision !== u.file_revision) throw new FileError("CONFLICT");
+      if (metadata.uploadRejection) throw new DefinitiveFileRejection();
       const recorded = await files.recordOriginalDigest(
         actor(ownerId),
         u.id,
@@ -853,8 +876,21 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
           throw new FileError("CONFLICT");
       }
       await storage.commitReservation(actor(ownerId), u.reservation_id);
+      // Probing and storage confirmation can outlive another file's publication.
+      // The request's entry CAS already passed; revalidate this immutable upload
+      // target before taking the final atomic workspace/file commit snapshot.
+      await consent(ownerId);
+      const commitUpload = await session(ownerId, workspaceId, fileId, u.id, true);
+      assertSameTarget(commitUpload);
       const success = await files.finishUpload(
-        { ...actor(ownerId), workspaceId, expectedRevision: request.expectedRevision },
+        {
+          ...actor(ownerId),
+          workspaceId,
+          expectedRevision:
+            deps.completionConsistency === FILE_TARGET_UPLOAD_CONSISTENCY
+              ? commitUpload.workspace_revision
+              : request.expectedRevision,
+        },
         {
           schemaVersion: "2",
           id: fileId,

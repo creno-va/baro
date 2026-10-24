@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
-import { V2_LIMITS } from "../src/contracts/v2";
+import { FILE_TARGET_UPLOAD_CONSISTENCY, V2_LIMITS } from "../src/contracts/v2";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -488,6 +488,109 @@ test("complete replay does not invoke probe twice; stale revision/wrong hash fai
   ).rejects.toThrow("CONFLICT");
   expect(probes).toBe(1);
 });
+test("upload completion revalidates its own target after another file publishes during native probing", async () => {
+  let f: Fixture;
+  let probes = 0;
+  f = await fixture({
+    completionConsistency: FILE_TARGET_UPLOAD_CONSISTENCY,
+    probe: async (input) => {
+      probes++;
+      await drain(input.open());
+      // Another file's background publication advances the workspace while
+      // this exact upload/session/manifest and its consent stay unchanged.
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspaceId);
+      return { category: "document", format: "txt", byteLength: input.byteLength, pageCount: 1 };
+    },
+  });
+  const u = await uploaded(f);
+  expect(u.complete.status).toBe("uploaded");
+  expect(probes).toBe(1);
+  expect(f.bucket.calls.put).toBe(1);
+  expect(
+    f.db.sqlite
+      .query("SELECT state FROM v2_upload_sessions WHERE id=?")
+      .get(u.session.uploadSession),
+  ).toEqual({ state: "finalized" });
+  expect(
+    f.db.sqlite
+      .query("SELECT stored_count,reserved_count FROM v2_case_original_usage WHERE workspace_id=?")
+      .get(f.workspaceId),
+  ).toEqual({ stored_count: 1, reserved_count: 0 });
+  const content = await f.service.content(f.actor.ownerId, f.workspaceId, u.session.fileId);
+  expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual(u.bytes);
+});
+
+for (const change of [
+  "workspace_deleted",
+  "file_deleted",
+  "archived",
+  "file_consent",
+  "account_consent",
+  "workspace_job",
+  "summary_changed",
+  "intake_changed",
+  "status_changed",
+] as const)
+  test(`fresh post-probe completion still rejects ${change} without publishing an original`, async () => {
+    let f: Fixture;
+    f = await fixture({
+      completionConsistency: FILE_TARGET_UPLOAD_CONSISTENCY,
+      probe: async (input) => {
+        await drain(input.open());
+        if (change === "workspace_deleted" || change === "file_deleted")
+          f.db.sqlite
+            .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES(?,?,?)")
+            .run(
+              change === "file_deleted" ? "file" : "workspace",
+              change === "file_deleted" ? input.fileId : f.workspaceId,
+              NOW,
+            );
+        else if (change === "archived")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_workspaces SET status='archived',archived_from='active',revision=revision+1 WHERE id=?",
+            )
+            .run(f.workspaceId);
+        else if (change === "file_consent")
+          f.db.sqlite.query("DELETE FROM v2_consents WHERE file_id=?").run(input.fileId);
+        else if (change === "workspace_job")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET current_job_id=?,revision=revision+1 WHERE id=?")
+            .run(crypto.randomUUID(), f.workspaceId);
+        else if (change === "summary_changed")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_workspaces SET confirmed_summary_revision=confirmed_summary_revision+1,revision=revision+1 WHERE id=?",
+            )
+            .run(f.workspaceId);
+        else if (change === "intake_changed")
+          f.db.sqlite
+            .query(
+              "UPDATE v2_workspaces SET intake_revision=intake_revision+1,revision=revision+1 WHERE id=?",
+            )
+            .run(f.workspaceId);
+        else if (change === "status_changed")
+          f.db.sqlite
+            .query("UPDATE v2_workspaces SET status='intake',revision=revision+1 WHERE id=?")
+            .run(f.workspaceId);
+        else f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        return { category: "document", format: "txt", byteLength: input.byteLength, pageCount: 1 };
+      },
+    });
+    await expect(uploaded(f)).rejects.toThrow();
+    expect(f.db.sqlite.query("SELECT state FROM v2_upload_sessions").get()).toEqual({
+      state: "open",
+    });
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT stored_count,reserved_count FROM v2_case_original_usage WHERE workspace_id=?",
+        )
+        .get(f.workspaceId),
+    ).toEqual({ stored_count: 0, reserved_count: 1 });
+  });
 test("wrong owner/workspace/upload/index, expiry and revocation reject before body consumption/R2", async () => {
   const f = await fixture();
   const s = await reserved(f, 5);

@@ -6,5 +6,6 @@ export * from "./lawyers";
 export * from "./reports";
 export * from "./sources";
 export * from "./tools";
+export * from "./upload-consistency";
 export * from "./usage";
 export * from "./workspace";
