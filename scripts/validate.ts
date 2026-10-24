@@ -36,6 +36,8 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/gemini-native-legacy.test.ts",
       "tests/gemini-native-chat.test.ts",
       "tests/workspace-pipeline.test.ts",
+      "tests/precedent-comparison.test.ts",
+      "tests/precedent-research-api.test.ts",
       "tests/preview-legacy-fixture.test.ts",
       "tests/session-owner-fence.test.ts",
       "scripts/validate.test.ts",

@@ -1,0 +1,81 @@
+# Case and precedent factual comparison — 2026-10-25
+
+Scope: [#524](https://github.com/creno-va/baro/issues/524), direct web feature
+request, branch `codex/524-precedent-comparison`. The existing topic research tab
+becomes **유사 판례**. Select and read a verified official judgment before explicitly
+requesting a comparison against the current confirmed summary.
+
+## Meaning and evidence
+
+The checklist has eight fixed factual indicators: parties' roles/relationship,
+transaction/action, formation, disputed conduct, sequence, kind of harm, contested
+facts, and kinds of records. The model returns yes, no or unknown with a short
+explanation. Every yes/no needs an exact continuous quote from a current case fact
+and an exact original UTF-16 span from the supplied judgment excerpt. Unknowns do
+not become negative findings. Uncertain/conflicting or official-source facts cannot
+support a definitive case-side match. A separate MEDIUM model audit checks the
+semantics, qualifications, all explanations and evidence after literal checks.
+
+The server calculates `round(100 * yes / 8)`, never model-supplied scores or weights.
+Unknowns stay in the denominator. The UI separately shows the number of comparable
+indicators and unavailable evidence, both sides' quotes, the official source link,
+actual comparison time and stale/partial notices. This is an indicator match rate,
+not legal similarity ranking, a legal conclusion or a winning probability. The
+comparison covers the supplied facts and verified excerpt, not an entire long
+judgment or all case material.
+
+## Execution and persistence
+
+The explicit comparison is a genuine existing `chat_response` operation and visible
+user message. It uses the shared AI200 quota, durable immutable Gateway admission,
+native Gemini LOW generation, separate MEDIUM audit, and existing bounded correction,
+lease, time and attempt limits. All inference remains in `llm-gateway` through the
+existing Cloudflare AI Gateway. No dummy job, new provider or migration is added.
+
+The signed source capability is validated before admission and again at execution
+against the original case revision plus the admitted user message. It pins owner,
+case, source hash, citation and expiry. It is encrypted with the private request and
+removed before model context/public message projection. The comparison result is
+encrypted with the validated assistant message. Opt-in owner-checked endpoints
+preserve the strict existing search/message/mobile DTOs. Publication uses the same
+atomic current-owner/revision/lease/consent/source authority fence as normal chat.
+Generic retry cannot reinterpret an old comparison capability: an unsuccessful
+comparison needs a new explicit request using a freshly selected current source.
+
+The web retains only an opaque job hint in session storage. GET polling/recovery
+never starts a new model call. A lost acknowledgment reuses the pending job or the
+same in-memory idempotency key. Foreground verification restarts read-only polling
+without cancelling a same-owner admission. Access changes hide the private view and
+invalidate delayed responses. A later case/source change marks a saved comparison
+as historical; it does not silently update the score.
+
+## Local evidence and remaining external acceptance
+
+- Literal/schema/API/runtime integration: 23 tests, 248 assertions. These use the
+  actual Hono, encrypted D1 repository, durable admission, workspace runtime and
+  publication code with synthetic model and official-source adapters. They are not
+  live provider calls.
+- Rejected audits publish no comparison/assistant response. Forged/foreign/stale
+  requests fail before model dispatch. Source corruption between admission and
+  execution dispatches zero model calls. Source revocation after both successful
+  synthetic generation/audit receipts fails with `reference_unauthorized` at the
+  existing publication fence. Completed results become historical after a case
+  revision change and are unavailable to another owner.
+- Six real Chromium tests cover search/read/comparison, pending admission across
+  foreground, failed/lost responses, owner sign-out, reload without another POST,
+  unknown indicators, evidence expansion and stale notices. Viewports 320–1440px
+  have no horizontal document overflow after layout settles; axe finds no violation.
+  Screenshots contain only explicitly synthetic browser fixtures.
+- Frozen Bun installation, `validate:quick` (572 focused tests/48 files/5,336
+  assertions plus source/tooling/shared-client/mobile checks), full unit suite
+  (4,351 tests/396 files/174,436 assertions), production build, bundle limits,
+  Wrangler dry-run and actual local built workerd boot passed. After the shared
+  pipeline return type was made consistent, the affected comparison/chat/source
+  tests passed again (177 tests/912 assertions). No provider calls run in these
+  validation profiles. No database schema changed.
+
+Actual Gemini comparison against a live verified official judgment remains a
+separate external acceptance. Neither synthetic adapters nor existing intake/chat
+Gemini receipts establish that result. No production deployment or full-MVP/#71
+acceptance is claimed. Unissued four-service credentials and their target/recipient
+consent execution producer remain separate work under #458.

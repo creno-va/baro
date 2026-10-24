@@ -27,6 +27,7 @@ import {
   WorkspaceOutputPolicyError,
 } from "./pipeline";
 import { createWorkspaceProgress, type WorkspaceProgress } from "./progress";
+import type { StoredUserMessage } from "./stored-message";
 
 export const workspaceParamsSchema = z.strictObject({
   ownerId: opaqueIdSchema,
@@ -64,6 +65,7 @@ export async function executeWorkspace(
       lease: JobLease,
       context: WorkspaceContext,
       progress: WorkspaceProgress,
+      latest?: StoredUserMessage,
     ) => Promise<ReturnType<typeof createWorkspacePipeline>>;
   },
 ) {
@@ -111,6 +113,7 @@ export async function executeWorkspace(
       expectedRevision: params.workspaceRevision,
     });
   let publicationFailure: WorkspacePublicationFailure | undefined;
+  let comparisonJob = false;
   let checkpointRevision = 0;
   const progress = createWorkspaceProgress(async (phase) => {
     if (!checkpointRevision)
@@ -140,6 +143,7 @@ export async function executeWorkspace(
       acquired.job.kind === "chat_response"
         ? await workspace.userMessage(actor(), params.workspaceId, acquired.job.operationId)
         : undefined;
+    comparisonJob = !!latest?.precedentComparisonRequest;
     const context = await readWorkspaceContext(
       core,
       actor(),
@@ -147,7 +151,13 @@ export async function executeWorkspace(
       latest?.role === "user" ? latest : undefined,
       options.guideHosts,
     );
-    const pipeline = await options.pipeline(acquired.job, lease, context, progress);
+    const pipeline = await options.pipeline(
+      acquired.job,
+      lease,
+      context,
+      progress,
+      latest ?? undefined,
+    );
     const fresh = async () => {
       if (!(await options.authorize(params.ownerId))) throw new ModelError("MODEL_UNAVAILABLE");
       const renewalActor = actor();
@@ -283,6 +293,9 @@ export async function executeWorkspace(
           actions: response.actions,
           timeline: response.timeline,
           toolResults: response.toolResults,
+          ...("precedentComparison" in response
+            ? { precedentComparison: response.precedentComparison }
+            : {}),
         },
         (failure) => {
           publicationFailure = safeWorkspacePublicationFailure(failure);
@@ -325,7 +338,7 @@ export async function executeWorkspace(
         actor(),
         lease,
         error instanceof ModelError ? error.code : "INTERNAL_ERROR",
-        error instanceof ModelError && error.code === "MODEL_UNAVAILABLE",
+        !comparisonJob && error instanceof ModelError && error.code === "MODEL_UNAVAILABLE",
       )
       .catch(() => false);
     return {

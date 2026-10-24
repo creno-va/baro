@@ -7,6 +7,7 @@ import {
   structuredCaseSchema,
   validationOutputSchema,
 } from "../../../contracts";
+import { precedentComparisonDraftSchema } from "../../../contracts/v2/precedent-comparison";
 import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
 import {
   type GatewayAttemptHandle,
@@ -17,6 +18,7 @@ import {
   responseReceipt,
   unavailableReceipt,
 } from "./attempts";
+import { COMPARISON_PROMPT_VERSION } from "./comparison-prompts";
 import { readModelCompletion } from "./completion";
 import {
   MODEL_ID,
@@ -47,6 +49,7 @@ const schemas = {
   validation: validationOutputSchema,
   workspace_questions: workspaceQuestionsOutputSchema,
   workspace_summary: workspaceSummaryOutputSchema,
+  workspace_precedent_compare: precedentComparisonDraftSchema,
   workspace_chat: workspaceChatOutputSchema,
   workspace_audit: workspaceAuditOutputSchema,
 };
@@ -59,6 +62,7 @@ const limits = {
   validation: 8000,
   workspace_questions: 2400,
   workspace_summary: 10000,
+  workspace_precedent_compare: 4000,
   workspace_chat: 10000,
   workspace_audit: 2400,
 };
@@ -131,6 +135,12 @@ function wireSchema(schema: unknown, compactNumbers = false): unknown {
 }
 /** Private provider input shared by dispatch and the trusted paid-execution planner. */
 export function prepareGatewayWireInput(phase: Phase, input: unknown, correction = false) {
+  const comparison =
+    phase === "workspace_precedent_compare" ||
+    (phase === "workspace_audit" &&
+      input !== null &&
+      typeof input === "object" &&
+      (input as { phase?: unknown }).phase === "workspace_precedent_compare");
   const envelope = z.strictObject({ output: schemas[phase] });
   // Strict provider output must include defaulted fields too; input schemas mark
   // them optional, which the provider rejects before generating a response.
@@ -148,7 +158,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     messages: [
       {
         role: "system",
-        content: `BARO prompt ${phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${promptFor(phase, input)}`,
+        content: `BARO prompt ${comparison ? COMPARISON_PROMPT_VERSION : phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${promptFor(phase, input)}`,
       },
       {
         role: "user",

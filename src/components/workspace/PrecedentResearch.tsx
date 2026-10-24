@@ -12,6 +12,7 @@ import type {
 import { PRECEDENT_TOPIC_LABELS } from "../../contracts/v2/precedent-topics";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { CaseNavigation } from "./CaseNavigation";
+import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
 
 type Item = V2PrecedentSearchResponse["items"][number];
 const allTopics = Object.keys(PRECEDENT_TOPIC_LABELS) as V2PrecedentTopic[];
@@ -208,7 +209,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       />
       <header className="workspace-section-heading">
         <div>
-          <h2>사건과 관련된 판례 찾기</h2>
+          <h2>사건과 비슷한 판례 찾기</h2>
           <p>
             확인한 사건 요약을 바탕으로 검색 주제를 추천해요. 궁금한 주제를 골라 공식 판례를
             살펴보세요.
@@ -290,8 +291,8 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
             </div>
           </form>
           <p className="precedent-scope">
-            주제와 관련된 판례를 제공해요. 사실관계가 같은 사건이나 승소 가능성을 판단한 결과는
-            아니에요.
+            주제로 찾은 판례와 확인한 사건 사실을 구분해 살펴봐요. 판례를 선택하면 항목별로 비교할
+            수 있어요.
           </p>
           {busy && (
             <div className="precedent-notice" role="status">
@@ -417,6 +418,13 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
               )}
             </>
           )}
+          <PrecedentComparisonPanel
+            caseId={caseId}
+            context={context}
+            selected={chosen && document?.citation.id === chosen.citation.id ? chosen : null}
+            access={access}
+            onSettled={() => setReload((n) => n + 1)}
+          />
         </>
       )}
     </section>

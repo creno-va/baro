@@ -151,7 +151,12 @@ export const api = new Hono<ApiEnvironment>()
     }),
   )
   .route("/v2/cases", workspaceDeleteApi)
-  .route("/v2/cases", createPrecedentsApi())
+  .route(
+    "/v2/cases",
+    createPrecedentsApi({
+      workspaceDependencies: async (env, core) => createWorkspaceDependencies(core, env),
+    }),
+  )
   .route("/v2", createReportsApi())
   .route("/me", meApi)
   .route("/me", accountDeleteApi)

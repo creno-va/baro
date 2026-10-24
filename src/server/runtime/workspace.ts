@@ -21,6 +21,10 @@ import {
 import { hasCurrentConsent } from "../modules/consent/service";
 import { lookupCatalog, lookupConfiguration } from "../modules/external-tools/catalog";
 import { createExternalTools } from "../modules/external-tools/service";
+import {
+  createPrecedentResearchService,
+  PrecedentResearchError,
+} from "../modules/legal-retrieval/research/service";
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
 import { createV2LegalRetrieval } from "../modules/legal-retrieval/v2/service";
 import {
@@ -73,12 +77,14 @@ export function workspaceTokenBounds(
     modelInputTokenLimit: inputLimit,
   } as TokenBounds;
 }
-const phaseFor = (kind: string): Phase =>
-  kind === "intake_questions"
-    ? "workspace_questions"
-    : kind === "intake_summary"
-      ? "workspace_summary"
-      : "workspace_chat";
+const phaseFor = (kind: string, comparison = false): Phase =>
+  comparison
+    ? "workspace_precedent_compare"
+    : kind === "intake_questions"
+      ? "workspace_questions"
+      : kind === "intake_summary"
+        ? "workspace_summary"
+        : "workspace_chat";
 async function request(
   phase: Phase,
   input: unknown,
@@ -156,6 +162,9 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
               role: "user" as const,
               text: input.chat.request.text,
               selectedFileIds: input.chat.request.selectedFileIds,
+              ...(input.chat.precedentComparisonRequest
+                ? { precedentComparisonRequest: input.chat.precedentComparisonRequest }
+                : {}),
             }
           : undefined);
       const context = await readWorkspaceContext(
@@ -165,9 +174,30 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         latest,
         GUIDE_HOSTS,
       );
+      const comparison = input.chat?.precedentComparisonRequest;
+      if (comparison) {
+        if (
+          comparison.expectedRevision !== input.revision - 1 ||
+          comparison.summaryRevision !== context.confirmedSummary?.revision
+        )
+          throw new PrecedentResearchError("CONFLICT");
+        const source = await createPrecedentResearchService(core, env).read(
+          input.ownerId,
+          input.caseId,
+          {
+            expectedRevision: comparison.expectedRevision,
+            readToken: comparison.readToken,
+          },
+        );
+        context.precedentComparison = {
+          basedOnWorkspaceRevision: comparison.expectedRevision,
+          summaryRevision: comparison.summaryRevision,
+          source: { citation: source.citation, excerpt: source.excerpt },
+        };
+      }
       const invocationId = crypto.randomUUID(),
-        phase = phaseFor(input.kind);
-      if (input.kind === "chat_response") {
+        phase = phaseFor(input.kind, !!context.precedentComparison);
+      if (input.kind === "chat_response" && !context.precedentComparison) {
         context.lookupTools = lookupCatalog(lookupConfiguration(env));
         context.toolLookupPerformed = false;
         context.toolResults = [];
@@ -220,8 +250,48 @@ export async function runWorkspaceRuntime(
   const result = await executeWorkspace(core, params, instanceId, {
     guideHosts: GUIDE_HOSTS,
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
-    pipeline: async (job, lease, context, progress) => {
-      if (job.kind === "chat_response") {
+    pipeline: async (job, lease, context, progress, latest) => {
+      const comparison = latest?.precedentComparisonRequest;
+      if (comparison) {
+        const source = await createPrecedentResearchService(core, env).readForExecution(
+          params.ownerId,
+          params.workspaceId,
+          comparison,
+          params.workspaceRevision,
+        );
+        const citation = source.citation;
+        const bound = await core
+          .statement("SELECT workspace_id,citation_json FROM v2_citation_bindings WHERE id=?", [
+            citation.id,
+          ])
+          .first<{ workspace_id: string; citation_json: string }>();
+        if (bound) {
+          const previous = JSON.parse(bound.citation_json) as Record<string, unknown>;
+          if (
+            bound.workspace_id !== params.workspaceId ||
+            previous._availability === "limited" ||
+            !Object.entries(citation).every(([key, value]) => previous[key] === value)
+          )
+            throw new ModelError("POLICY_REJECTED");
+        } else if (
+          !(await createV2OfficialSourceRepository(core, GUIDE_HOSTS).bindCitation(
+            {
+              ownerId: params.ownerId,
+              workspaceId: params.workspaceId,
+              expectedRevision: params.workspaceRevision,
+              now: new Date().toISOString(),
+            },
+            citation,
+          ))
+        )
+          throw new ModelError("POLICY_REJECTED");
+        context.precedentComparison = {
+          basedOnWorkspaceRevision: comparison.expectedRevision,
+          summaryRevision: comparison.summaryRevision,
+          source: { citation, excerpt: source.excerpt },
+        };
+      }
+      if (job.kind === "chat_response" && !context.precedentComparison) {
         context.lookupTools = lookupCatalog(lookupConfiguration(env));
         context.toolLookupPerformed = false;
         context.toolResults = [];
@@ -248,7 +318,7 @@ export async function runWorkspaceRuntime(
       // Lease, consent, source expiry and provider receipts still use the live clock.
       // Source retrieval also keeps its actual read/retrieval day, independently.
       context.calendar = workspaceCalendar(row.created_at);
-      const primary = phaseFor(job.kind);
+      const primary = phaseFor(job.kind, !!context.precedentComparison);
       let firstInvocation = true,
         initialUsed = false;
       const invocation = (phase: Phase) => {

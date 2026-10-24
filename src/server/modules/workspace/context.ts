@@ -1,11 +1,6 @@
 import { z } from "zod";
 import { timestampSchema } from "../../../contracts";
-import {
-  type V2Intake,
-  type V2UserMessage,
-  v2SummarySchema,
-  v2UserMessageSchema,
-} from "../../../contracts/v2";
+import { type V2Intake, type V2UserMessage, v2SummarySchema } from "../../../contracts/v2";
 import type { Actor, V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2SummaryStagingRepository } from "../../db/v2-summary-staging";
@@ -16,7 +11,7 @@ import { EXTRACTOR_VERSION, type SourceChunk } from "../legal-retrieval/v2/contr
 import { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
 import { conversationMaterialIds, MATERIAL_CONTEXT_BYTES, readMaterialWindow } from "./materials";
 import type { WorkspaceContext } from "./pipeline";
-import { publicStoredMessageSchema } from "./stored-message";
+import { publicStoredMessageSchema, publicStoredUserMessageSchema } from "./stored-message";
 
 /** Korea's request calendar is independent of stored UTC/event timestamps. */
 export function workspaceCalendar(now: string) {
@@ -95,7 +90,7 @@ export async function readWorkspaceContext(
         actor.ownerId,
         row.revision,
         row.encrypted_payload,
-        v2UserMessageSchema,
+        publicStoredUserMessageSchema,
       ),
     ),
   );
@@ -210,7 +205,7 @@ export async function readWorkspaceContext(
   }
   if (!(await repo.findWorkspace(actor, id))) throw new Error("Workspace unavailable");
   const normalized = (message: V2UserMessage) => ({
-    ...message,
+    ...publicStoredUserMessageSchema.parse(message),
     createdAt: "1970-01-01T00:00:00.000Z",
   });
   return {

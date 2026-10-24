@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type {
   V2Fact,
   V2FactReference,
@@ -16,6 +17,11 @@ import {
   v2ToolResultsSchema,
 } from "../../../contracts/v2";
 import {
+  type precedentComparisonSourceSchema,
+  type V2PrecedentComparison,
+  v2PrecedentComparisonSchema,
+} from "../../../contracts/v2/precedent-comparison";
+import {
   reportWorkspaceFactFailure,
   type WorkspaceFactFailure,
 } from "../../dependency-diagnostics";
@@ -23,6 +29,10 @@ import type { ClaimFailure } from "../citation/claim-diagnostics";
 import { type QuotationResolution, resolveQuotationSpans } from "../citation/quotation-spans";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { lookupCatalog } from "../external-tools/catalog";
+import {
+  checkPrecedentComparison,
+  precedentComparisonScore,
+} from "../legal-retrieval/research/comparison";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
@@ -46,6 +56,11 @@ export type WorkspaceContext = {
   calendar?: { localDate: string; timeZone: "Asia/Seoul" };
   intake: V2Intake;
   confirmedSummary: V2Summary | null;
+  precedentComparison?: {
+    basedOnWorkspaceRevision: number;
+    summaryRevision: number;
+    source: z.infer<typeof precedentComparisonSourceSchema>;
+  };
   messages: V2UserMessage[];
   latestMessage: V2UserMessage | null;
   facts: V2Fact[];
@@ -318,6 +333,23 @@ function normalizeNewFacts(context: WorkspaceContext, facts: V2Fact[]) {
 export function workspaceModelInput(input: unknown): unknown {
   if (!input || typeof input !== "object") return input;
   const { sourceRetrieval: _proof, ...rest } = input as Record<string, unknown>;
+  if (rest.precedentComparison) {
+    const context = rest as unknown as WorkspaceContext;
+    return {
+      calendar: context.calendar,
+      facts: context.facts,
+      confirmedSummary: context.confirmedSummary
+        ? {
+            revision: context.confirmedSummary.revision,
+            overview: context.confirmedSummary.overview,
+            unknowns: context.confirmedSummary.unknowns,
+          }
+        : null,
+      precedentComparison: context.precedentComparison,
+      contextCoverage: context.contextCoverage,
+      ...(rest.draftCorrection ? { draftCorrection: rest.draftCorrection } : {}),
+    };
+  }
   return "context" in rest ? { ...rest, context: workspaceModelInput(rest.context) } : rest;
 }
 
@@ -378,7 +410,11 @@ export function createWorkspacePipeline(
     }
   };
   const audit = async (
-    phase: "workspace_questions" | "workspace_summary" | "workspace_chat",
+    phase:
+      | "workspace_questions"
+      | "workspace_summary"
+      | "workspace_chat"
+      | "workspace_precedent_compare",
     context: WorkspaceContext,
     draft: unknown,
     requestId: string,
@@ -469,6 +505,45 @@ export function createWorkspacePipeline(
         !context.latestMessage
       )
         throw new ModelError("POLICY_REJECTED");
+      const comparison = context.precedentComparison;
+      if (comparison) {
+        if (comparison.summaryRevision !== context.confirmedSummary.revision)
+          throw new ModelError("POLICY_REJECTED");
+        return regenerateDraft(context, async (input) => {
+          const raw = await call("workspace_precedent_compare", input, requestId);
+          const draft = checkPrecedentComparison(raw, context.facts, comparison.source);
+          if (!draft) throw new WorkspaceOutputPolicyError("unsupported_fact");
+          if (draft.metrics.some((metric) => prohibited(JSON.stringify(metric))))
+            throw new WorkspaceOutputPolicyError("prohibited_content");
+          await audit("workspace_precedent_compare", context, draft, requestId);
+          const result: V2PrecedentComparison = v2PrecedentComparisonSchema.parse({
+            schemaVersion: "2",
+            criteriaVersion: "1",
+            ...comparison,
+            publishedWorkspaceRevision: comparison.basedOnWorkspaceRevision + 2,
+            checkedAt: new Date().toISOString(),
+            metrics: draft.metrics,
+            ...precedentComparisonScore(draft),
+            factsPartial:
+              !!context.contextCoverage?.factsPartial || !!context.contextCoverage?.summaryPartial,
+          });
+          return {
+            text: "선택한 판례와 사건 사실의 항목별 비교를 마쳤어요. 유사 판례 탭에서 일치한 점과 다른 점, 확인하지 못한 점의 근거를 확인할 수 있어요.",
+            references: [
+              { kind: "official_source" as const, citationId: comparison.source.citation.id },
+            ],
+            citations: [comparison.source.citation],
+            warnings: [],
+            facts: [],
+            parties: [],
+            actions: [],
+            timeline: [],
+            toolResults: [],
+            sourceClaims: [],
+            precedentComparison: result,
+          };
+        });
+      }
       context = {
         ...context,
         sourceLookupPerformed: false,
