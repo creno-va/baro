@@ -8,6 +8,8 @@ import type {
 import { CURRENT_POLICY_VERSIONS } from "@baro/contracts/consent";
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import {
+  FILE_TARGET_UPLOAD_CONSISTENCY,
+  UPLOAD_CONSISTENCY_HEADER,
   V2_LIMITS,
   type V2Coverage,
   v2CoverageSchema,
@@ -282,6 +284,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   scope: SessionScope;
   /** Only opt in when the adapter controls credential changes through this scope. */
   coalesceWrites?: "credential-scope";
+  /** Existing clients keep strict workspace CAS unless their adapter opts in. */
+  completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY;
   signal?: AbortSignal;
   newKey: () => string;
   openUpload: (source: Source, signal: AbortSignal) => Promise<UploadReader>;
@@ -291,6 +295,10 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   recovery?: UploadRecovery;
   onUploadAcknowledged?: (fileId: string) => void;
 }) {
+  const completionHeaders: Record<string, string> =
+    dependencies.completionConsistency === FILE_TARGET_UPLOAD_CONSISTENCY
+      ? { [UPLOAD_CONSISTENCY_HEADER]: FILE_TARGET_UPLOAD_CONSISTENCY }
+      : {};
   const generation = dependencies.scope.snapshot();
   const signal = dependencies.signal
     ? AbortSignal.any([dependencies.signal, dependencies.scope.signal()])
@@ -514,14 +522,18 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
       }
       const manifest = { byteLength: file.size, contentHash, parts };
       progress("checking", file.size);
-      await workspaceJson(
-        request,
+      const completion = workspaceMutation(
         `${base(id)}/files/${encodeURIComponent(session.fileId)}/complete`,
-        workspaceMutation(`${base(id)}/files/${encodeURIComponent(session.fileId)}/complete`, {
+        {
           expectedRevision: await workspaceRevision(id),
           uploadSession: session.uploadSession,
           manifest,
-        }),
+        },
+      );
+      await workspaceJson(
+        request,
+        `${base(id)}/files/${encodeURIComponent(session.fileId)}/complete`,
+        { ...completion, headers: { ...completion.headers, ...completionHeaders } },
       );
       progress("confirming", file.size);
       const result = (await list(id, options)).find((item) => item.id === session.fileId);
@@ -729,7 +741,11 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
                 uploadSession: session.uploadSession,
                 manifest,
               }),
-              headers: { "content-type": "application/json", "idempotency-key": commit.key },
+              headers: {
+                "content-type": "application/json",
+                "idempotency-key": commit.key,
+                ...completionHeaders,
+              },
             }),
           );
         if (ack.fileId !== operation.fileId)

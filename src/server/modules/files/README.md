@@ -38,6 +38,15 @@ uploads retain conditional interrupted-transfer recovery; no refusal is inferred
 from missing results. Other processing failures remain retryable and retain the
 same upload identity. A corrected file gets a new reservation.
 
+Unversioned completion retains strict workspace CAS and explicit conflict recovery.
+The web adapter opts in to `x-baro-upload-consistency: file-target-v1`. Only that
+version may use the fresh post-probe workspace revision after revalidating the same
+file/upload revision, operation, reservation/bytes, current consent and requesting
+session, plus unchanged workspace status/job/intake/confirmed summary. The request's
+entry CAS and the final atomic file/workspace/part guards still apply. Unsupported
+versions fail before probing. The version does not authorize processing or replace
+format/byte verification. Existing clients send no new header or DTO fields.
+
 Failed writes retain a durable cleanup intent. Deletion revokes access immediately,
 while R2 delete plus negative head and a current journal lease are required for a
 blob receipt. Cleanup of a failed chunk preserves a live upload's reservation.

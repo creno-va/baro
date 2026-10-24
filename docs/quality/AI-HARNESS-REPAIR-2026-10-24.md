@@ -453,3 +453,59 @@ Hono/AES/SQLite load paths passed afterward. Frozen bun ci, validate:quick(serve
 and validate:build/local workerd passed. No schema, mobile/shared DTO, model request,
 quota, execution hold or original provider observation changed. The fix still requires
 its own exact PR/main CI and deployment;054's live results do not attest the new code.
+
+## Actual product files and upload publication race
+
+PR483's exact a076ba4 [CI40088293463](https://github.com/creno-va/baro/actions/runs/40088293463)
+passed before normal merge to6559657. Its [main CI40088503615](https://github.com/creno-va/baro/actions/runs/40088503615)
+and [preview40088744708](https://github.com/creno-va/baro/actions/runs/40088744708)
+passed; ready matched exact655/schema0016 and all9 endpoint checks passed.
+The finite [configuration receipt](./ai-harness-2026-10-24/preview-6559657.json)
+retains its real observation time and remaining unverified scopes.
+
+Before that deployment, the authenticated actual054 product completed chat tool
+selection, regenerated/audited assistant output, encrypted opt-in result retrieval
+and two readable not_configured cards for NTS/TheCheat. No real provider lookup or
+lookup time was invented. Chat attachment of the317-byte synthetic UTF-8 TXT then
+completed upload/processing, queued its message, returned both exact document markers
+and linked the actual stored source. Reader text matched and original download bytes
+exactly matched the local fixture. TXT has one stored page observation; this is not
+evidence of two-page PDF processing or a new OAuth callback.
+
+Exact054 [full40086795098](https://github.com/creno-va/baro/actions/runs/40086795098)
+finished as failure at raw dependency audit: node-forge1.4.0 and Expo CLI's Zod3 retain
+the two high advisories in #339. The repaired workspace browser fixture passed with
+all79 workspace cases; CSP passed7 with1 skipped. Earlier unit/DB/offline/build and
+browser stages completed. The later gitleaks scan/native stages were not reached;
+downloading the scanner binary is not a completed history scan. No successful full
+release receipt was produced and no paid model was called. Preserve the
+[finite failure](./ai-harness-2026-10-24/full-validation-054b1e6.json); do not repeat
+unchanged dependency failures or label the whole run successful.
+
+In actual655, a batch of four synthetic files admitted JPEG and video. JPEG became
+ready; the reader returned the Korean/English marker text and, on its next observation
+page, the visible green triangle. The video remained an unfinished upload after
+CONFLICT; audio and PDF were not yet admitted. Existing file/parts/ledger records and
+remaining browser selections were preserved. No same-condition processing retry was
+performed and these observations are not full multimedia acceptance.
+
+The reproduced upload race occurs when native probing outlives another file's
+workspace revision bump. Complete checked the request's entry revision and reread the
+authorized session after probing, but discarded that current workspace snapshot and
+used the older revision at finishUpload. The new version validates the same upload/file
+revision, operation, reservation/bytes, workspace status/job, intake revision and
+confirmed summary both after probing and before the final atomic CAS. A revision-only
+background publication can complete the same original without repeating probe or PUT;
+new workspace work, changed input/summary/status, deletion and revoked consent still
+reject publication. Stale entry requests and explicit mobile conflict resolution stay
+unchanged. Full local unit validation of the first candidate passed4054 and failed
+the existing strict competing-completion contract once. That contract is preserved:
+unversioned clients retain strict workspace CAS, while the web adapter explicitly
+opts in with x-baro-upload-consistency:file-target-v1. Unknown versions fail before
+probing. No legacy request/response DTO is extended. Both default strict behavior and
+versioned normal/persisted-recovery HTTP clients are tested. The original regression
+failed before the fix and passed afterward with89 targeted
+tests across actual SQL/AES/R2-adapter uploads, signed-session revocation, paid-storage
+boundaries, shared file clients and persisted upload recovery. Fresh CI/deployment and
+the interrupted actual batch remain required; no schema/existing DTO/mobile change is
+part of this repair.

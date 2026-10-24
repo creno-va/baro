@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-24T11:16:23.611Z",
+  "environment": "preview",
+  "scope": "text",
+  "costPolicy": "observation_only",
+  "candidateSha": "6559657ecf9e0e66609c317cdec13e0f45307d8d",
+  "month": "2026-10",
+  "status": "configuration_ready",
+  "checks": {
+    "worker_metadata_available": true,
+    "binding_DB": true,
+    "binding_AI": true,
+    "binding_WORKSPACE_PROCESSING": true,
+    "secret_CASE_DATA_KEY_V1": true,
+    "secret_BETTER_AUTH_SECRET": true,
+    "secret_LAW_API_OC": true,
+    "secret_TURNSTILE_SECRET_KEY": true,
+    "environment_matches": true,
+    "gateway_matches": true,
+    "auth_origin_matches": true,
+    "release_matches": true,
+    "database_matches": true,
+    "budget_cap_setting_valid": true,
+    "application_cost_limits_setting_valid": true,
+    "model_bounds": "secret_present",
+    "runtime_configuration_attested": true,
+    "schema_matches": true,
+    "database_read_available": true,
+    "current_month_active": true,
+    "model_paid_available": false,
+    "model_skus_complete": false
+  },
+  "budgetGroups": {
+    "model": {
+      "available": false,
+      "missingSkus": [
+        "model_input_tokens",
+        "model_output_tokens"
+      ]
+    }
+  },
+  "blockers": [],
+  "warnings": [
+    "model_paid_available_observation_unavailable",
+    "model_skus_complete_observation_unavailable"
+  ],
+  "unverified": [
+    "live-provider-success",
+    "oauth-callbacks",
+    "secret-values",
+    "gateway-credit-and-provider-retention",
+    "legacy-analysis-runtime",
+    "media-storage-vision-capability-metering"
+  ],
+  "workflowRun": "https://github.com/creno-va/baro/actions/runs/40088744708"
+}

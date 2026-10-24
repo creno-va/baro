@@ -1,6 +1,7 @@
 import { expect } from "bun:test";
 import { createFilesClient, type UploadMetadata, type WorkspaceTransport } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
+import type { FILE_TARGET_UPLOAD_CONSISTENCY } from "@baro/contracts/v2";
 import { Hono } from "hono";
 import type { PrivateDownload } from "../../apps/mobile/src/platform/files/download";
 import { createNativeUploadReader } from "../../apps/mobile/src/platform/files/upload-reader";
@@ -15,7 +16,9 @@ const fingerprint = async (value: string) =>
   Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))).toString(
     "hex",
   );
-export async function uploadRecoveryHttpFixture() {
+export async function uploadRecoveryHttpFixture(
+  options: { onProbe?: () => void | Promise<void> } = {},
+) {
   const f = await customerWorkspaceFixture(new Date().toISOString());
   const bytes = new TextEncoder().encode("합성 비공개 원본 byte fixture"),
     objects = new Map<string, Uint8Array<ArrayBuffer>>();
@@ -45,6 +48,7 @@ export async function uploadRecoveryHttpFixture() {
     probe: async (input: { byteLength: number; open(): ReadableStream<Uint8Array> }) => {
       const body = new Uint8Array(await new Response(input.open()).arrayBuffer());
       expect(body).toEqual(bytes);
+      await options.onProbe?.();
       return {
         category: "document" as const,
         format: "txt" as const,
@@ -99,11 +103,19 @@ export async function uploadRecoveryHttpFixture() {
     download: (response: Response, signal: AbortSignal) => Promise<PrivateDownload> = async () => {
       throw new Error("UPLOAD_MUST_NOT_DOWNLOAD");
     },
-    options: { signal?: AbortSignal; ownerId?: string; onAcknowledged?: (id: string) => void } = {},
+    options: {
+      signal?: AbortSignal;
+      ownerId?: string;
+      onAcknowledged?: (id: string) => void;
+      completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY;
+    } = {},
   ) =>
     createFilesClient<UploadMetadata, PrivateDownload>({
       scope: createSessionScope(),
       request,
+      ...(options.completionConsistency
+        ? { completionConsistency: options.completionConsistency }
+        : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       ...(recover
         ? { recovery: { ownerId: options.ownerId ?? f.owner.userId, storage, fingerprint } }
