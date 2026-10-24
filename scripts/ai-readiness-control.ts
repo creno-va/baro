@@ -23,6 +23,14 @@ export const runtimeFailureSchema = z.strictObject({
 const probePhaseSchema = z.enum(["screening", "workspace_questions", "workspace_audit"]);
 export const probeProviderFailureSchema = z.strictObject({
   phase: probePhaseSchema,
+  requestIssue: z
+    .enum([
+      "thinking_configuration",
+      "thinking_output_limit",
+      "unsupported_parameter",
+      "schema_constraint",
+    ])
+    .optional(),
   category: z.enum([
     "provider_schema",
     "provider_model",
