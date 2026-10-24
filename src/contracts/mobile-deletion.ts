@@ -5,6 +5,7 @@ import {
   mobileAuthCodeSchema,
   mobileAuthV2ProviderSchema,
   mobileAuthVerifierSchema,
+  mobileReauthReceiptSchema,
 } from "./mobile-auth";
 
 export const mobileDeletionPrepareSchema = z.strictObject({
@@ -36,3 +37,22 @@ export const mobileDeletionCancelResponseSchema = z.union([
   mobileDeletionOutcomeSchema,
 ]);
 export type MobileDeletionOutcome = z.infer<typeof mobileDeletionOutcomeSchema>;
+
+export const mobileDeletionPrepareReceiptSchema = mobileReauthReceiptSchema.extend({
+  activityProof: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const mobileDeletionActivityRequestSchema = mobileDeletionProofSchema.extend({
+  ownerTag: mobileDeletionOutcomeSchema.shape.ownerTag,
+  startedAt: mobileReauthReceiptSchema.shape.startedAt,
+  activityProof: mobileDeletionPrepareReceiptSchema.shape.activityProof,
+});
+
+/** Authentication activity only. Neither inactive nor missing intent proves an account-deletion outcome. */
+export const mobileDeletionActivitySchema = z.strictObject({
+  contractVersion: z.literal(2),
+  attemptId: mobileAuthAttemptIdSchema,
+  status: z.enum(["active", "inactive"]),
+  outcome: z.literal("unknown"),
+  observedAt: z.iso.datetime(),
+});
+export type MobileDeletionActivity = z.infer<typeof mobileDeletionActivitySchema>;

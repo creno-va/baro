@@ -3,7 +3,7 @@ import { MOBILE_AUTH_CONTRACT_HEADER } from "@baro/contracts/mobile-auth";
 import type { MobileConfig } from "../../../config/environment";
 import { withoutSetCookie } from "./transport";
 
-const completionPath = /^\/api\/mobile\/auth\/deletion\/(?:exchange|status|cancel)$/;
+const completionPath = /^\/api\/mobile\/auth\/deletion\/(?:exchange|status|cancel|activity)$/;
 const denied = () =>
   new ApiError("UNAVAILABLE", "삭제 결과를 확인할 안전한 서버 연결이 필요해요.", true);
 /** Proof-only completion remains independent of every current/native cookie writer and owner generation. */

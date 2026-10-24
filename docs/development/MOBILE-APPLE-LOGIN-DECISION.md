@@ -354,3 +354,40 @@ production build/local workerd와 양 OS Metro export다. native proof/기존 �
 화면은 여전히 기존3사이며 삭제 factory/SecureStore namespace·owner별 정리와 cold/warm
 반환 분기·공식 Apple 버튼을 함께 조립한 뒤 capability 기반 UI를 노출한다. 미확정·만료
 기록의 사용자 복구와 실제 설정/두 OS 기기 검증도 남아 있다.
+
+## 만료된 삭제 인증 시도의 관측 계약
+
+`x-baro-deletion-activity: 1`을 명시한 capability 요청에만 `deletionActivity: 1`을
+추가한다. 같은 기능을 협의한 prepare에만 `activityProof`를 추가한다. 기본 응답과
+contract2 header만 사용하는 기존 strict v2 응답은 기존 필드 집합을 유지한다.
+공통 client는 협의된 signed receipt가 없으면 실패하며 기존 응답으로 재시도하지 않는다.
+
+activity proof는 원래 issuer·삭제 목적·attemptId·challenge·ownerTag·서버 startedAt에
+결합한 HKDF/HMAC이다. 원래 verifier와 함께 무세션 completion 전송으로만 사용한다.
+로그인·세션·삭제 권한이나 제공자 토큰이 아니며 새 DB schema/보관 namespace를 만들지
+않는다. 운영 secret 교체로 검증할 수 없으면 관측 실패로 남긴다.
+
+`POST /api/mobile/auth/deletion/activity`는 서명을 먼저 검증하므로 불명 nonce를 임의로
+조회할 수 없다. 유효한 원래 proof로 확인한 현재 시도가 없으면 `inactive`를 반환한다.
+기한 안의 시도는 수정 없이 `active`다. 만료된 삭제 시도는 원래 암호문과 일치하는
+행만 CAS로 정리한다. 이미 callback이 guard를 얻었어도 DB 삭제 batch와 정리가 하나의
+승자를 갖도록 하며 CAS 충돌은 최대 두 번만 확인한다. 일반 재인증 행·실제 삭제 원장과
+영수증은 정리하지 않는다. 인증·code·삭제 영수증의 기존 10분 TTL은 늘리지 않는다.
+
+응답은 `observedAt` 당시의 인증 활동만 나타내며 `outcome`은 항상 `unknown`이다.
+`inactive`는 계정 삭제 성공·실패·취소나 nonce의 영구 취소를 증명하지 않는다. 확인된
+accepted/cancelled 결과가 있으면 그 결과를 보존한다. 실제 삭제가 먼저 완료됐지만
+영수증이 만료된 경우도 `inactive/unknown`이며 성공을 추정하지 않는다.
+
+후속 native 소비는 저장소 용량·중복·같은 owner pending을 먼저 검사하고, 새 UUID로
+prepare한 signed receipt 전체를 durable 저장/readback한 뒤에만 OAuth를 시작한다.
+prepare 응답 유실이나 저장 실패 때는 OAuth를 시작하지 않는다. 이미 저장한 미확정
+기록은 만료·다른 owner 때문에 자동 제거하지 않는다. 명시적 결과 재확인 후 서버가
+관측한 inactive 상태와 원래 시각을 보존하고, 새 UUID로 별도 삭제를 시작할 수 있게 한다.
+서명 없는 과거 미확정 기록은 그대로 unknown이다. UI 조립은 별도 draft PR482에 있다.
+
+합성 HTTP/실제 로컬 SQLite 검증은 기존 응답 호환, 서명·verifier·owner·환경 변조,
+일반 재인증 보존, callback/만료 정리의 양쪽 승자와 rollback, DB 오류의 안전한 응답을
+검사한다. frozen install, quick(공통487·RN90·server262), 전체 unit4071/377파일/
+171751 assertions, production build/local workerd, 양 OS Metro export가 통과했다.
+실제 Apple 로그인·SecureStore·OS callback 성공이나 공개 출시 증거는 아니다.
