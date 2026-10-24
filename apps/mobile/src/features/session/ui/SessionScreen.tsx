@@ -24,6 +24,7 @@ export function SessionScreen({
   onReadReauthentication,
   onSettings,
   onProfile,
+  onCases,
 }: {
   state: SessionState;
   onRole: (role: AccountType) => void;
@@ -38,6 +39,7 @@ export function SessionScreen({
   onReadReauthentication?: () => void;
   onSettings?: () => void;
   onProfile?: () => void;
+  onCases?: () => void;
 }) {
   return (
     <Screen>
@@ -144,6 +146,16 @@ export function SessionScreen({
           </Text>
           <Text variant="muted">변호사 목록에서 프로필을 살펴보고 직접 연락할 수 있어요.</Text>
           <Button label="이용 상태 다시 확인" onPress={onRetry} />
+          {onCases &&
+          state.session.user.accountType === "customer" &&
+          !state.session.needsConsent ? (
+            <Button
+              variant="primary"
+              label="내 사건 정리 계속하기"
+              disabled={state.busy}
+              onPress={onCases}
+            />
+          ) : null}
         </Card>
       ) : null}
       {state.phase === "ready" || state.phase === "consent" ? (

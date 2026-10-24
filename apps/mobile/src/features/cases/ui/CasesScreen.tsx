@@ -296,7 +296,7 @@ export function CasesScreen({
               <Text variant="heading" accessibilityRole="header">
                 저장된 요약
               </Text>
-              {item.stage === "summary" ? (
+              {item.stage === "summary" || item.stage === "active" ? (
                 <>
                   <TextField
                     label="사건 요약"
@@ -352,18 +352,16 @@ export function CasesScreen({
                   />
                 </>
               ) : (
-                <>
-                  <Text>{item.summary || "사건 기록이 저장됐어요."}</Text>
-                  {item.schemaVersion === "2" && onWorkspace ? (
-                    <Button
-                      variant="primary"
-                      label="사건 작업공간 열기"
-                      disabled={state.busy || state.deleteUncertain}
-                      onPress={() => onWorkspace(item.id)}
-                    />
-                  ) : null}
-                </>
+                <Text>{item.summary || "사건 기록이 저장됐어요."}</Text>
               )}
+              {item.schemaVersion === "2" && item.stage !== "summary" && onWorkspace ? (
+                <Button
+                  variant="primary"
+                  label="사건 작업공간 열기"
+                  disabled={blocked}
+                  onPress={() => onWorkspace(item.id)}
+                />
+              ) : null}
               {item.summaryDetails?.notices.map((notice) => (
                 <Text key={notice} variant="muted">
                   {notice}

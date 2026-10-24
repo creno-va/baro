@@ -51,6 +51,7 @@ function ConnectedSession({ model }: { model: SessionModel }) {
       onBrowse={() => router.push("/directory")}
       onSettings={() => router.push("/settings")}
       onProfile={() => router.push("/profile")}
+      onCases={() => router.replace("/cases")}
       onPolicy={(policy) => {
         void model.openPolicy(policy);
       }}
