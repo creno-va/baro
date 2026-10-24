@@ -715,10 +715,10 @@ after deployment success; production is unchanged.
 In the same authenticated synthetic product case, the retained208526B English
 audio now reached ready. The reader shows full0–6.515s processed coverage and
 three actual STT observations:0–1.32s “This is Synthetic Speech”,2–3.3s
-“Blue Box17”,4–5.6s “Green Triangle9” (spacing/case as rendered). Both marker
+“Blue Box 17”,4–5.6s “Green Triangle 9” (as rendered). Both marker
 values match the synthetic TTS ground truth; digit normalization differs from the
 spoken word spelling. The26KB two-page PDF also reached ready: both pages are
-processed, Korean text is intact, BLUE BOX17/ORANGE CIRCLE42 and the final
+processed, Korean text is intact, BLUE BOX 17/ORANGE CIRCLE 42 and the final
 END OF SYNTHETIC DOCUMENT marker are present at their correct pages. Local
 private screenshots retain the actual UI, not a fixture-backed browser mock.
 The original failed attempts and all source bytes are retained. Video is now
@@ -748,3 +748,7 @@ fixtures and60 scripted v2 scenarios have zero critical findings. These are
 scripted checks; actual prompt2.5 legal-chat quality remains unverified. Broad
 validation, exact-head CI and a changed-source actual lookup acceptance remain
 required before claiming this response is fixed.
+
+Prompt2.5 on b4e-integrated source passes frozen install, quick305, full unit4217
+across386 files/172812 assertions and build/local built Worker. No actual prompt2.5
+provider success is inferred from these checks.
