@@ -1262,3 +1262,27 @@ specialized audit wires and corpus workspace-v2-3. Focused109 tests and scripted
 50+60 evaluations passed; these are offline and do not establish live quality.
 A fixture adapter initially failed to recognize specialized audit prompts; it was
 fixed to select by the actual server phase before the successful evaluation.
+
+### 2026-10-25 web chat progressive presentation (#523)
+
+On main2803b4f6, PR521 exact51eb8eed CI40133811797 and main CI40134066365
+passed. Intake fix final offline checks: quick549/46files/5089 assertions,
+unit4339/395files/174306 assertions, production build/dry-run/local workerd,
+product50/workspace60 fixed scenarios with zero deterministic critical findings.
+Same-source actual latency acceptance remains separate.
+
+The next isolated web change reveals only a newly published validated assistant
+answer in complete Korean/emoji graphemes. Historical messages, reloads and
+explicitly loaded history show their full saved text. Users can show the whole
+answer immediately; reduced-motion and switching away finish presentation without
+replaying it. Following stops when the user scrolls to earlier text. Source/tool
+cards retain their original validated data and owner boundaries. This is bounded
+presentation after generation/audit, not streamed unvalidated provider tokens or
+a claim that the model's first-response wait has disappeared.
+
+Eleven synthetic browser scenarios passed, including Unicode boundaries, immediate
+completion/reload without duplicate messages, reduced-motion changes, earlier
+reading scroll preservation, failed pending-refresh recovery with an unsent draft,
+attachment processing/retry/consent and owner-change purging. Quick549 and
+production build/dry-run/local workerd passed. No provider calls or real customer
+content were used in these browser tests. No shared styles/DTO/RN/landing changed.

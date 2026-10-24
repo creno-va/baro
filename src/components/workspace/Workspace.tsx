@@ -34,6 +34,7 @@ import { CaseNavigation } from "./CaseNavigation";
 import { ChatAttachments } from "./ChatAttachments";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
+import { ProgressiveReply } from "./ProgressiveReply";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { SourceCards } from "./SourceCards";
 import { referenceLabel, timelineDateLabel } from "./source-label";
@@ -94,6 +95,9 @@ export function Workspace({
   evidenceOnly?: boolean;
 }) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
+  const previousMessages = useRef<Map<string, string> | null>(null);
+  const newestMessageAt = useRef("");
+  const [progressiveIds, setProgressiveIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
@@ -157,6 +161,9 @@ export function Workspace({
     acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     sendAttempt.current = null;
+    previousMessages.current = null;
+    newestMessageAt.current = "";
+    setProgressiveIds(new Set());
     setView(null);
     setDraft("");
     setSelected([]);
@@ -197,7 +204,23 @@ export function Workspace({
     [deny],
   );
 
-  const apply = useCallback((next: WorkspaceView) => {
+  const apply = useCallback((next: WorkspaceView, animateNew = true) => {
+    const previous = previousMessages.current;
+    if (previous && animateNew) {
+      const added = next.messages.filter(
+        (message) =>
+          message.role === "assistant" &&
+          message.status === "complete" &&
+          (previous.get(message.id) === "pending" ||
+            (!previous.has(message.id) && message.createdAt >= newestMessageAt.current)),
+      );
+      if (added.length) setProgressiveIds((ids) => new Set([...ids, ...added.map((m) => m.id)]));
+    }
+    previousMessages.current = new Map(next.messages.map((m) => [m.id, m.status]));
+    newestMessageAt.current = next.messages.reduce(
+      (latest, m) => (m.createdAt > latest ? m.createdAt : latest),
+      newestMessageAt.current,
+    );
     setView(next);
     setChatAttachments((files) =>
       files.map((file) => next.files.find((item) => item.id === file.id) ?? file),
@@ -207,6 +230,17 @@ export function Workspace({
       ids.filter((id) => next.files.some((file) => file.id === id && file.status === "ready")),
     );
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
+  }, []);
+  const followReply = useCallback(() => {
+    if (followingChat.current)
+      chatEnd.current?.scrollIntoView({ block: "end", behavior: "instant" });
+  }, []);
+  const finishReply = useCallback((id: string) => {
+    setProgressiveIds((ids) => {
+      const next = new Set(ids);
+      next.delete(id);
+      return next;
+    });
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
   const readView = useCallback(
@@ -489,7 +523,7 @@ export function Workspace({
             void run("history", async (epoch) => {
               const next = await api.workspace.loadMore(caseId, collection);
               if (!(await verify()) || !current(epoch)) return;
-              apply(next);
+              apply(next, false);
             })
           }
         >
@@ -1049,7 +1083,16 @@ export function Workspace({
                             })}
                           </time>
                         </div>
-                        <p>{message.text}</p>
+                        {message.role === "assistant" && message.status === "complete" ? (
+                          <ProgressiveReply
+                            text={message.text}
+                            animate={progressiveIds.has(message.id)}
+                            onProgress={followReply}
+                            onComplete={() => finishReply(message.id)}
+                          />
+                        ) : (
+                          <p>{message.text}</p>
+                        )}
                         {message.role === "assistant" && message.status === "complete" && (
                           <ToolResults caseId={caseId} messageId={message.id} />
                         )}
