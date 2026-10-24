@@ -1,0 +1,49 @@
+{
+  "toolingSourceSha": "ae6aeccaba21534c011d72fdc2d810b186757d0f",
+  "phase": "directory-input-ready",
+  "code": "ANDROID_DIRECTORY_COMMAND_FAILED",
+  "emulatorBootVerified": true,
+  "lastHomeObservation": {
+    "titleVisible": true,
+    "firstCardVisible": true,
+    "foundationErrorVisible": false
+  },
+  "lastPublicObservation": null,
+  "lastDirectoryInputObservation": {
+    "stage": "ready",
+    "display": {
+      "width": 1080,
+      "height": 2400,
+      "rotation": 0,
+      "imeSourceObserved": true,
+      "keyboardVisible": false,
+      "keyboardTop": null
+    },
+    "displayShape": {
+      "outputWithinBound": true,
+      "controllerCount": 1,
+      "displayFrameCount": 1,
+      "displayFrameMarkerCount": 1,
+      "rawDisplayFrameMarkerCount": 1,
+      "rawStateCount": 1,
+      "rawDisplayFrameCount": 1,
+      "rawSectionFound": true,
+      "rawImeMarkerCount": 1,
+      "rawImeSourceCount": 1,
+      "allImeSourceCount": 2
+    },
+    "softwareSearchBeforeTap": null,
+    "input": null
+  },
+  "lastGuideObservation": null,
+  "lastAuthObservation": null,
+  "lastChromeFixture": null,
+  "receiptValidationFields": [],
+  "publicScreenshotsSuppressed": true,
+  "emulatorStartupIssues": [],
+  "sdkHomeLaunchVerified": true,
+  "largeFontVerified": false,
+  "physicalDeviceVerified": false,
+  "storeSigned": false,
+  "deployed": false
+}

@@ -1,0 +1,16 @@
+{
+  "toolingSourceSha": "ae6aeccaba21534c011d72fdc2d810b186757d0f",
+  "binarySourceSha": "b3eea741010b572158a01fc50b51e58aa13344c6",
+  "failureSha256": "b30fae5fbdf215b38b2142c8a01164d36edcbd1b80c06a9dcc39bff8c9cbe26e",
+  "freshSdkMetadataReceiptVerified": true,
+  "actualCertificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+  "originalApkAndCompilerReceiptMatched": true,
+  "homeReceiptAndPngMatched": true,
+  "phase": "directory-input-ready",
+  "code": "ANDROID_DIRECTORY_COMMAND_FAILED",
+  "softwareSearchReached": false,
+  "exactCommandAndCauseKnown": false,
+  "unchangedRetryPerformed": false,
+  "productJourneysVerified": false,
+  "physicalDeviceVerified": false
+}
