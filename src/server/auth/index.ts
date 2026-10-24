@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { authSchema } from "../db/schema";
+import { createAppleIdentityBinding } from "./apple-identity";
 import { parseAuthEnvironment } from "./env";
 import { createNativeExpoIntegration, nativeAuthCallbackBase } from "./native-expo";
 import { AUTH_RETENTION_MS, SESSION_EXPIRES_SECONDS, SESSION_UPDATE_SECONDS } from "./policy";
@@ -28,7 +29,7 @@ function createConfiguredAuth(env: Env) {
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
     trustedOrigins: [origin, ...(nativeCallback ? [`${new URL(nativeCallback).protocol}//`] : [])],
-    plugins: [createNativeExpoIntegration(env)],
+    plugins: [createAppleIdentityBinding(), createNativeExpoIntegration(env)],
     onAPIError: { errorURL: `${origin}/login` },
     // Adapter errors can include SQL parameters and provider tokens; keep them out of logs.
     logger: { disabled: true },
