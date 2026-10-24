@@ -1,6 +1,6 @@
 # 모바일 한국어 입력 인수
 
-2026-10-24 / #379·#334. 현재 상태는 **첫 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
+2026-10-25 KST / #379·#334. 현재 상태는 **두 실제 실행의 Settings 제어 탐색 실패, 한글 입력 미도달**이다.
 기존 source6201112의 두 OS ASCII 입력/실제 software Search·회전 성공과
 source9436e77의3사 인증 취소 성공을 한국어 IME 인수로 확대하지 않는다.
 
@@ -65,10 +65,40 @@ PR493/head6710f03의 CI40100949478 성공 뒤 main808a643/main CI40101102035에�
 PNG는 별도로 읽어 anonymous Home을 검토했으나 원래 homeContentVerified=false와
 visualReviewRequired=true를 수정하지 않는다. 이후 raw hierarchy/xcresult/설정 화면 캡처는 없다.
 
-후속 도구는 Add New Keyboard의 ellipsis/세 점/생략 표기만 허용하는 고정 목록을 사용한다.
+PR495 도구는 Add New Keyboard의 ellipsis/세 점/생략 표기만 허용하는 고정 목록을 사용한다.
 기존 cell/button과 같은 제어의 유일한 caption text를 조회하며, 복수 후보·서로 겹치지 않는
 별도 제어·hittable 부재는 실패다. known label 밖의 fuzzy selector나 임의 좌표 탭은 없다.
 기존12회 scroll 상한을 유지하고 매 단계 후보8개를 넘으면 즉시 실패한다. 최종 후보의
 종류/개수·scroll 수만 제한된 diagnostic으로 남기며 raw label/frame/개인정보는 내보내지
 않는다. 제품 앱·타이핑 값·조합 checkpoint·회전·성공 조건을 바꾸지 않는다. 새 조건의 실제
 성공은 CI/main 이후 후속이며, 원본 실패를 지우거나 같은 조건으로 재실행하지 않았다.
+
+## 두 번째 실행의 caption 모호성
+
+PR495/main81e504f·CI40103566104 성공 뒤
+[actual40103849176](https://github.com/creno-va/baro/actions/runs/40103849176)은 **FAILURE**였다.
+iPhone16/iOS26.5에서 원본9436/metadata·native cold2는 대조했지만 Settings `keyboard-list`의
+cell1/button1/text2가 기존 모든 유형≤1 조건에서 ambiguous로 거절됐다. caption 두 개를
+거절한 경로는 확인됐으며, actionable owner의 실제 geometry·정확한 OS label 배치와 제품
+입력 실패는 확인되지 않았다. 조합 checkpoint는0이고 같은 조건으로 재실행하지 않았다.
+
+[원래 실패](./mobile-native-9436e77/ios-korean-40103849176/failure.json),
+[Home 영수증](./mobile-native-9436e77/ios-korean-40103849176/home.json),
+[재검증](./mobile-native-9436e77/ios-korean-40103849176/verification.json),
+[탐색 전 PNG](./mobile-native-9436e77/ios-korean-40103849176/home-ios.png)와
+[로컬 결합](./mobile-native-9436e77/ios-korean-40103849176/local-preservation.json)을 그대로 보존한다.
+원래 Home homeContentVerified=false/visualReviewRequired=true와 전체 미완료 범위를 바꾸지 않는다.
+
+후속은 cell/button의 유일한 actionable owner를 먼저 확인하고 두 유형이 있으면 면적의
+95% 이상 겹치는 같은 제어인지 검사한다. 그 owner가 없을 때만 유일한 caption을 사용한다.
+분리된 owner·중복 owner와 owner가 없는 다중 caption은 계속 거절한다. text 후보가 있다는
+이유로 다른 위치의 owner를 무시하거나 임의 좌표를 탭하지 않는다. 후보8개/scroll12·고정
+label·capture 차단·원문 미출력·조합/검색/회전 성공 조건은 유지한다.
+
+실제 Swift 판단 함수를 별도 Apple Foundation/CoreGraphics probe로 컴파일해 synthetic
+rectangle12조건(중복 caption/유일 owner, 분리·중복 owner, caption-only/없음,95% 경계,
+후보 상한)을 확인한다. UIKit/Settings/runtime 성공은 아니며 owned macOS workflow에서
+이 검사를 필수로 통과해야 실제 관측을 시작한다. 신규 diagnostic은 ownersOverlap boolean을
+남기고 기존 field가 없던 실패 기록은 당시 규칙으로 읽어 과거 관측을 재해석하지 않는다.
+새 조건의 실제 실행은 정확한 CI/main 뒤다. UI PR496은 앱 입력을 바꾸므로 tooling의
+원본9436 trial을 먼저 dispatch한 뒤 별도 통합·새 컴파일/pin으로 인수한다.

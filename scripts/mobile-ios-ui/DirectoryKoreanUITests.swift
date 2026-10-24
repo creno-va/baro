@@ -1,10 +1,30 @@
 import XCTest
 import UIKit
 
+// BARO_KOREAN_SETTINGS_OWNER_BEGIN
+private func koreanSettingsOwnerChoice(cells: [CGRect], buttons: [CGRect], texts: [CGRect]) -> (selection: String, ownersOverlap: Bool) {
+  guard [cells.count, buttons.count, texts.count].allSatisfy({ $0 <= 8 }) else { return ("ambiguous", false) }
+  let primaryOwner = cells.first ?? buttons.first
+  let owners: [CGRect] = cells + buttons
+  let ownersOverlap: Bool
+  if let primary = primaryOwner {
+    ownersOverlap = owners.allSatisfy { (frame: CGRect) -> Bool in
+      let area = frame.width * frame.height, shared = frame.intersection(primary)
+      return area > 0 && shared.width * shared.height >= Swift.min(area, primary.width * primary.height) * 0.95
+    }
+  } else { ownersOverlap = true }
+  guard cells.count <= 1 && buttons.count <= 1 && ownersOverlap else { return ("ambiguous", ownersOverlap) }
+  if !cells.isEmpty { return ("cell", ownersOverlap) }
+  if !buttons.isEmpty { return ("button", ownersOverlap) }
+  if texts.count == 1 { return ("text", ownersOverlap) }
+  return (texts.isEmpty ? "none" : "ambiguous", ownersOverlap)
+}
+// BARO_KOREAN_SETTINGS_OWNER_END
+
 // Appended to DirectoryUITests.swift in the owned runner only. No product changes.
 extension BaroDirectoryUITests {
   @MainActor
-  private func settingsControl(_ aliases: [String], in settings: XCUIApplication) -> (element: XCUIElement?, cells: Int, buttons: Int, texts: Int, selection: String) {
+  private func settingsControl(_ aliases: [String], in settings: XCUIApplication) -> (element: XCUIElement?, cells: Int, buttons: Int, texts: Int, selection: String, ownersOverlap: Bool) {
     let predicates = aliases.flatMap { label in [NSPredicate(format: "label == %@", label), NSPredicate(format: "label BEGINSWITH %@", label + ",")] }
     let predicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
     let cellQuery = settings.cells.matching(predicate), buttonQuery = settings.buttons.matching(predicate)
@@ -17,15 +37,17 @@ extension BaroDirectoryUITests {
     }
     let cells = visible(cellQuery), buttons = visible(buttonQuery), texts = visible(textQuery)
     let counts = (cells.count, buttons.count, texts.count)
-    guard [counts.0, counts.1, counts.2].allSatisfy({ $0 <= 1 }) else { return (nil, counts.0, counts.1, counts.2, "ambiguous") }
-    guard let primary = cells.first ?? buttons.first ?? texts.first else { return (nil, 0, 0, 0, "none") }
-    // Same-control aliases must overlap. A matching title elsewhere is not a fallback target.
-    let sameControl = (cells + buttons + texts).allSatisfy { candidate in
-      let frame = candidate.frame, area = frame.width * frame.height, shared = frame.intersection(primary.frame)
-      return area > 0 && shared.width * shared.height >= min(area, primary.frame.width * primary.frame.height) * 0.95
+    // Cell/button are actionable owners. Unscoped static captions cannot veto or
+    // replace a unique owner; they are a fallback only when no owner exists.
+    let choice = koreanSettingsOwnerChoice(cells: cells.map { $0.frame }, buttons: buttons.map { $0.frame }, texts: texts.map { $0.frame })
+    let element: XCUIElement?
+    switch choice.selection {
+    case "cell": element = cells.first
+    case "button": element = buttons.first
+    case "text": element = texts.first
+    default: element = nil
     }
-    guard sameControl else { return (nil, counts.0, counts.1, counts.2, "ambiguous") }
-    return (primary, counts.0, counts.1, counts.2, !cells.isEmpty ? "cell" : (!buttons.isEmpty ? "button" : "text"))
+    return (element, counts.0, counts.1, counts.2, choice.selection, choice.ownersOverlap)
   }
 
   @MainActor
@@ -53,7 +75,7 @@ extension BaroDirectoryUITests {
         scrolls += 1
         control = settingsControl(aliases, in: settings)
       }
-      let diagnostic: [String: Any] = ["stage": stage, "cellCount": control.cells, "buttonCount": control.buttons, "textCount": control.texts, "selection": control.selection, "scrolls": scrolls]
+      let diagnostic: [String: Any] = ["stage": stage, "cellCount": control.cells, "buttonCount": control.buttons, "textCount": control.texts, "selection": control.selection, "ownersOverlap": control.ownersOverlap, "scrolls": scrolls]
       if let data = try? JSONSerialization.data(withJSONObject: diagnostic, options: [.sortedKeys]) {
         print("BARO_KOREAN_SETUP_CONTROL:" + String(decoding: data, as: UTF8.self))
       }

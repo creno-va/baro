@@ -241,10 +241,29 @@ const koreanSetupControlSchema = z
     cellCount: z.number().int().min(0).max(8),
     buttonCount: z.number().int().min(0).max(8),
     textCount: z.number().int().min(0).max(8),
+    ownersOverlap: z.boolean().optional(),
     selection: z.enum(["cell", "button", "text", "none", "ambiguous"]),
     scrolls: z.number().int().min(0).max(12),
   })
   .refine((v) => {
+    if (v.ownersOverlap !== undefined) {
+      if (v.cellCount + v.buttonCount <= 1 && !v.ownersOverlap) return false;
+      const ambiguous =
+        v.cellCount > 1 ||
+        v.buttonCount > 1 ||
+        !v.ownersOverlap ||
+        (v.cellCount === 0 && v.buttonCount === 0 && v.textCount > 1);
+      const expected = ambiguous
+        ? "ambiguous"
+        : v.cellCount === 1
+          ? "cell"
+          : v.buttonCount === 1
+            ? "button"
+            : v.textCount === 1
+              ? "text"
+              : "none";
+      return v.selection === expected;
+    }
     const sum = v.cellCount + v.buttonCount + v.textCount;
     if (v.selection === "none") return sum === 0;
     if (v.selection === "ambiguous") return sum >= 2;

@@ -145,6 +145,11 @@ jobs:
         env:
           BARO_IOS_DIRECTORY_SIGNATURE_REQUIRED: '1'
         run: bun test tests/mobile-ios-directory-signature.test.ts
+      - name: Require Apple Foundation Settings owner policy
+        if: inputs.korean_directory
+        env:
+          BARO_IOS_SETTINGS_OWNER_REQUIRED: '1'
+        run: bun test tests/mobile-ios-korean-settings-owner.test.ts
       - name: Resolve pinned compiler input
         id: input
         run: |
