@@ -1296,3 +1296,21 @@ compiler의 개발 cert attestation은 그대로 보존하며 local cert 독립 
 입력/소프트 Search/회전을 관측한다. compiler 성공은 native 값·Launcher baseline·입력 누락
 해결의 증거가 아니다. iOS40056945553은 이 기록 시점 같은 run에서 컴파일 중이며 성공
 원본/pin 전에는 b3eea74를 native draft 새 앱으로 재사용하지 않는다.
+
+### 같은 native draft 앱의 iOS compiler 원본
+
+이후 같은 source4ba1d39의 [iOS40056945553](https://github.com/creno-va/baro/actions/runs/40056945553)도
+terminal SUCCESS로 끝났다. 성공 run/source·artifact12545939612/name/만료 아님과 [원본 receipt](../quality/mobile-internal-ios-2026-10-24/compiler-receipt-4ba1d39.json)의
+SHA256 `3d8aadcfd5c51143c7bb369de76b6dda0e005659cc8a04e5ced78591a9f939de`를 대조했다.
+ZIP24,102,583bytes의 전체 SHA256은 `b09aa64aeb75c84f01c43f867d993d297c76321cd53de00be5baf6a1edaaae75`다.
+
+[독립 대조](../quality/mobile-internal-ios-2026-10-24/compiler-independent-4ba1d39.json)는 03:29:34.909Z에
+소유 임시 사본에서 actual codesign strict/all-architectures·ad-hoc/No-Team, arm64/x86_64
+Simulator platform·Mach-O XML/DER/서명 entitlements·plist/실행 hash를 원본 control과
+대조했다. 제품 재컴파일/재서명 없이 사본을 삭제했다. HBC3,582,780bytes/6d045006…·graph1465·
+실제 font byte/400·600·700·min16.4/phone+tablet·map/key/profile 부재도 확인했다.
+[중간 inspection](../quality/mobile-internal-ios-2026-10-24/compiler-inspection-4ba1d39.json)의 accepted=false는
+원래대로 보존하고 성공 receipt와 구분한다. 내부 전달 경로 `.wrangler/mobile-delivery/4ba1d39/ios`에도
+원본 ZIP/receipt를 보존한다. 두 OS 성공 pin 통합/exact main CI 뒤 이 native draft 앱으로
+actual 입력/소프트 Search·키보드/회전을 검증한다. metadata/compile 성공을 입력 누락 해결·
+한국어/reader·계정/API·실기기/스토어 성공으로 재명명하지 않는다.
