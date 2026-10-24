@@ -105,3 +105,49 @@ test("create and per-round answers expose labelled fields, unknown/skip choices 
   await fireEvent.press(screen.getByRole("button", { name: "진행 중인 요청 중단" }));
   expect(cancel).toHaveBeenCalledTimes(1);
 });
+
+test("an active case can review and confirm its summary again, while archived cases stay read only", async () => {
+  const confirm = jest.spyOn(actions, "confirm").mockResolvedValue();
+  const save = jest.spyOn(actions, "saveSummary").mockResolvedValue();
+  const onWorkspace = jest.fn();
+  const current: CasesState = {
+    ...state(),
+    view: "detail",
+    summary: "새 자료를 반영한 요약",
+    item: {
+      id: "case_a",
+      title: "합성 사건",
+      revision: 7,
+      schemaVersion: "2",
+      stage: "active",
+      subjectContext: "individual",
+      summary: "새 자료를 반영한 요약",
+      updatedAt: "2026-10-25",
+    },
+  };
+  const view = await render(
+    <CasesScreen
+      state={current}
+      actions={actions}
+      onSession={jest.fn()}
+      onWorkspace={onWorkspace}
+    />,
+    { wrapper },
+  );
+  expect(screen.getByDisplayValue(current.summary)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "수정한 요약 저장" }));
+  await fireEvent.press(screen.getByRole("button", { name: "요약 확인하고 계속" }));
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(confirm).toHaveBeenCalledTimes(1);
+  await fireEvent.press(screen.getByRole("button", { name: "사건 작업공간 열기" }));
+  expect(onWorkspace).toHaveBeenCalledWith("case_a");
+  await view.rerender(
+    <CasesScreen
+      state={{ ...current, item: current.item ? { ...current.item, stage: "archived" } : null }}
+      actions={actions}
+      onSession={jest.fn()}
+    />,
+  );
+  expect(screen.queryByDisplayValue(current.summary)).toBeNull();
+  expect(screen.queryByRole("button", { name: "요약 확인하고 계속" })).toBeNull();
+});
