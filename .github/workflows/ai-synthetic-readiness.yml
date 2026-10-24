@@ -19,6 +19,7 @@ on:
           - all
           - chat_tools
           - native_materials
+          - legal_chat
       candidate_sha:
         description: Exact current main SHA with successful CI; isolated synthetic Worker only
         required: true
@@ -71,6 +72,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           READINESS_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
           READINESS_FEATURE_CASE: ${{ matrix.feature_case }}
+          LAW_API_OC: ${{ matrix.feature_case == 'legal_chat' && secrets.LAW_API_OC || '' }}
         run: bun scripts/run-ai-readiness.ts
       - name: Validate native material processing without model calls
         if: matrix.feature_case == 'native_materials'

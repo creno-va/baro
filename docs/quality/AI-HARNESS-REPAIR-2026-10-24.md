@@ -248,6 +248,24 @@ not a token/cost/latency prediction. JSON Schema roundtrip tests verify required
 fields and closed objects remain enforceable, and server max2 tool requests remains.
 Actual changed-condition chat/tool acceptance is still required.
 
+The compact/native LOW candidate did **not** repair chat. Exact main eb57a03
+[run40077233826](https://github.com/creno-va/baro/actions/runs/40077233826)
+failed its first generation with HTTP400/provider_request after21462ms. Its finite
+receipt is preserved; there was no tool call or independent audit. No unchanged
+condition retry was made.
+
+The next candidate removes numeric range grammar only from chat's provider schema.
+The schema contained17 bounded numbers, including maximum safe-integer revisions,
+UTF-16 spans, frame indices and material ordinals repeated across nested references.
+[Google's structured-output guidance](https://ai.google.dev/gemini-api/docs/structured-output)
+identifies numeric bounds as a cause of excessive constrained-decoder states. This
+is a changed-condition hypothesis, not a confirmed diagnosis. Integer types, closed
+objects, required properties and native LOW remain. The original server Zod schema
+still rejects invalid revisions, ranges and counts before retrieval/publication;
+tests demonstrate that distinction. Other already-accepted feature wire bytes and
+all token, attempt, ownership, consent and quota limits remain unchanged. Actual
+changed-condition acceptance is required before claiming repair.
+
 [Native component40075714391](https://github.com/creno-va/baro/actions/runs/40075714391)
 on3e427aa succeeded through the actual pinned Linux Docker fixture profile, including
 document/office/HEIF, sampled video/audio, sanitization and report-native tests.
@@ -255,3 +273,35 @@ The finite native-materials receipt records actual job times and reference. It i
 not deployed Cloudflare Container/product/OAuth or full/security acceptance. No model
 calls occurred. The manual chat_tools selector lets a changed chat candidate test
 only the four affected cases, retaining each case's durable counter and observations.
+
+[Legal core40076630844](https://github.com/creno-va/baro/actions/runs/40076630844)
+on exact main3e81310 used the existing preview LAW_API_OC through the manual
+environment-readiness adapter. Five actual official API requests returned HTTP200;
+three statute/precedent sources and three exact quotation integrity checks passed.
+The precedent search remained truncated and that limitation is preserved. The
+finite receipt is recorded as preview-credential-ci-adapter/runtimeWorker=false;
+this is source adapter evidence, not Gemini legal chat or product acceptance. The
+known pending guide was excluded rather than retried under unchanged conditions.
+
+The separate manual legal_chat case tests a single public request (민법 제598조)
+through the actual Workers workspace pipeline: Gemini requests the source, the
+existing legal-retrieval module fetches and verifies it, the regenerated answer's
+quotation/spans are validated, then an independent Gemini audit must pass. A passed
+receipt requires actual HTTP reservations, a verified source, an accepted quotation
+and a final audit; a schema-valid answer alone cannot pass. The existing durable
+model cap remains3 and official HTTP requests are capped9. Other statutes, guides,
+precedents and private queries are refused before HTTP in this isolated diagnostic.
+
+Only this selected case temporarily receives the existing legal credential on the
+isolated probe Worker. The runner deletes that Worker secret in finally and marks
+cleanup failure as failure; product secrets are never changed. Fixed-scope deletion,
+off-scope zero HTTP, bounded failed requests, finite reports and replay/provenance
+checks have offline coverage. No issued keys or actual success is claimed for the
+four external services that the user confirmed are not yet provisioned.
+
+Web legal citations now show a separate title/original-link card next to the
+external-tool cards, using only the existing public citation fields. No verification
+timestamp or effective date is inferred from fields that this view does not carry.
+The isolated browser fixture labels its synthetic citation, checks the exact
+original link and clickability, and audits desktop/mobile overflow/accessibility.
+This UI fixture is not evidence of an actual verified legal answer.
