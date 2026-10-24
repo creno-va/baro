@@ -142,7 +142,11 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
 
 /** Identity only: neither byte length nor this digest proves a token/vision cost bound. */
 export async function gatewayWireIdentity(wireInput: ReturnType<typeof prepareGatewayWireInput>) {
-  const wireBytes = new TextEncoder().encode(JSON.stringify(providerWire(wireInput)));
+  return gatewayTransportIdentity(providerWire(wireInput));
+}
+/** Identity for an already-built transport, including offline captured replays. */
+export async function gatewayTransportIdentity(input: Record<string, unknown>) {
+  const wireBytes = new TextEncoder().encode(JSON.stringify(input));
   const digest = await crypto.subtle.digest("SHA-256", wireBytes);
   return {
     inputBytes: wireBytes.byteLength,

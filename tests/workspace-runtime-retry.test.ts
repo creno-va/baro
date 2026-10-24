@@ -7,6 +7,7 @@ import type { WorkspaceParams } from "../src/server/modules/workspace/execution"
 import { createWorkspaceService } from "../src/server/modules/workspace/service";
 import { createWorkspaceDependencies, runWorkspaceRuntime } from "../src/server/runtime/workspace";
 import { createTestDatabase } from "./helpers/d1";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
 import { seedTestSession } from "./helpers/session";
 
@@ -59,8 +60,8 @@ test.each(["MODEL_UNAVAILABLE", "POLICY_REJECTED"] as const)(
             modelCalls++;
             if (providerFail && failure === "MODEL_UNAVAILABLE")
               throw Object.assign(new Error("Synthetic provider error"), { status: 401 });
-            const audit = input.response_format.json_schema.name.includes("workspace_audit");
-            expect(JSON.stringify(input.response_format)).not.toContain('"oneOf"');
+            const audit = syntheticGatewayInput(input).phase === "workspace_audit";
+            expect(JSON.stringify(input)).not.toContain('"oneOf"');
             return {
               id: "synthetic-provider-request",
               service_tier: "default",
