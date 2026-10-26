@@ -41,6 +41,10 @@
   full40386960386/exactmain483b45f는 전체Bun4381·DB·eval·build 뒤 모바일 보내기 아래856px로
   실패했다. 새 후보의 같은 단언과 제품 UI12개가 통과했고 메뉴2행/6개 전체 노출도 검사했다.
   이 full의 후속 브라우저/CSP/audit/Gitleaks/native와 실제 배포 인수는 성공으로 기록하지 않는다.
+- #551 `codex/551-secret-scan`: full의 scanner 단계가 설치만 하던 공백을 실제 조기 실행으로
+  보완한다. 별도 전체 이력 스캔의 공개 checksum/commit·SRI 검증 vendor 구문20탐지/8개
+  정확한 역사 fingerprint만 분류했다. [근거/검증](../quality/SECRET-SCAN-2026-10-27.md)의
+  이력0·새 commit canary 탐지·workflow11이 통과했다. raw high2와 실제 릴리스 조건은 유지한다.
 
 
 - Reviewed: 2026-10-15 KST
