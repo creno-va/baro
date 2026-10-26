@@ -143,7 +143,11 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         const positions = await page
           .locator(".workspace-tabs a")
           .evaluateAll((links) => links.map((e) => Math.round(e.getBoundingClientRect().top)));
-        expect(new Set(positions).size).toBe(1);
+        expect(new Set(positions).size).toBe(width <= 640 ? 2 : 1);
+        const destinations = page.locator(".workspace-tabs a");
+        await expect(destinations).toHaveCount(6);
+        for (const destination of await destinations.all())
+          await expect(destination).toBeInViewport({ ratio: 1 });
       }
       if ([390, 901, 1440].includes(width))
         await page.screenshot({
