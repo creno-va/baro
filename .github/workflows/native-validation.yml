@@ -1,0 +1,65 @@
+name: Offline native validation (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Full main SHA for existing offline container fixtures (no provider credentials)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-native-validation-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Offline file processor fixtures
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+    steps:
+      - name: Validate explicit main candidate
+        run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify exact checkout and main ancestry
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: apps/mobile/.node-version
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Run unchanged offline native profile
+        run: bun run validate:native
+      - name: Record scoped success
+        run: |
+          mkdir -p .wrangler/offline-native-validation
+          node <<'NODE'
+          const fs = require("node:fs");
+          if (!/^[a-f0-9]{40}$/.test(process.env.TARGET_SHA)) throw Error("NATIVE_VALIDATION_SOURCE_REQUIRED");
+          fs.writeFileSync(".wrangler/offline-native-validation/receipt.json", JSON.stringify({sourceSha:process.env.TARGET_SHA, kind:"offline-file-processor-native-profile", profile:"native", profilePassed:true, fullValidationPassed:false, providerAcceptanceVerified:false, appRuntimeVerified:false, deployed:false}, null, 2)+"\n", {flag:"wx"});
+          NODE
+      - name: Retain scoped native receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: offline-native-validation-${{ inputs.target_sha }}
+          path: .wrangler/offline-native-validation/receipt.json
+          if-no-files-found: error
+          retention-days: 14

@@ -45,6 +45,13 @@
   보완한다. 별도 전체 이력 스캔의 공개 checksum/commit·SRI 검증 vendor 구문20탐지/8개
   정확한 역사 fingerprint만 분류했다. [근거/검증](../quality/SECRET-SCAN-2026-10-27.md)의
   이력0·새 commit canary 탐지·workflow11이 통과했다. raw high2와 실제 릴리스 조건은 유지한다.
+- #553 `codex/553-ios-architecture-ci`: API 키 없이 진행 가능한 CI 검증을 보완한다.
+  PR538의 두 iOS 아키텍처 동시 compile40분 취소를 각각 같은40분 matrix로 분리하고
+  실제 binary architecture/platform과 source receipt를 확인한다. Android·기본 universal/
+  runtime 빌드와 native 앱 제품은 보존한다. 기존 파일 처리 native Docker profile도 exact
+  main 수동 workflow로 독립 실행하며 full/실제 provider/배포 성공으로 확대하지 않는다.
+  [관측·합성 검증 경계](../quality/API-FREE-NATIVE-VALIDATION-2026-10-27.md)를 따르고
+  실제 CI 성공 뒤에만 병합한다.
 
 
 - Reviewed: 2026-10-15 KST
