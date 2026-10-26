@@ -127,6 +127,13 @@
       "when": 1792865350337,
       "tag": "0017_legacy_analysis_journal",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793032228550,
+      "tag": "0018_external_lookup_admission",
+      "breakpoints": true
     }
   ]
 }

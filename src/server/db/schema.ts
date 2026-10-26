@@ -20,6 +20,7 @@ import {
 export * from "./legacy-ai-schema";
 export * from "./v2-directory-index-schema";
 export * from "./v2-execution-schema";
+export * from "./v2-lookup-schema";
 export * from "./v2-runtime-refresh-schema";
 export * from "./v2-schema";
 export * from "./v2-storage-admission-schema";

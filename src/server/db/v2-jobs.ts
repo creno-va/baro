@@ -507,10 +507,12 @@ export function createV2JobsRepository(core: V2Core) {
           });
           const stored = storedUserMessageSchema.parse({
             ...message,
+            ...(request.lookupRequests ? { lookupRequests: request.lookupRequests } : {}),
             ...(chat.precedentComparisonRequest
               ? { precedentComparisonRequest: chat.precedentComparisonRequest }
               : {}),
           });
+          if (stored.lookupRequests && stored.precedentComparisonRequest) return false;
           if (
             stored.precedentComparisonRequest &&
             stored.precedentComparisonRequest.expectedRevision !== g.expectedRevision

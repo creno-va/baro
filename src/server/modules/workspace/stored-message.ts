@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   v2AssistantMessageSchema,
+  v2LookupRequestsSchema,
   v2MessageSchema,
   v2ToolResultsSchema,
   v2UserMessageSchema,
@@ -12,10 +13,11 @@ import {
 
 export const storedUserMessageSchema = v2UserMessageSchema.extend({
   precedentComparisonRequest: v2PrecedentComparisonRequestSchema.optional(),
+  lookupRequests: v2LookupRequestsSchema.optional(),
 });
 export type StoredUserMessage = z.infer<typeof storedUserMessageSchema>;
 export const publicStoredUserMessageSchema = storedUserMessageSchema.transform((stored) => {
-  const { precedentComparisonRequest: _request, ...message } = stored;
+  const { precedentComparisonRequest: _request, lookupRequests: _lookups, ...message } = stored;
   return v2UserMessageSchema.parse(message);
 });
 
