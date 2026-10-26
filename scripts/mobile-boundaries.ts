@@ -42,6 +42,7 @@ export function sourceImports(source: string): string[] {
 }
 
 export function mobileBoundaryFindings(path: string, source: string): string[] {
+  path = path.replaceAll("\\", "/");
   const findings: string[] = [];
   const contract = path.startsWith("src/contracts/");
   const shared = path.startsWith("packages/");

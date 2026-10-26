@@ -67,7 +67,21 @@ test("registry baseline reconstruction demonstrates original failures and strict
     const installed = resolve(root, "node_modules", item.name),
       before = resolve(temporary, item.name);
     await cp(installed, before, { recursive: true });
-    await command(["git", "apply", "--reverse", resolve(root, item.patch)], before);
+    // npm tarball bytes are canonical; a Windows Git installation may otherwise
+    // rewrite patched LF files to CRLF while reconstructing the original tree.
+    await command(
+      [
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+        "apply",
+        "--reverse",
+        resolve(root, item.patch),
+      ],
+      before,
+    );
     expect(await packageTreeHash(before)).toBe(item.beforeTreeSha256);
     for (const file of item.changes)
       expect(bytesHash(await readFile(resolve(before, file.path)))).toBe(file.beforeSha256);
