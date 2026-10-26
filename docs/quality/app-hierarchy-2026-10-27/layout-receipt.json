@@ -7,7 +7,8 @@
     "src/components/workspace/Workspace.tsx": "4f6713675c4e2c0b19b0cd9e5da7ac8fd2bc3f7e0281f238acea31a9206851c5",
     "src/styles/product.css": "0bb9d07cd4a7a720cee09e6b1113e77816c21a6c70f15f133bbdd43f538b4151",
     "src/styles/workspace.css": "7139b34e87255a1f8b07ae4be38904871542b61b4792299998a1387f637df176",
-    "tests/browser/workspace.e2e.ts": "c9ac39633268a2e2b82c7e7ce32558a52e96695b2c16b4ca1b0bf38c5fa0507e"
+    "tests/browser/workspace.e2e.ts": "c9ac39633268a2e2b82c7e7ce32558a52e96695b2c16b4ca1b0bf38c5fa0507e",
+    "tests/browser/product-ui.e2e.ts": "9feaa4cb9d69c978883c360f51879db755125214ccd908857384cfc3ecf8d5d4"
   },
   "landing": [
     {
