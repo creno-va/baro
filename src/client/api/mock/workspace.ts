@@ -262,8 +262,15 @@ export function ensureMockWorkspace(state: WorkspaceMockState, id: string) {
     files: state.files[id],
   } satisfies WorkspaceView;
 }
-function receiptKey(request: Request, body: unknown) {
-  return `${request.method}:${new URL(request.url).pathname}:${request.headers.get("idempotency-key") ?? ""}:${JSON.stringify(body)}`;
+async function receiptKey(request: Request, body: unknown) {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(body)),
+  );
+  const hash = Array.from(new Uint8Array(digest), (value) =>
+    value.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${request.method}:${new URL(request.url).pathname}:${request.headers.get("idempotency-key") ?? ""}:${hash}`;
 }
 export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
   return async function handleWorkspaceMock(request: Request): Promise<Response | null> {
@@ -280,7 +287,8 @@ export function createWorkspaceMock(runtime: WorkspaceMockRuntime) {
       const body =
         request.method === "GET" ? {} : ((await request.json()) as Record<string, unknown>);
       requireMockCase(runtime.read(), id, request.method !== "GET");
-      const key = receiptKey(request, body);
+      const key = await receiptKey(request, body);
+      requireMockCase(runtime.read(), id, request.method !== "GET");
       const replay = runtime.read().workspaceReceipts?.[key];
       if (request.method !== "GET" && replay) return mockResponse(replay);
       const operation =

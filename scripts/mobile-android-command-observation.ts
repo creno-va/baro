@@ -61,7 +61,9 @@ export function androidHierarchyDumpOutcome(
 /** Classify structure only; never return executable, device, arguments, paths or input. */
 export function androidNativeCommandOperation(args: readonly string[]): z.infer<typeof operation> {
   if (
-    args[0]?.split("/").at(-1) !== "adb" ||
+    !["adb", "adb.exe", "adb.cmd"].includes(
+      args[0]?.replaceAll("\\", "/").split("/").at(-1) ?? "",
+    ) ||
     args[1] !== "-s" ||
     !/^emulator-\d{4,5}$/.test(args[2] ?? "") ||
     args[3] !== "shell"

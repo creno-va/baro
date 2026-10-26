@@ -390,6 +390,7 @@
   color: #5c6b80;
 }
 .workspace-composer-footer {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -405,6 +406,53 @@
   border-radius: 10px;
   color: #526176;
   font-size: 0.78rem;
+}
+.workspace-lookup {
+  display: grid;
+  gap: 12px;
+}
+.workspace-lookup__field {
+  display: grid;
+  gap: 8px;
+}
+.workspace-lookup input[type="text"],
+.workspace-lookup select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #c8d2df;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 16px;
+}
+.workspace-lookup__hint,
+.workspace-lookup__consent p {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #526176;
+}
+.workspace-lookup__consent {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f3f6fa;
+}
+.workspace-lookup__consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.6;
+}
+.workspace-lookup__consent input {
+  flex: none;
+  margin-top: 5px;
+}
+.workspace-lookup :focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
 }
 .workspace-attach:hover {
   background: #f3f6fa;

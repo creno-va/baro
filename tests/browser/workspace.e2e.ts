@@ -12,6 +12,96 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("explicit lookup has bounded mobile inputs, fresh recipient consent and no target in chat or browser storage", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v2/cases/synthetic-case/lookup-tools", (route) =>
+    route.fulfill({
+      json: {
+        schemaVersion: "2",
+        tools: [
+          {
+            tool: "hometax_status",
+            title: "국세청 사업자 상태 조회",
+            description: "사업자등록 상태와 과세 유형을 확인해요.",
+            sourceUrl: "https://www.data.go.kr/data/15081808/openapi.do",
+            status: "input_required",
+          },
+          {
+            tool: "registry",
+            title: "등기정보광장 조회",
+            description: "연결되지 않은 도구",
+            sourceUrl: "https://data.iros.go.kr/",
+            status: "not_configured",
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(base);
+  const opener = page.getByRole("button", { name: "외부 조회", exact: true });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "공공·외부 정보 조회" });
+  const target = dialog.getByRole("textbox", { name: "사업자등록번호" });
+  const consent = dialog.getByRole("checkbox", { name: "위 조회 대상의 외부 전송에 동의합니다." });
+  const submit = dialog.getByRole("button", { name: "동의하고 조회 요청" });
+  await expect(dialog.getByRole("option")).toHaveCount(1);
+  await expect(dialog.getByText("수신 서비스: 국세청", { exact: true })).toBeVisible();
+  await expect(submit).toBeDisabled();
+  await target.fill("1111111111");
+  await consent.check();
+  await target.fill("0000000000");
+  await expect(consent).not.toBeChecked();
+  await consent.check();
+  expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  await page.screenshot({ path: "test-results/lookup-dialog-mobile.png" });
+  await page.screenshot({ path: "test-results/lookup-dialog-mobile.png" });
+  await dialog.getByRole("button", { name: "닫기", exact: true }).last().click();
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await expect(target).toHaveValue("");
+  await expect(consent).not.toBeChecked();
+  await target.fill("0000000000");
+  await consent.check();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.faults = { "workspace.sendMessage": ["UNAVAILABLE"] };
+    localStorage.setItem(key, JSON.stringify(state));
+  }, key);
+  await submit.click();
+  await expect(dialog.getByRole("alert")).toContainText("같은 요청");
+  await expect(target).toBeDisabled();
+  await dialog.getByRole("button", { name: "같은 요청 다시 확인" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByText(
+      "국세청 사업자 상태 조회를 요청합니다. 별도로 입력하고 전송에 동의한 대상만 조회해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  const stored = await page.evaluate(() =>
+    JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
+  );
+  expect(stored).not.toMatch(/0000000000|businessNumber|lookupRequests/);
+});
+
+test("lookup without configured tools displays availability without a target or consent form", async ({
+  page,
+}) => {
+  await page.route("**/api/v2/cases/synthetic-case/lookup-tools", (route) =>
+    route.fulfill({ json: { schemaVersion: "2", tools: [] } }),
+  );
+  await page.goto(base);
+  await page.getByRole("button", { name: "외부 조회", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "공공·외부 정보 조회" });
+  await expect(dialog.getByRole("status")).toHaveText("아직 연결된 조회 서비스가 없어요.");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+});
+
 test("tool cards distinguish unconfigured and test responses on desktop and mobile", async ({
   page,
 }) => {

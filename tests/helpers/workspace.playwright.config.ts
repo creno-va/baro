@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: "chromium", trace: "off" },
   webServer: {
-    env: { BARO_UI_TEST_FIXTURE: "true", BARO_C_TEST_API: "true" },
+    env: { BARO_UI_TEST_FIXTURE: "true", BARO_C_TEST_API: "true", PUBLIC_API_MODE: "mock" },
     command: `bun run dev -- --ignore-lock --config tests/helpers/workspace.astro.config.ts --host 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/cases/synthetic-case`,
     reuseExistingServer: false,

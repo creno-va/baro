@@ -6,6 +6,7 @@ import { createCaseDataCipher } from "../../crypto";
 import { createPreviewD1Timing, type PreviewD1Operation } from "../../db/preview-d1-timing";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
+import { lookupCatalog, lookupConfiguration } from "../../modules/external-tools/catalog";
 import { verifyTurnstile } from "../../modules/intake/service";
 import {
   createWorkspaceService,
@@ -152,6 +153,13 @@ export function createWorkspacesApi(
         c.req.param("id"),
       ),
     );
+  });
+  app.get("/:id/lookup-tools", async (c) => {
+    const a = await customerAccess(c, false, true);
+    if (a.response) return a.response;
+    emptyQuery.parse(c.req.query());
+    await (await service(c.env, a.ownerId)).find(a.ownerId, c.req.param("id"));
+    return c.json({ schemaVersion: "2", tools: lookupCatalog(lookupConfiguration(c.env)) });
   });
   app.get("/:id/intake", async (c) => {
     const a = await customerAccess(c);

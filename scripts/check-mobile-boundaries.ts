@@ -1,4 +1,4 @@
-import { dirname, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { mobileBoundaryFindings, sourceImports } from "./mobile-boundaries";
 
 const root = process.cwd();
@@ -13,10 +13,15 @@ async function walk(file: string) {
   if (visited.has(file)) return;
   visited.add(file);
   const local = relative(root, file).replaceAll("\\", "/");
+  const contractPath = relative(contractsRoot, file).replaceAll("\\", "/");
   if (
-    !file.startsWith(`${contractsRoot}/`) ||
+    !contractPath ||
+    contractPath === ".." ||
+    contractPath.startsWith("../") ||
+    isAbsolute(contractPath) ||
     file === resolve(contractsRoot, "index.ts") ||
-    file.endsWith("/pipeline.ts")
+    contractPath === "pipeline.ts" ||
+    contractPath.endsWith("/pipeline.ts")
   ) {
     failures.push(`${local}: private/outside contract entry`);
     return;
@@ -43,6 +48,7 @@ for await (const file of new Bun.Glob("apps/mobile/{src,config,runtime-probe}/**
   );
 }
 for await (const file of new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scan(".")) {
+  const local = file.replaceAll("\\", "/");
   const source = await Bun.file(file).text();
   failures.push(...mobileBoundaryFindings(file, source).map((message) => `${file}: ${message}`));
   for (const specifier of sourceImports(source)) {
@@ -50,7 +56,7 @@ for await (const file of new Bun.Glob("packages/*/src/**/*.{ts,tsx}").scan("."))
       const entry = manifest.exports[`./${specifier.slice("@baro/contracts/".length)}`];
       if (!entry) failures.push(`${file}: nonpublic contract import: ${specifier}`);
     }
-    if (file.startsWith("packages/client-core/") && specifier === "@baro/client-core")
+    if (local.startsWith("packages/client-core/") && specifier === "@baro/client-core")
       failures.push(`${file}: shared core cannot import itself through a package cycle`);
   }
 }

@@ -69,6 +69,51 @@ function settle(runtime: WorkspaceMockRuntime) {
       for (const pending of Object.values(workspace.pending ?? {})) pending.at = 0;
   });
 }
+
+test("explicit lookup body and idempotency key survive an ambiguous acknowledgement without persisting the target", async () => {
+  const f = fixture();
+  const attempts: { body: string; key: string | null }[] = [];
+  let ambiguous = true;
+  const client = createWorkspaceApi(async (path, init) => {
+    const response = await f.transport(path, init);
+    if (path.endsWith("/messages") && init?.method === "POST") {
+      attempts.push({
+        body: String(init.body),
+        key: new Headers(init.headers).get("idempotency-key"),
+      });
+      if (ambiguous) {
+        ambiguous = false;
+        throw new TypeError("synthetic lost acknowledgement");
+      }
+    }
+    return response;
+  });
+  const view = await client.get("synthetic-case");
+  const input = {
+    expectedRevision: view.case.revision,
+    text: "국세청 사업자 상태 조회를 요청합니다.",
+    selectedFileIds: [],
+    lookupRequests: [
+      {
+        tool: "hometax_status" as const,
+        target: { businessNumber: "0000000000" },
+        consent: {
+          version: "2026-10-27" as const,
+          recipient: "nts" as const,
+          transmit: true as const,
+        },
+      },
+    ],
+  };
+  await expect(client.sendMessage("synthetic-case", input)).rejects.toBeDefined();
+  const next = await client.sendMessage("synthetic-case", input);
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]).toEqual(attempts[1]);
+  expect(attempts[0]?.key).toBeTruthy();
+  expect(JSON.parse(attempts[0]?.body ?? "{}").lookupRequests).toEqual(input.lookupRequests);
+  expect(next.messages.filter((message) => message.role === "user")).toHaveLength(1);
+  expect(JSON.stringify(f.runtime.read())).not.toMatch(/0000000000|businessNumber|lookupRequests/);
+});
 for (const [status, wireCode, code, retryable] of [
   [400, "FILE_REJECTED", "FILE_REJECTED", false],
   [400, "UNRECOGNIZED", "VALIDATION_ERROR", true],

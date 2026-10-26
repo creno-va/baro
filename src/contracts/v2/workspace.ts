@@ -10,6 +10,7 @@ import {
 } from "../common";
 import { v2FailureCodeSchema, v2IdListSchema, v2JobPhaseSchema, v2VersionSchema } from "./common";
 import { v2FactReferenceSchema, v2OfficialCitationSchema } from "./sources";
+import { v2LookupRequestsSchema } from "./tools";
 
 export const v2CreateCaseRequestSchema = z.strictObject({
   narrative: boundedText(20, 5000),
@@ -55,6 +56,7 @@ export const v2MessageRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   text: boundedText(1, 10_000),
   selectedFileIds: v2IdListSchema,
+  lookupRequests: v2LookupRequestsSchema.optional(),
 });
 const messageBase = {
   schemaVersion: v2VersionSchema,

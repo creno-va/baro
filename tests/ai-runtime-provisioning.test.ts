@@ -76,7 +76,7 @@ test("runtime status is read-only and exposes only the operational allowlist", a
     expect(statements.every((sql) => /^SELECT\b/i.test(sql))).toBe(true);
     expect(db.sqlite.serialize()).toEqual(before);
     expect(status.results).toHaveLength(1);
-    expect(status.results[0]?.schema).toBe("0017_legacy_analysis_journal");
+    expect(status.results[0]?.schema).toBe("0018_external_lookup_admission");
     expect(Object.keys(status.results[0] ?? {}).sort()).toEqual([
       "carryover",
       "control",

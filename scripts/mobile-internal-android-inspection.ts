@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { constants, createReadStream } from "node:fs";
 import { copyFile, lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { z } from "zod";
 
 async function fileIdentity(path: string) {
@@ -18,17 +18,26 @@ export async function generatedAndroidReleaseFiles(build: string) {
       cwd: resolve(build, directory),
       onlyFiles: true,
     })) {
-      if (/(?:^|\/)(?:release|createBundleReleaseJsAndAssets)(?:\/|$)/i.test(path))
+      if (
+        /(?:^|\/)(?:release|createBundleReleaseJsAndAssets)(?:\/|$)/i.test(
+          path.replaceAll("\\", "/"),
+        )
+      )
         paths.push(resolve(build, directory, path));
     }
     if (paths.length > 1) throw new Error("INTERNAL_ANDROID_GENERATED_OUTPUT_AMBIGUOUS");
     const selected = paths[0];
-    if (
-      selected &&
-      ((await lstat(selected)).isSymbolicLink() ||
-        !(await realpath(selected)).startsWith(`${await realpath(build)}/`))
-    )
-      throw new Error("INTERNAL_ANDROID_GENERATED_OUTPUT_NOT_OWNED");
+    if (selected) {
+      const owned = relative(await realpath(build), await realpath(selected)).replaceAll("\\", "/");
+      if (
+        (await lstat(selected)).isSymbolicLink() ||
+        !owned ||
+        owned === ".." ||
+        owned.startsWith("../") ||
+        isAbsolute(owned)
+      )
+        throw new Error("INTERNAL_ANDROID_GENERATED_OUTPUT_NOT_OWNED");
+    }
     return selected ?? null;
   }
   return {
@@ -72,7 +81,7 @@ export async function preserveCompiledAndroidInspection(
     );
     generatedBundle = {
       name: "generated-index.android.bundle",
-      relativePath: relative(build, files.bundle),
+      relativePath: relative(build, files.bundle).replaceAll("\\", "/"),
       ...(await fileIdentity(files.bundle)),
     };
   }

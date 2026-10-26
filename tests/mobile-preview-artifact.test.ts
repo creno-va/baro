@@ -812,8 +812,12 @@ test("actual SDK-generated Hermes bytes must match the packaged copy and exclude
     const compiler = resolve(
       compilerRoot,
       "hermesc",
-      process.platform === "darwin" ? "osx-bin" : "linux64-bin",
-      "hermesc",
+      process.platform === "darwin"
+        ? "osx-bin"
+        : process.platform === "win32"
+          ? "win64-bin"
+          : "linux64-bin",
+      process.platform === "win32" ? "hermesc.exe" : "hermesc",
     );
     const input = resolve(root, "synthetic.js"),
       output = resolve(root, "synthetic.hbc");

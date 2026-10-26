@@ -25,11 +25,24 @@ async function fixture() {
     await copyFile(font, resolve(staging, "baro_mobile.ttf"));
     if (tamper)
       await writeFile(resolve(staging, "baro_mobile.ttf"), "synthetic wrong compiled font");
-    const child = Bun.spawn(["zip", "-q", "-0", apk, "res/font/baro_mobile.ttf"], {
-      cwd: resolve(root, "synthetic-archive"),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const python =
+      process.platform === "win32"
+        ? (Bun.which("python") ?? Bun.which("python3"))
+        : (Bun.which("python3") ?? Bun.which("python"));
+    if (!python) throw new Error("SYNTHETIC_ARCHIVE_PYTHON_REQUIRED");
+    const child = Bun.spawn(
+      [
+        python,
+        "-c",
+        "import sys, zipfile\nwith zipfile.ZipFile(sys.argv[1], 'w', compression=zipfile.ZIP_STORED) as archive:\n archive.write(sys.argv[2], 'res/font/baro_mobile.ttf')\n",
+        apk,
+        resolve(staging, "baro_mobile.ttf"),
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     if (await child.exited) throw new Error("SYNTHETIC_ARCHIVE_FAILED");
   };
   await archive();

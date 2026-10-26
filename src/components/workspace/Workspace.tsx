@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Paperclip,
   Plus,
+  Search,
   Send,
   Upload,
   X,
@@ -23,7 +24,7 @@ import type {
 } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
-import { V2_LIMITS } from "../../contracts/v2";
+import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
@@ -34,6 +35,7 @@ import { CaseNavigation } from "./CaseNavigation";
 import { ChatAttachments } from "./ChatAttachments";
 import { ElapsedTime } from "./ElapsedTime";
 import { FileReview } from "./FileReview";
+import { LookupDialog } from "./LookupDialog";
 import { ProgressiveReply } from "./ProgressiveReply";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { SourceCards } from "./SourceCards";
@@ -89,10 +91,12 @@ export function Workspace({
   caseId,
   tab = "chat",
   evidenceOnly = false,
+  lookupAvailable = false,
 }: {
   caseId: string;
   tab?: WorkspaceTab;
   evidenceOnly?: boolean;
+  lookupAvailable?: boolean;
 }) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
   const previousMessages = useRef<Map<string, string> | null>(null);
@@ -131,6 +135,8 @@ export function Workspace({
     text: string;
     selectedFileIds: string[];
   } | null>(null);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const lookupAttempt = useRef<V2MessageRequest | null>(null);
   const lock = useRef(false);
   const mounted = useRef(true);
   const linkedFile = useRef("");
@@ -161,6 +167,8 @@ export function Workspace({
     acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     sendAttempt.current = null;
+    lookupAttempt.current = null;
+    setLookupOpen(false);
     previousMessages.current = null;
     newestMessageAt.current = "";
     setProgressiveIds(new Set());
@@ -607,6 +615,34 @@ export function Workspace({
       setChatAttachments([]);
       setNotice("메시지를 저장했어요.");
     });
+  }
+  async function sendLookup(request: V2LookupRequest) {
+    if (
+      !lookupAvailable ||
+      readonly ||
+      !view ||
+      view.case.schemaVersion !== "2" ||
+      lock.current ||
+      view.messages.some((message) => message.status === "pending")
+    )
+      return false;
+    let accepted = false;
+    await run("lookup", async (epoch) => {
+      lookupAttempt.current ??= {
+        expectedRevision: view.case.revision,
+        text: `${({ hometax_status: "국세청 사업자 상태", thecheat: "더치트 피해 등록", datahub_property: "데이터허브 부동산 주소", datahub_building: "데이터허브 건축물대장" } as const)[request.tool]} 조회를 요청합니다. 별도로 입력하고 전송에 동의한 대상만 조회해 주세요.`,
+        selectedFileIds: [],
+        lookupRequests: [request],
+      };
+      const next = await api.workspace.sendMessage(caseId, lookupAttempt.current);
+      if (!(await verify()) || !current(epoch)) return;
+      apply(next);
+      lookupAttempt.current = null;
+      followingChat.current = true;
+      setNotice("조회 요청을 저장했어요. 실제 결과와 연결 상태는 대화에서 확인해 주세요.");
+      accepted = true;
+    });
+    return accepted;
   }
   async function reflectMaterial(fileId: string) {
     if (reviewDirty.current || reviewBusy.current) return;
@@ -1308,6 +1344,20 @@ export function Workspace({
                         >
                           <Plus size={19} /> 사진·파일 첨부
                         </button>
+                        {lookupAvailable && view.case.schemaVersion === "2" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={!!busy || readonly || queuedSend || pendingResponse}
+                            onClick={() => {
+                              lookupAttempt.current = null;
+                              setLookupOpen(true);
+                            }}
+                          >
+                            <Search size={17} /> 외부 조회
+                          </Button>
+                        )}
                         <Button
                           className="workspace-send"
                           type="submit"
@@ -1857,6 +1907,18 @@ export function Workspace({
             </aside>
           </div>
         </div>
+      )}
+      {lookupOpen && (
+        <LookupDialog
+          key={caseId}
+          caseId={caseId}
+          busy={busy === "lookup"}
+          onClose={() => {
+            setLookupOpen(false);
+            lookupAttempt.current = null;
+          }}
+          onSubmit={sendLookup}
+        />
       )}
       <dialog
         ref={dialog}
