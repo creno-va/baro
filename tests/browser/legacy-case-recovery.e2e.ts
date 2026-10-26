@@ -40,6 +40,55 @@ async function wire(page: Page, handler: (route: Route, path: string) => Promise
 const retryButton = (page: Page) =>
   page.getByRole("button", { name: "분석 다시 시도", exact: true });
 
+test("unconfirmed legacy transport offers a read-only status check and restores retry only after a fresh ready response", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  let resolved = false,
+    retryPosts = 0;
+  await wire(page, async (route, path) => {
+    if (path === `/api${casePath}`) {
+      await route.fulfill({
+        json: {
+          ...detail,
+          error: {
+            ...detail.error,
+            retryable: resolved,
+            message: resolved
+              ? "분석 상태를 다시 확인했어요."
+              : "이전 AI 응답이 확인되지 않아 재분석을 보류했어요. 저장된 사건은 계속 보거나 삭제할 수 있어요.",
+          },
+        },
+      });
+      return true;
+    }
+    if (path === `/api${casePath}/retry`) {
+      retryPosts++;
+      await route.fulfill({
+        status: 202,
+        json: { analysisId, inputRevision: 1, status: "queued" },
+      });
+      return true;
+    }
+    return false;
+  });
+  await page.goto(casePath);
+  await expect(page.getByText("이전 AI 응답이 확인되지 않아", { exact: false })).toBeVisible();
+  await expect(retryButton(page)).toHaveCount(0);
+  const check = page.getByRole("button", { name: "분석 상태 다시 확인", exact: true });
+  await check.click();
+  await expect(check).toBeVisible();
+  expect(retryPosts).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/legacy-transport-blocked.png", fullPage: true });
+  resolved = true;
+  await check.click();
+  await expect(retryButton(page)).toBeVisible();
+  expect(retryPosts).toBe(0);
+  await retryButton(page).click();
+  await expect.poll(() => retryPosts).toBe(1);
+});
+
 for (const lostReply of [false, true]) {
   test(`legacy retry rotates acknowledged keys and preserves lost replies: ${lostReply}`, async ({
     page,

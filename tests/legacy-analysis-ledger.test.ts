@@ -1,11 +1,12 @@
 import { expect, spyOn, test } from "bun:test";
 import { inspectAiRuntime, modelBounds } from "../scripts/provision-ai-budget";
-import { caseDetailResponseSchema } from "../src/contracts";
+import { analysisStatusResponseSchema, caseDetailResponseSchema } from "../src/contracts";
 import { api } from "../src/server/api";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { usageDateKst } from "../src/server/db/repository";
 import { MODEL_ID } from "../src/server/model-policy";
 import { createLegacyAnalysisLedger } from "../src/server/modules/budget/legacy-analysis-ledger";
+import { readAnalysis, readCase } from "../src/server/modules/cases/service";
 import {
   type GatewayAttemptRequest,
   responseReceipt,
@@ -368,6 +369,7 @@ test.each(["dispatched", "unknown"] as const)(
     const f = await journal(),
       handle = await f.ledger.beforeDispatch(f.request);
     if (!handle) throw new Error("NO_HANDLE");
+    const workflowStatus = spyOn(f.env.ANALYSIS_WORKFLOW, "get");
     expect(await f.ledger.confirmDispatch(handle)).toBe(true);
     if (transport === "unknown")
       await f.ledger.afterTransport(handle, unavailableReceipt("unknown"));
@@ -375,6 +377,33 @@ test.each(["dispatched", "unknown"] as const)(
       .query("UPDATE analyses SET status='failed',failure_code='MODEL_UNAVAILABLE' WHERE id=?")
       .run(f.identity.analysisId);
     f.db.sqlite.query("UPDATE cases SET status='failed' WHERE id=?").run(f.caseId);
+    const readiness = async () => {
+      const detail = await api.request(
+        `/cases/${f.caseId}`,
+        { headers: { cookie: f.session.cookie } },
+        f.env,
+      );
+      const status = await api.request(
+        `/cases/${f.caseId}/analysis`,
+        { headers: { cookie: f.session.cookie } },
+        f.env,
+      );
+      expect(detail.status).toBe(200);
+      expect(status.status).toBe(200);
+      return {
+        detail: caseDetailResponseSchema.parse(await detail.json()),
+        status: analysisStatusResponseSchema.parse(await status.json()),
+      };
+    };
+    const blockedRead = await readiness();
+    expect(blockedRead.detail.error?.retryable).toBe(false);
+    expect(blockedRead.status).toMatchObject({
+      retryable: false,
+      retryAttemptsRemaining: 2,
+      error: { code: "MODEL_UNAVAILABLE", retryable: false },
+    });
+    expect(blockedRead.detail.error?.message).toContain("응답이 확인되지 않아");
+    expect(JSON.stringify(blockedRead)).not.toContain(handle.attemptId);
     const key = crypto.randomUUID(),
       route = `/api/cases/${f.caseId}/retry`;
     const retry = () =>
@@ -395,8 +424,9 @@ test.each(["dispatched", "unknown"] as const)(
     const blocked = await retry();
     expect(blocked.status).toBe(409);
     expect(await blocked.json()).toMatchObject({
-      error: { code: "INVALID_STATE", retryable: true },
+      error: { code: "INVALID_STATE", retryable: false },
     });
+    expect(workflowStatus).not.toHaveBeenCalled();
     expect(
       f.db.sqlite
         .query("SELECT attempt,status FROM analyses WHERE id=?")
@@ -424,6 +454,13 @@ test.each(["dispatched", "unknown"] as const)(
       ),
     ).toBe(false);
     await f.ledger.afterTransport(handle, receipt());
+    const resolvedRead = await readiness();
+    expect(resolvedRead.detail.error?.retryable).toBe(true);
+    expect(resolvedRead.status).toMatchObject({
+      retryable: true,
+      retryAttemptsRemaining: 2,
+      error: { code: "MODEL_UNAVAILABLE", retryable: true },
+    });
     const accepted = await retry();
     expect(accepted.status).toBe(202);
     expect((await retry()).status).toBe(202);
@@ -432,8 +469,69 @@ test.each(["dispatched", "unknown"] as const)(
     ).toEqual({ attempt: 2 });
     expect(f.calls).toEqual([]);
     expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    workflowStatus.mockRestore();
   },
 );
+
+test("retry hints preserve prepared/not_sent facts, remaining attempts, ownership and current-revision fencing", async () => {
+  const f = await journal(),
+    handle = await f.ledger.beforeDispatch(f.request);
+  if (!handle) throw Error("SYNTHETIC_HANDLE_REQUIRED");
+  f.db.sqlite
+    .query("UPDATE analyses SET status='failed',failure_code='MODEL_UNAVAILABLE' WHERE id=?")
+    .run(f.identity.analysisId);
+  f.db.sqlite.query("UPDATE cases SET status='failed' WHERE id=?").run(f.caseId);
+  const input = {
+    ownerId: f.session.userId,
+    caseId: f.caseId,
+    analysisId: f.identity.analysisId,
+    inputRevision: 1,
+    attempt: 1,
+  };
+  const journalRows = () =>
+    ["legacy_ai_operations", "legacy_ai_attempts", "legacy_ai_observations", "v2_daily_usage"].map(
+      (table) => f.db.sqlite.query(`SELECT * FROM ${table}`).all(),
+    );
+  const before = journalRows();
+  expect(await f.repo.readAnalysisRetryState(input)).toBe("allowed");
+  expect(
+    (await readCase(f.repo, f.env, f.session.userId, f.caseId, "synthetic-prepared"))?.error
+      ?.retryable,
+  ).toBe(true);
+  expect(
+    (await readAnalysis(f.repo, f.session.userId, f.caseId, "synthetic-prepared"))
+      ?.retryAttemptsRemaining,
+  ).toBe(2);
+  expect(journalRows()).toEqual(before);
+  await f.ledger.afterTransport(handle, unavailableReceipt("not_sent"));
+  expect(await f.repo.readAnalysisRetryState(input)).toBe("allowed");
+  expect(await f.repo.readAnalysisRetryState({ ...input, ownerId: "synthetic-other-owner" })).toBe(
+    "stale",
+  );
+  f.db.sqlite.query("UPDATE cases SET input_revision=2 WHERE id=?").run(f.caseId);
+  expect(await f.repo.readAnalysisRetryState(input)).toBe("stale");
+  expect(await readCase(f.repo, f.env, f.session.userId, f.caseId, "synthetic-stale")).toBeNull();
+  expect(f.calls).toEqual([]);
+});
+
+test("historical pre-journal failed cases remain readable without inventing provider unknown or retry permission", async () => {
+  const f = await analysisFixture("guidance", { throughMigration: "0005_deletion_cleanup" });
+  f.db.sqlite
+    .query("UPDATE analyses SET status='failed',failure_code='MODEL_UNAVAILABLE' WHERE id=?")
+    .run(f.identity.analysisId);
+  f.db.sqlite.query("UPDATE cases SET status='failed' WHERE id=?").run(f.caseId);
+  const detail = await readCase(f.repo, f.env, f.session.userId, f.caseId, "synthetic-pre-journal");
+  expect(detail).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_UNAVAILABLE", retryable: false },
+  });
+  expect(detail?.error?.message).toContain("가능 여부를 확인하지 못했어요");
+  expect(detail?.error?.message).not.toContain("이전 AI 응답");
+  expect(
+    await readAnalysis(f.repo, f.session.userId, f.caseId, "synthetic-pre-journal"),
+  ).toMatchObject({ retryable: false, retryAttemptsRemaining: 2 });
+  expect(f.calls).toEqual([]);
+});
 
 test("an explicit retry cancels only an old provably unsent preparation", async () => {
   const f = await journal(),
