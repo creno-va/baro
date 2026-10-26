@@ -1,7 +1,36 @@
 /* Synthetic dependency regression probe. No provider, credential, case or persisted private key. */
-const { generateKeyPairSync, createHash } = require("node:crypto");
-const dependency = require(process.argv[3]);
+const {
+  generateKeyPairSync,
+  createHash,
+  privateEncrypt,
+  constants,
+  webcrypto,
+} = require("node:crypto");
 const mode = process.argv[2];
+function loadBrowserDistribution(path) {
+  const browser = { crypto: webcrypto, setTimeout, clearTimeout };
+  browser.self = browser;
+  browser.window = browser;
+  browser.navigator = { userAgent: "BARO synthetic browser probe" };
+  // forge.all captures jQuery for deferred form/network helpers. They are
+  // deliberately unavailable here; this probe checks the crypto API only.
+  browser.jQuery = new Proxy(
+    () => {
+      throw new Error("FORM_API_OUT_OF_SCOPE");
+    },
+    {
+      get() {
+        throw new Error("FORM_API_OUT_OF_SCOPE");
+      },
+    },
+  );
+  require("node:vm").runInNewContext(require("node:fs").readFileSync(path, "utf8"), browser, {
+    timeout: 5000,
+  });
+  return browser.forge;
+}
+const dependency =
+  mode === "forge-browser" ? loadBrowserDistribution(process.argv[3]) : require(process.argv[3]);
 const outcome = (action) => {
   try {
     return action() === false ? "rejected" : "accepted";
@@ -60,7 +89,7 @@ if (mode === "braces") {
   }));
   const rangeLimitPreserved = outcome(() => braces.expand("{1..1000000}")) === "rejected";
   console.log(JSON.stringify({ mode, attacks, compatibility, rangeLimitPreserved }));
-} else if (mode === "forge") {
+} else if (mode === "forge" || mode === "forge-browser") {
   const forge = dependency,
     asn1 = forge.asn1;
   const pair = generateKeyPairSync("rsa", {
@@ -93,7 +122,16 @@ if (mode === "braces") {
     ]);
     const encoded = asn1.toDer(info).getBytes() + suffix;
     // Normal padding and trailing-byte checks; this demonstrates a parser gap, not private-key-free forgery.
-    return publicKey.verify(mismatch ? "wrong digest" : digest, privateKey.sign(encoded, "NONE"));
+    // OpenSSL creates browser fixtures independently of forge's private RSA
+    // implementation. The unmodified browser public verifier handles the input.
+    const signature =
+      mode === "forge-browser"
+        ? privateEncrypt(
+            { key: pair.privateKey, padding: constants.RSA_PKCS1_PADDING },
+            Buffer.from(encoded, "latin1"),
+          ).toString("latin1")
+        : privateKey.sign(encoded, "NONE");
+    return publicKey.verify(mismatch ? "wrong digest" : digest, signature);
   };
   const malformed = {
     extraChild: outcome(() => verify("sha256", [param(), garbage()])),

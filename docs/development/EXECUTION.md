@@ -12,6 +12,10 @@
   CLI Zod3의 명시적 array/set 상한 조기 거절을 source/CJS/ESM에 이식했다. 원본 전체 tree·
   정상/실패·실제 CLI·양 OS local export/quick을 검증했다. 새 조건에서 raw audit는 여전히
   high2다. [범위/한계](../quality/CLI-ZOD-BACKPORT-2026-10-27.md)와 보안 gate를 유지한다.
+  PR544 exactb880b0e CI40377051321 SUCCESS → mainbfaf63e·main CI40380560616 SUCCESS로 통합했다.
+  #545의 `codex/545-forge-browser`에서 기존 CJS와 같은 RSA 검사를 두 원본 UMD에 확장했다.
+  [원본 역복원·VM 회귀 범위](../quality/FORGE-BROWSER-BACKPORT-2026-10-27.md)는 통과했고
+  raw high2·공식 release/SDK·#71 잔여는 보존한다.
 - #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
   exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
   모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.

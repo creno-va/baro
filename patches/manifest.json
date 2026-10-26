@@ -60,31 +60,33 @@
       "version": "1.4.0",
       "registryIntegrity": "sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==",
       "patch": "patches/node-forge@1.4.0.patch",
-      "patchSha256": "8d266e6ccb1a0079868002d25b34726f7d0152212ef335ad1ddb20357f9201b3",
+      "patchSha256": "3ac844818a01ba4b9111f9ecb3dd486aea5cfcde7afcc8271b98f784c523eaf5",
       "beforeTreeSha256": "0f7eccb60abe54fbb129532f52c28d1ce8f2c5b221c9d942500b221c531d75fe",
-      "afterTreeSha256": "264fe2f0fb52c6043558d3c68a8432f40e34202405023688a9919c69092e5ae0",
+      "afterTreeSha256": "55c33729304a15b4c1f0d96799e036ca404d3717a36ccf48e712daa211fa5fe0",
       "entryPoint": "lib/index.js",
       "licenseSha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
-      "coverage": "commonjs-rsa-verifier-only",
+      "coverage": "commonjs-and-browser-rsa-verifier",
       "changes": [
         {
           "path": "lib/rsa.js",
           "beforeSha256": "fd4740238145ec26470eb3f06a627c72039538ce1307dbdce40521f94dfd0a50",
           "afterSha256": "f2ecaedd70fa7939cc8ea79f30f339af402f28b85e996245d45c6404a954ec78"
+        },
+        {
+          "path": "dist/forge.min.js",
+          "beforeSha256": "d9b9074e6861200d676e25dcfe97889db5e8f4150bb766d29c491ad709a51b58",
+          "afterSha256": "4b650c68d70f3c0e1295e3093ad0502a12126bc42e7d1319a6a9d230d56789b1"
+        },
+        {
+          "path": "dist/forge.all.min.js",
+          "beforeSha256": "cb9ba4045a81825f8edb646c38d53a1ac30ce07665bf26042c8dea86d7208642",
+          "afterSha256": "ff9651b3368253244a74ccd05117d1b93e80ea21cb891fd51796a1f5d48d95dc"
         }
       ],
       "unmodifiedBrowserDistributions": [
         {
-          "path": "dist/forge.all.min.js",
-          "sha256": "cb9ba4045a81825f8edb646c38d53a1ac30ce07665bf26042c8dea86d7208642"
-        },
-        {
           "path": "dist/forge.all.min.js.map",
           "sha256": "0b21eb8fb1c124e963d564b6462177331027f6e739f48e73184e0f6a81cac3f1"
-        },
-        {
-          "path": "dist/forge.min.js",
-          "sha256": "d9b9074e6861200d676e25dcfe97889db5e8f4150bb766d29c491ad709a51b58"
         },
         {
           "path": "dist/forge.min.js.map",
