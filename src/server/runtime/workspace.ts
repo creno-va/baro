@@ -20,7 +20,7 @@ import {
 } from "../modules/citation/quotation-spans";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { lookupCatalog, lookupConfiguration } from "../modules/external-tools/catalog";
-import { createExternalTools } from "../modules/external-tools/service";
+import { createWorkspaceLookupRound } from "../modules/external-tools/execution";
 import {
   type ComparisonEvidenceObservation,
   comparisonEvidenceObservationSchema,
@@ -408,38 +408,33 @@ export async function runWorkspaceRuntime(
       return createWorkspacePipeline(gateway, {
         reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
+        ...(latest?.lookupRequests
+          ? { explicitLookupTools: latest.lookupRequests.map((request) => request.tool) }
+          : {}),
         lookup: async (tools) => {
           await progress.enter("retrieval");
-          const service = createExternalTools(lookupConfiguration(env));
-          const results = [];
-          for (const tool of tools) {
-            results.push(
-              await service.execute(tool, null, {
-                authorize: async () => {
-                  if (!(await hasCustomerWorkspaceAccess(core, params.ownerId))) return false;
-                  return !!(await core
-                    .statement(
-                      "SELECT id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND status IN ('running','validating') AND EXISTS(SELECT 1 FROM v2_workspaces WHERE id=? AND owner_id=? AND current_job_id=v2_jobs.id AND revision=?)",
-                      [
-                        job.id,
-                        lease.token,
-                        lease.fencing,
-                        new Date().toISOString(),
-                        params.workspaceId,
-                        params.ownerId,
-                        params.workspaceRevision,
-                      ],
-                    )
-                    .first());
-                },
-                // Targets are never inferred from chat. Until a separate explicit
-                // target/recipient-consent flow exists, no network claim is issued.
-                reserve: async () => false,
-                signal: new AbortController().signal,
-              }),
-            );
-          }
-          return results;
+          return createWorkspaceLookupRound(core, lookupConfiguration(env), {
+            ownerId: params.ownerId,
+            lease,
+            latest,
+            authorize: async () => {
+              if (!(await hasCustomerWorkspaceAccess(core, params.ownerId))) return false;
+              return !!(await core
+                .statement(
+                  "SELECT id FROM v2_jobs WHERE id=? AND lease_token=? AND fencing=? AND lease_until>? AND status IN ('running','validating') AND EXISTS(SELECT 1 FROM v2_workspaces WHERE id=? AND owner_id=? AND current_job_id=v2_jobs.id AND revision=?)",
+                  [
+                    job.id,
+                    lease.token,
+                    lease.fencing,
+                    new Date().toISOString(),
+                    params.workspaceId,
+                    params.ownerId,
+                    params.workspaceRevision,
+                  ],
+                )
+                .first());
+            },
+          })(tools);
         },
         observeQuotationResolution: (value) => {
           quotationResolution = safeQuotationResolution(value);

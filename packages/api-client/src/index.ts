@@ -56,7 +56,7 @@ export { createReportsClient, reportSaveSchema } from "./reports";
 export { createSessionClient } from "./session";
 export type { UploadRecovery, UploadRecoveryRecord } from "./upload-recovery";
 export { uploadRecoveryRecordSchema } from "./upload-recovery";
-export type { CustomerWorkspaceView, WorkspaceAcknowledgement } from "./workspace";
+export type { CustomerWorkspaceView, LookupCatalog, WorkspaceAcknowledgement } from "./workspace";
 export { createWorkspaceClient, workspaceViewSchema } from "./workspace";
 export type { WorkspaceTransport } from "./workspace-http";
 export { createWorkspaceOperations, workspaceError, workspaceResponse } from "./workspace-http";

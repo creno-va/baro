@@ -129,12 +129,13 @@ export const api = {
     confirmSummary(id: string, input: { expectedRevision: number }): Promise<CaseView>;
   }>("cases"),
   workspace: domain<{
+    lookupCatalog(id: string): Promise<import("@baro/api-client").LookupCatalog>;
     get(id: string): Promise<WorkspaceView>;
     getFiles(id: string, options?: { evidence?: boolean }): Promise<WorkspaceView>;
     loadMore(id: string, collection: "messages" | "actions" | "timeline"): Promise<WorkspaceView>;
     sendMessage(
       id: string,
-      input: { expectedRevision: number; text: string; selectedFileIds: string[] },
+      input: import("../../contracts/v2").V2MessageRequest,
     ): Promise<WorkspaceView>;
     retryMessage(id: string, messageId: string): Promise<WorkspaceView>;
     setAction(id: string, actionId: string, done: boolean): Promise<WorkspaceView>;

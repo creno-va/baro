@@ -1,10 +1,12 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { v2LookupRequestsSchema, v2MessageRequestSchema } from "../src/contracts/v2";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2LookupRepository } from "../src/server/db/v2-lookup";
 import { runtimeDigest } from "../src/server/db/v2-paid-runtime";
 import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
+import { createWorkspaceLookupRound } from "../src/server/modules/external-tools/execution";
+import type { LookupFetch } from "../src/server/modules/external-tools/transport";
 import {
   publicStoredUserMessageSchema,
   storedUserMessageSchema,
@@ -358,4 +360,188 @@ test("real late receipts survive revocation and account deletion without resetti
   expect(() => f.db.sqlite.exec("UPDATE v2_lookup_executions SET tool='thecheat'")).toThrow(
     "LOOKUP_EXECUTION_IMMUTABLE",
   );
+});
+
+const taxResponse = () =>
+  Response.json({
+    status_code: "OK",
+    request_cnt: 1,
+    match_cnt: 1,
+    data: [
+      {
+        b_no: "0000000000",
+        b_stt: "계속사업자",
+        b_stt_cd: "01",
+        tax_type: "일반과세자",
+        end_dt: "",
+      },
+    ],
+  });
+function lookupRound(
+  f: Awaited<ReturnType<typeof lookupFixture>>,
+  network: LookupFetch,
+  configured = true,
+  latest = f.message,
+) {
+  return createWorkspaceLookupRound(
+    f.core,
+    configured ? { hometaxKey: "synthetic-key" } : {},
+    {
+      ownerId: f.actor.ownerId,
+      lease: f.lease,
+      latest,
+      authorize: async () => true,
+      clock: () => f.actor.now,
+    },
+    { fetch: network },
+  );
+}
+
+test("runtime transmits only the explicitly bound target once and retains the actual response receipt", async () => {
+  const f = await lookupFixture();
+  let calls = 0;
+  const network = async (_url: URL, init: RequestInit) => {
+    calls++;
+    expect(JSON.parse(String(init.body))).toEqual({ b_no: ["0000000000"] });
+    return taxResponse();
+  };
+  expect((await lookupRound(f, network)(["hometax_status"]))[0]?.status).toBe("retrieved");
+  expect(f.rows()).toMatchObject([{ transport: "response", observed_at: f.actor.now }]);
+  expect((await lookupRound(f, network)(["hometax_status"]))[0]?.status).toBe("unavailable");
+  expect(calls).toBe(1);
+});
+
+test("runtime never replays an unknown network outcome across recreation", async () => {
+  const f = await lookupFixture();
+  let calls = 0;
+  const network = async () => {
+    calls++;
+    throw new Error("synthetic network unknown");
+  };
+  expect((await lookupRound(f, network)(["hometax_status"]))[0]?.status).toBe("unavailable");
+  expect(f.rows()).toMatchObject([{ transport: "unknown", observed_at: f.actor.now }]);
+  await lookupRound(f, network)(["hometax_status"]);
+  expect(calls).toBe(1);
+});
+
+test("an observation write failure preserves the unknown claim without retrying a real response", async () => {
+  const f = await lookupFixture();
+  f.db.sqlite.exec(
+    "CREATE TEMP TRIGGER fail_lookup_observation BEFORE UPDATE ON v2_lookup_executions BEGIN SELECT RAISE(ABORT,'synthetic observation unavailable'); END;",
+  );
+  let calls = 0;
+  const diagnostics = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const network = async () => {
+      calls++;
+      return taxResponse();
+    };
+    expect((await lookupRound(f, network)(["hometax_status"]))[0]?.status).toBe("retrieved");
+    expect(f.rows()).toMatchObject([{ transport: "unknown", observed_at: null }]);
+    expect((await lookupRound(f, network)(["hometax_status"]))[0]?.status).toBe("unavailable");
+    expect(calls).toBe(1);
+    expect(diagnostics).toHaveBeenCalled();
+    expect(JSON.stringify(diagnostics.mock.calls)).not.toMatch(
+      /0000000000|synthetic-key|observation unavailable/,
+    );
+  } finally {
+    diagnostics.mockRestore();
+  }
+});
+
+test("unconfigured, missing input and duplicate tool rounds dispatch no HTTP and claim no execution", async () => {
+  for (const missing of [false, true]) {
+    const f = await lookupFixture({ lookups: !missing });
+    let calls = 0;
+    const round = lookupRound(
+      f,
+      async () => {
+        calls++;
+        return taxResponse();
+      },
+      missing,
+    );
+    expect((await round(["hometax_status"]))[0]?.status).toBe(
+      missing ? "input_required" : "not_configured",
+    );
+    await expect(round(["hometax_status", "hometax_status"])).rejects.toThrow(
+      "LOOKUP_INVALID_TOOL_ROUND",
+    );
+    expect(calls).toBe(0);
+    expect(f.rows()).toEqual([]);
+  }
+});
+
+test("an in-memory target differing from the encrypted operation is never transmitted", async () => {
+  const f = await lookupFixture();
+  const changed = structuredClone(f.message);
+  if (changed.lookupRequests?.[0]?.tool !== "hometax_status")
+    throw new Error("synthetic lookup missing");
+  changed.lookupRequests[0].target.businessNumber = "1111111111";
+  let calls = 0;
+  expect(
+    (
+      await lookupRound(
+        f,
+        async () => {
+          calls++;
+          return taxResponse();
+        },
+        true,
+        changed,
+      )(["hometax_status"])
+    )[0]?.status,
+  ).toBe("unavailable");
+  expect(calls).toBe(0);
+  expect(f.rows()).toMatchObject([{ transport: "not_sent" }]);
+});
+
+test("revocation after the durable claim records not_sent; revocation during HTTP records response without disclosure", async () => {
+  const before = await lookupFixture();
+  before.db.sqlite.exec(
+    "CREATE TEMP TRIGGER revoke_lookup_consent AFTER INSERT ON v2_lookup_executions BEGIN DELETE FROM user_consents; END;",
+  );
+  let calls = 0;
+  expect(
+    (
+      await lookupRound(before, async () => {
+        calls++;
+        return taxResponse();
+      })(["hometax_status"])
+    )[0]?.status,
+  ).toBe("access_denied");
+  expect(before.rows()).toMatchObject([{ transport: "not_sent" }]);
+  expect(calls).toBe(0);
+  const during = await lookupFixture();
+  const results = await lookupRound(during, async () => {
+    during.db.sqlite.exec("DELETE FROM user_consents");
+    return taxResponse();
+  })(["hometax_status"]);
+  expect(results[0]).toMatchObject({ status: "access_denied", rows: [], observedAt: null });
+  expect(during.rows()).toMatchObject([{ transport: "response" }]);
+});
+
+test("lookup catalog is a private owner/consent checked capability read and never contains credentials", async () => {
+  const f = await reportHttpFixture();
+  try {
+    f.app.route("/api/v2/cases", createWorkspacesApi());
+    const env = { ...f.env, HOMETAX_SERVICE_KEY: "synthetic-secret-sentinel" };
+    const get = (id: string = f.workspaceId, cookie = f.cookie) =>
+      f.app.request(`/api/v2/cases/${id}/lookup-tools`, { headers: { cookie } }, env);
+    const response = await get();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const body = (await response.json()) as { tools: { tool: string; status: string }[] };
+    expect(body.tools.find((tool) => tool.tool === "hometax_status")?.status).toBe(
+      "input_required",
+    );
+    expect(body.tools.find((tool) => tool.tool === "registry")?.status).toBe("not_configured");
+    expect(JSON.stringify(body)).not.toMatch(/synthetic-secret|0000000000|businessNumber/);
+    expect((await get(f.workspaceId, "")).status).toBe(401);
+    expect((await get("other_workspace")).status).toBe(404);
+    f.db.sqlite.exec("DELETE FROM user_consents");
+    expect((await get()).status).toBe(403);
+  } finally {
+    f.db.close();
+  }
 });
