@@ -1,5 +1,46 @@
 # 에이전트 실행 기준
 
+## 2026-10-27 로컬 잔여 작업 인계
+
+사용자 직접 지시에 따라 네이티브 앱 개발은 완료한 범위로 보존한다. 이전 잔여 작업을
+마무리한 뒤, 별도 목표로 웹 UI/UX의 위계·강약·상태·일관성·여백과 모바일 반응형을
+개선한다. 랜딩페이지의 코드·자산·스타일은 변경하지 않는다. 아래 모바일 진행 표는
+당시 source/검증 이력이며 새 앱 개발 착수 지시로 사용하지 않는다.
+
+- #339: 공식 registry/advisory 재확인에서 node-forge1.4.0의 patched version이 없고,
+  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완·원본 audit high2와 보안 gate를
+  유지한다. 조건 변경 없는 audit/full 재실행은 하지 않았다.
+- #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
+  exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
+  모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.
+- #458/#539: 사용자가 외부4종 API 모두 미발급을 재확인했다. 기존 실행 계약의 대상 입력·
+  수신 서비스 전송 동의와 durable execution 선행을 `codex/539-lookup-admission`에서
+  맡는다. 최신0017 뒤의0018을 #539가 순차 소유한다. 새 계약/암호화 저장·실행 기록의
+  로컬 검증은 실제 외부 성공이 아니며 runtime/UI 소비와 발급 후 인수를 별도로 추적한다.
+- 사용자 후속 지시로 미발급 API 설정/실제 인수는 이번 완료 범위에서 제외하고 비워둔다.
+  관련 이슈는 미래 검증 항목을 보존한 뒤 정리할 수 있다. 실제 성공·API 발급을 꾸미지 않는다.
+  Windows 검사 호환 #540은 PR541/mainf67d2af와 정확 head CI 성공으로 완료했다.
+
+
+## 2026-10-27 로컬 잔여 작업 인계
+
+사용자 직접 지시에 따라 네이티브 앱 개발은 완료한 범위로 보존한다. 이전 잔여 작업을
+마무리한 뒤, 별도 목표로 웹 UI/UX의 위계·강약·상태·일관성·여백과 모바일 반응형을
+개선한다. 랜딩페이지의 코드·자산·스타일은 변경하지 않는다. 아래 모바일 진행 표는
+당시 source/검증 이력이며 새 앱 개발 착수 지시로 사용하지 않는다.
+
+- #339: 공식 registry/advisory 재확인에서 node-forge1.4.0의 patched version이 없고,
+  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완·원본 audit high2와 보안 gate를
+  유지한다. 조건 변경 없는 audit/full 재실행은 하지 않았다.
+- #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
+  exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
+  모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.
+- #458/#539: 사용자가 외부4종 API 모두 미발급을 재확인했다. 기존 실행 계약의 대상 입력·
+  수신 서비스 전송 동의와 durable execution 선행을 `codex/539-lookup-admission`에서
+  맡는다. 최신0017 뒤의0018을 #539가 순차 소유한다. 새 계약/암호화 저장·실행 기록의
+  로컬 검증은 실제 외부 성공이 아니며 runtime/UI 소비와 발급 후 인수를 별도로 추적한다.
+
+
 - Reviewed: 2026-10-15 KST
 - 정비 총괄: hyunhomon / 현재 정비 채팅. 기존 모듈 소유권은 유지한다.
 - 결정: [ADR-0015](../adr/0015-maintenance-and-operating-policy.md), 제품: [PRD](../PRD.md), 상세: [v2 실행 계약](../architecture/V2-CONTRACTS.md).
