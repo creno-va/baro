@@ -367,6 +367,9 @@ export function createWorkspacePipeline(
       requests: WorkspaceSourceRequest[],
     ) => Promise<WorkspaceContext>;
     lookup?: (tools: V2LookupToolId[]) => Promise<V2ToolResult[]>;
+    /** Server-owned IDs from this operation's encrypted explicit consent.
+     * Keep the initial model admission unchanged; execute before its final answer. */
+    explicitLookupTools?: V2LookupToolId[];
     readMaterials?: (
       context: WorkspaceContext,
       requests: MaterialWindowRequest[],
@@ -558,20 +561,22 @@ export function createWorkspacePipeline(
         ...(context.lookupTools ? { toolLookupPerformed: false, toolResults: [] } : {}),
       };
       let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
-      const toolsRequested = draft.requestedTools.length > 0;
+      const requestedTools = deps.explicitLookupTools?.length
+        ? deps.explicitLookupTools
+        : draft.requestedTools;
+      const toolsRequested = requestedTools.length > 0;
       if (toolsRequested) {
         if (
           !deps.lookup ||
-          new Set(draft.requestedTools).size !== draft.requestedTools.length ||
-          draft.requestedTools.some(
-            (tool) => !context.lookupTools?.some((entry) => entry.tool === tool),
-          )
+          requestedTools.length > 2 ||
+          new Set(requestedTools).size !== requestedTools.length ||
+          requestedTools.some((tool) => !context.lookupTools?.some((entry) => entry.tool === tool))
         )
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
-        const toolResults = v2ToolResultsSchema.parse(await deps.lookup(draft.requestedTools));
+        const toolResults = v2ToolResultsSchema.parse(await deps.lookup(requestedTools));
         if (
-          toolResults.length !== draft.requestedTools.length ||
-          toolResults.some((result, index) => result.tool !== draft.requestedTools[index])
+          toolResults.length !== requestedTools.length ||
+          toolResults.some((result, index) => result.tool !== requestedTools[index])
         )
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
         context = { ...context, toolResults, toolLookupPerformed: true };

@@ -11,6 +11,7 @@ import { workspaceProgressText } from "@baro/client-core";
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { caseDetailResponseSchema, opaqueIdSchema } from "@baro/contracts/v1";
 import {
+  type V2MessageRequest,
   v2AcceptedOperationSchema,
   v2ActionSchema,
   v2EntityMutationReceiptSchema,
@@ -18,8 +19,10 @@ import {
   v2FailureCodeSchema,
   v2FileProcessingSchema,
   v2JobSchema,
+  v2LookupToolIdSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
+  v2ToolResultSchema,
   v2UserMessageSchema,
   v2WorkspaceSchema,
 } from "@baro/contracts/v2";
@@ -33,6 +36,23 @@ import {
   workspaceResponse,
 } from "./workspace-http";
 import { createWorkspaceRecovery, type WorkspaceRecovery } from "./workspace-recovery";
+
+const lookupCatalogSchema = z.strictObject({
+  schemaVersion: z.literal("2"),
+  tools: z
+    .array(
+      z.strictObject({
+        tool: v2LookupToolIdSchema,
+        title: z.string().min(1).max(100),
+        description: z.string().min(1).max(500),
+        sourceUrl: v2ToolResultSchema.shape.sourceUrl,
+        status: z.enum(["input_required", "not_configured"]),
+      }),
+    )
+    .max(5)
+    .refine((tools) => new Set(tools.map((tool) => tool.tool)).size === tools.length),
+});
+export type LookupCatalog = z.infer<typeof lookupCatalogSchema>["tools"];
 
 const messageSources = {
   references: z.array(v2FactReferenceSchema).default([]),
@@ -716,6 +736,10 @@ export function createWorkspaceClient(dependencies: {
   }
   const client = {
     get,
+    async lookupCatalog(id: string): Promise<LookupCatalog> {
+      return lookupCatalogSchema.parse(await workspaceJson(request, `${base(id)}/lookup-tools`))
+        .tools;
+    },
     getFiles: (id: string, options?: { evidence?: boolean }) =>
       get(id, 0, undefined, options?.evidence ? "evidence" : true),
     async loadMore(id: string, collection: "messages" | "actions" | "timeline") {
@@ -729,10 +753,7 @@ export function createWorkspaceClient(dependencies: {
         if (pageRequests.get(id) === next) pageRequests.delete(id);
       }
     },
-    async sendMessage(
-      id: string,
-      input: { expectedRevision: number; text: string; selectedFileIds: string[] },
-    ) {
+    async sendMessage(id: string, input: V2MessageRequest) {
       const path = `${base(id)}/messages`;
       const signature = JSON.stringify({ id, input });
       const init =

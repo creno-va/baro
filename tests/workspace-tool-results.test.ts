@@ -82,6 +82,39 @@ test("chat executes a bounded server tool round, audits actual statuses, rejects
     expect(calls[2]?.input).toMatchObject({
       context: { toolLookupPerformed: true, toolResults: output.toolResults },
     });
+    const explicitCalls: { phase: string; input: unknown }[] = [];
+    const explicitDispatches: string[][] = [];
+    const explicit = createWorkspacePipeline(
+      {
+        call: async (phase, input) => {
+          explicitCalls.push({ phase, input });
+          // Even when the first draft does not request a tool, the explicit user
+          // action must run before the final answer, without exposing its target.
+          return phase === "workspace_audit" ? approved : draft;
+        },
+      },
+      {
+        reserve: async () => true,
+        invocation: () => crypto.randomUUID(),
+        explicitLookupTools: ["hometax_status"],
+        lookup: async (tools) => {
+          explicitDispatches.push(tools);
+          return [await createExternalTools({}).execute("hometax_status", null, access)];
+        },
+      },
+    );
+    expect((await explicit.chat(context, "synthetic_explicit_lookup")).toolResults).toHaveLength(1);
+    expect(explicitDispatches).toEqual([["hometax_status"]]);
+    expect(explicitCalls.map((call) => call.phase)).toEqual([
+      "workspace_chat",
+      "workspace_chat",
+      "workspace_audit",
+    ]);
+    expect(explicitCalls[0]?.input).toMatchObject({ toolLookupPerformed: false, toolResults: [] });
+    expect(explicitCalls[1]?.input).toMatchObject({
+      toolLookupPerformed: true,
+      toolResults: [{ status: "not_configured" }],
+    });
     const repeated = createWorkspacePipeline(
       { call: async () => ({ ...draft, requestedTools: ["hometax_status"] }) },
       {

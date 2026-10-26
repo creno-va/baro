@@ -37,7 +37,7 @@ export interface LookupConfiguration {
   thecheatEncryptionKey?: string;
   datahubToken?: string;
 }
-export function lookupConfiguration(env: Env): LookupConfiguration {
+export function lookupConfiguration(env: Partial<Env>): LookupConfiguration {
   return {
     ...(env.HOMETAX_SERVICE_KEY ? { hometaxKey: env.HOMETAX_SERVICE_KEY } : {}),
     ...(env.THECHEAT_API_KEY ? { thecheatKey: env.THECHEAT_API_KEY } : {}),

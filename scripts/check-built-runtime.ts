@@ -59,8 +59,18 @@ try {
     "Built production worker started in local workerd and served anonymous login HTML; no deployment or provider calls",
   );
 } finally {
-  if (!stopped) child.kill("SIGINT");
-  await Promise.race([exited, Bun.sleep(5000)]);
-  if (!stopped) child.kill("SIGKILL");
+  if (!stopped && process.platform === "win32") {
+    // bunx launches Node/workerd descendants. Killing only the wrapper leaves
+    // the generated client directory locked on Windows after a successful smoke.
+    const cleanup = Bun.spawn(["taskkill", "/PID", String(child.pid), "/T", "/F"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    if ((await cleanup.exited) !== 0 && !stopped) child.kill("SIGKILL");
+  } else {
+    if (!stopped) child.kill("SIGINT");
+    await Promise.race([exited, Bun.sleep(5000)]);
+    if (!stopped) child.kill("SIGKILL");
+  }
   await exited;
 }

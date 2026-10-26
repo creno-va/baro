@@ -5,6 +5,7 @@ import {
   v2LookupToolIdSchema,
   v2ToolResultSchema,
 } from "../../../contracts/v2";
+import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { type LookupConfiguration, lookupCatalog, lookupTools } from "./catalog";
 import { type LookupFetch, lookupJson } from "./transport";
 
@@ -33,6 +34,9 @@ export interface LookupAccess {
   authorize: () => Promise<boolean>;
   /** Durable per-job execution claim; an unknown/replayed claim cannot dispatch. */
   reserve: (tool: V2LookupToolId) => Promise<boolean>;
+  observeTransport?: (
+    transport: "response" | "provider_error" | "unknown" | "not_sent",
+  ) => Promise<void>;
   signal: AbortSignal;
 }
 const field = z.union([z.string().max(1000), z.number().finite()]);
@@ -68,7 +72,7 @@ export function createExternalTools(
   configuration: LookupConfiguration,
   options: { fetch?: LookupFetch; clock?: () => string } = {},
 ) {
-  const network = options.fetch ?? fetch;
+  const baseNetwork = options.fetch ?? fetch;
   const clock = options.clock ?? (() => new Date().toISOString());
   let attempts = 0;
   return {
@@ -80,6 +84,24 @@ export function createExternalTools(
     ): Promise<V2ToolResult> {
       const tool = v2LookupToolIdSchema.parse(rawTool);
       const definition = lookupTools[tool];
+      const observe = async (transport: "response" | "provider_error" | "unknown" | "not_sent") => {
+        try {
+          await access.observeTransport?.(transport);
+        } catch (error) {
+          reportDependencyFailure(error);
+        }
+      };
+      const network: LookupFetch = async (url, init) => {
+        let response: Response;
+        try {
+          response = await baseNetwork(url, init);
+        } catch (error) {
+          await observe("unknown");
+          throw error;
+        }
+        await observe(response.ok ? "response" : "provider_error");
+        return response;
+      };
       const result = (
         status: V2ToolResult["status"],
         notices: string[],
@@ -124,6 +146,10 @@ export function createExternalTools(
         return result("unavailable", [
           "이번 요청의 조회를 시작하지 못했어요. 앞선 조회 기록은 유지돼요.",
         ]);
+      if (access.signal.aborted || !(await access.authorize())) {
+        await observe("not_sent");
+        return result("access_denied", ["조회 전 권한이나 동의가 바뀌어 전송하지 않았어요."]);
+      }
       try {
         let raw: unknown;
         if (tool === "hometax_status") {

@@ -42,6 +42,7 @@ const runtime: WorkspaceMockRuntime = {
 };
 const handlers = [createWorkspaceMock(runtime), createFilesMock(runtime)];
 async function request(path: string, init?: RequestInit) {
+  if (path === "/api/v2/cases/synthetic-case/lookup-tools") return fetch(path, init);
   for (const handler of handlers) {
     const result = await handler(new Request(new URL(path, window.location.origin), init));
     if (result) return result;
