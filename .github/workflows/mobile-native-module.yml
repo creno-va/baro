@@ -6,6 +6,9 @@ on:
       - apps/mobile/modules/**
       - tests/native/mobile-download/**
       - scripts/mobile-native-download-probe.ts
+      - scripts/mobile-native-build.ts
+      - scripts/mobile-ios-compile-verification.ts
+      - scripts/mobile-native-assets.ts
       - .github/workflows/mobile-native-module.yml
 
 permissions:
@@ -17,14 +20,22 @@ concurrency:
 
 jobs:
   compile:
-    name: Native module ${{ matrix.platform }}
+    name: Native module ${{ matrix.id }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: android
+            id: android
+            architecture: ""
             runner: ubuntu-latest
           - platform: ios
+            id: ios-arm64
+            architecture: arm64
+            runner: macos-26
+          - platform: ios
+            id: ios-x86_64
+            architecture: x86_64
             runner: macos-26
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
@@ -33,6 +44,9 @@ jobs:
       EXPO_PUBLIC_API_URL: https://preview.baro.site
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+      VERIFICATION_ID: ${{ matrix.id }}
+      IOS_VERIFICATION_ARCH: ${{ matrix.architecture }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,7 +66,13 @@ jobs:
           java-version: "17"
       - run: bun ci
       - name: Compile exact PR native source
-        run: bun run mobile:native ${{ matrix.platform }}
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "ios" ]]; then
+            bun run mobile:native ios --verify-architecture=${{ matrix.architecture }}
+          else
+            bun run mobile:native android
+          fi
       - name: Android bounded native HTTP and file IO with 128MiB heap
         if: matrix.platform == 'android'
         working-directory: apps/mobile/android
@@ -89,10 +109,20 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           mkdir -p .wrangler/mobile-native-pr
-          node -e 'const fs=require("node:fs"); fs.writeFileSync(".wrangler/mobile-native-pr/receipt-"+process.env.PLATFORM+".json", JSON.stringify({sourceSha:process.env.SOURCE_SHA, platform:process.env.PLATFORM, kind:"pull-request-native-compile-and-core-probe", compilePassed:true, coreProbePassed:true, appRuntimeVerified:false, storeSigned:false, deployed:false}, null, 2)+"\n")'
+          node <<'NODE'
+          const fs = require("node:fs");
+          const {SOURCE_SHA:sourceSha, PLATFORM:platform, VERIFICATION_ID:id, IOS_VERIFICATION_ARCH:architecture} = process.env;
+          if (!/^[a-f0-9]{40}$/.test(sourceSha) || !["android", "ios"].includes(platform)) throw Error("NATIVE_RECEIPT_IDENTITY_REQUIRED");
+          let iosCompileVerification = null;
+          if (platform === "ios") {
+            iosCompileVerification = JSON.parse(fs.readFileSync(".wrangler/mobile-build/ios-verification-architecture.json", "utf8"));
+            if (!["arm64", "x86_64"].includes(architecture) || id !== `ios-${architecture}` || iosCompileVerification.sourceSha !== sourceSha || iosCompileVerification.architecture !== architecture || iosCompileVerification.platform !== "ios-simulator" || iosCompileVerification.kind !== "single-architecture-compile-verification" || !iosCompileVerification.binaries?.length || iosCompileVerification.appRuntimeVerified !== false) throw Error("IOS_COMPILE_RECEIPT_MISMATCH");
+          } else if (id !== "android" || architecture) throw Error("NATIVE_RECEIPT_IDENTITY_MISMATCH");
+          fs.writeFileSync(`.wrangler/mobile-native-pr/receipt-${id}.json`, JSON.stringify({sourceSha, platform, kind:"pull-request-native-compile-and-core-probe", iosCompileVerification, compilePassed:true, coreProbePassed:true, appRuntimeVerified:false, storeSigned:false, deployed:false}, null, 2)+"\n", {flag:"wx"});
+          NODE
       - name: Retain compile and core probe identity
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: native-module-${{ matrix.platform }}-${{ github.event.pull_request.head.sha }}
+          name: native-module-${{ matrix.id }}-${{ github.event.pull_request.head.sha }}
           path: .wrangler/mobile-native-pr/*.json
           if-no-files-found: error
