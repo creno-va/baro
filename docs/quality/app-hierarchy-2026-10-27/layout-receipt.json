@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "evidence": "synthetic-local-browser-only",
+  "baseSha": "483b45ff9a6ef0568114073aed8cf4664b6c1691",
+  "candidateBranch": "codex/549-app-hierarchy",
+  "sourceFiles": {
+    "src/components/workspace/Workspace.tsx": "4f6713675c4e2c0b19b0cd9e5da7ac8fd2bc3f7e0281f238acea31a9206851c5",
+    "src/styles/product.css": "0bb9d07cd4a7a720cee09e6b1113e77816c21a6c70f15f133bbdd43f538b4151",
+    "src/styles/workspace.css": "7139b34e87255a1f8b07ae4be38904871542b61b4792299998a1387f637df176",
+    "tests/browser/workspace.e2e.ts": "c9ac39633268a2e2b82c7e7ce32558a52e96695b2c16b4ca1b0bf38c5fa0507e",
+    "tests/browser/product-ui.e2e.ts": "9feaa4cb9d69c978883c360f51879db755125214ccd908857384cfc3ecf8d5d4"
+  },
+  "landing": [
+    {
+      "width": 320,
+      "layoutAndStylesIdentical": true,
+      "appFrameCount": 0,
+      "beforePngSha256": "282f6763008f3f8e126d3cb77bb2da5602d59cc23f0efd49074701fa34073cde",
+      "afterPngSha256": "282f6763008f3f8e126d3cb77bb2da5602d59cc23f0efd49074701fa34073cde"
+    },
+    {
+      "width": 390,
+      "layoutAndStylesIdentical": true,
+      "appFrameCount": 0,
+      "beforePngSha256": "a020211b4a6904f99ed0899436bdeb45b1d1d11b086d561044ac8b3ba7f14d93",
+      "afterPngSha256": "a020211b4a6904f99ed0899436bdeb45b1d1d11b086d561044ac8b3ba7f14d93"
+    },
+    {
+      "width": 1440,
+      "layoutAndStylesIdentical": true,
+      "appFrameCount": 0,
+      "beforePngSha256": "b61ab909ba73ead94582403ff0f45adcef23208cbfc7b50396651df9c3145273",
+      "afterPngSha256": "b61ab909ba73ead94582403ff0f45adcef23208cbfc7b50396651df9c3145273"
+    }
+  ],
+  "chat": [
+    {
+      "width": 320,
+      "beforeComposerTop": 597.234375,
+      "afterComposerTop": 531.03125,
+      "beforeSendTop": 761.234375,
+      "afterSendTop": 639.03125,
+      "afterSendHeight": 44,
+      "afterDocumentWidth": 320
+    },
+    {
+      "width": 390,
+      "beforeComposerTop": 597.234375,
+      "afterComposerTop": 531.03125,
+      "beforeSendTop": 761.234375,
+      "afterSendTop": 639.03125,
+      "afterSendHeight": 44,
+      "afterDocumentWidth": 390
+    },
+    {
+      "width": 1440,
+      "beforeComposerTop": 589.40625,
+      "afterComposerTop": 452.328125,
+      "beforeSendTop": 704.40625,
+      "afterSendTop": 567.328125,
+      "afterSendHeight": 44,
+      "afterDocumentWidth": 1440
+    }
+  ],
+  "images": {
+    "chat-before-mobile.png": "a441e9ea866cd1c04656d81b6d2d774f209b109e1f9cf9497ea352d6b94574ac",
+    "chat-desktop.png": "1264814038c0512210e8f433848833b6b8cc9444de33c945cec7d432e12c8139",
+    "chat-mobile.png": "d0b125a5c626c37849f08c95a68eb06060c64cebfca8ca4cb79a0b9b31998eb4"
+  }
+}

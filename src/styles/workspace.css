@@ -92,13 +92,15 @@
 .workspace-main {
   width: 100%;
   min-width: 0;
-  animation: workspace-enter 320ms ease-out both;
   view-transition-name: case-content;
 }
 .workspace--chat .workspace-main {
   display: flex;
   flex-direction: column;
   min-height: calc(100svh - 400px);
+}
+.workspace--chat.workspace--empty .workspace-main {
+  min-height: 0;
 }
 .workspace-section-heading {
   display: flex;
@@ -296,17 +298,13 @@
 }
 .workspace-chat-welcome {
   position: relative;
-  text-align: center;
-  padding: 34px 12px 22px;
+  text-align: left;
+  padding: 16px 0;
   isolation: isolate;
-}
-.workspace-welcome-mark {
-  display: inline-flex;
-  margin-bottom: 17px;
 }
 .workspace-chat-welcome h2 {
   margin: 0;
-  font-size: clamp(1.4rem, 3vw, 1.95rem);
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
   font-weight: 650;
   letter-spacing: -0.045em;
   color: var(--foreground);
@@ -315,11 +313,11 @@
   font-size: 0.88rem;
   line-height: 1.9;
   color: #526176;
-  margin: 14px 0 24px;
+  margin: 10px 0 20px;
 }
 .workspace-suggestions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -397,6 +395,57 @@
   gap: 12px;
   margin-top: 9px;
 }
+.workspace-attach-short,
+.workspace-lookup-short {
+  display: none;
+}
+.workspace-composer-footer > .workspace-lookup-open {
+  min-width: 44px;
+  min-height: 44px;
+  color: #526176;
+  font-size: 0.78rem;
+  padding: 8px;
+}
+.workspace-composer-footer > .workspace-send {
+  margin-left: auto;
+  flex: none;
+}
+.workspace .workspace-message-length {
+  margin: 6px 2px 0;
+  text-align: right;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #526176;
+}
+.workspace .workspace-message-length[role="alert"] {
+  color: var(--destructive);
+}
+.workspace-chat-guide > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  width: fit-content;
+  cursor: pointer;
+  color: #526176;
+  font-size: 0.75rem;
+  list-style: none;
+}
+.workspace-chat-guide > summary::-webkit-details-marker {
+  display: none;
+}
+.workspace-chat-guide > summary::before {
+  content: "+";
+  font-size: 1rem;
+}
+.workspace-chat-guide[open] > summary::before {
+  content: "−";
+}
+.workspace-chat-guide > summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .workspace-attach {
   display: inline-flex;
   gap: 5px;
@@ -473,7 +522,7 @@
 .workspace .workspace-chat-notice {
   color: #526176;
   font-size: 0.72rem;
-  text-align: center;
+  text-align: left;
   line-height: 1.65;
   margin: 11px 0 0;
 }
@@ -1005,10 +1054,10 @@
   }
   .workspace-suggestions {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
   }
   .workspace-suggestions .ui-button {
-    width: min(100%, 280px);
+    width: 100%;
   }
   .workspace-messages {
     gap: 24px;
@@ -1031,6 +1080,22 @@
   .workspace-composer-surface {
     border-radius: 22px;
     padding: 10px 12px;
+  }
+  .workspace-composer-footer {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .workspace-attach-label,
+  .workspace-lookup-label {
+    display: none;
+  }
+  .workspace-attach-short,
+  .workspace-lookup-short {
+    display: inline;
+  }
+  .workspace-attach {
+    min-width: 44px;
+    flex: none;
   }
   .workspace-composer textarea {
     font-size: 0.88rem;
@@ -1135,16 +1200,6 @@
   background: var(--card);
 }
 
-@keyframes workspace-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @view-transition {
   navigation: auto;
 }
@@ -1154,17 +1209,10 @@
 ::view-transition-group(case-navigation) {
   animation-duration: 180ms;
 }
-::view-transition-old(case-content) {
-  animation: case-content-out 120ms ease-out both;
-}
+::view-transition-group(case-content),
+::view-transition-old(case-content),
 ::view-transition-new(case-content) {
-  animation: workspace-enter 280ms 80ms ease-out both;
-}
-@keyframes case-content-out {
-  to {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
+  animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-main {
@@ -1381,4 +1429,11 @@
 }
 .workspace-source-cards a {
   justify-self: start;
+}
+
+/* An empty conversation should lead straight to the input, without a full-height spacer. */
+.workspace--empty .workspace-messages {
+  flex: none;
+  min-height: 0;
+  gap: 0;
 }

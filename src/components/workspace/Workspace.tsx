@@ -849,7 +849,9 @@ export function Workspace({
   );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
-    <div className={`workspace workspace--${tab}`}>
+    <div
+      className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
+    >
       {/* Keep the chooser's original node attached during temporary access checks. */}
       <input
         ref={uploadInput}
@@ -1076,9 +1078,6 @@ export function Workspace({
                   >
                     {!view.messages.length && (
                       <div className="workspace-chat-welcome">
-                        <div className="workspace-welcome-mark">
-                          <BrandMark size={52} />
-                        </div>
                         <h2>이제, 하나씩 풀어가요.</h2>
                         <p>더 기억나는 일이나 궁금한 점이 있나요?</p>
                         <div className="workspace-suggestions">
@@ -1312,7 +1311,7 @@ export function Workspace({
                         disabled={readonly || busy === "send" || queuedSend}
                         onChange={(event) => setDraft(event.target.value)}
                         placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
-                        aria-describedby="workspace-message-length workspace-chat-notice"
+                        aria-describedby="workspace-message-length"
                         aria-invalid={messageTooLong}
                         onKeyDown={(event) => {
                           if (
@@ -1339,23 +1338,35 @@ export function Workspace({
                         <button
                           type="button"
                           className="workspace-attach"
+                          aria-label="사진·파일 첨부"
                           disabled={!!busy || readonly || queuedSend}
                           onClick={() => uploadInput.current?.click()}
                         >
-                          <Plus size={19} /> 사진·파일 첨부
+                          <Plus size={19} />
+                          <span className="workspace-attach-label">사진·파일 첨부</span>
+                          <span className="workspace-attach-short" aria-hidden="true">
+                            첨부
+                          </span>
                         </button>
                         {lookupAvailable && view.case.schemaVersion === "2" && (
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="workspace-lookup-open"
+                            aria-label="외부 조회"
+                            title="외부 조회"
                             disabled={!!busy || readonly || queuedSend || pendingResponse}
                             onClick={() => {
                               lookupAttempt.current = null;
                               setLookupOpen(true);
                             }}
                           >
-                            <Search size={17} /> 외부 조회
+                            <Search size={17} />
+                            <span className="workspace-lookup-label">외부 조회</span>
+                            <span className="workspace-lookup-short" aria-hidden="true">
+                              조회
+                            </span>
                           </Button>
                         )}
                         <Button
@@ -1386,19 +1397,26 @@ export function Workspace({
                         </Button>
                       </div>
                     </div>
-                    <p id="workspace-message-length" role={messageTooLong ? "alert" : undefined}>
+                    <p
+                      className="workspace-message-length"
+                      id="workspace-message-length"
+                      role={messageTooLong ? "alert" : undefined}
+                    >
                       {messageLength.toLocaleString()} / 10,000자
                       {messageTooLong &&
                         " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
                     </p>
-                    <p className="workspace-chat-notice" id="workspace-chat-notice">
-                      사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료
-                      탭에서 확인해요.
-                      <br />
-                      BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
-                      <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
-                      확인해 주세요.
-                    </p>
+                    <details className="workspace-chat-guide">
+                      <summary>대화·자료 안내</summary>
+                      <p className="workspace-chat-notice" id="workspace-chat-notice">
+                        사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료
+                        탭에서 확인해요.
+                        <br />
+                        BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
+                        <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
+                        확인해 주세요.
+                      </p>
+                    </details>
                   </form>
                 </>
               )}

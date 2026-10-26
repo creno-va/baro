@@ -24,6 +24,7 @@
   표시되던 불일치를 고쳤다. [합성 재시도 상태 검증](../quality/LEGACY-RETRY-READINESS-2026-10-27.md)의
   SQLite/Hono62·실제 브라우저16·DB·quick이 성공했다. transport가 미확정이면 read-only
   상태 확인만 제공하며, 실제 #506 receipt/시도/원장은 보존한다.
+  PR548 exacta7af708 CI40386176126 SUCCESS → main483b45f·main CI40386905503 SUCCESS로 통합했다.
 - #539/PR542: exact8652167 CI40368233948 SUCCESS → main249b957 정상 통합.
   #458/PR543 exact6804460 CI40373654054 SUCCESS → mainebdff2f·main CI40374305109 SUCCESS.
   0018 private 대상·전송 동의·durable permit과 runtime/UI 연결, 로컬 quick/build·집중71 및
@@ -33,6 +34,13 @@
 - 사용자 후속 지시로 미발급 API 설정/실제 인수는 이번 완료 범위에서 제외하고 비워둔다.
   관련 이슈는 미래 검증 항목을 보존한 뒤 정리할 수 있다. 실제 성공·API 발급을 꾸미지 않는다.
   Windows 검사 호환 #540은 PR541/mainf67d2af와 정확 head CI 성공으로 완료했다.
+- #549 `codex/549-app-hierarchy`: 로컬 구현 가능한 앞선 잔여 수정의 통합 뒤, 외부 보안/실제
+  transport gate를 완료로 꾸미지 않고 독립적인 웹 표시 정비를 진행한다. 모바일 사건 메뉴
+  6개·입력 버튼·반복 안내·본문 진입 효과를 정리했다. [합성 검증/랜딩 보존](../quality/APP-HIERARCHY-2026-10-27.md)의
+  Workspace86·통합3·작은/큰 화면 검사가 통과했고, 랜딩3폭의 배치/스타일과 PNG가 동일하다.
+  full40386960386/exactmain483b45f는 전체Bun4381·DB·eval·build 뒤 모바일 보내기 아래856px로
+  실패했다. 새 후보의 같은 단언과 제품 UI12개가 통과했고 메뉴2행/6개 전체 노출도 검사했다.
+  이 full의 후속 브라우저/CSP/audit/Gitleaks/native와 실제 배포 인수는 성공으로 기록하지 않는다.
 
 
 - Reviewed: 2026-10-15 KST
