@@ -24,11 +24,23 @@ test("native patch preserves the exact registry version/license and reconstructs
   try {
     const before = resolve(owned, "react-native");
     await cp("node_modules/react-native", before, { recursive: true });
-    const reverse = Bun.spawn(["git", "apply", "--reverse", resolve(manifest.patch)], {
-      cwd: before,
-      stdout: "ignore",
-      stderr: "ignore",
-    });
+    const reverse = Bun.spawn(
+      [
+        "git",
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+        "apply",
+        "--reverse",
+        resolve(manifest.patch),
+      ],
+      {
+        cwd: before,
+        stdout: "ignore",
+        stderr: "ignore",
+      },
+    );
     expect(await reverse.exited).toBe(0);
     expect(await packageTreeHash(before)).toBe(manifest.beforeTreeSha256);
     expect(bytesHash(await readFile(resolve(before, "LICENSE")))).toBe(manifest.licenseSha256);

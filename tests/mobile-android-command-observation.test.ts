@@ -109,12 +109,17 @@ test("UIAutomator saved/idle/root diagnostics use fixed stdout and stderr signat
 
 test("bounded real subprocesses preserve output and stdin in memory while failure reports contain no raw output or argv", async () => {
   const directory = await mkdtemp(join(tmpdir(), "baro-native-command-")),
-    executable = join(directory, "adb");
+    executable = join(directory, process.platform === "win32" ? "adb.cmd" : "adb"),
+    script = process.platform === "win32" ? join(directory, "fixture.ts") : executable;
   try {
     await Bun.write(
-      executable,
-      `#!${process.execPath}\nconst mode=process.env.BARO_FIXTURE_CASE;\nif(mode==='timeout'){setInterval(()=>{},1000);await new Promise(()=>{});}\nelse if(mode==='stdin'){process.stdout.write(await Bun.stdin.text());}\nelse if(mode==='idle'){process.stderr.write('ERROR: could not get idle state.\\n');}\nelse if(mode==='failure'){process.stdout.write('synthetic-private-state');process.stderr.write('synthetic-private-error');process.exitCode=7;}\nelse{process.stdout.write('UI hierchary dumped to: '+process.argv.at(-1)+'\\n');}\n`,
+      script,
+      // CMD is only a fixture launcher. Bound its synthetic child separately so
+      // killing that launcher cannot leave an orphan holding the pipe open.
+      `#!${process.execPath}\nconst mode=process.env.BARO_FIXTURE_CASE;\nif(mode==='timeout'){${process.platform === "win32" ? "setTimeout(()=>process.exit(0),1000);" : ""}setInterval(()=>{},1000);await new Promise(()=>{});}\nelse if(mode==='stdin'){process.stdout.write(await Bun.stdin.text());}\nelse if(mode==='idle'){process.stderr.write('ERROR: could not get idle state.\\n');}\nelse if(mode==='failure'){process.stdout.write('synthetic-private-state');process.stderr.write('synthetic-private-error');process.exitCode=7;}\nelse{process.stdout.write('UI hierchary dumped to: '+process.argv.at(-1)+'\\n');}\n`,
     );
+    if (process.platform === "win32")
+      await Bun.write(executable, `@echo off\r\n"${process.execPath}" "%~dp0fixture.ts" %*\r\n`);
     await chmod(executable, 0o700);
     const args = [
       executable,

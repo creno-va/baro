@@ -108,3 +108,19 @@ test("public contract and mobile imports cannot cross server/browser boundaries"
   ])
     expect(mobileBoundaryFindings("packages/api-client/src/example.ts", source)).not.toEqual([]);
 });
+
+test("Windows separators preserve the same contract, shared-source and Expo environment boundaries", () => {
+  const scenarios = [
+    ["apps/mobile/src/composition/config.ts", "const env = process.env.EXPO_PUBLIC_APP_ENV;"],
+    ["apps/mobile/src/composition/config.ts", "const secret = process.env.SECRET;"],
+    ["apps/mobile/src/x.ts", 'import { x } from "../../../outside";'],
+    ["src/contracts/client.ts", 'export * from "./pipeline";'],
+    ["packages/client-core/src/x.ts", 'import { x } from "../../../server/private";'],
+  ];
+  for (const [path, source] of scenarios) {
+    if (!path || source === undefined) throw new Error("Invalid boundary fixture");
+    expect(mobileBoundaryFindings(path.replaceAll("/", "\\"), source)).toEqual(
+      mobileBoundaryFindings(path, source),
+    );
+  }
+});

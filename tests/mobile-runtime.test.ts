@@ -359,7 +359,7 @@ test("AVD manager and emulator share explicitly owned home locations", () => {
   expect(paths.environment.ANDROID_AVD_HOME).toBe(paths.avdHome);
   expect(paths.environment.ANDROID_USER_HOME).toBe(paths.userHome);
   expect(paths.environment.ANDROID_EMULATOR_HOME).toBe(paths.userHome);
-  expect(paths.avdHome.startsWith("/synthetic/baro-runtime/")).toBe(true);
+  expect(paths.avdHome).toBe(resolve("/synthetic/baro-runtime", "android/avd"));
 });
 test("real Node localhost listener binds the IPv4 address used by native deep links", async () => {
   const node = Bun.which("node");
