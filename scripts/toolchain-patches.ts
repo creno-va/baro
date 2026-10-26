@@ -21,7 +21,7 @@ const patchSchema = z.strictObject({
   afterTreeSha256: digest,
   entryPoint: safePath,
   licenseSha256: digest,
-  coverage: z.enum(["bounded-commonjs-traversal", "commonjs-rsa-verifier-only"]),
+  coverage: z.enum(["bounded-commonjs-traversal", "commonjs-and-browser-rsa-verifier"]),
   changes: z
     .array(z.strictObject({ path: safePath, beforeSha256: digest, afterSha256: digest }))
     .min(1),

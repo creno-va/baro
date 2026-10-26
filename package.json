@@ -61,7 +61,7 @@
     "mobile:assets:check": "bun scripts/check-mobile-assets.ts",
     "mobile:assets:brand": "bun scripts/build-mobile-brand.ts",
     "mobile:runtime": "bun scripts/mobile-runtime.ts",
-    "security:patches": "bun scripts/check-toolchain-patches.ts && bun test tests/toolchain-patches.test.ts tests/cli-zod-patch.test.ts"
+    "security:patches": "bun scripts/check-toolchain-patches.ts && bun test tests/toolchain-patches.test.ts tests/cli-zod-patch.test.ts tests/forge-browser-patch.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",

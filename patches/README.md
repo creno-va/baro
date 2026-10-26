@@ -9,14 +9,15 @@ consumer에서 resolve하는 패키지도 확인해 중첩된 원본 copy를 사
 - braces3.0.3: 문자열 parse·compile/expand/stringify·queue/flatten/parent traversal을
   고정 깊이128로 제한한다. 옵션으로 끌 수 없다. 정상 glob/범위/escape 동작과 기존 range
   제한을 보존하며 과도한 중첩은 `ERR_BRACES_DEPTH`로 거부한다.
-- node-forge1.4.0: CommonJS `lib/rsa.js`의 nested DigestAlgorithm 자식 수와 empty NULL을
-  검사한다. [검토한 upstream commit](https://github.com/nitrog7/forge/commit/85446800199c4995d3cd4b0ab5a8409df4455859)의
-  해당 파일 post-image와 byte가 같다. 정상 RSA/SHA·MD5의 기존 NULL 요건·인증서/CSR·padding/
+- node-forge1.4.0: CommonJS `lib/rsa.js`와 `dist/forge.min.js`, `dist/forge.all.min.js`의
+  nested DigestAlgorithm 자식 수와 empty NULL을 검사한다. [검토한 upstream commit](https://github.com/nitrog7/forge/commit/85446800199c4995d3cd4b0ab5a8409df4455859)의
+  CJS 파일 post-image와 byte가 같고 두 원본 브라우저 번들에도 같은 조건을 이식했다.
+  정상 RSA/SHA·MD5의 기존 NULL 요건·인증서/CSR·padding/
   trailing-byte 검사를 보존한다. 합성 runtime key로 잘못된 구조를 서명하는 검사는 parser gap
   회귀이며 private key 없는 signature forgery를 시연했다고 표현하지 않는다.
 
-**범위 제한:** node-forge의 prebuilt browser dist/map은 원본 그대로이며 이 CJS backport의
-보완 대상이 아니다. manifest에 각 byte hash와 이 잔여 범위를 명시한다. RN/Worker에 배포되는
+**범위 제한:** 두 브라우저 번들에서는 RSA verifier 조건만 바꾼다. source map과 prime worker는
+원본 byte를 보존한다. manifest에 각각의 수정/미수정 hash와 이 범위를 명시한다. RN/Worker에 배포되는
 모듈 도달성과 CLI 입력 경계·SDK/native 호환은 별도 인수다. upstream PR은 아직 공식 fixed
 release가 아니며 package version을 올려 audit를 통과시키지 않는다.
 
@@ -60,8 +61,10 @@ global 오류 개수 상한·자동 major override를 추가하지 않는다.
 설치 검사에는 기존 CJS2개/native1개와 이 CLI1개가 포함된다. 각 범위를 따로 attestation하고,
 root Zod4가 CLI의 원래 Zod3을 대신한 것으로 오인하지 않는다. [검증과 잔여](../docs/quality/CLI-ZOD-BACKPORT-2026-10-27.md)를 따른다.
 
-Browser dist/map은 보완하지 않았으며 배포 module graph에 나타나면 별도 수정·검증이
-필요하다. 현재 후보의 byte/graph 대조 결과·시각·SHA와 native 호환 잔여는 #339에 기록한다.
+두 브라우저 분포의 보완은 [#545 검증 범위](../docs/quality/FORGE-BROWSER-BACKPORT-2026-10-27.md)를
+따른다. Node VM은 browser 전역과 CSPRNG만 제공하고 jQuery form/network API는 호출 시
+실패하는 대역으로 격리한다. 실제 브라우저 UI나 다른 forge API의 전체 인수가 아니다.
+현재 후보의 byte/graph 대조 결과·시각·SHA와 native 호환 잔여는 #339에 기록한다.
 
 ## iOS TextInput native source backport (#379)
 
