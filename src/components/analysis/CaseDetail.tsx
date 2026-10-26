@@ -588,7 +588,12 @@ export function CaseDetail({ caseId }: { caseId: string }) {
               분석 다시 시도
             </button>
           ) : (
-            <a href="/cases/new">새 사건 입력</a>
+            <div className="actions">
+              <button type="button" disabled={busy} onClick={() => refreshSignal.current?.()}>
+                분석 상태 다시 확인
+              </button>
+              <a href="/cases/new">새 사건 입력</a>
+            </div>
           )}
         </section>
       )}

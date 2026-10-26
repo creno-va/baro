@@ -248,7 +248,7 @@
   margin-bottom: 8px;
 }
 .app-frame.app-frame--product .workspace-chat-welcome {
-  padding: 32px 0 16px;
+  padding: 12px 0 16px;
 }
 .app-frame.app-frame--product .workspace-upload {
   border: 1px dashed #d4deed;
@@ -690,21 +690,31 @@
     overflow: hidden;
   }
   .app-frame.app-frame--product .workspace-tabs {
-    gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    overflow: visible;
+    padding: 0;
   }
   .app-frame.app-frame--product .workspace-tabs a {
     font-size: 13px;
+    white-space: normal;
+    text-align: center;
+    padding: 10px 4px;
+    border-radius: 8px;
+  }
+  .app-frame.app-frame--product .workspace-tabs a[aria-current] {
+    background: #e8f1ff;
+  }
+  .app-frame.app-frame--product .workspace-tabs a[aria-current]::after {
+    display: none;
   }
   .app-frame.app-frame--product .workspace-chat-welcome {
     padding: 8px 0;
   }
-  .app-frame.app-frame--product .workspace-chat-welcome .brand-mark {
-    width: 32px;
-    height: 36px;
-  }
   .app-frame.app-frame--product .workspace-chat-welcome h2 {
-    font-size: 25px;
-    margin-top: 12px;
+    font-size: 22px;
+    margin-top: 0;
   }
   .app-frame.app-frame--product .workspace-messages {
     padding-top: 0;

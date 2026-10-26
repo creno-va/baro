@@ -8,19 +8,50 @@
 당시 source/검증 이력이며 새 앱 개발 착수 지시로 사용하지 않는다.
 
 - #339: 공식 registry/advisory 재확인에서 node-forge1.4.0의 patched version이 없고,
-  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완·원본 audit high2와 보안 gate를
-  유지한다. 조건 변경 없는 audit/full 재실행은 하지 않았다.
+  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완을 유지하며 `codex/339-constrained-zod-backport`에서
+  CLI Zod3의 명시적 array/set 상한 조기 거절을 source/CJS/ESM에 이식했다. 원본 전체 tree·
+  정상/실패·실제 CLI·양 OS local export/quick을 검증했다. 새 조건에서 raw audit는 여전히
+  high2다. [범위/한계](../quality/CLI-ZOD-BACKPORT-2026-10-27.md)와 보안 gate를 유지한다.
+  PR544 exactb880b0e CI40377051321 SUCCESS → mainbfaf63e·main CI40380560616 SUCCESS로 통합했다.
+  #545의 `codex/545-forge-browser`에서 기존 CJS와 같은 RSA 검사를 두 원본 UMD에 확장했다.
+  [원본 역복원·VM 회귀 범위](../quality/FORGE-BROWSER-BACKPORT-2026-10-27.md)는 통과했고
+  raw high2·공식 release/SDK·#71 잔여는 보존한다.
+  PR546 exactffa1434 CI40382480636 SUCCESS → main15ea94a·main CI40384257481 SUCCESS로 통합했다.
 - #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
   exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
   모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.
+  #547 `codex/547-legacy-retry-state`는 원래 실행이 차단되는 동안 GET에 재시도 가능이
+  표시되던 불일치를 고쳤다. [합성 재시도 상태 검증](../quality/LEGACY-RETRY-READINESS-2026-10-27.md)의
+  SQLite/Hono62·실제 브라우저16·DB·quick이 성공했다. transport가 미확정이면 read-only
+  상태 확인만 제공하며, 실제 #506 receipt/시도/원장은 보존한다.
+  PR548 exacta7af708 CI40386176126 SUCCESS → main483b45f·main CI40386905503 SUCCESS로 통합했다.
 - #539/PR542: exact8652167 CI40368233948 SUCCESS → main249b957 정상 통합.
-  #458의 `codex/458-explicit-lookup`에서0018의 private 대상·전송 동의·durable permit과
-  runtime/UI를 연결한다. 설정이 없는 현재 서비스는 not_configured를 유지하며 키는
-  비워둔다. 발급 후 검증 목록과 [구현/검증 범위](../quality/LOOKUP-ADMISSION-2026-10-27.md)를
-  보존한다. 모델에 target/동의 원문을 전달하지 않고 랜딩·native 제품은 변경하지 않는다.
+  #458/PR543 exact6804460 CI40373654054 SUCCESS → mainebdff2f·main CI40374305109 SUCCESS.
+  0018 private 대상·전송 동의·durable permit과 runtime/UI 연결, 로컬 quick/build·집중71 및
+  Workspace 브라우저81개 성공으로 사용자 합의 개발 범위를 완료했다. 키는 비워두고
+  not_configured·발급 후 검증 목록과 [구현/검증 범위](../quality/LOOKUP-ADMISSION-2026-10-27.md)를
+  보존한다. 실제 외부 인수/배포·#506/#339/#71 완료로 확대하지 않는다.
 - 사용자 후속 지시로 미발급 API 설정/실제 인수는 이번 완료 범위에서 제외하고 비워둔다.
   관련 이슈는 미래 검증 항목을 보존한 뒤 정리할 수 있다. 실제 성공·API 발급을 꾸미지 않는다.
   Windows 검사 호환 #540은 PR541/mainf67d2af와 정확 head CI 성공으로 완료했다.
+- #549 `codex/549-app-hierarchy`: 로컬 구현 가능한 앞선 잔여 수정의 통합 뒤, 외부 보안/실제
+  transport gate를 완료로 꾸미지 않고 독립적인 웹 표시 정비를 진행한다. 모바일 사건 메뉴
+  6개·입력 버튼·반복 안내·본문 진입 효과를 정리했다. [합성 검증/랜딩 보존](../quality/APP-HIERARCHY-2026-10-27.md)의
+  Workspace86·통합3·작은/큰 화면 검사가 통과했고, 랜딩3폭의 배치/스타일과 PNG가 동일하다.
+  full40386960386/exactmain483b45f는 전체Bun4381·DB·eval·build 뒤 모바일 보내기 아래856px로
+  실패했다. 새 후보의 같은 단언과 제품 UI12개가 통과했고 메뉴2행/6개 전체 노출도 검사했다.
+  이 full의 후속 브라우저/CSP/audit/Gitleaks/native와 실제 배포 인수는 성공으로 기록하지 않는다.
+- #551 `codex/551-secret-scan`: full의 scanner 단계가 설치만 하던 공백을 실제 조기 실행으로
+  보완한다. 별도 전체 이력 스캔의 공개 checksum/commit·SRI 검증 vendor 구문20탐지/8개
+  정확한 역사 fingerprint만 분류했다. [근거/검증](../quality/SECRET-SCAN-2026-10-27.md)의
+  이력0·새 commit canary 탐지·workflow11이 통과했다. raw high2와 실제 릴리스 조건은 유지한다.
+- #553 `codex/553-ios-architecture-ci`: API 키 없이 진행 가능한 CI 검증을 보완한다.
+  PR538의 두 iOS 아키텍처 동시 compile40분 취소를 각각 같은40분 matrix로 분리하고
+  실제 binary architecture/platform과 source receipt를 확인한다. Android·기본 universal/
+  runtime 빌드와 native 앱 제품은 보존한다. 기존 파일 처리 native Docker profile도 exact
+  main 수동 workflow로 독립 실행하며 full/실제 provider/배포 성공으로 확대하지 않는다.
+  [관측·합성 검증 경계](../quality/API-FREE-NATIVE-VALIDATION-2026-10-27.md)를 따르고
+  실제 CI 성공 뒤에만 병합한다.
 
 
 - Reviewed: 2026-10-15 KST

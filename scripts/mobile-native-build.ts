@@ -1,6 +1,11 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  iosCompileArchitectureArguments,
+  iosCompileVerificationArchitecture,
+  recordIOSCompileVerification,
+} from "./mobile-ios-compile-verification";
+import {
   attestLocalXcodeSimulatorControl,
   attestXcodeSimulatorControl,
   configureGeneratedXcodeControl,
@@ -15,6 +20,13 @@ import { verifyCompiledMobileFont } from "./mobile-native-assets";
 const platform = process.argv[2];
 if (platform !== "android" && platform !== "ios")
   throw new Error("Usage: bun run mobile:native android|ios");
+const verificationArchitecture = iosCompileVerificationArchitecture(
+  platform,
+  process.argv.slice(3),
+  process.env.CI,
+);
+if (verificationArchitecture && process.platform !== "darwin")
+  throw new Error("IOS_COMPILE_VERIFICATION_REQUIRES_MACOS");
 const localControl = process.argv[3] === "--runtime-xcode-control";
 const runtimeLocal = process.argv[3] === "--runtime-local" || localControl;
 const xcodeControl = process.argv[3] === "--xcode-control" || localControl;
@@ -70,6 +82,15 @@ async function run(args: string[], cwd = root) {
   }
 }
 async function main(platform: "android" | "ios") {
+  if (verificationArchitecture) {
+    const expected = process.env.SOURCE_SHA;
+    if (!expected || !/^[a-f0-9]{40}$/.test(expected))
+      throw new Error("IOS_COMPILE_SOURCE_REQUIRED");
+    const head = Bun.spawn(["git", "rev-parse", "HEAD"], { stdout: "pipe", stderr: "ignore" });
+    if ((await new Response(head.stdout).text()).trim() !== expected || (await head.exited))
+      throw new Error("IOS_COMPILE_CHECKOUT_MISMATCH");
+    await run(["git", "diff", "--quiet", "HEAD"]);
+  }
   if (xcodeControl) {
     if (
       await Bun.file(
@@ -134,6 +155,7 @@ async function main(platform: "android" | "ios") {
         "-derivedDataPath",
         resolve(root, ".wrangler/mobile-build/ios"),
         ...(xcodeControl ? xcodeSimulatorControlArguments : ["CODE_SIGNING_ALLOWED=NO"]),
+        ...iosCompileArchitectureArguments(verificationArchitecture),
         "build",
       ],
       mobileRoot,
@@ -153,6 +175,12 @@ async function main(platform: "android" | "ios") {
   }
   phase = "compiled-font";
   await verifyCompiledMobileFont(platform, root);
+  if (verificationArchitecture)
+    await recordIOSCompileVerification(
+      root,
+      process.env.SOURCE_SHA as string,
+      verificationArchitecture,
+    );
   console.log(
     `Native ${platform} debug build completed; no store signing, upload or deployment performed`,
   );

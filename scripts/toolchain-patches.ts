@@ -3,6 +3,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { verifyCliZodPatch } from "./cli-zod-patch";
 import { verifyNativeTextInputPatch } from "./mobile-ios-text-input-patch";
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -20,7 +21,7 @@ const patchSchema = z.strictObject({
   afterTreeSha256: digest,
   entryPoint: safePath,
   licenseSha256: digest,
-  coverage: z.enum(["bounded-commonjs-traversal", "commonjs-rsa-verifier-only"]),
+  coverage: z.enum(["bounded-commonjs-traversal", "commonjs-and-browser-rsa-verifier"]),
   changes: z
     .array(z.strictObject({ path: safePath, beforeSha256: digest, afterSha256: digest }))
     .min(1),
@@ -109,6 +110,7 @@ export function patchFilePaths(source: string) {
 }
 export async function verifyToolchainPatches(root = process.cwd()) {
   await verifyNativeTextInputPatch(root, { bytesHash, packageTreeHash, patchFilePaths });
+  await verifyCliZodPatch(root, { bytesHash, packageTreeHash, patchFilePaths });
   const manifest = toolchainPatchManifestSchema.parse(
     JSON.parse(await readFile(resolve(root, "patches/manifest.json"), "utf8")),
   );
@@ -122,9 +124,9 @@ export async function verifyToolchainPatches(root = process.cwd()) {
   if (
     new Set(manifest.packages.map((item) => item.name)).size !== 2 ||
     JSON.stringify(Object.keys(project.patchedDependencies ?? {}).sort()) !==
-      JSON.stringify(["braces@3.0.3", "node-forge@1.4.0", "react-native@0.88.0"]) ||
+      JSON.stringify(["braces@3.0.3", "node-forge@1.4.0", "react-native@0.88.0", "zod@3.25.76"]) ||
     JSON.stringify(Object.keys(lock.patchedDependencies ?? {}).sort()) !==
-      JSON.stringify(["braces@3.0.3", "node-forge@1.4.0", "react-native@0.88.0"])
+      JSON.stringify(["braces@3.0.3", "node-forge@1.4.0", "react-native@0.88.0", "zod@3.25.76"])
   )
     throw new Error("PATCH_PACKAGE_SET_CHANGED");
   for (const item of manifest.packages) {

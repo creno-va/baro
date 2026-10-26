@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "package": "zod",
+  "packageVersion": "3.25.76",
+  "consumer": "@expo/cli",
+  "consumerVersion": "58.1.14",
+  "registryIntegrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==",
+  "patch": "patches/zod@3.25.76.patch",
+  "patchSha256": "3ef28a056fbcd9b86ce5d5d726c94567d2f90b585b34252800e09c2e6c317ab4",
+  "beforeTreeSha256": "96768f7b688a25b580e65b110879121d6f17c90ba770eade063b4c8253decd0e",
+  "afterTreeSha256": "fcde8fd2de91154194bdb3d4d65be3d2973fb5d14c7bdf4d1c3d521693b423be",
+  "licenseSha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+  "changes": [
+    {
+      "path": "src/v3/types.ts",
+      "beforeSha256": "70309a0877c35d036842e291fe7c8a4439d5db49411d233f8a22bf8a59c41419",
+      "afterSha256": "4c708d549860f16a3d5d582cd0a312501a15f79dabb14f163cd95b35847e31e0"
+    },
+    {
+      "path": "v3/types.cjs",
+      "beforeSha256": "06487cc05ed45c5dd29789bf0aa75734d1ce06592a7f2665ba4ca90a68e8a3e1",
+      "afterSha256": "99130604c6ce415c00819145cf4747e43548e71ff3ac85bb226d5f4df2e45962"
+    },
+    {
+      "path": "v3/types.js",
+      "beforeSha256": "9763a2938f0e7f983363ef4bf6530e7583e3f2d54f8a4a6684efad58febc6e8e",
+      "afterSha256": "c4767f0a73cc0869785cd635a62e73d6e2b47c2c292715887f39ada1c5590ce8"
+    }
+  ],
+  "source": "https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd",
+  "coverage": "v3-constrained-array-set-upper-bounds-only",
+  "rawAuditRequired": true,
+  "unboundedCollectionsFixed": false,
+  "bundledV4Fixed": false
+}

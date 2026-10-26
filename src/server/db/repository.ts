@@ -51,6 +51,7 @@ const guardSchema = z.strictObject({
   ),
 });
 export type AnalysisGuard = z.infer<typeof guardSchema>;
+const retryReadGuardSchema = guardSchema.omit({ expectedStatus: true });
 /** Trusted runtime capability; never derived from an HTTP request body. */
 export interface AnalysisPublicationFence {
   sql: string;
@@ -188,6 +189,33 @@ export function createDomainRepository(binding: D1Database, cipher: EnvelopeCiph
           )
           .get();
         return row?.analysis ?? null;
+      });
+    },
+    readAnalysisRetryState(input: z.infer<typeof retryReadGuardSchema>) {
+      return safe(async (): Promise<"allowed" | "blocked" | "unavailable" | "stale"> => {
+        const g = parse(retryReadGuardSchema, input);
+        // Historical pre-0017 reads still work. Missing execution history cannot
+        // authorize a retry, and is not a fabricated provider-unknown receipt.
+        const tables = await statement(
+          "SELECT count(*) AS present FROM sqlite_master WHERE type='table' AND name IN ('legacy_ai_operations','legacy_ai_attempts')",
+          [],
+        ).first<{ present: number }>();
+        const transport =
+          tables?.present === 2
+            ? `CASE WHEN ${unresolvedAnalysisTransport} THEN 1 ELSE 0 END`
+            : "NULL";
+        // Ownership, current operation/revision/attempt and the transport flag
+        // share this snapshot. A stale read is never a positive retry hint.
+        const row = await statement(
+          `SELECT ${transport} AS unresolved FROM analyses JOIN cases
+          ON cases.id=analyses.case_id AND cases.current_analysis_id=analyses.id AND cases.input_revision=analyses.input_revision
+          WHERE cases.user_id=? AND cases.id=? AND analyses.id=? AND analyses.input_revision=? AND analyses.attempt=?
+          AND cases.status='failed' AND analyses.status='failed'`,
+          [g.ownerId, g.caseId, g.analysisId, g.inputRevision, g.attempt],
+        ).first<{ unresolved: number | null }>();
+        if (!row) return "stale";
+        if (row.unresolved === null) return "unavailable";
+        return row.unresolved ? "blocked" : "allowed";
       });
     },
     hasUnresolvedAnalysisTransport(ownerId: string, caseId: string, analysisId: string) {

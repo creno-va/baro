@@ -11,6 +11,37 @@ const workflowSchema = z.object({
   ),
 });
 
+test("full validation actually scans committed history before a later advisory failure can stop it", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/full-validation.yml").text(),
+  ) as {
+    jobs: {
+      validation: {
+        steps: {
+          name?: string;
+          uses?: string;
+          run?: string;
+          if?: string;
+          with?: Record<string, unknown>;
+          "continue-on-error"?: boolean;
+        }[];
+      };
+    };
+  };
+  const steps = workflow.jobs.validation.steps;
+  const full = steps.findIndex((step) => step.run === "bun run validate:full");
+  const scanner = steps.findIndex(
+    (step) => step.run === "gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn",
+  );
+  expect(scanner).toBeGreaterThanOrEqual(0);
+  expect(scanner).toBeLessThan(full);
+  expect(steps[scanner]?.if).toBeUndefined();
+  expect(steps[scanner]?.["continue-on-error"]).not.toBe(true);
+  expect(
+    steps.find((step) => step.uses?.startsWith("actions/checkout@"))?.with?.["fetch-depth"],
+  ).toBe(0);
+});
+
 test("local and every CI Bun host use the same pinned stable toolchain", async () => {
   const version = (await Bun.file(".bun-version").text()).trim();
   expect(version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -49,6 +80,7 @@ test("all workflow actions use immutable commits and valid YAML", async () => {
     "mobile-ios-xcode-control.yml",
     "mobile-ios-xcode-reverify.yml",
     "full-validation.yml",
+    "native-validation.yml",
     "cost-operations.yml",
     "directory-reindex.yml",
     "deploy-preview.yml",

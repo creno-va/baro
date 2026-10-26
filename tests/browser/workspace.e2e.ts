@@ -12,6 +12,94 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+for (const width of [320, 390, 768, 1440]) {
+  test(`workspace navigation and empty composer remain readable at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto(base);
+    await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+    const links = navigation.getByRole("link");
+    await expect(links).toHaveCount(6);
+    for (const link of await links.all()) {
+      const box = await link.boundingBox();
+      if (!box) throw new Error("Visible navigation link is missing its box");
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    expect(await navigation.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(
+      true,
+    );
+    const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
+    expect(
+      await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
+    ).toBeGreaterThanOrEqual(16);
+    const send = page.getByRole("button", { name: "보내기", exact: true });
+    const controls = [
+      page.getByRole("button", { name: "사진·파일 첨부", exact: true }),
+      page.getByRole("button", { name: "외부 조회", exact: true }),
+      send,
+    ];
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
+    const first = boxes[0];
+    if (!first) throw new Error("Attachment control is missing its box");
+    for (const box of boxes) {
+      if (!box) throw new Error("Composer control is missing its box");
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.y).toBeCloseTo(first.y, 0);
+      expect(box.y + box.height).toBeLessThan(844);
+    }
+    expect(
+      await page.locator(".workspace-main").evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          opacity: style.opacity,
+          transform: style.transform,
+          animation: style.animationName,
+        };
+      }),
+    ).toEqual({ opacity: "1", transform: "none", animation: "none" });
+    await expect(send).toBeDisabled();
+    await page.getByRole("button", { name: "어떤 자료를 준비하면 좋을까요?" }).click();
+    await expect(input).toHaveValue("어떤 자료를 준비하면 좋을까요?");
+    await expect(input).toBeFocused();
+    await expect(page.locator(".workspace-message")).toHaveCount(0);
+    await expect(send).toBeEnabled();
+    const guide = page.locator(".workspace-chat-guide > summary");
+    await guide.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#workspace-chat-notice")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#workspace-chat-notice")).not.toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  });
+}
+
+test("empty workspace tolerates short screens, large text and reduced motion", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(base);
+  const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
+  await expect(input).toBeVisible();
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  await input.fill("화면이 작아도 입력 내용은 그대로 유지돼요.");
+  await input.scrollIntoViewIfNeeded();
+  await expect(input).toBeInViewport();
+  const send = page.getByRole("button", { name: "보내기", exact: true });
+  await send.scrollIntoViewIfNeeded();
+  await expect(send).toBeInViewport();
+  await expect(send).toBeEnabled();
+  await expect(input).toHaveValue("화면이 작아도 입력 내용은 그대로 유지돼요.");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test("explicit lookup has bounded mobile inputs, fresh recipient consent and no target in chat or browser storage", async ({
   page,
 }) => {
