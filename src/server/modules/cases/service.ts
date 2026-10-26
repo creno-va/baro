@@ -21,15 +21,24 @@ const retryCodes = new Set([
 export function canRetry(code: string | null, attempt: number) {
   return !!code && retryCodes.has(code) && attempt < 3;
 }
-export function publicFailure(code: string | null, attempt: number, requestId: string) {
+export function publicFailure(
+  code: string | null,
+  attempt: number,
+  requestId: string,
+  retryState: "allowed" | "blocked" | "unavailable" = "allowed",
+) {
   return {
     code: failureCodeSchema.parse(code),
     message:
       code === "CLARIFICATION_EXPIRED"
         ? "질문 대기 시간이 지나 새 사건을 입력해 주세요."
-        : "분석을 완료하지 못했어요. 상태를 확인해 주세요.",
+        : retryState === "blocked"
+          ? "이전 AI 응답이 확인되지 않아 재분석을 보류했어요. 저장된 사건은 계속 보거나 삭제할 수 있어요."
+          : retryState === "unavailable"
+            ? "재분석 가능 여부를 확인하지 못했어요. 저장된 사건은 계속 보거나 삭제할 수 있어요."
+            : "분석을 완료하지 못했어요. 상태를 확인해 주세요.",
     requestId,
-    retryable: canRetry(code, attempt),
+    retryable: retryState === "allowed" && canRetry(code, attempt),
     details: {},
   };
 }
@@ -78,9 +87,21 @@ export async function readCase(
           JSON.parse(await decrypt(analysis.encryptedResult ?? "", "encrypted_result")),
         )
       : null;
+  let retryState: "allowed" | "blocked" | "unavailable" = "allowed";
+  if (record.status === "failed" && canRetry(analysis.failureCode, analysis.attempt)) {
+    const state = await repo.readAnalysisRetryState({
+      ownerId,
+      caseId,
+      analysisId: analysis.id,
+      inputRevision: analysis.inputRevision,
+      attempt: analysis.attempt,
+    });
+    if (state === "stale") return null;
+    retryState = state;
+  }
   const error =
     record.status === "failed"
-      ? publicFailure(analysis.failureCode, analysis.attempt, requestId)
+      ? publicFailure(analysis.failureCode, analysis.attempt, requestId, retryState)
       : null;
   // Recheck after decryption so deletion/revision changes do not publish stale plaintext.
   const current = await repo.findCase(ownerId, caseId);
@@ -108,19 +129,30 @@ export async function readCase(
 export async function readAnalysis(repo: Repo, ownerId: string, caseId: string, requestId: string) {
   const analysis = await repo.findCurrentAnalysis(ownerId, caseId);
   if (!analysis) return null;
-  const retryable =
-    analysis.status === "failed" && canRetry(analysis.failureCode, analysis.attempt);
+  let retryState: "allowed" | "blocked" | "unavailable" = "allowed";
+  if (analysis.status === "failed" && canRetry(analysis.failureCode, analysis.attempt)) {
+    const state = await repo.readAnalysisRetryState({
+      ownerId,
+      caseId,
+      analysisId: analysis.id,
+      inputRevision: analysis.inputRevision,
+      attempt: analysis.attempt,
+    });
+    if (state === "stale") return null;
+    retryState = state;
+  }
+  const error =
+    analysis.status === "failed"
+      ? publicFailure(analysis.failureCode, analysis.attempt, requestId, retryState)
+      : null;
   return analysisStatusResponseSchema.parse({
     caseId,
     analysisId: analysis.id,
     inputRevision: analysis.inputRevision,
     status: analysis.status,
     updatedAt: analysis.updatedAt,
-    retryable,
+    retryable: error?.retryable ?? false,
     retryAttemptsRemaining: Math.max(0, 3 - analysis.attempt),
-    error:
-      analysis.status === "failed"
-        ? publicFailure(analysis.failureCode, analysis.attempt, requestId)
-        : null,
+    error,
   });
 }

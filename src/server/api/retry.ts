@@ -35,23 +35,24 @@ export const retryApi = new Hono<ApiEnvironment>().post("/:caseId/retry", async 
     return c.json(errorBody(c, "REVISION_CONFLICT", "최신 상태를 확인해 주세요."), 409);
   if (analysis.status !== "failed" || !canRetry(analysis.failureCode, analysis.attempt))
     return c.json(errorBody(c, "INVALID_STATE", "재시도할 수 없는 상태예요."), 409);
-  // A missing/unreachable instance is ambiguous. Only a confirmed terminal instance permits reuse.
+  if (await repo.hasUnresolvedAnalysisTransport(access.ownerId, id.data, analysis.id))
+    return c.json(
+      errorBody(
+        c,
+        "INVALID_STATE",
+        "이전 AI 응답이 확인되지 않아 재분석을 보류했어요. 저장된 사건은 계속 보거나 삭제할 수 있어요.",
+        false,
+      ),
+      409,
+    );
+  // A definite transport blocker needs no Workflow control-plane call. Once
+  // clear, a missing instance remains ambiguous and cannot authorize reuse.
   const status = await c.env.ANALYSIS_WORKFLOW.get(analysis.workflowInstanceId)
     .then((i) => i.status())
     .catch(() => null);
   if (!status || !["complete", "errored", "terminated"].includes(status.status))
     return c.json(
       errorBody(c, "INVALID_STATE", "이전 분석이 종료되기를 기다려 주세요.", true),
-      409,
-    );
-  if (await repo.hasUnresolvedAnalysisTransport(access.ownerId, id.data, analysis.id))
-    return c.json(
-      errorBody(
-        c,
-        "INVALID_STATE",
-        "이전 AI 응답이 아직 확인되지 않았어요. 잠시 후 상태를 확인해 주세요.",
-        true,
-      ),
       409,
     );
   let committed = false;

@@ -16,9 +16,14 @@
   #545의 `codex/545-forge-browser`에서 기존 CJS와 같은 RSA 검사를 두 원본 UMD에 확장했다.
   [원본 역복원·VM 회귀 범위](../quality/FORGE-BROWSER-BACKPORT-2026-10-27.md)는 통과했고
   raw high2·공식 release/SDK·#71 잔여는 보존한다.
+  PR546 exactffa1434 CI40382480636 SUCCESS → main15ea94a·main CI40384257481 SUCCESS로 통합했다.
 - #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
   exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
   모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.
+  #547 `codex/547-legacy-retry-state`는 원래 실행이 차단되는 동안 GET에 재시도 가능이
+  표시되던 불일치를 고쳤다. [합성 재시도 상태 검증](../quality/LEGACY-RETRY-READINESS-2026-10-27.md)의
+  SQLite/Hono62·실제 브라우저16·DB·quick이 성공했다. transport가 미확정이면 read-only
+  상태 확인만 제공하며, 실제 #506 receipt/시도/원장은 보존한다.
 - #539/PR542: exact8652167 CI40368233948 SUCCESS → main249b957 정상 통합.
   #458/PR543 exact6804460 CI40373654054 SUCCESS → mainebdff2f·main CI40374305109 SUCCESS.
   0018 private 대상·전송 동의·durable permit과 runtime/UI 연결, 로컬 quick/build·집중71 및
