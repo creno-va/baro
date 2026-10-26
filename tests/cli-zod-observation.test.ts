@@ -63,6 +63,8 @@ test("actual CLI validators accept supported synthetic commands and reject malfo
     // The fixed production validator must reject the excessive array before running its elements.
     expect(result.constrainedProduct.elementVisits).toBe(0);
     expect(result.constrainedProduct.issues).toBe(1);
+    expect(result.constrainedLegacy.elementVisits).toBe(0);
+    expect(result.constrainedLegacy.issues).toBe(1);
     expect(result.malformedOutputs.map((v) => v.syntheticElements)).toEqual([128, 256, 512]);
   } finally {
     clearTimeout(timer);

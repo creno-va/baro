@@ -1,0 +1,99 @@
+diff --git a/src/v3/types.ts b/src/v3/types.ts
+index b10e84f1beb1dacdae5e01c42a223974b9e20b73..eaa64f536291ca001c687e034d876fdb7b3c4913 100644
+--- a/src/v3/types.ts
++++ b/src/v3/types.ts
+@@ -2263,6 +2263,8 @@ export class ZodArray<T extends ZodTypeAny, Cardinality extends ArrayCardinality
+           exact: true,
+           message: def.exactLength.message,
+         });
++        // Bound oversized collections before parsing their elements.
++        if (tooBig) return INVALID;
+         status.dirty();
+       }
+     }
+@@ -2291,7 +2293,8 @@ export class ZodArray<T extends ZodTypeAny, Cardinality extends ArrayCardinality
+           exact: false,
+           message: def.maxLength.message,
+         });
+-        status.dirty();
++        // Bound oversized collections before parsing their elements.
++        return INVALID;
+       }
+     }
+ 
+@@ -3723,7 +3726,8 @@ export class ZodSet<Value extends ZodTypeAny = ZodTypeAny> extends ZodType<
+           exact: false,
+           message: def.maxSize.message,
+         });
+-        status.dirty();
++        // Bound oversized collections before parsing their elements.
++        return INVALID;
+       }
+     }
+ 
+diff --git a/v3/types.cjs b/v3/types.cjs
+index 11ed4dfc4745f9af1f1501874576b78b77d294ef..a575fa65862787ed2448b9c15dd8828088709a68 100644
+--- a/v3/types.cjs
++++ b/v3/types.cjs
+@@ -1790,6 +1790,8 @@ class ZodArray extends ZodType {
+                     exact: true,
+                     message: def.exactLength.message,
+                 });
++                // Bound oversized collections before parsing their elements.
++                if (tooBig) return parseUtil_js_1.INVALID;
+                 status.dirty();
+             }
+         }
+@@ -1816,7 +1818,8 @@ class ZodArray extends ZodType {
+                     exact: false,
+                     message: def.maxLength.message,
+                 });
+-                status.dirty();
++                // Bound oversized collections before parsing their elements.
++                return parseUtil_js_1.INVALID;
+             }
+         }
+         if (ctx.common.async) {
+@@ -2843,7 +2846,8 @@ class ZodSet extends ZodType {
+                     exact: false,
+                     message: def.maxSize.message,
+                 });
+-                status.dirty();
++                // Bound oversized collections before parsing their elements.
++                return parseUtil_js_1.INVALID;
+             }
+         }
+         const valueType = this._def.valueType;
+diff --git a/v3/types.js b/v3/types.js
+index 40b11c0f01b2af54e0ed48e198607bd8836d9a63..cb19192a6d5d3863b83a787376b64f5a6b62cba4 100644
+--- a/v3/types.js
++++ b/v3/types.js
+@@ -1769,6 +1769,8 @@ export class ZodArray extends ZodType {
+                     exact: true,
+                     message: def.exactLength.message,
+                 });
++                // Bound oversized collections before parsing their elements.
++                if (tooBig) return INVALID;
+                 status.dirty();
+             }
+         }
+@@ -1795,7 +1797,8 @@ export class ZodArray extends ZodType {
+                     exact: false,
+                     message: def.maxLength.message,
+                 });
+-                status.dirty();
++                // Bound oversized collections before parsing their elements.
++                return INVALID;
+             }
+         }
+         if (ctx.common.async) {
+@@ -2814,7 +2817,8 @@ export class ZodSet extends ZodType {
+                     exact: false,
+                     message: def.maxSize.message,
+                 });
+-                status.dirty();
++                // Bound oversized collections before parsing their elements.
++                return INVALID;
+             }
+         }
+         const valueType = this._def.valueType;

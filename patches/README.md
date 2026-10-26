@@ -1,4 +1,4 @@
-# Toolchain CJS backports (#339)
+# Toolchain 보완 (#339)
 
 패키지 버전과 npm registry integrity·원래 LICENSE는 보존한다. `bun ci`는 Bun의
 `patchedDependencies`를 적용하며 `bun run security:patches`는 patch/lock/전체 설치 tree와
@@ -42,6 +42,24 @@ manifest signing은 요청의 `expo-expect-signature` header·project config와 
 실행되므로 모든 입력을 신뢰한다고 간주하지 않는다. 이 검토를 위해 실제 keychain,
 실제 인증서·private key·Expo 계정을 읽거나 서버에 서명을 요청하지 않는다.
 
+## CLI Zod3 constrained collection 보완 (2026-10-27)
+
+`cli-zod.json`은 root/shared의 Zod4.6.6과 별도로 실제 @expo/cli58.1.14가 resolve하는
+중첩 Zod3.25.76을 검사한다. [Zod의 공식 수정](https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd)의
+명시적 상한 사전 검사 방향을 v3의 array max/length와 set max에 이식했다. 원본 source와
+CJS/ESM3파일만 바꾸며 정상 입력의 결과·현재 major·registry SRI·license를 유지한다.
+과도한 입력의 issue 목록과 refinement 수행은 조기 거절로 줄어든다. 타입 선언·새 제한·
+global 오류 개수 상한·자동 major override를 추가하지 않는다.
+
+원본을 역적용한 전체 tree와 수정 tree를 실제 Node child에서 대조한다. 두 module 형식과
+동기/비동기 array/set의 초과512개는 원소 방문512/issue513에서 방문0/issue1로 바뀐다.
+정상 값, 범위 안 오류, 부족한 배열 길이, catch와 상한 없는 배열은 별도로 보존 검증한다.
+현재 CLI의 실제 plugin/output/command schema도 계속 검사한다. package 내 옛 v4 export와
+상한 없는 collections를 보완했다고 주장하지 않으며 raw audit를 그대로 유지한다.
+
+설치 검사에는 기존 CJS2개/native1개와 이 CLI1개가 포함된다. 각 범위를 따로 attestation하고,
+root Zod4가 CLI의 원래 Zod3을 대신한 것으로 오인하지 않는다. [검증과 잔여](../docs/quality/CLI-ZOD-BACKPORT-2026-10-27.md)를 따른다.
+
 Browser dist/map은 보완하지 않았으며 배포 module graph에 나타나면 별도 수정·검증이
 필요하다. 현재 후보의 byte/graph 대조 결과·시각·SHA와 native 호환 잔여는 #339에 기록한다.
 
@@ -49,8 +67,8 @@ Browser dist/map은 보완하지 않았으며 배포 module graph에 나타나�
 
 `react-native-ios-input.json`은 CJS 두 보완과 분리한 native3파일 범위다. RN0.88.0의
 version/registry SRI/원래 MIT LICENSE·전체 설치 tree를 보존·검사한다. 실제 모바일
-workspace가 같은 패키지를 resolve하는지도 확인한다. 허용 patch 집합은 기존 CJS2개와
-이 native1개뿐이며 raw audit 검사나 #339 잔여를 제거하지 않는다.
+workspace가 같은 패키지를 resolve하는지도 확인한다. native 범위는 이1개이며 위의
+CJS2개/CLI1개와 함께 검사한다. raw audit 검사나 #339 잔여를 제거하지 않는다.
 
 후보는 [RN59197의 a91468ffe6](https://github.com/react/react-native/pull/59197/commits/a91468ffe62122bc49d964a08b493374f0af4775)의
 비교 경로만 이식했다. `defaultTextAttributes`/기존 typing attributes와 single-line의

@@ -1,0 +1,34 @@
+{
+  "kind": "patched-cli-local-export-graph",
+  "observedAt": "2026-10-26T18:18:54.044Z",
+  "sourceCommit": "ebdff2faebd866df6d6739cb508b2b811e782b01",
+  "workingTreeClean": false,
+  "patchManifestSha256": "90d42549baa2db12af3ca5615d8b793b153a5628769d20c1262e9ed694113369",
+  "cliVersion": "58.1.14",
+  "cliZodVersion": "3.25.76",
+  "productZodVersion": "4.6.6",
+  "platforms": [
+    {
+      "platform": "android",
+      "sourceCount": 1471,
+      "zod4SourceCount": 93,
+      "zod3SourceCount": 0,
+      "cliSourceCount": 1,
+      "bundleSha256": "89d0ac2c955312c6ed20815ffcb8f1a8436d4cf9e79e14809858048325d08ccc",
+      "mapSha256": "a97d035955bc8acc594414ac2c2308668e72bf12b03e3ebeaea3b9d1ca22a9cf"
+    },
+    {
+      "platform": "ios",
+      "sourceCount": 1480,
+      "zod4SourceCount": 93,
+      "zod3SourceCount": 0,
+      "cliSourceCount": 1,
+      "bundleSha256": "0bb67313213d0616ccee661afc49054555ae2328c17eba3e016452e568e34a94",
+      "mapSha256": "68f3631c6258cbb557bc1538044758e0347de6c680d4951a70bd86d374d0dc55"
+    }
+  ],
+  "localExportOnly": true,
+  "compiledNativeArtifactMatched": false,
+  "actualApiValidation": false,
+  "rawAuditPassed": false
+}
