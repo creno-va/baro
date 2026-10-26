@@ -120,6 +120,7 @@
     "react-native@0.88.0": "patches/react-native@0.88.0.patch",
     "node-forge@1.4.0": "patches/node-forge@1.4.0.patch",
     "braces@3.0.3": "patches/braces@3.0.3.patch",
+    "zod@3.25.76": "patches/zod@3.25.76.patch",
   },
   "overrides": {
     "esbuild": "0.28.2",

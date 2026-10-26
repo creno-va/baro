@@ -8,16 +8,19 @@
 당시 source/검증 이력이며 새 앱 개발 착수 지시로 사용하지 않는다.
 
 - #339: 공식 registry/advisory 재확인에서 node-forge1.4.0의 patched version이 없고,
-  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완·원본 audit high2와 보안 gate를
-  유지한다. 조건 변경 없는 audit/full 재실행은 하지 않았다.
+  Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완을 유지하며 `codex/339-constrained-zod-backport`에서
+  CLI Zod3의 명시적 array/set 상한 조기 거절을 source/CJS/ESM에 이식했다. 원본 전체 tree·
+  정상/실패·실제 CLI·양 OS local export/quick을 검증했다. 새 조건에서 raw audit는 여전히
+  high2다. [범위/한계](../quality/CLI-ZOD-BACKPORT-2026-10-27.md)와 보안 gate를 유지한다.
 - #506: [status40358338441](https://github.com/creno-va/baro/actions/runs/40358338441)의
   exact76b1dfb finite receipt는 failed/MODEL_UNAVAILABLE·attempt2·minimize unknown1이다.
   모델/fixture 생성 없이 조회했으며 genuine terminal receipt 전 세번째 호출을 보내지 않는다.
 - #539/PR542: exact8652167 CI40368233948 SUCCESS → main249b957 정상 통합.
-  #458의 `codex/458-explicit-lookup`에서0018의 private 대상·전송 동의·durable permit과
-  runtime/UI를 연결한다. 설정이 없는 현재 서비스는 not_configured를 유지하며 키는
-  비워둔다. 발급 후 검증 목록과 [구현/검증 범위](../quality/LOOKUP-ADMISSION-2026-10-27.md)를
-  보존한다. 모델에 target/동의 원문을 전달하지 않고 랜딩·native 제품은 변경하지 않는다.
+  #458/PR543 exact6804460 CI40373654054 SUCCESS → mainebdff2f·main CI40374305109 SUCCESS.
+  0018 private 대상·전송 동의·durable permit과 runtime/UI 연결, 로컬 quick/build·집중71 및
+  Workspace 브라우저81개 성공으로 사용자 합의 개발 범위를 완료했다. 키는 비워두고
+  not_configured·발급 후 검증 목록과 [구현/검증 범위](../quality/LOOKUP-ADMISSION-2026-10-27.md)를
+  보존한다. 실제 외부 인수/배포·#506/#339/#71 완료로 확대하지 않는다.
 - 사용자 후속 지시로 미발급 API 설정/실제 인수는 이번 완료 범위에서 제외하고 비워둔다.
   관련 이슈는 미래 검증 항목을 보존한 뒤 정리할 수 있다. 실제 성공·API 발급을 꾸미지 않는다.
   Windows 검사 호환 #540은 PR541/mainf67d2af와 정확 head CI 성공으로 완료했다.
