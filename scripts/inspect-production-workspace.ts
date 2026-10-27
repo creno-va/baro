@@ -100,6 +100,28 @@ export function finiteWorkspaceOutput(raw: unknown) {
       : {}),
   };
 }
+/** Traverse only known telemetry envelope fields; the caller validates finite diagnostic enums. */
+export function telemetryCandidates(raw: unknown, depth = 0): unknown[] {
+  if (depth > 8) return [];
+  if (typeof raw === "string") {
+    if (raw.length > 8192) return [];
+    try {
+      return telemetryCandidates(JSON.parse(raw), depth + 1);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(raw))
+    return raw.slice(0, 30).flatMap((value) => telemetryCandidates(value, depth + 1));
+  if (!raw || typeof raw !== "object") return [];
+  const value = raw as Record<string, unknown>;
+  return [
+    raw,
+    ...["source", "message", "logs", "$metadata"].flatMap((key) =>
+      telemetryCandidates(value[key], depth + 1),
+    ),
+  ];
+}
 /** Operator-only read port. No credentials, ciphertext, case text, SQL errors or raw logs leave it. */
 export async function inspectProductionWorkspace(
   raw: unknown,
@@ -178,68 +200,99 @@ export async function inspectProductionWorkspace(
       const logs = await api("workers/observability/telemetry/query", {
         queryId: "baro-report-dependency-inspection",
         timeframe: { from, to },
+        // The REST API selects its response shape at the top level, outside parameters.
+        view: "events",
+        limit: 30,
         parameters: {
-          view: "events",
-          limit: 30,
-          needle: { value: "report_dependency_failure", isRegex: false, matchCase: true },
+          needle: {
+            value: "report_dependency_failure|file_processor_failure",
+            isRegex: true,
+            matchCase: true,
+          },
         },
       });
       const events =
         z
           .object({
-            events: z.object({ events: z.array(z.object({ source: z.unknown() })) }).optional(),
+            events: z
+              .object({
+                events: z.array(
+                  z.object({ source: z.unknown().optional(), $metadata: z.unknown().optional() }),
+                ),
+              })
+              .optional(),
           })
           .parse(logs).events?.events ?? [];
-      const finite = z.object({
-        event: z.literal("report_dependency_failure"),
-        stage: z.enum(["latest", "source", "create", "view", "unclassified"]),
-        category: z.enum([
-          "database_constraint",
-          "database_query",
-          "database_limit",
-          "database_unavailable",
-          "crypto_unavailable",
-          "input_invalid",
-          "provider_schema",
-          "provider_model",
-          "provider_auth",
-          "provider_budget",
-          "provider_rate",
-          "provider_timeout",
-          "provider_request",
-          "provider_unavailable",
-          "unknown",
-        ]),
-        code: z.enum([
-          "DB_OPERATION_FAILED",
-          "SNAPSHOT_INVALID",
-          "SNAPSHOT_STREAM_REQUIRED",
-          "REPOSITORY_INPUT_INVALID",
-          "FORBIDDEN",
-          "CRYPTO_DECRYPT_FAILED",
-          "CRYPTO_CONFIGURATION_INVALID",
-          "unknown",
-        ]),
-      });
+      const finite = z.union([
+        z.object({
+          event: z.literal("report_dependency_failure"),
+          stage: z.enum(["latest", "source", "create", "view", "unclassified"]),
+          category: z.enum([
+            "database_constraint",
+            "database_query",
+            "database_limit",
+            "database_unavailable",
+            "crypto_unavailable",
+            "input_invalid",
+            "provider_schema",
+            "provider_model",
+            "provider_auth",
+            "provider_budget",
+            "provider_rate",
+            "provider_timeout",
+            "provider_request",
+            "provider_unavailable",
+            "unknown",
+          ]),
+          code: z.enum([
+            "DB_OPERATION_FAILED",
+            "SNAPSHOT_INVALID",
+            "SNAPSHOT_STREAM_REQUIRED",
+            "REPOSITORY_INPUT_INVALID",
+            "FORBIDDEN",
+            "CRYPTO_DECRYPT_FAILED",
+            "CRYPTO_CONFIGURATION_INVALID",
+            "unknown",
+          ]),
+        }),
+        z.object({
+          event: z.literal("file_processor_failure"),
+          stage: z.enum([
+            "revocation_read",
+            "reset",
+            "capacity_wait",
+            "startup",
+            "dispatch",
+            "response",
+            "stream",
+            "cleanup",
+            "unclassified",
+          ]),
+          category: z.enum([
+            "instance_unavailable",
+            "start_rate_limited",
+            "port_not_ready",
+            "instance_stopped",
+            "connection_lost",
+            "startup_timeout",
+            "cancelled",
+            "invalid_output",
+            "native_response_failed",
+            "unknown",
+          ]),
+          durationMs: z.number().min(0).max(3600000).nullable(),
+          httpStatus: z.number().int().min(400).max(599).nullable(),
+        }),
+      ]);
       telemetry = {
         status: "read",
-        events: events.flatMap((event) => {
-          let source = event.source;
-          if (
-            typeof source === "object" &&
-            source &&
-            "message" in source &&
-            typeof source.message === "string"
-          ) {
-            try {
-              source = JSON.parse(source.message);
-            } catch {
-              return [];
-            }
-          }
-          const parsed = finite.safeParse(source);
-          return parsed.success ? [parsed.data] : [];
-        }),
+        returnedEvents: events.length,
+        events: events.flatMap((event) =>
+          telemetryCandidates(event).flatMap((candidate) => {
+            const parsed = finite.safeParse(candidate);
+            return parsed.success ? [parsed.data] : [];
+          }),
+        ),
       };
     } catch {
       telemetry = { status: "unavailable" };

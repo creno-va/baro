@@ -1,5 +1,5 @@
 import type { CaseView, QuestionView, SessionScope } from "@baro/client-core";
-import { workspaceProgressText } from "@baro/client-core";
+import { intakeQuestionContext, workspaceProgressText } from "@baro/client-core";
 import {
   boundedText,
   caseDetailResponseSchema,
@@ -314,6 +314,7 @@ export function createCasesClient(
       updatedAt: w.updatedAt,
       summary,
       schemaVersion: "2",
+      ...(m?.batches.length ? { intakeQuestions: intakeQuestionContext(m) } : {}),
     };
   }
   function questions(m: Metadata, revision: number): QuestionsResult {

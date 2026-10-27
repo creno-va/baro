@@ -13,6 +13,7 @@ import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { CaseMaterials } from "../workspace/CaseMaterials";
 import { BackToCases, ErrorPanel } from "./common";
+import { FactQuestionContext } from "./FactQuestionContext";
 import { useCustomerAccess } from "./useCustomerAccess";
 
 type ConfirmationReturn = {
@@ -493,6 +494,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                                 ? "공식 출처 사실 (직접 변경할 수 없음)"
                                 : "사용자가 확인할 사실"}
                             </legend>
+                            <FactQuestionContext
+                              references={fact.references}
+                              context={item.intakeQuestions}
+                              className="intake-muted"
+                            />
                             <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
                             <Textarea
                               id={`fact-${fact.id}`}

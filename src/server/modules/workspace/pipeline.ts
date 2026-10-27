@@ -614,174 +614,213 @@ export function createWorkspacePipeline(
       }
       if (draft.requestedMaterials.length || draft.requestedTools.length)
         throw new WorkspaceOutputPolicyError("unauthorized_reference");
-      const factsChanged = normalizeNewFacts(context, draft.facts);
-      assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
-      assertWorkspaceReferences(context, [
-        ...draft.references,
-        ...draft.actions.flatMap((a) => a.references),
-        ...draft.timeline.flatMap((t) => t.references),
-      ]);
-      const ids = new Set([...context.facts, ...draft.facts].map((fact) => fact.id));
-      if (
-        draft.facts.some(
-          (fact) =>
-            context.facts.some((existing) => existing.id === fact.id) ||
-            fact.conflictingFactIds.some((id) => !ids.has(id)),
-        ) ||
-        draft.actions.some(
-          (action) =>
-            action.revision !== 1 ||
-            action.status !== "todo" ||
-            action.factIds.some((id) => !ids.has(id)) ||
-            prohibited(`${action.title} ${action.instructions} ${action.caution}`),
-        ) ||
-        draft.timeline.some(
-          (entry) =>
-            entry.revision !== 1 ||
-            entry.userEdited ||
-            entry.factIds.some((id) => !ids.has(id)) ||
-            prohibited(entry.event),
-        ) ||
-        prohibitedChatText(draft.text) ||
-        draft.parties.some((party) => prohibited(JSON.stringify(party)))
-      )
-        throw new WorkspaceOutputPolicyError(
-          "prohibited_content",
-          undefined,
-          undefined,
-          chatContentFailure(context, draft, ids),
-        );
-      const dates = normalizeTimelineDates(
-        {
-          ...context,
-          facts: [
-            ...context.facts,
-            ...draft.facts.filter(
-              (fact) =>
-                fact.attribution === "user_statement" || fact.attribution === "user_material",
-            ),
-          ],
-        },
-        draft.timeline,
-        (ref) => sourceText(context, ref),
-      );
-      draft.timeline = dates.timeline;
-      const serverWarnings = [
-        ...(context.sourceStatus === "unavailable" ? [unavailableSourceWarning] : []),
-        ...(context.sourceCoverage?.sourcesPartial
-          ? ["공식 자료 일부만 확인했어요. 출처별 제한과 원문에서 빠진 범위를 확인해 주세요."]
-          : []),
-        ...(factsChanged
-          ? ["새 사실의 교정·미확인 표시는 원자료와 실제 사용자 수정 기록을 기준으로 유지했어요."]
-          : []),
-        ...(dates.changed
-          ? [
-              "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
-            ]
-          : []),
-      ];
-      draft.warnings = [
-        ...draft.warnings
-          .filter((warning) => !serverWarnings.includes(warning))
-          .slice(0, 20 - serverWarnings.length),
-        ...serverWarnings,
-      ];
-      const claimIds = new Set(draft.sourceClaims.map((claim) => claim.citationId));
-      const officialRefs = [
-        ...draft.references,
-        ...draft.facts.flatMap((f) => f.references),
-        ...draft.actions.flatMap((a) => a.references),
-        ...draft.timeline.flatMap((t) => t.references),
-      ].filter((ref) => ref.kind === "official_source");
-      if (
-        officialRefs.some((ref) => !claimIds.has(ref.citationId)) ||
-        draft.sourceClaims.some(
-          (claim) =>
-            !draft.text.includes(claim.text) &&
-            !draft.facts.some((fact) => fact.text === claim.text),
+      const finishDraft = async () => {
+        const factsChanged = normalizeNewFacts(context, draft.facts);
+        assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
+        assertWorkspaceReferences(context, [
+          ...draft.references,
+          ...draft.actions.flatMap((a) => a.references),
+          ...draft.timeline.flatMap((t) => t.references),
+        ]);
+        const ids = new Set([...context.facts, ...draft.facts].map((fact) => fact.id));
+        if (
+          draft.facts.some(
+            (fact) =>
+              context.facts.some((existing) => existing.id === fact.id) ||
+              fact.conflictingFactIds.some((id) => !ids.has(id)),
+          ) ||
+          draft.actions.some(
+            (action) =>
+              action.revision !== 1 ||
+              action.status !== "todo" ||
+              action.factIds.some((id) => !ids.has(id)) ||
+              prohibited(`${action.title} ${action.instructions} ${action.caution}`),
+          ) ||
+          draft.timeline.some(
+            (entry) =>
+              entry.revision !== 1 ||
+              entry.userEdited ||
+              entry.factIds.some((id) => !ids.has(id)) ||
+              prohibited(entry.event),
+          ) ||
+          prohibitedChatText(draft.text) ||
+          draft.parties.some((party) => prohibited(JSON.stringify(party)))
         )
-      )
-        throw new WorkspaceOutputPolicyError("unsupported_fact");
-      if (draft.sourceClaims.some((claim) => claim.kind === "quotation")) {
-        const resolved = resolveQuotationSpans(draft.sourceClaims, context);
-        draft.sourceClaims = resolved.claims;
-        // Diagnostic observers cannot affect acceptance. Audit and claim hashes
-        // below both receive these final coordinates, never a pre-repair receipt.
-        try {
-          deps.observeQuotationResolution?.(resolved.resolution);
-        } catch {}
-      }
-      const checked = await audit("workspace_chat", context, draft, requestId);
-      if (draft.sourceClaims.length) {
-        const retrieval = context.sourceRetrieval;
-        const rejectClaim = (failure: ClaimFailure) =>
-          new WorkspaceOutputPolicyError(
-            "unsupported_fact",
-            undefined,
-            undefined,
-            undefined,
-            failure,
-          );
-        if (!retrieval) throw rejectClaim("retrieval_missing");
-        for (const claim of draft.sourceClaims) {
-          const source = context.sourceTexts?.find((text) => text.citationId === claim.citationId);
-          if (!source) throw rejectClaim("excerpt_missing");
-          if (claim.endUtf16 > source.text.length) throw rejectClaim("excerpt_span_bounds");
-        }
-        const reviews = await Promise.all(
-          draft.sourceClaims.map(async (claim) => ({
-            claimId: claim.id,
-            claimHash: await claimReviewHash(claim, retrieval.asOfDate),
-            sourceHash:
-              retrieval.chunks.find((chunk) => chunk.citation.id === claim.citationId)?.citation
-                .contentHash ?? "",
-            accepted: checked.legalClaimsSupported,
-            policyAccepted: checked.pass && !checked.strategyDetected,
-          })),
-        );
-        const result = await validateV2Claims(
-          draft.sourceClaims,
-          context.citations.filter((citation) => claimIds.has(citation.id)),
-          retrieval,
-          reviews,
-        );
-        if (!result.valid) {
           throw new WorkspaceOutputPolicyError(
-            "unsupported_fact",
+            "prohibited_content",
             undefined,
             undefined,
-            undefined,
-            result.failure,
+            chatContentFailure(context, draft, ids),
           );
-        }
-        // Claims are independently audited and integrity-checked above. Preserve
-        // their provenance even when the model omitted the redundant message ref.
-        // Publication rechecks these refs against current citation bindings.
-        const referenced = new Set(
-          draft.references.flatMap((ref) =>
-            ref.kind === "official_source" ? [ref.citationId] : [],
-          ),
+        const dates = normalizeTimelineDates(
+          {
+            ...context,
+            facts: [
+              ...context.facts,
+              ...draft.facts.filter(
+                (fact) =>
+                  fact.attribution === "user_statement" || fact.attribution === "user_material",
+              ),
+            ],
+          },
+          draft.timeline,
+          (ref) => sourceText(context, ref),
         );
-        for (const citationId of claimIds) {
-          if (!referenced.has(citationId))
-            draft.references.push({ kind: "official_source", citationId });
-        }
-        if (draft.references.length > 100)
-          throw new WorkspaceOutputPolicyError("unauthorized_reference");
-      }
-      const cited = new Set(
-        [
+        draft.timeline = dates.timeline;
+        const serverWarnings = [
+          ...(context.sourceStatus === "unavailable" ? [unavailableSourceWarning] : []),
+          ...(context.sourceCoverage?.sourcesPartial
+            ? ["공식 자료 일부만 확인했어요. 출처별 제한과 원문에서 빠진 범위를 확인해 주세요."]
+            : []),
+          ...(factsChanged
+            ? ["새 사실의 교정·미확인 표시는 원자료와 실제 사용자 수정 기록을 기준으로 유지했어요."]
+            : []),
+          ...(dates.changed
+            ? [
+                "타임라인 날짜는 원문에서 확인한 정밀도로만 표시했어요. 근거가 없으면 날짜 미확인으로 남겼어요.",
+              ]
+            : []),
+        ];
+        draft.warnings = [
+          ...draft.warnings
+            .filter((warning) => !serverWarnings.includes(warning))
+            .slice(0, 20 - serverWarnings.length),
+          ...serverWarnings,
+        ];
+        const claimIds = new Set(draft.sourceClaims.map((claim) => claim.citationId));
+        const officialRefs = [
           ...draft.references,
           ...draft.facts.flatMap((f) => f.references),
           ...draft.actions.flatMap((a) => a.references),
           ...draft.timeline.flatMap((t) => t.references),
-        ].flatMap((ref) => (ref.kind === "official_source" ? [ref.citationId] : [])),
-      );
-      return {
-        ...draft,
-        toolResults: context.toolResults ?? [],
-        citations: context.citations.filter((citation) => cited.has(citation.id)),
+        ].filter((ref) => ref.kind === "official_source");
+        if (
+          officialRefs.some((ref) => !claimIds.has(ref.citationId)) ||
+          draft.sourceClaims.some(
+            (claim) =>
+              !draft.text.includes(claim.text) &&
+              !draft.facts.some((fact) => fact.text === claim.text),
+          )
+        )
+          throw new WorkspaceOutputPolicyError("unsupported_fact");
+        if (draft.sourceClaims.some((claim) => claim.kind === "quotation")) {
+          const resolved = resolveQuotationSpans(draft.sourceClaims, context);
+          draft.sourceClaims = resolved.claims;
+          // Diagnostic observers cannot affect acceptance. Audit and claim hashes
+          // below both receive these final coordinates, never a pre-repair receipt.
+          try {
+            deps.observeQuotationResolution?.(resolved.resolution);
+          } catch {}
+        }
+        const checked = await audit("workspace_chat", context, draft, requestId);
+        if (draft.sourceClaims.length) {
+          const retrieval = context.sourceRetrieval;
+          const rejectClaim = (failure: ClaimFailure) =>
+            new WorkspaceOutputPolicyError(
+              "unsupported_fact",
+              undefined,
+              undefined,
+              undefined,
+              failure,
+            );
+          if (!retrieval) throw rejectClaim("retrieval_missing");
+          for (const claim of draft.sourceClaims) {
+            const source = context.sourceTexts?.find(
+              (text) => text.citationId === claim.citationId,
+            );
+            if (!source) throw rejectClaim("excerpt_missing");
+            if (claim.endUtf16 > source.text.length) throw rejectClaim("excerpt_span_bounds");
+          }
+          const reviews = await Promise.all(
+            draft.sourceClaims.map(async (claim) => ({
+              claimId: claim.id,
+              claimHash: await claimReviewHash(claim, retrieval.asOfDate),
+              sourceHash:
+                retrieval.chunks.find((chunk) => chunk.citation.id === claim.citationId)?.citation
+                  .contentHash ?? "",
+              accepted: checked.legalClaimsSupported,
+              policyAccepted: checked.pass && !checked.strategyDetected,
+            })),
+          );
+          const result = await validateV2Claims(
+            draft.sourceClaims,
+            context.citations.filter((citation) => claimIds.has(citation.id)),
+            retrieval,
+            reviews,
+          );
+          if (!result.valid) {
+            throw new WorkspaceOutputPolicyError(
+              "unsupported_fact",
+              undefined,
+              undefined,
+              undefined,
+              result.failure,
+            );
+          }
+          // Claims are independently audited and integrity-checked above. Preserve
+          // their provenance even when the model omitted the redundant message ref.
+          // Publication rechecks these refs against current citation bindings.
+          const referenced = new Set(
+            draft.references.flatMap((ref) =>
+              ref.kind === "official_source" ? [ref.citationId] : [],
+            ),
+          );
+          for (const citationId of claimIds) {
+            if (!referenced.has(citationId))
+              draft.references.push({ kind: "official_source", citationId });
+          }
+          if (draft.references.length > 100)
+            throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        }
+        const cited = new Set(
+          [
+            ...draft.references,
+            ...draft.facts.flatMap((f) => f.references),
+            ...draft.actions.flatMap((a) => a.references),
+            ...draft.timeline.flatMap((t) => t.references),
+          ].flatMap((ref) => (ref.kind === "official_source" ? [ref.citationId] : [])),
+        );
+        return {
+          ...draft,
+          toolResults: context.toolResults ?? [],
+          citations: context.citations.filter((citation) => cited.has(citation.id)),
+        };
       };
+      try {
+        return await finishDraft();
+      } catch (error) {
+        if (
+          !(error instanceof WorkspaceOutputPolicyError) ||
+          error.reason !== "prohibited_content" ||
+          error.contentFailure?.field !== "chat_text" ||
+          error.contentFailure.category !== "strategy" ||
+          error.contentFailure.canonicalRefusalOpening ||
+          (!draft.timeline.length && !draft.actions.length)
+        )
+          throw error;
+        // One newly admitted generation for a rejected body. Never rewrite or expose the
+        // rejected draft, repeat lookup side effects, or relax the full validation/audit.
+        draft = workspaceChatOutputSchema.parse(
+          await call(
+            "workspace_chat",
+            {
+              ...context,
+              draftCorrection: {
+                reason: "prohibited_content",
+                contentFailure: { field: "chat_text", category: "strategy" },
+              },
+            },
+            requestId,
+          ),
+        );
+        if (
+          draft.requestedSources.length ||
+          draft.requestedMaterials.length ||
+          draft.requestedTools.length
+        )
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        return finishDraft();
+      }
     },
   };
 }

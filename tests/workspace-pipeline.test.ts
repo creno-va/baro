@@ -1160,3 +1160,71 @@ test.each(["private_identifier", "strategy"] as const)(
     });
   },
 );
+
+test("structured preparation body gets one freshly admitted correction with unchanged content guards and final audit", async () => {
+  const saved = confirmedChatContext();
+  const action = {
+    id: "check_record",
+    revision: 1,
+    kind: "organize_materials",
+    title: "보유 자료 확인",
+    instructions: "가지고 있는 자료가 있는지 확인해 주세요.",
+    caution: "기억나지 않는 부분은 미확인으로 남겨 주세요.",
+    status: "todo",
+    factIds: [],
+    references: [],
+  };
+  let generated = 0;
+  const p = pipeline((phase, input) => {
+    if (phase === "workspace_audit") {
+      expect(input).toMatchObject({
+        draft: { text: "보유 자료를 확인하는 준비 항목을 정리했어요." },
+      });
+      return approved;
+    }
+    generated++;
+    if (generated === 2)
+      expect(input).toMatchObject({
+        draftCorrection: { contentFailure: { field: "chat_text", category: "strategy" } },
+      });
+    return {
+      ...chatText(
+        generated === 1
+          ? "소송 전략은 추가하지 않고 준비 항목을 정리했어요."
+          : "보유 자료를 확인하는 준비 항목을 정리했어요.",
+      ),
+      actions: [action],
+    };
+  });
+  const result = await p.value.chat(saved, "synthetic_preparation_recovery");
+  expect(result.actions).toHaveLength(1);
+  expect(p.calls.map((call) => call.phase)).toEqual([
+    "workspace_chat",
+    "workspace_chat",
+    "workspace_audit",
+  ]);
+  expect(new Set(p.calls.map((call) => call.invocation)).size).toBe(3);
+});
+
+test("a second prohibited preparation body stays private without a third generation or audit bypass", async () => {
+  const p = pipeline(() => ({
+    ...chatText("소송 전략을 추가하지 않고 정리했어요."),
+    actions: [
+      {
+        id: "check_record",
+        revision: 1,
+        kind: "organize_materials",
+        title: "자료 보유 확인",
+        instructions: "보유한 자료가 있는지 확인해 주세요.",
+        caution: "모르면 미확인으로 남겨 주세요.",
+        status: "todo",
+        factIds: [],
+        references: [],
+      },
+    ],
+  }));
+  await expect(
+    p.value.chat(confirmedChatContext(), "synthetic_preparation_stopped"),
+  ).rejects.toMatchObject({ reason: "prohibited_content" });
+  expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_chat"]);
+});

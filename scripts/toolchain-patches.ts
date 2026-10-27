@@ -46,25 +46,34 @@ export const bytesHash = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
 export async function packageTreeHash(directory: string) {
   const files: { path: string; sha256: string }[] = [];
-  async function walk(path: string, relative = "") {
-    for (const name of (await readdir(path)).sort()) {
-      const local = relative ? `${relative}/${name}` : name,
-        full = resolve(path, name),
-        metadata = await lstat(full);
-      if (
-        !relative &&
-        /^\.bun-tag-[a-f0-9]{16}$/.test(name) &&
-        metadata.isFile() &&
-        metadata.size === 0
-      )
-        continue;
-      if (metadata.isDirectory()) await walk(full, local);
-      else if (metadata.isFile())
-        files.push({ path: local, sha256: bytesHash(await readFile(full)) });
-      else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
+  const directories = [{ path: directory, relative: "" }];
+  // Keep the exact tree/digest contract while bounding filesystem concurrency.
+  // Serial stat/read for thousands of files exceeded the existing Windows check timeout.
+  while (directories.length) {
+    const current = directories.pop();
+    if (!current) break;
+    const names = (await readdir(current.path)).sort();
+    for (let offset = 0; offset < names.length; offset += 8) {
+      await Promise.all(
+        names.slice(offset, offset + 8).map(async (name) => {
+          const local = current.relative ? `${current.relative}/${name}` : name;
+          const full = resolve(current.path, name);
+          const metadata = await lstat(full);
+          if (
+            !current.relative &&
+            /^\.bun-tag-[a-f0-9]{16}$/.test(name) &&
+            metadata.isFile() &&
+            metadata.size === 0
+          )
+            return;
+          if (metadata.isDirectory()) directories.push({ path: full, relative: local });
+          else if (metadata.isFile())
+            files.push({ path: local, sha256: bytesHash(await readFile(full)) });
+          else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
+        }),
+      );
     }
   }
-  await walk(directory);
   return bytesHash(
     files
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
