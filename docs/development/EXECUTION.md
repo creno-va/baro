@@ -7,6 +7,12 @@
 개선한다. 랜딩페이지의 코드·자산·스타일은 변경하지 않는다. 아래 모바일 진행 표는
 당시 source/검증 이력이며 새 앱 개발 착수 지시로 사용하지 않는다.
 
+- #555 `codex/555-registry-scope`: 사용자 후속 지시에 따라 등기정보광장은 현재 MVP의
+  필수 용도가 없어 신규 연동·발급·인수 대기에서 제외한다. 신규 capability 목록에서
+  registry placeholder를 빼고 과거 ID/저장 결과·읽기와 비실행 처리는 호환 보존한다.
+  국세청·더치트·DataHub는 미발급/실제 검증 대기다. 등기정보광장 제외를 실제 조회
+  구현 완료나 남은 다른 공급자의 인수 성공으로 표현하지 않는다.
+
 - #339: 공식 registry/advisory 재확인에서 node-forge1.4.0의 patched version이 없고,
   Expo CLI58.1.15도 Zod3.25.76을 요구한다. 기존 보완을 유지하며 `codex/339-constrained-zod-backport`에서
   CLI Zod3의 명시적 array/set 상한 조기 거절을 source/CJS/ESM에 이식했다. 원본 전체 tree·
