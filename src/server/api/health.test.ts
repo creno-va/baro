@@ -84,7 +84,7 @@ describe("AI configuration health", () => {
         { phase: "workspace_questions", inputTokens: 1046176, outputTokens: 2400 },
         { phase: "workspace_summary", inputTokens: 1038576, outputTokens: 10000 },
         { phase: "workspace_chat", inputTokens: 1038576, outputTokens: 10000 },
-        { phase: "workspace_audit", inputTokens: 1046176, outputTokens: 2400 },
+        { phase: "workspace_audit", inputTokens: 1040576, outputTokens: 8000 },
       ],
     });
     expect(JSON.stringify(body)).not.toContain(f.secret);

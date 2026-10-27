@@ -789,26 +789,49 @@ export function createWorkspacePipeline(
       try {
         return await finishDraft();
       } catch (error) {
-        if (
-          !(error instanceof WorkspaceOutputPolicyError) ||
-          error.reason !== "prohibited_content" ||
-          error.contentFailure?.field !== "chat_text" ||
-          error.contentFailure.category !== "strategy" ||
-          error.contentFailure.canonicalRefusalOpening ||
-          (!draft.timeline.length && !draft.actions.length)
-        )
-          throw error;
-        // One newly admitted generation for a rejected body. Never rewrite or expose the
+        if (!(error instanceof WorkspaceOutputPolicyError)) throw error;
+        const bodyFailure =
+          error.reason === "prohibited_content" &&
+          error.contentFailure?.field === "chat_text" &&
+          error.contentFailure.category === "strategy" &&
+          !error.contentFailure.canonicalRefusalOpening &&
+          (draft.timeline.length > 0 || draft.actions.length > 0);
+        const auditFailure = error.auditFailure;
+        const timelineFailure =
+          error.reason === "audit_rejected" &&
+          draft.timeline.length > 0 &&
+          auditFailure?.legalClaimsSupported === true &&
+          auditFailure.strategyDetected === false &&
+          auditFailure.unsupportedFactCount === 0 &&
+          auditFailure.findings.length > 0 &&
+          auditFailure.findings.every(
+            (finding) =>
+              finding.severity === "critical" &&
+              finding.code === "unsupported_fact" &&
+              finding.target === "timeline" &&
+              finding.basis === "intake_narrative",
+          );
+        if (!bodyFailure && !timelineFailure) throw error;
+        // One shared newly admitted correction for either narrow failure. Never expose the
         // rejected draft, repeat lookup side effects, or relax the full validation/audit.
         draft = workspaceChatOutputSchema.parse(
           await call(
             "workspace_chat",
             {
               ...context,
-              draftCorrection: {
-                reason: "prohibited_content",
-                contentFailure: { field: "chat_text", category: "strategy" },
-              },
+              draftCorrection: bodyFailure
+                ? {
+                    reason: "prohibited_content",
+                    contentFailure: { field: "chat_text", category: "strategy" },
+                  }
+                : {
+                    reason: "audit_rejected",
+                    auditFailure: {
+                      code: "unsupported_fact",
+                      target: "timeline",
+                      basis: "intake_narrative",
+                    },
+                  },
             },
             requestId,
           ),
