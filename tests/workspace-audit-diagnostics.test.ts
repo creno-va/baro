@@ -186,6 +186,6 @@ test("provider requires diagnostic fields while server enforces array bounds wit
   expect(wire.messages[0]?.content).toContain(
     "This classification only explains a finding already reached; it must not create a finding, change pass or severity, or replace any semantic or policy check.",
   );
-  expect(wire.max_completion_tokens).toBe(2400);
+  expect(wire.max_completion_tokens).toBe(8000);
   expect(wire).not.toHaveProperty("store");
 });

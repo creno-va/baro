@@ -15,3 +15,9 @@ Scope: #558. Landing code, assets and styles remain unchanged. External lookup A
 ## Verification boundary
 
 Focused gateway/schema/terminal-receipt regressions passed (48 tests). Required quick/build, ledger/runtime regressions and fixed offline evaluations are being run for the implementation candidate; exact CI, final main full validation, same-SHA preview and production receipts are recorded in #558/#71. Prior candidate 405ef70 is held after its actual AI failure and must not be treated as repaired or as full/security acceptance.
+
+## Follow-up after the 8000-token preview run
+
+Read-only inspection 40477660853 shows that audit now completed with a valid structured verdict and rejected an unsupported timeline assertion based on the intake narrative. The historical rejected text is not retained, so its exact wording is not claimed. Prompt 2.7.2 explicitly distinguishes a reported occurrence from an agreed deadline and preserves unsupported date components as unknown. A sole critical unsupported-timeline finding with supported legal claims, no strategy and no unsupported fact IDs may use the existing single shared draft-correction slot. The fresh draft still passes every original source/content check and a new independent audit; a second failure stops, mixed critical findings do not enter this path, and lookup side effects cannot be repeated.
+
+The first full run of 3863863 passed 4407 tests but stopped at two stale test expectations for the old audit ceiling. Update those expectations to the actual 8000 output / 1040576 input envelope; all other technical rejection assertions remain intact. New focused timeline/ceiling tests passed (131). Actual success and final release verification remain separate records in #558/#71.

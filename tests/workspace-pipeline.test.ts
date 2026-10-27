@@ -1228,3 +1228,138 @@ test("a second prohibited preparation body stays private without a third generat
   ).rejects.toMatchObject({ reason: "prohibited_content" });
   expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_chat"]);
 });
+
+const timelineRejection = {
+  ...approved,
+  pass: false,
+  findings: [
+    {
+      severity: "critical",
+      code: "unsupported_fact",
+      target: "timeline",
+      basis: "intake_narrative",
+    },
+  ],
+};
+function timelineRepairDraft(repaired: boolean) {
+  return {
+    ...chatText("약속한 기한에 관한 진술을 정리했어요."),
+    timeline: [
+      {
+        id: "reported_deadline",
+        revision: 1,
+        date: null,
+        datePrecision: "unknown",
+        event: repaired
+          ? "9월 30일까지 돌려받기로 한 약속이며 실제 반환 여부는 미확인입니다."
+          : "9월 30일에 전액 반환받았습니다.",
+        certainty: "reported",
+        factIds: [],
+        userEdited: false,
+        references: [{ kind: "intake_narrative", intakeRevision: 3 }],
+      },
+    ],
+  };
+}
+for (const repaired of [true, false]) {
+  test(`timeline-only source rejection gets one fresh generation and full audit, repaired=${repaired}`, async () => {
+    const saved = confirmedChatContext();
+    saved.intake.narrative =
+      "2026년 9월 1일에 돈을 빌려줬고 9월 30일까지 돌려받기로 했으나 아직 받지 못했습니다.";
+    let generations = 0,
+      audits = 0;
+    const p = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        audits++;
+        return audits === 2 && repaired ? approved : timelineRejection;
+      }
+      generations++;
+      if (generations === 2) {
+        const correction = (input as { draftCorrection: unknown }).draftCorrection;
+        expect(correction).toEqual({
+          reason: "audit_rejected",
+          auditFailure: { code: "unsupported_fact", target: "timeline", basis: "intake_narrative" },
+        });
+        expect(JSON.stringify(correction)).not.toContain("전액 반환");
+      }
+      return timelineRepairDraft(generations === 2);
+    });
+    if (repaired)
+      expect((await p.value.chat(saved, "synthetic_timeline_repair")).timeline[0]?.event).toContain(
+        "약속",
+      );
+    else
+      await expect(p.value.chat(saved, "synthetic_timeline_repair")).rejects.toMatchObject({
+        reason: "audit_rejected",
+      });
+    expect(p.calls.map((call) => call.phase)).toEqual([
+      "workspace_chat",
+      "workspace_audit",
+      "workspace_chat",
+      "workspace_audit",
+    ]);
+    expect(new Set(p.calls.map((call) => call.invocation)).size).toBe(4);
+    expect(generations).toBe(2);
+  });
+}
+
+test("mixed critical audit findings cannot enter timeline correction", async () => {
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? {
+          ...timelineRejection,
+          findings: [
+            ...timelineRejection.findings,
+            { severity: "critical", code: "privacy", target: "response_text", basis: "policy" },
+          ],
+        }
+      : timelineRepairDraft(false),
+  );
+  await expect(p.value.chat(confirmedChatContext(), "synthetic_mixed_audit")).rejects.toMatchObject(
+    { reason: "audit_rejected" },
+  );
+  expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+});
+
+test("timeline correction cannot request new lookup side effects", async () => {
+  let generations = 0;
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? timelineRejection
+      : {
+          ...timelineRepairDraft(++generations === 2),
+          requestedTools: generations === 2 ? ["thecheat"] : [],
+        },
+  );
+  await expect(
+    p.value.chat(confirmedChatContext(), "synthetic_repair_lookup"),
+  ).rejects.toMatchObject({ reason: "unauthorized_reference" });
+  expect(p.calls.map((call) => call.phase)).toEqual([
+    "workspace_chat",
+    "workspace_audit",
+    "workspace_chat",
+  ]);
+});
+
+test("body and timeline rejection share the same single correction ceiling", async () => {
+  let generations = 0;
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? timelineRejection
+      : {
+          ...timelineRepairDraft(false),
+          text:
+            ++generations === 1
+              ? "소송 전략을 추가하지 않고 정리했어요."
+              : "약속된 기한을 정리했어요.",
+        },
+  );
+  await expect(
+    p.value.chat(confirmedChatContext(), "synthetic_shared_repair_limit"),
+  ).rejects.toMatchObject({ reason: "audit_rejected" });
+  expect(p.calls.map((call) => call.phase)).toEqual([
+    "workspace_chat",
+    "workspace_chat",
+    "workspace_audit",
+  ]);
+});
