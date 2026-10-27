@@ -200,9 +200,10 @@ export async function inspectProductionWorkspace(
       const logs = await api("workers/observability/telemetry/query", {
         queryId: "baro-report-dependency-inspection",
         timeframe: { from, to },
+        // The REST API selects its response shape at the top level, outside parameters.
+        view: "events",
+        limit: 30,
         parameters: {
-          view: "events",
-          limit: 30,
           needle: {
             value: "report_dependency_failure|file_processor_failure",
             isRegex: true,

@@ -96,7 +96,7 @@ test("prefixed report jobs retain the same bounded metadata contract as UUID wor
 test("nested telemetry messages expose only finite diagnostics and discard unrelated private fields", async () => {
   let calls = 0;
   const time = new Date().toISOString();
-  const fetcher = async () => {
+  const fetcher = async (_url: string, init?: RequestInit) => {
     calls++;
     if (calls === 1)
       return Response.json({ release: "a".repeat(40), environment: "production", status: "ready" });
@@ -121,6 +121,10 @@ test("nested telemetry messages expose only finite diagnostics and discard unrel
           },
         ],
       });
+    const query = JSON.parse(String(init?.body));
+    expect(query.view).toBe("events");
+    expect(query.limit).toBe(30);
+    expect(query.parameters.view).toBeUndefined();
     return Response.json({
       success: true,
       result: {
