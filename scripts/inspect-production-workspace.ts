@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../src/contracts";
 import { safeClaimFailure } from "../src/server/modules/citation/claim-diagnostics";
+import { safeModelSchemaFailure } from "../src/server/modules/llm-gateway/schema-diagnostics";
 import { safeWorkspaceAuditFailure } from "../src/server/modules/workspace/audit-diagnostics";
 import { safeWorkspaceContentFailure } from "../src/server/modules/workspace/content-diagnostics";
 import { safeWorkspacePublicationFailure } from "../src/server/workspace-publication-diagnostics";
@@ -99,6 +100,9 @@ export function finiteWorkspaceOutput(raw: unknown) {
     })
     .safeParse(data.factFailure);
   return {
+    ...(safeModelSchemaFailure(data.schemaFailure)
+      ? { schemaFailure: safeModelSchemaFailure(data.schemaFailure) }
+      : {}),
     ...(timings.success ? { stageTimings: timings.data } : {}),
     ...(policy.success ? { policyReason: policy.data } : {}),
     ...(fact.success ? { factFailure: fact.data } : {}),

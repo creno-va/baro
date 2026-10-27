@@ -17,6 +17,7 @@ import {
   type WorkspacePublicationFailure,
 } from "../../workspace-publication-diagnostics";
 import { safeClaimFailure } from "../citation/claim-diagnostics";
+import { safeModelSchemaFailure } from "../llm-gateway/schema-diagnostics";
 import { ModelError } from "../llm-gateway/service";
 import { safeWorkspaceAuditFailure } from "./audit-diagnostics";
 import { safeWorkspaceContentFailure } from "./content-diagnostics";
@@ -310,6 +311,10 @@ export async function executeWorkspace(
     };
   } catch (error) {
     const stageTimings = progress.finish("failed");
+    const schemaFailure =
+      error instanceof ModelError && error.code === "MODEL_SCHEMA_INVALID"
+        ? safeModelSchemaFailure(error.schemaFailure)
+        : undefined;
     const policyReason =
       error instanceof WorkspaceOutputPolicyError
         ? reportWorkspacePolicyFailure(error.reason)
@@ -345,6 +350,7 @@ export async function executeWorkspace(
       jobId: params.jobId,
       status: "failed" as const,
       stageTimings,
+      ...(schemaFailure ? { schemaFailure } : {}),
       ...(policyReason ? { policyReason } : {}),
       ...(factFailure ? { factFailure } : {}),
       ...(auditFailure ? { auditFailure } : {}),

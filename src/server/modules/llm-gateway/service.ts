@@ -28,6 +28,7 @@ import {
   WORKSPACE_PROMPT_VERSION,
 } from "./prompts";
 import { providerWire } from "./provider-wire";
+import { type ModelSchemaFailure, modelSchemaValidationFailure } from "./schema-diagnostics";
 import { gatewayRequestIssue, gatewayResponse } from "./transport";
 import {
   workspaceAuditOutputSchema,
@@ -64,10 +65,16 @@ const limits = {
   workspace_summary: 10000,
   workspace_precedent_compare: 4000,
   workspace_chat: 10000,
-  workspace_audit: 2400,
+  // MEDIUM thinking shares this envelope with the strict JSON answer. Two
+  // actual audits failed near 2383 total tokens under the old 2400 envelope.
+  // Keep bounded headroom, the existing reasoning level and attempt/deadline guards.
+  workspace_audit: 8000,
 };
 export class ModelError extends Error {
-  constructor(readonly code: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED") {
+  constructor(
+    readonly code: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED",
+    readonly schemaFailure?: ModelSchemaFailure,
+  ) {
     super(code);
   }
 }
@@ -414,11 +421,22 @@ export function createLlmGateway(
         }
         const completion = readModelCompletion(raw);
         let output: unknown = null;
+        let schemaFailure: ModelSchemaFailure = {
+          phase,
+          reason: completion ? "incomplete_output" : "completion_invalid",
+          field: "unknown",
+          issue: "unknown",
+        };
         if (completion?.refused) throw new ModelError("POLICY_REJECTED");
         if (completion?.stopped) {
+          schemaFailure = { phase, reason: "invalid_json", field: "unknown", issue: "unknown" };
           try {
             const content = completion.content ?? "";
-            if (content.length <= 256 * 1024) output = envelope.parse(JSON.parse(content)).output;
+            if (content.length <= 256 * 1024) {
+              const parsed = envelope.safeParse(JSON.parse(content));
+              if (parsed.success) output = parsed.data.output;
+              else schemaFailure = modelSchemaValidationFailure(phase, parsed.error);
+            }
           } catch {
             output = null;
           }
@@ -436,8 +454,9 @@ export function createLlmGateway(
           });
           return output;
         }
-        if (correction || call === 2) throw new ModelError("MODEL_SCHEMA_INVALID");
-        if (!(await reserveCorrection())) throw new ModelError("MODEL_SCHEMA_INVALID");
+        if (correction || call === 2) throw new ModelError("MODEL_SCHEMA_INVALID", schemaFailure);
+        if (!(await reserveCorrection()))
+          throw new ModelError("MODEL_SCHEMA_INVALID", schemaFailure);
         correction = true;
       }
       throw new ModelError("MODEL_UNAVAILABLE");
