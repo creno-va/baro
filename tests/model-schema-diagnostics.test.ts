@@ -143,7 +143,7 @@ test("schema diagnostics drop arbitrary text and reject unknown enum values", ()
     reason: "incomplete_output",
     field: "unknown",
     issue: "unknown",
-  };
+  } as const;
   expect(
     safeModelSchemaFailure({ ...finite, output: "private-text", stack: "private-stack" }),
   ).toEqual(finite);
