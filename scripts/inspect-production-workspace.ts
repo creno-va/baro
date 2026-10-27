@@ -1,0 +1,260 @@
+import { z } from "zod";
+import { safeClaimFailure } from "../src/server/modules/citation/claim-diagnostics";
+import { safeWorkspaceAuditFailure } from "../src/server/modules/workspace/audit-diagnostics";
+import { safeWorkspaceContentFailure } from "../src/server/modules/workspace/content-diagnostics";
+import { safeWorkspacePublicationFailure } from "../src/server/workspace-publication-diagnostics";
+
+const account = "9e844969d0c44b2449f3951d1f301654";
+const database = "d315e93f-2fac-4cc2-bf99-e9d6eb31523f";
+const inputSchema = z.object({
+  token: z.string().min(1),
+  sha: z.string().regex(/^[a-f0-9]{40}$/),
+  workspaceId: z.uuid(),
+});
+const jobSchema = z.object({
+  id: z.uuid(),
+  runtime_instance_id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+  kind: z.enum([
+    "intake_questions",
+    "intake_summary",
+    "chat_response",
+    "file_processing",
+    "report_build",
+  ]),
+  status: z.enum([
+    "queued",
+    "running",
+    "validating",
+    "completed",
+    "failed",
+    "cancelled",
+    "superseded",
+  ]),
+  failure_code: z
+    .string()
+    .regex(/^[A-Z_]{1,64}$/)
+    .nullable(),
+  attempts: z.number().int().min(0).max(10),
+  created_at: z.iso.datetime(),
+  updated_at: z.iso.datetime(),
+});
+const policySchema = z.enum([
+  "unauthorized_reference",
+  "unsupported_fact",
+  "prohibited_content",
+  "question_repetition",
+  "audit_rejected",
+  "policy_rejected",
+]);
+export function finiteWorkspaceOutput(raw: unknown) {
+  const value = z.record(z.string(), z.unknown()).safeParse(raw);
+  if (!value.success) return null;
+  const data = value.data;
+  const policy = policySchema.safeParse(data.policyReason);
+  const fact = z
+    .object({
+      category: z.enum([
+        "source_text_unavailable",
+        "source_text_mismatch",
+        "claim_text_missing",
+        "claim_reference_mismatch",
+        "unknown",
+      ]),
+      attribution: z.enum([
+        "user_statement",
+        "user_material",
+        "official_source",
+        "ai_organization",
+        "unknown",
+      ]),
+      referenceKind: z.enum([
+        "intake_narrative",
+        "intake_answer",
+        "user_message",
+        "user_material",
+        "official_source",
+        "mixed",
+        "none",
+        "unknown",
+      ]),
+      factCount: z.number().int().min(0).max(1000).nullable(),
+      referenceCount: z.number().int().min(0).max(1000).nullable(),
+      availableSourceCount: z.number().int().min(0).max(1000).nullable(),
+    })
+    .safeParse(data.factFailure);
+  return {
+    ...(policy.success ? { policyReason: policy.data } : {}),
+    ...(fact.success ? { factFailure: fact.data } : {}),
+    ...(safeWorkspacePublicationFailure(data.publicationFailure)
+      ? { publicationFailure: safeWorkspacePublicationFailure(data.publicationFailure) }
+      : {}),
+    ...(safeClaimFailure(data.claimFailure)
+      ? { claimFailure: safeClaimFailure(data.claimFailure) }
+      : {}),
+    ...(safeWorkspaceAuditFailure(data.auditFailure)
+      ? { auditFailure: safeWorkspaceAuditFailure(data.auditFailure) }
+      : {}),
+    ...(safeWorkspaceContentFailure(data.contentFailure)
+      ? { contentFailure: safeWorkspaceContentFailure(data.contentFailure) }
+      : {}),
+  };
+}
+/** Operator-only read port. No credentials, ciphertext, case text, SQL errors or raw logs leave it. */
+export async function inspectProductionWorkspace(
+  raw: unknown,
+  fetcher: (input: string, init?: RequestInit) => Promise<Response> = fetch,
+) {
+  const input = inputSchema.parse(raw);
+  const live = await fetcher("https://baro.site/api/health/ready", {
+    signal: AbortSignal.timeout(15000),
+    cache: "no-store",
+    redirect: "error",
+  });
+  if (
+    !live.ok ||
+    !z
+      .object({
+        release: z.literal(input.sha),
+        environment: z.literal("production"),
+        status: z.literal("ready"),
+      })
+      .safeParse(await live.json()).success
+  )
+    throw new Error("INSPECTION_RELEASE_MISMATCH");
+  async function api(path: string, body?: unknown) {
+    const response = await fetcher(
+      `https://api.cloudflare.com/client/v4/accounts/${account}/${path}`,
+      {
+        method: body === undefined ? "GET" : "POST",
+        headers: { authorization: `Bearer ${input.token}`, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(30000),
+        redirect: "error",
+      },
+    );
+    if (!response.ok) throw new Error("INSPECTION_READ_UNAVAILABLE");
+    const parsed = z
+      .object({ success: z.literal(true), result: z.unknown() })
+      .safeParse(await response.json());
+    if (!parsed.success) throw new Error("INSPECTION_READ_INVALID");
+    return parsed.data.result;
+  }
+  const result = await api(`d1/database/${database}/query`, {
+    sql: "SELECT id,runtime_instance_id,kind,status,failure_code,attempts,created_at,updated_at FROM v2_jobs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 12",
+    params: [input.workspaceId],
+  });
+  const rows =
+    z
+      .array(z.object({ success: z.literal(true), results: z.array(jobSchema).max(12) }))
+      .length(1)
+      .parse(result)[0]?.results ?? [];
+  const jobs = [];
+  for (const row of rows) {
+    let diagnostic: unknown = null;
+    if (["intake_questions", "intake_summary", "chat_response"].includes(row.kind)) {
+      const instance = z
+        .object({ output: z.unknown().optional() })
+        .parse(
+          await api(`workflows/baro-workspace-production/instances/${row.runtime_instance_id}`),
+        );
+      diagnostic = finiteWorkspaceOutput(instance.output);
+    }
+    jobs.push({ ...row, diagnostic });
+  }
+  let telemetry: unknown = { status: "not_requested" };
+  if (rows.length) {
+    try {
+      const from = Math.max(Date.parse(rows.at(-1)?.created_at ?? ""), Date.now() - 6 * 3600000);
+      const to = Math.min(
+        Date.now(),
+        Math.max(...rows.map((row) => Date.parse(row.updated_at))) + 60000,
+      );
+      const logs = await api("workers/observability/telemetry/query", {
+        queryId: "baro-report-dependency-inspection",
+        timeframe: { from, to },
+        parameters: {
+          view: "events",
+          limit: 30,
+          needle: { value: "report_dependency_failure", isRegex: false, matchCase: true },
+        },
+      });
+      const events =
+        z
+          .object({
+            events: z.object({ events: z.array(z.object({ source: z.unknown() })) }).optional(),
+          })
+          .parse(logs).events?.events ?? [];
+      const finite = z.object({
+        event: z.literal("report_dependency_failure"),
+        stage: z.enum(["latest", "source", "create", "view", "unclassified"]),
+        category: z.enum([
+          "database_constraint",
+          "database_query",
+          "database_limit",
+          "database_unavailable",
+          "crypto_unavailable",
+          "input_invalid",
+          "provider_schema",
+          "provider_model",
+          "provider_auth",
+          "provider_budget",
+          "provider_rate",
+          "provider_timeout",
+          "provider_request",
+          "provider_unavailable",
+          "unknown",
+        ]),
+        code: z.enum([
+          "DB_OPERATION_FAILED",
+          "SNAPSHOT_INVALID",
+          "SNAPSHOT_STREAM_REQUIRED",
+          "REPOSITORY_INPUT_INVALID",
+          "FORBIDDEN",
+          "CRYPTO_DECRYPT_FAILED",
+          "CRYPTO_CONFIGURATION_INVALID",
+          "unknown",
+        ]),
+      });
+      telemetry = {
+        status: "read",
+        events: events.flatMap((event) => {
+          let source = event.source;
+          if (
+            typeof source === "object" &&
+            source &&
+            "message" in source &&
+            typeof source.message === "string"
+          ) {
+            try {
+              source = JSON.parse(source.message);
+            } catch {
+              return [];
+            }
+          }
+          const parsed = finite.safeParse(source);
+          return parsed.success ? [parsed.data] : [];
+        }),
+      };
+    } catch {
+      telemetry = { status: "unavailable" };
+    }
+  }
+  return { release: input.sha, observedAt: new Date().toISOString(), jobs, telemetry };
+}
+if (import.meta.main) {
+  try {
+    const result = await inspectProductionWorkspace({
+      token: process.env.CLOUDFLARE_API_TOKEN,
+      sha: process.env.RECOVERY_EXPECTED_LIVE_SHA,
+      workspaceId: process.env.INSPECT_WORKSPACE_ID,
+    });
+    await Bun.write(
+      ".wrangler/readiness/production-inspection.json",
+      JSON.stringify(result, null, 2),
+    );
+    console.info(JSON.stringify(result));
+  } catch {
+    console.error("Production inspection unavailable; no changes or provider calls were made.");
+    process.exitCode = 1;
+  }
+}

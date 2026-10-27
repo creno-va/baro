@@ -3,6 +3,15 @@ name: Recover production runtime
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: Read finite diagnostics, or restore missing runtime settings
+        type: choice
+        default: restore
+        options: [restore, inspect]
+      workspace_id:
+        description: Existing synthetic workspace UUID for read-only inspection
+        type: string
+        required: false
       confirmation:
         description: Type production to restore missing settings on the existing production release
         required: true
@@ -49,6 +58,7 @@ jobs:
         run: bun ci
 
       - name: Restore and verify missing production runtime settings
+        if: inputs.mode != 'inspect'
         env:
           RECOVERY_EXPECTED_LIVE_SHA: ${{ inputs.expected_live_sha }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -56,11 +66,21 @@ jobs:
           LAW_API_OC: ${{ secrets.LAW_API_OC }}
         run: bun scripts/recover-production-runtime.ts
 
+      - name: Read finite production diagnostics without mutations or model calls
+        if: inputs.mode == 'inspect'
+        env:
+          RECOVERY_EXPECTED_LIVE_SHA: ${{ inputs.expected_live_sha }}
+          INSPECT_WORKSPACE_ID: ${{ inputs.workspace_id }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bun scripts/inspect-production-workspace.ts
+
       - name: Save allowlisted production recovery observation
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: production-recovery-${{ github.run_id }}
-          path: .wrangler/readiness/production-recovery.json
+          path: |
+            .wrangler/readiness/production-recovery.json
+            .wrangler/readiness/production-inspection.json
           if-no-files-found: warn
           retention-days: 7
