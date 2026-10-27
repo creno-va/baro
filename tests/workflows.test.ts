@@ -424,7 +424,20 @@ test("production runtime recovery preserves reviewer protection and cannot becom
   expect(checkout?.with).toMatchObject({ ref: "${{ github.sha }}", "persist-credentials": false });
   const artifact = job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
   expect(artifact?.if).toBe("always()");
-  expect(artifact?.with?.path).toBe(".wrangler/readiness/production-recovery.json");
+  expect(String(artifact?.with?.path).trim().split(/\r?\n/)).toEqual([
+    ".wrangler/readiness/production-recovery.json",
+    ".wrangler/readiness/production-inspection.json",
+  ]);
+  expect(job.steps[recovery]?.if).toBe("inputs.mode != 'inspect'");
+  const inspection = job.steps.find(
+    (step) => step.run === "bun scripts/inspect-production-workspace.ts",
+  );
+  expect(inspection?.if).toBe("inputs.mode == 'inspect'");
+  expect(inspection?.env).toEqual({
+    RECOVERY_EXPECTED_LIVE_SHA: "${{ inputs.expected_live_sha }}",
+    INSPECT_WORKSPACE_ID: "${{ inputs.workspace_id }}",
+    CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+  });
   expect(artifact?.with?.["retention-days"]).toBe(7);
   for (const [index, step] of job.steps.entries()) {
     expect(step["continue-on-error"]).not.toBe(true);
@@ -432,7 +445,7 @@ test("production runtime recovery preserves reviewer protection and cannot becom
     expect(step.run ?? "").not.toMatch(
       /wrangler.*deploy|migrate|provision-ai-budget|PUBLIC_BETA_ENABLED|\/deployments/,
     );
-    if (index !== recovery)
+    if (index !== recovery && step !== inspection)
       expect(Object.values(step.env ?? {}).some((value) => value.includes("secrets."))).toBe(false);
   }
 });
