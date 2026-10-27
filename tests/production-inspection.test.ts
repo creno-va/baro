@@ -3,6 +3,103 @@ import {
   finiteWorkspaceOutput,
   inspectProductionWorkspace,
 } from "../scripts/inspect-production-workspace";
+import { createTestDatabase } from "./helpers/d1";
+
+test("schema failure inspection projects existing timing and numeric usage without model calls", async () => {
+  const db = await createTestDatabase();
+  const time = new Date().toISOString();
+  let calls = 0;
+  const fetcher = async (_url: string, init?: RequestInit) => {
+    calls++;
+    if (calls === 1)
+      return Response.json({ release: "a".repeat(40), environment: "production", status: "ready" });
+    if (calls === 2)
+      return Response.json({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [
+              {
+                id: "synthetic-chat",
+                runtime_instance_id: "synthetic-chat-1",
+                kind: "chat_response",
+                status: "failed",
+                failure_code: "MODEL_SCHEMA_INVALID",
+                attempts: 1,
+                created_at: time,
+                updated_at: time,
+              },
+            ],
+          },
+        ],
+      });
+    if (calls === 3)
+      return Response.json({
+        success: true,
+        result: {
+          output: {
+            stageTimings: [
+              { stage: "audit", outcome: "failed", durationMs: 2500, prompt: "private-output" },
+            ],
+          },
+        },
+      });
+    if (calls === 4) {
+      const query = JSON.parse(String(init?.body));
+      expect(query.sql).toStartWith("SELECT ");
+      expect(query.params).toEqual(["synthetic-chat"]);
+      // Execute the real selector against all migrated tables, not SQL emulation.
+      expect(db.sqlite.query(query.sql).all(...query.params)).toEqual([]);
+      return Response.json({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [
+              {
+                attempt: 1,
+                state: "final",
+                transport: "response",
+                maximum_output_tokens: 2400,
+                output_tokens: 2400,
+                providerRequestId: "private-id",
+                output: "private-output",
+              },
+            ],
+          },
+        ],
+      });
+    }
+    return Response.json({ success: true, result: {} });
+  };
+  try {
+    const result = await inspectProductionWorkspace(
+      {
+        token: "private-token",
+        sha: "a".repeat(40),
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+      },
+      fetcher,
+    );
+    expect(calls).toBe(5);
+    expect(result.jobs[0]?.diagnostic).toEqual({
+      stageTimings: [{ stage: "audit", outcome: "failed", durationMs: 2500 }],
+    });
+    expect(result.jobs[0]?.schemaAttempts).toEqual([
+      {
+        attempt: 1,
+        state: "final",
+        transport: "response",
+        maximum_output_tokens: 2400,
+        output_tokens: 2400,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("private");
+  } finally {
+    db.close();
+  }
+});
 
 test("preview inspection pins its own release, database and workflow without mutations", async () => {
   const calls: { url: string; body?: string }[] = [];
