@@ -66,7 +66,7 @@ const limits = {
   workspace_precedent_compare: 4000,
   workspace_chat: 10000,
   // MEDIUM thinking shares this envelope with the strict JSON answer. Two
-  // actual audits exhausted the old 2400 envelope near 2383 total tokens.
+  // actual audits failed near 2383 total tokens under the old 2400 envelope.
   // Keep bounded headroom, the existing reasoning level and attempt/deadline guards.
   workspace_audit: 8000,
 };
