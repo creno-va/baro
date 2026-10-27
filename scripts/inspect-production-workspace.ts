@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { opaqueIdSchema } from "../src/contracts";
 import { safeClaimFailure } from "../src/server/modules/citation/claim-diagnostics";
 import { safeWorkspaceAuditFailure } from "../src/server/modules/workspace/audit-diagnostics";
 import { safeWorkspaceContentFailure } from "../src/server/modules/workspace/content-diagnostics";
@@ -12,7 +13,7 @@ const inputSchema = z.object({
   workspaceId: z.uuid(),
 });
 const jobSchema = z.object({
-  id: z.uuid(),
+  id: opaqueIdSchema,
   runtime_instance_id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   kind: z.enum([
     "intake_questions",
@@ -103,8 +104,10 @@ export function finiteWorkspaceOutput(raw: unknown) {
 export async function inspectProductionWorkspace(
   raw: unknown,
   fetcher: (input: string, init?: RequestInit) => Promise<Response> = fetch,
+  observe: (stage: "release" | "jobs" | "workflow" | "telemetry") => void = () => {},
 ) {
   const input = inputSchema.parse(raw);
+  observe("release");
   const live = await fetcher("https://baro.site/api/health/ready", {
     signal: AbortSignal.timeout(15000),
     cache: "no-store",
@@ -139,6 +142,7 @@ export async function inspectProductionWorkspace(
     if (!parsed.success) throw new Error("INSPECTION_READ_INVALID");
     return parsed.data.result;
   }
+  observe("jobs");
   const result = await api(`d1/database/${database}/query`, {
     sql: "SELECT id,runtime_instance_id,kind,status,failure_code,attempts,created_at,updated_at FROM v2_jobs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 12",
     params: [input.workspaceId],
@@ -152,6 +156,7 @@ export async function inspectProductionWorkspace(
   for (const row of rows) {
     let diagnostic: unknown = null;
     if (["intake_questions", "intake_summary", "chat_response"].includes(row.kind)) {
+      observe("workflow");
       const instance = z
         .object({ output: z.unknown().optional() })
         .parse(
@@ -164,6 +169,7 @@ export async function inspectProductionWorkspace(
   let telemetry: unknown = { status: "not_requested" };
   if (rows.length) {
     try {
+      observe("telemetry");
       const from = Math.max(Date.parse(rows.at(-1)?.created_at ?? ""), Date.now() - 6 * 3600000);
       const to = Math.min(
         Date.now(),
@@ -243,11 +249,15 @@ export async function inspectProductionWorkspace(
 }
 if (import.meta.main) {
   try {
-    const result = await inspectProductionWorkspace({
-      token: process.env.CLOUDFLARE_API_TOKEN,
-      sha: process.env.RECOVERY_EXPECTED_LIVE_SHA,
-      workspaceId: process.env.INSPECT_WORKSPACE_ID,
-    });
+    const result = await inspectProductionWorkspace(
+      {
+        token: process.env.CLOUDFLARE_API_TOKEN,
+        sha: process.env.RECOVERY_EXPECTED_LIVE_SHA,
+        workspaceId: process.env.INSPECT_WORKSPACE_ID,
+      },
+      fetch,
+      (stage) => console.info(JSON.stringify({ event: "production_inspection_stage", stage })),
+    );
     await Bun.write(
       ".wrangler/readiness/production-inspection.json",
       JSON.stringify(result, null, 2),

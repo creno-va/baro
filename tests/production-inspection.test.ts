@@ -63,3 +63,32 @@ test("empty workspace inspection makes only a release read and parameterized met
   expect(query.params).toEqual(["00000000-0000-4000-8000-000000000001"]);
   expect(JSON.stringify(result)).not.toContain("private");
 });
+
+test("prefixed report jobs retain the same bounded metadata contract as UUID workspace jobs", async () => {
+  let calls = 0;
+  const job = {
+    id: "native-v1-report-00000000-0000-4000-8000-000000000002",
+    runtime_instance_id: "native-v1-report-00000000-0000-4000-8000-000000000002-1",
+    kind: "report_build",
+    status: "failed",
+    failure_code: "STORAGE_UNAVAILABLE",
+    attempts: 1,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  const fetcher = async () => {
+    calls++;
+    if (calls === 1)
+      return Response.json({ release: "a".repeat(40), environment: "production", status: "ready" });
+    return Response.json({
+      success: true,
+      result: calls === 2 ? [{ success: true, results: [job] }] : {},
+    });
+  };
+  const result = await inspectProductionWorkspace(
+    { token: "private", sha: "a".repeat(40), workspaceId: "00000000-0000-4000-8000-000000000001" },
+    fetcher,
+  );
+  expect(result.jobs).toEqual([{ ...job, diagnostic: null }]);
+  expect(calls).toBe(3);
+});
