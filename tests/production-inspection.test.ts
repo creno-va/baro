@@ -92,3 +92,84 @@ test("prefixed report jobs retain the same bounded metadata contract as UUID wor
   expect(result.jobs).toEqual([{ ...job, diagnostic: null }]);
   expect(calls).toBe(3);
 });
+
+test("nested telemetry messages expose only finite diagnostics and discard unrelated private fields", async () => {
+  let calls = 0;
+  const time = new Date().toISOString();
+  const fetcher = async () => {
+    calls++;
+    if (calls === 1)
+      return Response.json({ release: "a".repeat(40), environment: "production", status: "ready" });
+    if (calls === 2)
+      return Response.json({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [
+              {
+                id: "native-v1-report-synthetic",
+                runtime_instance_id: "native-v1-report-synthetic-1",
+                kind: "report_build",
+                status: "failed",
+                failure_code: "STORAGE_UNAVAILABLE",
+                attempts: 1,
+                created_at: time,
+                updated_at: time,
+              },
+            ],
+          },
+        ],
+      });
+    return Response.json({
+      success: true,
+      result: {
+        events: {
+          events: [
+            {
+              source: {
+                logs: [
+                  {
+                    message: [
+                      JSON.stringify({
+                        event: "file_processor_failure",
+                        stage: "startup",
+                        category: "port_not_ready",
+                        durationMs: 500,
+                        httpStatus: 503,
+                        error: "private-stack",
+                      }),
+                    ],
+                  },
+                ],
+              },
+              $metadata: { message: "private-user-text" },
+            },
+          ],
+        },
+      },
+    });
+  };
+  const result = await inspectProductionWorkspace(
+    {
+      token: "private-token",
+      sha: "a".repeat(40),
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    },
+    fetcher,
+  );
+  expect(result.telemetry).toMatchObject({
+    status: "read",
+    returnedEvents: 1,
+    events: [
+      {
+        event: "file_processor_failure",
+        stage: "startup",
+        category: "port_not_ready",
+        durationMs: 500,
+        httpStatus: 503,
+      },
+    ],
+  });
+  expect(JSON.stringify(result)).not.toContain("private");
+});

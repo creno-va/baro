@@ -438,6 +438,7 @@ export async function buildReportSource(
         id: question.id,
         round: batch.ordinal,
         number: index + 1,
+        prompt: question.prompt,
       })),
     ),
   };
@@ -454,7 +455,7 @@ export const sourcePositionText = (p: V2SourcePosition) =>
 
 type ReportDisplayContext = {
   readonly intakeRevision: number;
-  readonly questions: readonly { id: string; round: number; number: number }[];
+  readonly questions: readonly { id: string; round: number; number: number; prompt?: string }[];
 };
 export function reportText(
   body: V2ReportBody,
@@ -487,6 +488,16 @@ export function reportText(
       : "추가 질문에 대한 답변";
   };
   const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
+  const questionContext = (references: V2ReportBody["facts"][number]["references"]) => {
+    const prompts = references.flatMap((ref) => {
+      if (!display || ref.kind !== "intake_answer" || ref.intakeRevision !== display.intakeRevision)
+        return [];
+      const matches = display.questions.filter((question) => question.id === ref.questionId);
+      const prompt = matches.length === 1 ? matches[0]?.prompt : undefined;
+      return prompt ? [prompt] : [];
+    });
+    return [...new Set(prompts)].map((prompt) => `\n질문: ${prompt}`).join("");
+  };
   const citationLabel = (id: string) =>
     `공식 출처 ${body.citations.findIndex((citation) => citation.id === id) + 1}`;
   const refs = (references: V2ReportBody["facts"][number]["references"]) =>
@@ -513,7 +524,7 @@ export function reportText(
     "사실·주장·출처",
     ...body.facts.map(
       (fact) =>
-        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "사용자가 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]`,
+        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "사용자가 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]${questionContext(fact.references)}`,
     ),
     "",
     "미확인 사항",

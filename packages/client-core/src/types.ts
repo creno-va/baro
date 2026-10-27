@@ -8,6 +8,7 @@ import type {
   V2FileProcessing,
 } from "@baro/contracts/v2";
 import type { V2Summary } from "@baro/contracts/v2/intake";
+import type { IntakeQuestionContext } from "./intake-questions";
 
 export type AccountType = NonNullable<ClientSession["user"]>["accountType"];
 export type Provider = "google" | "naver" | "kakao";
@@ -23,6 +24,7 @@ export type CaseView = {
   summary: string;
   schemaVersion?: "1" | "2";
   summaryDetails?: V2Summary;
+  intakeQuestions?: IntakeQuestionContext;
   summaryNeedsConfirmation?: boolean;
   legacyDetail?: CaseDetail;
 };

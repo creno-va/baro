@@ -139,6 +139,8 @@ test("report labels follow actual encrypted question rounds and localize action 
   ])
     expect(report.content).toContain(`합성 행동 ${state} (${label})`);
   expect(await sourceDigest(f.core, f.actor, f.workspaceId)).toBe(beforeDigest);
+  expect(report.content).toContain("질문: 합성 1차 1번 질문");
+  expect(report.content).toContain("질문: 합성 2차 3번 질문");
   const stored = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(stored?.body).toEqual(source.body);
   const html = await f.reports.html(f.actor.ownerId, report.id);

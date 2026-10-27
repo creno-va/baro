@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { internalIosEnvironment } from "../scripts/mobile-internal-ios-build";
@@ -12,6 +12,27 @@ import {
 } from "../scripts/mobile-ios-text-input-patch";
 import { bytesHash, packageTreeHash, patchFilePaths } from "../scripts/toolchain-patches";
 
+async function copyRegularPackage(source: string, target: string) {
+  const pending = [{ source, target }];
+  while (pending.length) {
+    const directory = pending.pop();
+    if (!directory) break;
+    await mkdir(directory.target, { recursive: true });
+    const entries = await readdir(directory.source, { withFileTypes: true });
+    for (let offset = 0; offset < entries.length; offset += 8) {
+      await Promise.all(
+        entries.slice(offset, offset + 8).map(async (entry) => {
+          const from = resolve(directory.source, entry.name),
+            to = resolve(directory.target, entry.name);
+          if (entry.isDirectory()) pending.push({ source: from, target: to });
+          else if (entry.isFile()) await copyFile(from, to);
+          else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
+        }),
+      );
+    }
+  }
+}
+
 test("native patch preserves the exact registry version/license and reconstructs the unmodified release tree", async () => {
   const manifest = await verifyNativeTextInputPatch(process.cwd(), {
     bytesHash,
@@ -23,7 +44,7 @@ test("native patch preserves the exact registry version/license and reconstructs
   const owned = await mkdtemp(resolve(tmpdir(), "baro-native-input-before-"));
   try {
     const before = resolve(owned, "react-native");
-    await cp("node_modules/react-native", before, { recursive: true });
+    await copyRegularPackage("node_modules/react-native", before);
     const reverse = Bun.spawn(
       [
         "git",

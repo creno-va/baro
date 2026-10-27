@@ -7,7 +7,7 @@ import type {
   TimelineView,
   WorkspaceView,
 } from "@baro/client-core";
-import { workspaceProgressText } from "@baro/client-core";
+import { intakeQuestionContext, workspaceProgressText } from "@baro/client-core";
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { caseDetailResponseSchema, opaqueIdSchema } from "@baro/contracts/v1";
 import {
@@ -20,6 +20,7 @@ import {
   v2FileProcessingSchema,
   v2JobSchema,
   v2LookupToolIdSchema,
+  v2QuestionBatchSchema,
   v2SummarySchema,
   v2TimelineEntrySchema,
   v2ToolResultSchema,
@@ -436,7 +437,12 @@ export function createWorkspaceClient(dependencies: {
       files.list(id, { metadataOnly: true }),
     ]);
     const metadata = z
-      .object({ narrative: z.string(), summary: z.object({ revision: z.number() }).nullable() })
+      .object({
+        narrative: z.string(),
+        summary: z.object({ revision: z.number() }).nullable(),
+        revision: z.number().int().positive().optional(),
+        batches: z.array(v2QuestionBatchSchema).optional(),
+      })
       .parse(intake);
     const summary =
       cached?.revision === w.workspaceRevision
@@ -616,6 +622,14 @@ export function createWorkspaceClient(dependencies: {
       updatedAt: w.updatedAt,
       summary: summary?.overview ?? "",
       schemaVersion: "2",
+      ...(metadata.revision && metadata.batches?.length
+        ? {
+            intakeQuestions: intakeQuestionContext({
+              revision: metadata.revision,
+              batches: metadata.batches,
+            }),
+          }
+        : {}),
       ...(dependencies.includeSummaryConfirmation
         ? {
             summaryNeedsConfirmation: Boolean(

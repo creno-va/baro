@@ -27,6 +27,7 @@ import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
+import { FactQuestionContext } from "../intake/FactQuestionContext";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -1812,6 +1813,11 @@ export function Workspace({
                         <ul className="workspace-facts">
                           {view.facts.map((fact) => (
                             <li key={fact.id}>
+                              <FactQuestionContext
+                                references={fact.references}
+                                context={view.case.intakeQuestions}
+                                className="workspace-fact-source"
+                              />
                               <p>{fact.text}</p>
                               <small>
                                 {fact.attribution === "user_statement"
