@@ -4,6 +4,57 @@ import {
   inspectProductionWorkspace,
 } from "../scripts/inspect-production-workspace";
 
+test("preview inspection pins its own release, database and workflow without mutations", async () => {
+  const calls: { url: string; body?: string }[] = [];
+  const time = new Date().toISOString();
+  const fetcher = async (url: string, init?: RequestInit) => {
+    calls.push({ url, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+    if (calls.length === 1)
+      return Response.json({ release: "a".repeat(40), environment: "preview", status: "ready" });
+    if (calls.length === 2)
+      return Response.json({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [
+              {
+                id: "synthetic-chat",
+                runtime_instance_id: "synthetic-chat-1",
+                kind: "chat_response",
+                status: "failed",
+                failure_code: "POLICY_REJECTED",
+                attempts: 1,
+                created_at: time,
+                updated_at: time,
+              },
+            ],
+          },
+        ],
+      });
+    return Response.json({
+      success: true,
+      result: calls.length === 3 ? { output: { policyReason: "audit_rejected" } } : {},
+    });
+  };
+  const result = await inspectProductionWorkspace(
+    {
+      token: "private",
+      sha: "a".repeat(40),
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+      environment: "preview",
+    },
+    fetcher,
+  );
+  expect(calls[0]?.url).toBe("https://preview.baro.site/api/health/ready");
+  expect(calls[1]?.url).toContain("d1/database/e8cdcf75-5bd8-469e-848e-f31816df4327/query");
+  expect(calls[2]?.url).toContain("workflows/baro-workspace-preview/instances/synthetic-chat-1");
+  expect(JSON.parse(calls[1]?.body ?? "").sql).toStartWith("SELECT ");
+  expect(result.jobs[0]?.diagnostic).toEqual({ policyReason: "audit_rejected" });
+  expect(result.environment).toBe("preview");
+  expect(JSON.stringify(result)).not.toContain("private");
+});
+
 test("invalid target and changed serving release stop before authenticated reads", async () => {
   let calls = 0;
   const fetcher = async () => {

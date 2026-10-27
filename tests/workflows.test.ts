@@ -11,6 +11,36 @@ const workflowSchema = z.object({
   ),
 });
 
+test("finite workspace inspection stays main-only, environment-bound and read-only", async () => {
+  const source = await Bun.file(".github/workflows/inspect-workspace.yml").text();
+  const workflow = Bun.YAML.parse(source) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: {
+      inspect: {
+        if: string;
+        environment: { name: string; deployment: boolean };
+        steps: { run?: string; env?: Record<string, string> }[];
+      };
+    };
+  };
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+  expect(workflow.permissions).toEqual({ contents: "read" });
+  expect(workflow.jobs.inspect.if).toBe("github.ref == 'refs/heads/main'");
+  expect(workflow.jobs.inspect.environment).toEqual({
+    name: "${{ inputs.target_environment }}",
+    deployment: false,
+  });
+  const read = workflow.jobs.inspect.steps.find(
+    (step) => step.run === "bun scripts/inspect-production-workspace.ts",
+  );
+  expect(read?.env?.INSPECT_ENVIRONMENT).toBe("${{ inputs.target_environment }}");
+  expect(read?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
+  expect(source).not.toMatch(
+    /CASE_DATA_KEY|restore-production|wrangler deploy|configure-ai|ai-readiness\.ts/,
+  );
+});
+
 test("full validation actually scans committed history before a later advisory failure can stop it", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(".github/workflows/full-validation.yml").text(),

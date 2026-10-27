@@ -6,11 +6,15 @@ import { safeWorkspaceContentFailure } from "../src/server/modules/workspace/con
 import { safeWorkspacePublicationFailure } from "../src/server/workspace-publication-diagnostics";
 
 const account = "9e844969d0c44b2449f3951d1f301654";
-const database = "d315e93f-2fac-4cc2-bf99-e9d6eb31523f";
+const databases = {
+  production: "d315e93f-2fac-4cc2-bf99-e9d6eb31523f",
+  preview: "e8cdcf75-5bd8-469e-848e-f31816df4327",
+} as const;
 const inputSchema = z.object({
   token: z.string().min(1),
   sha: z.string().regex(/^[a-f0-9]{40}$/),
   workspaceId: z.uuid(),
+  environment: z.enum(["production", "preview"]).default("production"),
 });
 const jobSchema = z.object({
   id: opaqueIdSchema,
@@ -131,7 +135,9 @@ export async function inspectProductionWorkspace(
 ) {
   const input = inputSchema.parse(raw);
   observe("release");
-  const live = await fetcher("https://baro.site/api/health/ready", {
+  const origin =
+    input.environment === "preview" ? "https://preview.baro.site" : "https://baro.site";
+  const live = await fetcher(`${origin}/api/health/ready`, {
     signal: AbortSignal.timeout(15000),
     cache: "no-store",
     redirect: "error",
@@ -141,7 +147,7 @@ export async function inspectProductionWorkspace(
     !z
       .object({
         release: z.literal(input.sha),
-        environment: z.literal("production"),
+        environment: z.literal(input.environment),
         status: z.literal("ready"),
       })
       .safeParse(await live.json()).success
@@ -166,7 +172,7 @@ export async function inspectProductionWorkspace(
     return parsed.data.result;
   }
   observe("jobs");
-  const result = await api(`d1/database/${database}/query`, {
+  const result = await api(`d1/database/${databases[input.environment]}/query`, {
     sql: "SELECT id,runtime_instance_id,kind,status,failure_code,attempts,created_at,updated_at,(SELECT transport FROM v2_execution_admissions a WHERE a.job_id=j.id AND a.service='container' ORDER BY a.created_at DESC LIMIT 1) AS native_transport FROM v2_jobs j WHERE workspace_id=? ORDER BY created_at DESC LIMIT 12",
     params: [input.workspaceId],
   });
@@ -183,7 +189,9 @@ export async function inspectProductionWorkspace(
       const instance = z
         .object({ output: z.unknown().optional() })
         .parse(
-          await api(`workflows/baro-workspace-production/instances/${row.runtime_instance_id}`),
+          await api(
+            `workflows/baro-workspace-${input.environment}/instances/${row.runtime_instance_id}`,
+          ),
         );
       diagnostic = finiteWorkspaceOutput(instance.output);
     }
@@ -315,7 +323,13 @@ export async function inspectProductionWorkspace(
       telemetry = { status: "unavailable" };
     }
   }
-  return { release: input.sha, observedAt: new Date().toISOString(), jobs, telemetry };
+  return {
+    environment: input.environment,
+    release: input.sha,
+    observedAt: new Date().toISOString(),
+    jobs,
+    telemetry,
+  };
 }
 if (import.meta.main) {
   try {
@@ -324,6 +338,7 @@ if (import.meta.main) {
         token: process.env.CLOUDFLARE_API_TOKEN,
         sha: process.env.RECOVERY_EXPECTED_LIVE_SHA,
         workspaceId: process.env.INSPECT_WORKSPACE_ID,
+        environment: process.env.INSPECT_ENVIRONMENT,
       },
       fetch,
       (stage) => console.info(JSON.stringify({ event: "production_inspection_stage", stage })),
