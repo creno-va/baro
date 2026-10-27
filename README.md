@@ -17,6 +17,9 @@ BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며,
 [현행 비용 정책](./docs/adr/0015-maintenance-and-operating-policy.md)이 우선합니다.
 [ADR-0015](./docs/adr/0015-maintenance-and-operating-policy.md)가 현재 운영 결정입니다.
 정비 종료와 전체 MVP 실제 인수는 별개이며 [인수표](./docs/development/MVP-REQUIREMENTS-EVIDENCE.md)와 #71로 추적합니다.
+2026-10-27 사용자 지시에 따른 전체 이슈 범위 종료와 API·스토어 보류, 실제 미해결 조건은
+[최신 정비 인계](./docs/quality/MAINTENANCE-HANDOFF-2026-10-27.md)를 따릅니다.
+이슈 종료를 보안 통과·구형 재분석 복구·실제 릴리스 완료로 해석하지 않습니다.
 
 2026-10-07 사용자 후속 지시에 따라 배포되는 preview와 production은 실제 same-origin API를
 사용합니다. 예시 adapter는 명시적 local/격리 검증에 보존합니다. 실제 외부 설정이 없으면
