@@ -1,5 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { canRetryV2Job } from "../src/server/db/v2-job-retry";
+import { ModelError } from "../src/server/modules/llm-gateway/service";
 import { executeWorkspace } from "../src/server/modules/workspace/execution";
 import {
   createWorkspacePipeline,
@@ -17,6 +18,29 @@ async function fixture() {
   databases.push(f.db);
   return f;
 }
+
+test("terminal model schema failure keeps only finite diagnostics and preserves the failed job", async () => {
+  const f = await fixture();
+  const diagnostic = {
+    phase: "workspace_questions",
+    reason: "incomplete_output",
+    field: "unknown",
+    issue: "unknown",
+  } as const;
+  const error = new ModelError("MODEL_SCHEMA_INVALID", diagnostic);
+  error.message = "private-output";
+  error.stack = "private-stack";
+  const failed = await runCustomerJob(f, "intake_questions", true, async () => {
+    throw error;
+  });
+  expect(failed.result).toMatchObject({ status: "failed", schemaFailure: diagnostic });
+  expect(JSON.stringify(failed.result)).not.toContain("private");
+  expect(await f.service.job(f.owner.userId, f.workspace.id, failed.params.jobId)).toMatchObject({
+    status: "failed",
+    failure: "MODEL_SCHEMA_INVALID",
+    attempts: 1,
+  });
+});
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function guard(f: Fixture) {
   return {
