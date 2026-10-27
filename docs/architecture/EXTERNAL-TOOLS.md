@@ -6,17 +6,31 @@
 
 ## 현재 계약과 발급 상태
 
-사용자는 아래4개 서비스의 API가 아직 발급되지 않았다고 확인했다. 어댑터·대역 검증은
-실제 발급·제휴·외부 조회 성공이 아니다. 미설정은 `not_configured`, 입력/수신자 동의
-미확인은 `input_required`로 남기며 기능 전체나 다른 법률·자료 정리를 막지 않는다.
-추가로 기존 가입 계정이 없다는 사용자 답변을 받았다. 사용할 운영 계정과 이용 주체는
-확인되지 않았다. 가입 정보·사업자 정보·약관 동의·상품 승인을 임의 생성하지 않는다.
+2026-10-27 사용자 후속 결정 / #555: **등기정보광장은 현재 MVP 범위에서 제외한다.**
+BARO의 핵심은 개별 사건의 진술·자료·타임라인·상담 전달 리포트다. 공개
+[신청 목록](https://data.iros.go.kr/rp/oa/openOapiAppl.do)의 등기 현황 통계·실거래가에
+현재 명세의 필수 사용처가 없고, 개별 등기부·소유자·근저당 조회용 서비스를 확인하지
+못했다. 통계가 개별 사건의 권리관계를 증명하는 자료라고 해석하지 않는다. 기존
+등기서류 업로드·자료 검토 흐름을 사용하며 새 자동조회 기능을 만들지 않는다.
+향후 구체적인 사건 흐름·필요 데이터·공식 제공 계약이 생기면 별도 범위로 검토한다.
+
+registry는 이름·미연결 상태 처리만 있던 placeholder였으며 실제 HTTP adapter나
+인증키 설정은 없었다. 신규 runtime/model/private catalog에서는 제외하고 과거 ID·
+암호화 결과 읽기와 HTTP를 보내지 않는 not_configured 처리는 호환 보존한다.
+수동 tools_registry 하네스는 이 과거 미연결 결과만 검사하며 현행 기능 인수가 아니다.
+제외는 구현·발급·실제 외부 검증 성공을 뜻하지 않는다.
+
+사용자는 국세청·더치트·DataHub의 API가 아직 발급되지 않았다고 확인했다. 어댑터·대역
+검증은 실제 발급·제휴·외부 조회 성공이 아니다. 미설정은 not_configured, 입력/수신자
+동의 미확인은 input_required로 남기며 다른 법률·자료 정리를 막지 않는다.
+사용자는 개인사업자가 있으며 실제 발급 절차는 대표자에게 요청한다고 밝혔다.
+운영 계정의 가입·약관 동의·상품 계약·키 설정 완료는 확인되지 않았다.
+가입 정보·사업자 정보·약관 동의·상품 승인을 임의 생성하지 않는다.
 
 | 도구 | 공개 문서로 확인한 범위 | 남은 외부 입력 |
 | --- | --- | --- |
 | 홈택스/국세청 | [사업자 상태 서비스](https://www.data.go.kr/data/15081808/openapi.do), [공식 Swagger](https://infuser.odcloud.kr/api/stages/28493/api-docs?1728017570963). POST `/api/nts-businessman/v1/status`, 요청 번호와 응답 번호 일치 검사 | 활용 신청·운영 인증키. 개인의 납세·체납/세무 서류 조회는 이 계약에 포함하지 않음 |
 | 더치트 | [공통 인증·복호화](https://apidocs.thecheat.co.kr/docs/api-usage/api-common/), [피해 등록 조회](https://apidocs.thecheat.co.kr/docs/api-usage/api-search-plain/), [공식 준비사항](https://apidocs.thecheat.co.kr/docs/api-prerequisite/). X-TheCheat-ApiKey, AES256-CBC, keyword/type/은행코드·기간 일치 검사 | 기업 회원·사업자등록증·앱 등록 후 API/ENC 키. `success (test)`는 실제 등록 여부로 표시하지 않음. 추가 네트워크 정책은 실제 발급 계약에서 확인하며 임의 필수 조건으로 만들지 않음 |
-| 등기정보광장 | [서비스별 신청 안내](https://data.iros.go.kr/rp/oa/openOapiIntro.do). 별도 회원/서비스별 인증과 승인 명세 필요 | 발급 대상 서비스의 정확한 endpoint·요청/응답 계약·인증키. 주소/소유권/등본 API로 임의 대체하지 않음 |
 | 데이터허브 | [공통 인증·production 도메인](https://dataapi.co.kr/dLab/mdh_api.do), [부동산 사전주소](https://dataapi.co.kr/upload/dLab/20260831-151849-35382.html), [건축물 총괄표제부](https://dataapi.co.kr/upload/dLab/20231102-132305-87364.html) | 승인 Token·상품 사용 권한·실제 응답 인수. 공개 가이드의2022/2025 개정일은 그대로 보존 |
 
 데이터허브 사전주소의 소유자명/소유자주소 필드는 반환·모델 전달 대상에서 제외하고
@@ -45,8 +59,9 @@ HTTP20초·응답256KiB이며 자동 retry·redirect·임의 URL·개발 서버 
 
 모델은 등록된 tool ID와 서버가 승인한 opaque target만 선택한다. 인증키, 연락처/계좌,
 원천 callback·세무 인증·개인 식별자는 tool schema에 넣지 않는다. 가입·결제·제휴 수락,
-개인 인증을 어댑터가 대신하지 않는다. 실제 대상 입력/동의·durable reservation producer와
-채팅 소비 연결은 별도 인수이며 standalone adapter만으로 운영 연결 완료를 표시하지 않는다.
+개인 인증을 어댑터가 대신하지 않는다. PR542/PR543으로 명시 대상 입력·전송 동의,
+durable reservation producer와 채팅 소비를 연결했다. 이 소스 통합과 합성 검증은
+운영 키 발급·상품 권한·실제 공급자 응답·동일 SHA 배포 인수를 대신하지 않는다.
 
 ## 결과와 이전 앱
 
@@ -55,9 +70,9 @@ HTTP20초·응답256KiB이며 자동 retry·redirect·임의 URL·개발 서버 
 않는다. 더치트 테스트 결과와 실제 결과는 구분하며 owner/인증 query deep link는 반환하지
 않는다. 비용/가격 미관측은 실행 실패로 전파하지 않는다.
 
-기존 strict assistant message DTO에는 아직 필드를 추가하지 않았다. 후속 producer는
-기존 응답 shape를 보존하고 opt-in endpoint로 결과를 제공해야 한다. 모바일 채팅과
-이 범위를 조율했으며 앱/package 소비 변경은 별도 통합한다.
+기존 strict assistant message DTO의 shape를 보존하고 별도 opt-in endpoint로 결과를
+제공한다. 이번 명시 입력 UI와 runtime 연결은 웹 기준이며 앱/package 소비 변경과
+실제 네이티브 외부 조회 인수는 별도다.
 
 ## 채팅 연결
 
@@ -69,6 +84,7 @@ HTTP20초·응답256KiB이며 자동 retry·redirect·임의 URL·개발 서버 
 
 설정 이름은 `HOMETAX_SERVICE_KEY`, `THECHEAT_API_KEY`,
 `THECHEAT_ENCRYPTION_KEY`, `DATAHUB_API_TOKEN`이다. 값은 현재 미발급이며
-이름 선언은 secret 설정이나 검증을 의미하지 않는다. 현재 runtime은 대상이 null인
-상태 조회만 허용한다. 키가 있어도 별도 대상/수신자 동의와 durable producer가
-연결되기 전에는 input_required이며 외부 HTTP를 예약/실행하지 않는다.
+이름 선언은 secret 설정이나 검증을 의미하지 않는다. 현재 웹은 설정된 도구에 한해
+대상·수신자 동의를 입력받고 runtime은 암호화된 원래 요청과 durable permit을 대조한다.
+키·명시 대상·동의·유효 permit이 없으면 실제 HTTP를 보내지 않는다. DataHub 건축물은
+식별자4개를 직접 입력하는 경로이며 주소에서 자동 취득하는 상품 연결은 미구현이다.

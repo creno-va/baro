@@ -535,7 +535,7 @@ test("lookup catalog is a private owner/consent checked capability read and neve
     expect(body.tools.find((tool) => tool.tool === "hometax_status")?.status).toBe(
       "input_required",
     );
-    expect(body.tools.find((tool) => tool.tool === "registry")?.status).toBe("not_configured");
+    expect(body.tools.find((tool) => tool.tool === "registry")).toBeUndefined();
     expect(JSON.stringify(body)).not.toMatch(/synthetic-secret|0000000000|businessNumber/);
     expect((await get(f.workspaceId, "")).status).toBe(401);
     expect((await get("other_workspace")).status).toBe(404);

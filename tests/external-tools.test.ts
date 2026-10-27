@@ -70,6 +70,27 @@ test("all unissued lookup APIs return not_configured without HTTP, targets or in
   expect(calls).toBe(0);
 });
 
+test("current capabilities omit retired registry while historical requests stay non-dispatching", async () => {
+  let calls = 0;
+  const tools = createExternalTools(configuration, {
+    fetch: async () => {
+      calls++;
+      throw new Error("must not dispatch");
+    },
+  });
+  expect(tools.catalog().map((entry) => entry.tool)).toEqual([
+    "hometax_status",
+    "thecheat",
+    "datahub_property",
+    "datahub_building",
+  ]);
+  expect(tools.catalog().every((entry) => entry.status === "input_required")).toBe(true);
+  const historical = await tools.execute("registry", null, access());
+  expect(v2ToolResultSchema.safeParse(historical).success).toBe(true);
+  expect(historical).toMatchObject({ status: "not_configured", rows: [], observedAt: null });
+  expect(calls).toBe(0);
+});
+
 test("HomeTax binds the returned business number and exposes only status fields", async () => {
   let seen: RequestInit | undefined,
     calls = 0;

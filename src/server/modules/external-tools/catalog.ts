@@ -46,20 +46,21 @@ export function lookupConfiguration(env: Partial<Env>): LookupConfiguration {
   };
 }
 export function lookupCatalog(configuration: LookupConfiguration) {
-  return Object.entries(lookupTools).map(([tool, value]) => ({
-    tool: tool as V2LookupToolId,
-    ...value,
-    status:
-      tool === "registry"
-        ? ("not_configured" as const)
-        : (
-              tool === "hometax_status"
-                ? configuration.hometaxKey?.trim()
-                : tool === "thecheat"
-                  ? configuration.thecheatKey?.trim() && configuration.thecheatEncryptionKey?.trim()
-                  : configuration.datahubToken?.trim()
-            )
-          ? ("input_required" as const)
-          : ("not_configured" as const),
-  }));
+  // Keep the historical registry result contract readable, but do not advertise
+  // this retired placeholder as a current product capability or pending setup.
+  return Object.entries(lookupTools)
+    .filter(([tool]) => tool !== "registry")
+    .map(([tool, value]) => ({
+      tool: tool as V2LookupToolId,
+      ...value,
+      status: (
+        tool === "hometax_status"
+          ? configuration.hometaxKey?.trim()
+          : tool === "thecheat"
+            ? configuration.thecheatKey?.trim() && configuration.thecheatEncryptionKey?.trim()
+            : configuration.datahubToken?.trim()
+      )
+        ? ("input_required" as const)
+        : ("not_configured" as const),
+    }));
 }

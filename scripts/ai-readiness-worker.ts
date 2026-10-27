@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { z } from "zod";
 import { MODEL_ID } from "../src/server/model-policy";
-import { lookupCatalog } from "../src/server/modules/external-tools/catalog";
+import { lookupCatalog, lookupTools } from "../src/server/modules/external-tools/catalog";
 import { createExternalTools } from "../src/server/modules/external-tools/service";
 import { ProcessingError } from "../src/server/modules/file-processing/protocol";
 import { researchExcerpt } from "../src/server/modules/legal-retrieval/research/topics";
@@ -342,6 +342,14 @@ export class SyntheticProbe extends DurableObject<ProbeEnv> {
         ) {
           const context = syntheticToolContext(active.featureCase);
           context.lookupTools = lookupCatalog({});
+          // Historical unavailable-result compatibility only. Registry is retired
+          // from the product catalog; this probe cannot dispatch external HTTP.
+          if (active.featureCase === "tools_registry")
+            context.lookupTools.push({
+              tool: "registry",
+              ...lookupTools.registry,
+              status: "not_configured",
+            });
           const output = await pipeline.chat(context, PROBE_REQUEST_ID);
           const expected = {
             tools_business: ["hometax_status", "thecheat"],
