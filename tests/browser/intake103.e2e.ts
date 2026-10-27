@@ -1416,3 +1416,68 @@ for (const recovery of [
     );
   });
 }
+
+test("choice fact shows its original question separately in summary on desktop and mobile", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const id = "synthetic-question-context";
+    const summary = {
+      schemaVersion: "2",
+      revision: 1,
+      intakeRevision: 1,
+      createdAt: "2026-10-27T00:00:00.000Z",
+      overview: "차용증 없이 돈을 빌려줬다고 진술한 합성 사건입니다.",
+      facts: [
+        {
+          id: "contract-answer",
+          text: "작성하지 않았다",
+          attribution: "user_statement",
+          certainty: "reported",
+          significance: "neutral",
+          userEdited: false,
+          references: [{ kind: "intake_answer", intakeRevision: 1, questionId: "contract" }],
+          conflictingFactIds: [],
+        },
+      ],
+      parties: [],
+      unknowns: [],
+      notices: [],
+    };
+    localStorage.setItem(
+      "baro-api-mock-v1:caseOwners",
+      JSON.stringify({ [id]: "example-customer" }),
+    );
+    localStorage.setItem(
+      "baro-api-mock-v1:cases",
+      JSON.stringify({
+        [id]: {
+          id,
+          title: "합성 질문 맥락",
+          subjectContext: "individual",
+          stage: "summary",
+          revision: 1,
+          updatedAt: summary.createdAt,
+          schemaVersion: "2",
+          summary: summary.overview,
+          summaryDetails: summary,
+          intakeQuestions: {
+            intakeRevision: 1,
+            questions: [
+              { id: "contract", prompt: "차용증을 작성해 두셨나요?", round: 1, number: 1 },
+            ],
+          },
+        },
+      }),
+    );
+  });
+  await page.goto("/cases/synthetic-question-context/summary");
+  await page.locator("summary", { hasText: "사실별로 검토" }).click();
+  await expect(page.getByText("질문: 차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveValue(
+    "작성하지 않았다",
+  );
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByText("질문: 차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

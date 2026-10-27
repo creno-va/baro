@@ -38,6 +38,7 @@ const jobSchema = z.object({
   attempts: z.number().int().min(0).max(10),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime(),
+  native_transport: z.enum(["not_sent", "response", "unknown"]).nullable().optional(),
 });
 const policySchema = z.enum([
   "unauthorized_reference",
@@ -166,7 +167,7 @@ export async function inspectProductionWorkspace(
   }
   observe("jobs");
   const result = await api(`d1/database/${database}/query`, {
-    sql: "SELECT id,runtime_instance_id,kind,status,failure_code,attempts,created_at,updated_at FROM v2_jobs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 12",
+    sql: "SELECT id,runtime_instance_id,kind,status,failure_code,attempts,created_at,updated_at,(SELECT transport FROM v2_execution_admissions a WHERE a.job_id=j.id AND a.service='container' ORDER BY a.created_at DESC LIMIT 1) AS native_transport FROM v2_jobs j WHERE workspace_id=? ORDER BY created_at DESC LIMIT 12",
     params: [input.workspaceId],
   });
   const rows =
@@ -226,7 +227,16 @@ export async function inspectProductionWorkspace(
       const finite = z.union([
         z.object({
           event: z.literal("report_dependency_failure"),
-          stage: z.enum(["latest", "source", "create", "view", "unclassified"]),
+          stage: z.enum([
+            "latest",
+            "source",
+            "create",
+            "view",
+            "font",
+            "render",
+            "persist",
+            "unclassified",
+          ]),
           category: z.enum([
             "database_constraint",
             "database_query",
@@ -252,6 +262,13 @@ export async function inspectProductionWorkspace(
             "FORBIDDEN",
             "CRYPTO_DECRYPT_FAILED",
             "CRYPTO_CONFIGURATION_INVALID",
+            "FILE_PROCESSING_FAILED",
+            "FILE_REJECTED",
+            "JOB_TIMEOUT",
+            "STALE_REVISION",
+            "REPORT_FONT_UNAVAILABLE",
+            "REPORT_FONT_INVALID",
+            "REPORT_RENDERER_UNAVAILABLE",
             "unknown",
           ]),
         }),

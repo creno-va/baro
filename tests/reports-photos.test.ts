@@ -195,6 +195,9 @@ test("report template escapes captions, rejects remote/SVG photo URLs and exclud
 
 test("real report renderer composition admits bounded native work with missing cost observations and records response without inventing usage", async () => {
   const f = await reportFixture();
+  f.db.sqlite.exec(
+    "INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('preview',100000000)",
+  );
   const core = createV2Core(f.db.binding, f.core.cipher, {
     applicationCostLimitsEnabled: false,
     monthlyBudgetCapEnabled: false,
@@ -236,7 +239,6 @@ test("real report renderer composition admits bounded native work with missing c
   const service = createReportsService(core, {
     ...runtime,
     files: f.service,
-    testOnlyUnmeteredStorage: true,
     fixedLength: f.deps.fixedLength,
   });
   const report = await service.get(f.actor.ownerId, f.workspaceId);
@@ -252,6 +254,14 @@ test("real report renderer composition admits bounded native work with missing c
     )
     .get();
   expect(admission).toMatchObject({ state: "final", transport: "response" });
+  expect(
+    f.db.sqlite
+      .query("SELECT service,state,transport FROM v2_execution_admissions ORDER BY service")
+      .all(),
+  ).toEqual([
+    { service: "container", state: "final", transport: "response" },
+    { service: "requests", state: "final", transport: "response" },
+  ]);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_runtime_proofs").get()).toMatchObject({
     n: 0,
   });

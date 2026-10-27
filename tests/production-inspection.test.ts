@@ -72,6 +72,7 @@ test("prefixed report jobs retain the same bounded metadata contract as UUID wor
     kind: "report_build" as const,
     status: "failed" as const,
     failure_code: "STORAGE_UNAVAILABLE",
+    native_transport: "response" as const,
     attempts: 1,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

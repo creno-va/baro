@@ -12,6 +12,7 @@ import { createStorageMaintenance } from "../budget/storage-maintenance";
 import type { ProcessingCosts } from "../file-processing/transport";
 import type { FilesService, PrivateBucket } from "../files/service";
 import { decryptExport, type ExportIdentity, planExport } from "./binary";
+import { reportReadStep } from "./diagnostics";
 import { exportFence, requireReportConsent, storedReportFence } from "./fence";
 import {
   allowReportCleanup,
@@ -528,7 +529,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];
     try {
-      const font = await deps.font();
+      const font = await reportReadStep("font", () => deps.font());
       const authorize = () => fence.check(l);
       await authorize();
       const report = {
@@ -566,16 +567,19 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       await authorize();
       // The legacy text writer is an explicit preview test adapter only. Real
       // runtimes must render the same HTML document as the review screen.
-      const pdf = deps.renderPdf
-        ? await deps.renderPdf(html, {
-            authorize,
-            lease: l,
-            reportId: r.id,
-            operationId: r.operation_id,
-            sourceRevision: r.workspace_revision,
-            sourceRows: fence.rows,
-            reportFiles: data.body.selectedFiles.length,
-          })
+      const renderPdf = deps.renderPdf;
+      const pdf = renderPdf
+        ? await reportReadStep("render", () =>
+            renderPdf(html, {
+              authorize,
+              lease: l,
+              reportId: r.id,
+              operationId: r.operation_id,
+              sourceRevision: r.workspace_revision,
+              sourceRows: fence.rows,
+              reportFiles: data.body.selectedFiles.length,
+            }),
+          )
         : legacyRenderer && !report.photos.length
           ? await renderReportPdf(await deps.font(), {
               ...report,
@@ -623,17 +627,19 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
       });
       applyReportWorkPlan(core, workPlan);
-      const pdfArtifact = await persist(
-        actor.ownerId,
-        r,
-        l,
-        "report_pdf",
-        pdf.byteLength,
-        async function* () {
-          yield pdf;
-        },
-        authorize,
-        workPlan,
+      const pdfArtifact = await reportReadStep("persist", () =>
+        persist(
+          actor.ownerId,
+          r,
+          l,
+          "report_pdf",
+          pdf.byteLength,
+          async function* () {
+            yield pdf;
+          },
+          authorize,
+          workPlan,
+        ),
       );
       written.push(pdfArtifact.id);
       pdf.fill(0);
