@@ -1,7 +1,7 @@
 import { dependencyCategory } from "../../dependency-diagnostics";
 
-type ReportReadStage = "latest" | "source" | "create" | "view";
-const stages = new Set<string>(["latest", "source", "create", "view"]);
+type ReportReadStage = "latest" | "source" | "create" | "view" | "font" | "render" | "persist";
+const stages = new Set<string>(["latest", "source", "create", "view", "font", "render", "persist"]);
 const failures = new WeakMap<object, string>();
 const codes = new Set([
   "DB_OPERATION_FAILED",
@@ -11,6 +11,13 @@ const codes = new Set([
   "FORBIDDEN",
   "CRYPTO_DECRYPT_FAILED",
   "CRYPTO_CONFIGURATION_INVALID",
+  "FILE_PROCESSING_FAILED",
+  "FILE_REJECTED",
+  "JOB_TIMEOUT",
+  "STALE_REVISION",
+  "REPORT_FONT_UNAVAILABLE",
+  "REPORT_FONT_INVALID",
+  "REPORT_RENDERER_UNAVAILABLE",
 ]);
 
 /** Keep only a finite stage; do not retain source data or add details to errors. */
@@ -29,7 +36,19 @@ export function reportReadFailure(error: unknown) {
   const object = error && typeof error === "object" ? error : undefined;
   const stage = (object && failures.get(object)) ?? "unclassified";
   const category = dependencyCategory(error);
-  const candidate = object && "code" in object ? object.code : null;
+  const candidate =
+    object && "code" in object
+      ? object.code
+      : object &&
+          "message" in object &&
+          typeof object.message === "string" &&
+          [
+            "REPORT_FONT_UNAVAILABLE",
+            "REPORT_FONT_INVALID",
+            "REPORT_RENDERER_UNAVAILABLE",
+          ].includes(object.message)
+        ? object.message
+        : null;
   const code = typeof candidate === "string" && codes.has(candidate) ? candidate : "unknown";
   console.error(JSON.stringify({ event: "report_dependency_failure", stage, category, code }));
 }

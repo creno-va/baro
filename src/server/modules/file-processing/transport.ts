@@ -3,6 +3,7 @@ import { z } from "zod";
 import { v2FileProbeSchema } from "../../../contracts/v2";
 import type { ProcessingArtifactScope } from "../../db/v2-paid-contracts";
 import { digest, hex } from "../files/binary";
+import { processorStage } from "./container-diagnostics";
 import {
   DefinitiveFileRejection,
   decodeArtifact,
@@ -171,14 +172,16 @@ export function createProcessorTransport(options: {
       if (bytes.length < 1 || bytes.length > 20_000_000) throw new ProcessingError("FILE_REJECTED");
       let response: Response | undefined;
       try {
-        response = await start(
-          "report",
-          {
-            byteLength: bytes.length,
-            contentHash: await digest(bytes),
-            open: () => new Response(bytes).body as ReadableStream<Uint8Array>,
-          },
-          access,
+        response = await processorStage("dispatch", async () =>
+          start(
+            "report",
+            {
+              byteLength: bytes.length,
+              contentHash: await digest(bytes),
+              open: () => new Response(bytes).body as ReadableStream<Uint8Array>,
+            },
+            access,
+          ),
         );
         if (!response.body || response.headers.get("content-type") !== "application/pdf")
           throw new ProcessingError("FILE_PROCESSING_FAILED");
@@ -187,7 +190,7 @@ export function createProcessorTransport(options: {
         let size = 0;
         try {
           for (;;) {
-            const item = await reader.read();
+            const item = await processorStage("stream", () => reader.read());
             if (item.done) break;
             size += item.value.length;
             if (size > 24_000_000 || !(await authorize(access)))
@@ -213,7 +216,7 @@ export function createProcessorTransport(options: {
       } finally {
         bytes.fill(0);
         await response?.body?.cancel().catch(() => {});
-        await options.stop();
+        await processorStage("cleanup", () => options.stop());
       }
     },
     async *sanitize(

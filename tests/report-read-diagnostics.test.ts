@@ -1,9 +1,61 @@
 import { expect, spyOn, test } from "bun:test";
 import { productBoundaryFindings } from "../scripts/product-boundaries";
 import { V2RepositoryError } from "../src/server/db/v2-core";
+import { ProcessingError } from "../src/server/modules/file-processing/protocol";
 import { reportReadFailure, reportReadStep } from "../src/server/modules/reports/diagnostics";
+import { createReportsService } from "../src/server/modules/reports/service";
 import { REPORT_SOURCE_SQL } from "../src/server/modules/reports/source";
+import { reportFixture } from "./helpers/report-fixture";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
+
+for (const phase of ["font", "render"] as const) {
+  test(`PDF ${phase} failure preserves its job and exposes only finite diagnostics`, async () => {
+    const f = await reportFixture();
+    const failure =
+      phase === "font"
+        ? new Error("REPORT_FONT_UNAVAILABLE")
+        : new ProcessingError("FILE_PROCESSING_FAILED");
+    failure.stack = "private-stack";
+    const reports = createReportsService(f.core, {
+      ...f.deps,
+      ...(phase === "font"
+        ? {
+            font: async () => {
+              throw failure;
+            },
+          }
+        : {
+            renderPdf: async () => {
+              throw failure;
+            },
+          }),
+    });
+    const draft = await reports.get(f.actor.ownerId, f.workspaceId);
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(reports.pdf(f.actor.ownerId, draft.id)).rejects.toBe(failure);
+      reportReadFailure(failure);
+      expect(log.mock.calls).toEqual([
+        [
+          JSON.stringify({
+            event: "report_dependency_failure",
+            stage: phase,
+            category: "unknown",
+            code: phase === "font" ? "REPORT_FONT_UNAVAILABLE" : "FILE_PROCESSING_FAILED",
+          }),
+        ],
+      ]);
+      expect(
+        f.db.sqlite.query("SELECT status,attempts FROM v2_jobs WHERE kind='report_build'").get(),
+      ).toEqual({ status: "failed", attempts: 1 });
+      expect(f.bucket.objects.size).toBe(0);
+      expect(JSON.stringify(log.mock.calls)).not.toContain("private-");
+    } finally {
+      log.mockRestore();
+      f.db.close();
+    }
+  });
+}
 
 for (const [stage, matches, code] of [
   ["latest", (sql: string) => sql.startsWith("SELECT id,revision FROM v2_reports"), "unknown"],
