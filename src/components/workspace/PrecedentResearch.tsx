@@ -443,6 +443,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
             selected={chosen && document?.citation.id === chosen.citation.id ? chosen : null}
             access={access}
             onSettled={() => setReload((n) => n + 1)}
+            onRefreshSources={() => void search()}
           />
         </>
       )}

@@ -472,6 +472,82 @@ test("a delayed admission receipt cannot erase an already recovered completed co
   ).toBe(1);
 });
 
+test("an expired comparison proof requires fresh search and never automatically submits another comparison", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.evaluate(
+    async ({ id, fixture }) => {
+      const { registerHttpMockHandler, registerMockHandlers, ApiError } = await import(
+        `${location.origin}/src/client/api/core.ts`
+      );
+      let searches = 0;
+      const counts = window as unknown as { comparisonPosts: number };
+      counts.comparisonPosts = 0;
+      registerMockHandlers({
+        "precedents.search": ({
+          body,
+        }: {
+          body: { expectedRevision: number; summaryRevision: number; topics: string[] };
+        }) => {
+          searches++;
+          return {
+            ...fixture,
+            workspaceRevision: body.expectedRevision,
+            summaryRevision: body.summaryRevision,
+            topics: body.topics,
+            items: [
+              {
+                ...fixture.items[0],
+                matchedTopics: [body.topics[0]],
+                readToken: `synthetic_receipt_${searches}.synthetic_signature`,
+              },
+            ],
+          };
+        },
+        "precedents.read": ({ body }: { body: { expectedRevision: number } }) => ({
+          schemaVersion: "2",
+          workspaceRevision: body.expectedRevision,
+          citation: fixture.items[0].citation,
+          excerpt: fixture.items[0].excerpt,
+        }),
+      });
+      registerHttpMockHandler(async (request: Request) => {
+        const path = new URL(request.url).pathname;
+        if (path === `/api/v2/cases/${id}/workspace-jobs/latest`) return Response.json(null);
+        if (path === `/api/v2/cases/${id}/precedents/compare`) {
+          counts.comparisonPosts++;
+          throw new ApiError("NOT_FOUND", "합성 조회권 만료");
+        }
+        return null;
+      });
+    },
+    { id, fixture: syntheticSearch },
+  );
+  const search = page.getByRole("button", { name: "판례 찾기", exact: true });
+  const choose = page
+    .getByRole("list", { name: "관련 판례 목록" })
+    .getByRole("button", { name: /판례 내용 보기/ })
+    .first();
+  const compare = page.getByRole("button", { name: "선택한 판례와 내 사건 비교", exact: true });
+  await search.click();
+  await choose.click();
+  await expect(compare).toBeEnabled();
+  await compare.click();
+  await expect(
+    page.getByText(
+      "판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요.",
+    ),
+  ).toBeVisible();
+  await expect(compare).toBeDisabled();
+  await page.getByRole("button", { name: "판례 다시 검색", exact: true }).click();
+  await choose.click();
+  await expect(compare).toBeEnabled();
+  expect(
+    await page.evaluate(() => (window as unknown as { comparisonPosts: number }).comparisonPosts),
+  ).toBe(1);
+});
+
 test("specific partial-source reasons stay visible and an expired proof triggers new search instead of the same read", async ({
   page,
 }) => {
@@ -515,9 +591,10 @@ test("specific partial-source reasons stay visible and an expired proof triggers
   for (const width of [320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    // Viewport changes can precede the responsive style/layout commit.
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
   }
   await page
     .getByRole("list", { name: "관련 판례 목록" })

@@ -12,6 +12,7 @@ on:
       - "src/contracts/v2/precedent-research.ts"
       - "src/contracts/v2/sources.ts"
       - "src/components/workspace/PrecedentResearch.tsx"
+      - "src/components/workspace/PrecedentComparisonPanel.tsx"
       - "packages/api-client/src/precedents.ts"
       - "apps/mobile/src/features/precedents/**"
       - "tests/legal-*.test.ts"

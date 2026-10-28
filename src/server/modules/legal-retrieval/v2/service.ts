@@ -319,7 +319,8 @@ export function createV2LegalRetrieval(
               body.asOfDate,
               plan.limit,
             );
-            if (!candidates.rows.length) throw new RetrievalFailure("no_results");
+            if (!candidates.rows.length)
+              throw new RetrievalFailure(candidates.failures?.[0] ?? "no_results");
             searchTruncated = candidates.truncated;
             failures.push(...(candidates.failures ?? []));
             for (const candidate of candidates.rows)

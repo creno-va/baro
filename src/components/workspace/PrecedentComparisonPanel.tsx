@@ -22,17 +22,20 @@ export function PrecedentComparisonPanel({
   selected,
   access,
   onSettled,
+  onRefreshSources,
 }: {
   caseId: string;
   context: V2PrecedentResearchContext;
   selected: V2PrecedentSearchResponse["items"][number] | null;
   access: ReturnType<typeof useCustomerAccess>;
   onSettled: () => void;
+  onRefreshSources: () => void;
 }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [state, setState] = useState<V2PrecedentComparisonState | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [expiredToken, setExpiredToken] = useState<string | null>(null);
   const startController = useRef<AbortController | null>(null);
   const boundary = useRef(access);
   boundary.current = access;
@@ -149,8 +152,9 @@ export function PrecedentComparisonPanel({
     };
   }, [caseId, jobId, remember, access.version]);
   const pending = starting || (!!jobId && (!state || !terminal.has(state.job.status)));
+  const sourceExpired = !!selected && selected.readToken === expiredToken;
   async function start() {
-    if (!selected || pending) return;
+    if (!selected || pending || sourceExpired) return;
     const controller = new AbortController();
     startController.current = controller;
     const ticket = access.ticket();
@@ -182,6 +186,8 @@ export function PrecedentComparisonPanel({
         )
           access.deny();
         setError(cause);
+        if (cause instanceof ApiError && cause.code === "NOT_FOUND")
+          setExpiredToken(selected.readToken);
         if (cause instanceof ApiError && ["CONFLICT", "NOT_FOUND"].includes(cause.code))
           completed.current();
       }
@@ -197,12 +203,26 @@ export function PrecedentComparisonPanel({
       <p>판례를 선택하면 사건의 사실과 8개 항목을 비교해요. 모르는 내용은 추측하지 않아요.</p>
       <Button
         className="precedent-primary"
-        disabled={!selected || pending || !access.canMutate}
+        disabled={!selected || pending || sourceExpired || !access.canMutate}
         onClick={() => void start()}
       >
         {pending ? "비교하고 있어요" : "선택한 판례와 내 사건 비교"}
       </Button>
-      {!!error && (
+      {sourceExpired && (
+        <div role="alert">
+          <p>판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요.</p>
+          <Button
+            disabled={pending}
+            onClick={() => {
+              setError(null);
+              onRefreshSources();
+            }}
+          >
+            판례 다시 검색
+          </Button>
+        </div>
+      )}
+      {!!error && !sourceExpired && (
         <p role="alert">{errorMessage(error)} 처리 중인 작업과 저장한 내용은 유지돼요.</p>
       )}
       {pending && (

@@ -1528,6 +1528,31 @@ test("corrupted cached text is rejected and cannot refresh or bind a mismatched 
   });
 });
 
+test.each([false, true])(
+  "future-only rows with malformed=%s never hide an actual list failure as empty",
+  async (malformed) => {
+    const f = await fixture();
+    const rawList = JSON.parse(
+      precedents.find((v) => v.id === "precedent_list_candidate")?.response.body ?? "{}",
+    );
+    const future = { ...rawList.PrecSearch.prec[0], 선고일자: "2099.01.01" };
+    let calls = 0;
+    const result = await f
+      .service({
+        transport: async () => {
+          calls++;
+          return response({
+            PrecSearch: { totalCnt: malformed ? 2 : 1, prec: malformed ? [future, {}] : [future] },
+          });
+        },
+      })
+      .retrieve(input([{ kind: "precedent", query: "합성 개념", limit: 3 }]), f.access);
+    expect(result.outcomes[0]?.reason).toBe(malformed ? "schema_mismatch" : "no_results");
+    expect(result.chunks).toEqual([]);
+    expect(calls).toBe(1);
+  },
+);
+
 for (const position of ["first", "last"] as const) {
   test.each(["http", "identity", "summary", "malformed", "timeout"] as const)(
     `${position} failed precedent %s preserves only independently verified originals`,
