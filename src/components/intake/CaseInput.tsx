@@ -12,7 +12,7 @@ import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { ErrorPanel } from "./common";
 
-const examples = [
+const individualExamples = [
   {
     label: "빌려준 돈을 못 받았어요",
     text: "지인에게 돈을 빌려줬는데, 약속한 날짜가 지나도 돌려받지 못했어요. ",
@@ -27,6 +27,24 @@ const examples = [
     label: "계약에 문제가 생겼어요",
     text: "계약한 내용과 실제로 진행된 내용이 달라서 어떻게 정리할지 고민이에요. ",
     Icon: FileText,
+  },
+];
+
+const companyExamples = [
+  {
+    label: "거래처 대금을 못 받았어요",
+    text: "저는 회사의 거래 담당자예요. 거래처에 납품을 마쳤는데 약속한 지급일이 지나도 대금을 받지 못했어요. ",
+    Icon: WalletCards,
+  },
+  {
+    label: "용역 계약에 문제가 생겼어요",
+    text: "회사가 의뢰한 용역의 계약 내용과 실제 결과가 달라요. 제가 담당한 업무와 주고받은 내용을 정리하고 싶어요. ",
+    Icon: FileText,
+  },
+  {
+    label: "직원과 분쟁이 생겼어요",
+    text: "회사에서 직원과 업무 조건에 관한 이견이 생겼어요. 제 역할과 당시의 약속, 업무 기록을 정리하고 싶어요. ",
+    Icon: Building2,
   },
 ];
 
@@ -233,9 +251,13 @@ export function CaseInput({
                   value={loading || sessionError ? "" : narrative}
                   onChange={(event) => setNarrative(event.target.value)}
                   disabled={busy || loading || !!sessionError || !canCreate}
-                  aria-describedby="narrative-help narrative-count"
+                  aria-describedby="subject-context-help narrative-help narrative-count"
                   aria-invalid={count > 5000 || Boolean(lengthError)}
-                  placeholder="누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
+                  placeholder={
+                    subjectContext === "company"
+                      ? "회사에서 맡은 역할, 거래처·직원 등 상대방과의 관계, 계약·업무 중 어떤 문제가 생겼는지 적어주세요."
+                      : "누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
+                  }
                 />
                 <div className="conversation-composer-toolbar">
                   <fieldset
@@ -264,6 +286,11 @@ export function CaseInput({
                   <span className="conversation-context-hint">누구의 사건인가요?</span>
                 </div>
               </div>
+              <p className="conversation-subject-help" id="subject-context-help" aria-live="polite">
+                {subjectContext === "company"
+                  ? "기업 사건은 회사와 상대방의 관계, 담당 역할, 계약·승인·정산 기록을 중심으로 정리해요. 사건은 이 계정에서 관리해요."
+                  : "개인 사건은 나와 상대방의 관계, 약속과 피해, 대화·입금 기록을 중심으로 정리해요."}
+              </p>
               <div className="conversation-input-meta">
                 <p id="narrative-help">주민등록번호·계좌번호 전체는 적지 마세요.</p>
                 <p id="narrative-count" aria-live="polite">
@@ -303,20 +330,22 @@ export function CaseInput({
             </form>
             {!narrative && !session?.needsConsent && session?.user?.accountType !== "lawyer" ? (
               <div className="conversation-examples">
-                {examples.map(({ label, text, Icon }) => (
-                  <Button
-                    key={label}
-                    variant="outline"
-                    disabled={loading || !canCreate}
-                    onClick={() => {
-                      setNarrative(text);
-                      document.getElementById("narrative")?.focus();
-                    }}
-                  >
-                    <Icon size={16} aria-hidden="true" />
-                    {label}
-                  </Button>
-                ))}
+                {(subjectContext === "company" ? companyExamples : individualExamples).map(
+                  ({ label, text, Icon }) => (
+                    <Button
+                      key={label}
+                      variant="outline"
+                      disabled={loading || !canCreate}
+                      onClick={() => {
+                        setNarrative(text);
+                        document.getElementById("narrative")?.focus();
+                      }}
+                    >
+                      <Icon size={16} aria-hidden="true" />
+                      {label}
+                    </Button>
+                  ),
+                )}
               </div>
             ) : null}
             {(!canCreate || busy || loading || !!sessionError) && (

@@ -42,6 +42,7 @@ test.each(boundaries)(
   async (now, localDate) => {
     const f = await fixture(now);
     const input = workspaceModelInput(f.context) as Record<string, unknown>;
+    expect(input.subjectContext).toBe("individual");
     expect(input.calendar).toEqual({ localDate, timeZone: "Asia/Seoul" });
     expect(f.context.sourceRetrieval?.asOfDate).toBe(localDate);
     expect(input).not.toHaveProperty("sourceRetrieval");
@@ -147,4 +148,22 @@ test("a missing request calendar stays absent and all workspace prompts prohibit
     );
     expect(wire.messages[1]?.content).not.toContain('"calendar":');
   }
+});
+
+test("company context comes from the owned encrypted workspace and reaches model input", async () => {
+  const f = await reportFixture();
+  const encrypted = await f.core.encrypt("v2_workspaces", f.workspaceId, f.actor.ownerId, 1, {
+    subjectContext: "company",
+    jurisdiction: "KR",
+  });
+  f.db.sqlite
+    .query("UPDATE v2_workspaces SET encrypted_payload=? WHERE id=?")
+    .run(encrypted, f.workspaceId);
+  const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId);
+  expect(context.subjectContext).toBe("company");
+  expect(workspaceModelInput(context)).toHaveProperty("subjectContext", "company");
+  expect(workspaceModelInput({ context, draft: {} })).toHaveProperty(
+    "context.subjectContext",
+    "company",
+  );
 });

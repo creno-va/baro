@@ -113,41 +113,27 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
       if (route === "/settings") await expect(page.locator(".usage-item")).toHaveCount(4);
-      await expect(page.locator(".app-frame--product")).toBeVisible();
+      await expect(page.locator(".app-frame")).toBeVisible();
       const dimensions = await page.evaluate(() => ({
         available: document.documentElement.clientWidth,
         scroll: document.documentElement.scrollWidth,
       }));
       expect(dimensions.scroll, route).toBeLessThanOrEqual(dimensions.available);
       if (route === "/cases") {
-        await expect(
-          page.getByRole("heading", {
-            name: "돌려받지 못한 보증금, 함께 정리한 이야기",
-            exact: true,
-          }),
-        ).toBeVisible();
-        const overlap = await page.evaluate(() => {
-          const a = document
-            .querySelector(".intake-case-card footer span")
-            ?.getBoundingClientRect();
-          const b = document.querySelector(".case-list-delete")?.getBoundingClientRect();
-          return (
-            !a ||
-            !b ||
-            (a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top)
-          );
-        });
-        expect(overlap).toBe(false);
+        await expect(page).toHaveURL("/app");
+        await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       }
       if (route === base) {
         const positions = await page
           .locator(".workspace-tabs a")
           .evaluateAll((links) => links.map((e) => Math.round(e.getBoundingClientRect().top)));
-        expect(new Set(positions).size).toBe(width <= 640 ? 2 : 1);
+        expect(new Set(positions).size).toBe(1);
         const destinations = page.locator(".workspace-tabs a");
         await expect(destinations).toHaveCount(6);
-        for (const destination of await destinations.all())
+        for (const destination of await destinations.all()) {
+          await destination.scrollIntoViewIfNeeded();
           await expect(destination).toBeInViewport({ ratio: 1 });
+        }
       }
       if ([390, 901, 1440].includes(width))
         await page.screenshot({
@@ -191,12 +177,16 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(page.locator(".case-options")).not.toHaveAttribute("open");
   await expect(page.locator(".case-options summary")).toBeFocused();
   await page.goto("/cases");
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
   const remove = page.getByRole("button", {
     name: "돌려받지 못한 보증금, 함께 정리한 이야기 사건 삭제",
     exact: true,
   });
   await remove.click();
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
+    .getByRole("button", { name: "취소", exact: true })
+    .click();
   await expect(remove).toBeFocused();
 });
 
@@ -315,4 +305,33 @@ test("product navigation and reading surfaces support keyboard access and enlarg
     if (route === base)
       await page.screenshot({ path: ".wrangler/ui332/chat-390-text-200.png", fullPage: true });
   }
+});
+
+test("individual and company input differ and the saved company context appears in case detail", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/app");
+  await expect(page.getByText("개인 사건은 나와 상대방의 관계", { exact: false })).toBeVisible();
+  await page.getByRole("radio", { name: "기업", exact: true }).check();
+  await expect(page.getByRole("button", { name: "거래처 대금을 못 받았어요" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "빌려준 돈을 못 받았어요" })).toHaveCount(0);
+  await page.getByRole("button", { name: "거래처 대금을 못 받았어요" }).click();
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await expect(page).toHaveURL(/\/intake$/);
+  const caseId = page.url().split("/")[4];
+  await page.goto(`/cases/${caseId}`);
+  await expect(page.locator(".case-subject-context")).toContainText("기업 사건");
+  await page.locator(".workspace-context > summary").click();
+  await expect(page.getByText("회사와 상대방의 계약 관계", { exact: false })).toBeVisible();
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "보관한 사건" })).toHaveCount(0);
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(
+    menu.getByRole("navigation", { name: "모바일 주 메뉴" }).getByRole("link"),
+  ).toHaveCount(2);
+  await expect(menu.getByRole("link", { name: "이용 유형 변경" })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: "도움말", exact: true })).toHaveCount(0);
 });

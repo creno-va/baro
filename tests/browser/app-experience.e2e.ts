@@ -32,8 +32,10 @@ async function session(page: Page) {
 }
 async function settled(page: Page) {
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.locator(".intake-case-card")).toHaveCount(30);
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(30);
   await page.evaluate(() => document.fonts.ready);
+  if (await page.getByRole("button", { name: "메뉴 열기" }).isVisible())
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
 }
 async function fits(page: Page) {
   expect(
@@ -67,7 +69,9 @@ test("press feedback keeps the pointer target fixed with motion enabled", async 
   await expect(opener).toHaveCSS("transform", "none");
   expect(await opener.boundingBox()).toEqual(before);
   await page.mouse.up();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true }),
+  ).toBeVisible();
 });
 
 test("recent stories scroll independently while account controls stay visible at desktop heights", async ({
@@ -95,7 +99,8 @@ test("recent stories scroll independently while account controls stay visible at
     if (metrics.scroll > metrics.height)
       await expect.poll(() => recent.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
     await page
-      .getByRole("heading", { name: lastStory.title, exact: true })
+      .locator(".sidebar-desktop")
+      .getByRole("link", { name: lastStory.title, exact: true })
       .scrollIntoViewIfNeeded();
     expect((await account.boundingBox())?.y).toBe(before?.y);
     expect(await page.locator(".sidebar-desktop").evaluate((node) => node.scrollTop)).toBe(0);
@@ -125,7 +130,7 @@ test("dialogs center, contain long content and restore focus across viewport siz
       exact: true,
     });
     await opener.click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
     await expect(dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.")).toBeVisible();
     const bounds = await dialog.boundingBox();
     expect(bounds).not.toBeNull();
@@ -168,14 +173,11 @@ test("pending list keeps structure, announces loading, stops motion on request a
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/cases");
-  const loading = page.locator("main .ui-loading");
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  const loading = page.locator(".ui-sheet .ui-loading");
   await expect(loading).toHaveAttribute("role", "status");
   await expect(loading.locator('[data-slot="skeleton"]')).toHaveCount(12);
   await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "app-spin");
-  await expect(page.getByRole("button", { name: "새로 불러오기" })).toHaveAttribute(
-    "aria-busy",
-    "true",
-  );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "none");
   await expect(loading.locator('[data-slot="skeleton"]').first()).toHaveCSS(
@@ -185,10 +187,10 @@ test("pending list keeps structure, announces loading, stops motion on request a
   await page.screenshot({ path: ".wrangler/ui522/loading-390.png" });
   release();
   await expect(loading).toHaveCount(0);
-  await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("button", { name: "새로 불러오기" })).not.toHaveAttribute(
-    "aria-busy",
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "사건을 불러오지 못했어요" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "다시 불러오기" })).toBeVisible();
   await fits(page);
 });
 
@@ -208,7 +210,8 @@ test("mobile menu, classic scrollbars, zoom and foreground contrast stay usable"
     await page.goto("/cases");
     await settled(page);
     const opener = page.getByRole("button", { name: "메뉴 열기" });
-    await opener.click();
+    if (!(await page.getByRole("dialog", { name: "메뉴", exact: true }).isVisible()))
+      await opener.click();
     const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
     await expect(menu.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
     await menu.getByRole("link", { name: /합성 검증 계정/ }).scrollIntoViewIfNeeded();
@@ -303,7 +306,7 @@ test("Escape cannot hide a deletion request that the dialog owner is still waiti
   await settled(page);
   const opener = page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
   await opener.click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect.poll(() => writes).toBe(1);

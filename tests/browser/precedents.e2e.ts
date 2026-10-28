@@ -355,16 +355,17 @@ test("comparison survives foreground during admission, renders fixed indicators 
     sessionStorage.setItem("synthetic-comparison-done", "true");
     window.dispatchEvent(new Event("focus"));
   });
-  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
-  await expect(
-    region.getByText("전체 8개 중 2개 일치 · 2개 비교 가능 · 6개 확인 불가"),
-  ).toBeVisible();
-  await expect(region.getByRole("listitem")).toHaveCount(8);
-  await expect(region.locator("summary", { hasText: "Y · 일치" })).toHaveCount(2);
-  await expect(region.locator("summary", { hasText: "확인 불가" })).toHaveCount(6);
-  await region.locator("summary").first().click();
-  await expect(region.getByText("내 사건 근거", { exact: true }).first()).toBeVisible();
-  await expect(region.getByText("판례 원문 근거", { exact: true }).first()).toBeVisible();
+  await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await expect(region.locator("progress")).toHaveAttribute("value", "25");
+  await expect(region.getByRole("button", { name: /유사 · \+12.5점/ })).toHaveCount(2);
+  await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);
+  await region.locator(".comparison-highlight").first().click();
+  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });
+  await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
+  await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
+  await expect(reason.locator(".comparison-reason")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(reason).not.toBeVisible();
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await expect
@@ -383,7 +384,7 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await page.reload();
   await comparisonTransport(page);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
+  await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
   expect(
     await page.evaluate(
       () => JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]").length,
@@ -424,7 +425,7 @@ test("comparison recovers a lost receipt without another POST and preserves work
     sessionStorage.setItem("synthetic-comparison-done", "true");
     window.dispatchEvent(new Event("focus"));
   });
-  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
+  await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
   await page.evaluate(() => {
     localStorage.setItem(
       "baro-api-mock-v1:session",
@@ -435,7 +436,7 @@ test("comparison recovers a lost receipt without another POST and preserves work
     );
   });
   await expect(region).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toHaveCount(0);
 });
 
 test("a delayed admission receipt cannot erase an already recovered completed comparison", async ({
@@ -458,13 +459,13 @@ test("a delayed admission receipt cannot erase an already recovered completed co
     window.dispatchEvent(new Event("focus"));
   });
   const region = page.getByRole("region", { name: "유사 판례 비교" });
-  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
+  await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
   await page.evaluate(() =>
     (window as unknown as { finishComparisonStart: () => void }).finishComparisonStart(),
   );
   await expect(page.getByRole("button", { name: "선택한 판례와 내 사건 비교" })).toBeVisible();
-  await expect(region.getByRole("heading", { name: "확인한 항목 일치율 25%" })).toBeVisible();
-  await expect(region.getByRole("listitem")).toHaveCount(8);
+  await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await expect(region.locator(".comparison-indicator")).toHaveCount(8);
   expect(
     await page.evaluate(
       () => JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]").length,

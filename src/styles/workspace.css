@@ -1019,8 +1019,9 @@
     font-size: 1.05rem;
   }
   .workspace-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     gap: 4px;
   }
   .workspace-tabs a {
@@ -1443,4 +1444,41 @@
   flex: none;
   min-height: 0;
   gap: 0;
+}
+
+.case-subject-context {
+  margin: -4px 0 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.workspace-facts > li:has(.fact-answer) {
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.fact-answer__question {
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.fact-answer__text {
+  margin: 0;
+  line-height: 1.7;
+}
+.fact-answer__notice {
+  color: var(--foreground);
+  font-size: 12px;
+}
+.fact-answer__sources {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.fact-answer__sources summary {
+  cursor: pointer;
+}
+.fact-answer__sources p {
+  margin: 6px 0;
 }

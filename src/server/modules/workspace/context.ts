@@ -203,12 +203,14 @@ export async function readWorkspaceContext(
     materials.push(...window.materials);
     materialBytes += new TextEncoder().encode(JSON.stringify(window.materials)).byteLength;
   }
-  if (!(await repo.findWorkspace(actor, id))) throw new Error("Workspace unavailable");
+  const workspace = await repo.findWorkspace(actor, id);
+  if (!workspace) throw new Error("Workspace unavailable");
   const normalized = (message: V2UserMessage) => ({
     ...publicStoredUserMessageSchema.parse(message),
     createdAt: "1970-01-01T00:00:00.000Z",
   });
   return {
+    subjectContext: workspace.subjectContext,
     intake,
     confirmedSummary: intake.status === "confirmed" ? summary : null,
     facts: factPage.facts,

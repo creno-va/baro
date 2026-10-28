@@ -122,13 +122,13 @@ test("persisted role changes invalidate peer navigation without sharing session 
   const peer = await context.newPage();
   await peer.goto("/app");
   const peerNav = peer.getByRole("navigation", { name: "주 메뉴" });
-  await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
+  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page).toHaveURL(/\/lawyer$/);
   await expect(peer).toHaveURL(/\/lawyer$/);
   await expect(peerNav.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
-  await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
+  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toMatch(
     /^[0-9a-f-]{36}$/,
   );

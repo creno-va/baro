@@ -77,7 +77,7 @@ test("application, login and case screens share local brand and remain usable at
     "rgb(35, 100, 232)",
   );
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/case-list-320.png", fullPage: true });
 });
 
@@ -87,14 +87,17 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
   let accountType: "customer" | "lawyer" | null = "customer";
   await openInteractiveFixture(page, () => accountType);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
-  await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveAttribute("href", "/lawyers");
   accountType = "lawyer";
   await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(navigation.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
+  await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toHaveCount(0);
   await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: "계정 설정" })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-profile")).toHaveAttribute(
+    "href",
+    "/settings",
+  );
   accountType = null;
   await page.getByLabel("메뉴 예시 역할").selectOption("moderator");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

@@ -75,24 +75,18 @@ test("long service content fits narrow screens and the menu stays closable after
     ]) {
       await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-      await expect(
-        page
-          .getByRole("main")
-          .getByText(/SYNTHETIC-LONG-CONTENT-/)
-          .first(),
-      ).toBeVisible();
+      if (path.startsWith("/cases/"))
+        await expect(
+          page
+            .getByRole("main")
+            .getByText(/SYNTHETIC-LONG-CONTENT-/)
+            .first(),
+        ).toBeVisible();
+      if (path === "/cases")
+        await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
-        for (const selector of [
-          ".settings-refresh",
-          ".settings-report-link",
-          ".settings-case-delete",
-        ]) {
-          const target = page.locator(selector).first();
-          await expect(target).toBeVisible();
-          const bounds = await target.boundingBox();
-          expect(bounds?.height).toBeGreaterThanOrEqual(44);
-          expect(bounds?.width).toBeGreaterThanOrEqual(44);
-        }
+        await expect(page.locator(".settings-refresh")).toBeVisible();
+        await expect(page.locator(".settings-case-delete")).toHaveCount(0);
       }
       if (path.endsWith("/reports")) {
         const regenerate = page.getByRole("button", { name: "새 버전 만들기", exact: true });

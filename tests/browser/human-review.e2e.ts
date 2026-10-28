@@ -249,7 +249,7 @@ test("case deletion is reachable from the list and survives reload", async ({ pa
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("link", { name: /휴먼 리뷰 합성 사건/ })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
 });
 
 test("an uploaded synthetic recording can be played while correcting and is removed on sign-out", async ({

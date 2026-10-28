@@ -125,15 +125,17 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   );
   await page.screenshot({ path: resolve(artifacts, "integrated-review.png"), fullPage: true });
   await page.goto("/settings");
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  const removeCase = page.locator(".sidebar-desktop .sidebar-story-delete");
+  await removeCase.click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
-  await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toHaveCount(0);
+  await expect(removeCase).toHaveCount(1);
+  await removeCase.click();
+  await page.getByRole("textbox", { name: "삭제하려면 DELETE를 입력해 주세요." }).fill("DELETE");
+  await page.getByRole("dialog").getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(page).toHaveURL("/app");
+  await expect(removeCase).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toHaveCount(0);
+  await expect(removeCase).toHaveCount(0);
   const originalCount = () =>
     page.evaluate(
       () =>
@@ -156,7 +158,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.goto(`${casePath}/reports`);
   await expect(page.getByRole("alert")).toContainText("찾을 수 없어요");
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
   await page.goto("/cases/new");
   const accountCasePath = await completeIntake(
     "계정 삭제를 확인하기 위해 보관한 합성 사건입니다. 실제 개인정보가 아닙니다.",

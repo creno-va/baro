@@ -1,7 +1,5 @@
 import {
   BriefcaseBusiness,
-  ChevronRight,
-  CircleHelp,
   FileText,
   House,
   LogOut,
@@ -44,19 +42,13 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
   ],
   user: [
     { href: "/app", label: "새 사건 입력", icon: "new" },
-    { href: "/cases", label: "내 사건", icon: "cases" },
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
-    { href: "/settings", label: "계정 설정", icon: "settings" },
   ],
   lawyer: [
     { href: "/lawyer", label: "변호사 프로필", icon: "profile" },
     { href: "/lawyers", label: "공개 디렉터리", icon: "lawyers" },
-    { href: "/settings", label: "계정 설정", icon: "settings" },
   ],
-  moderator: [
-    { href: "/admin/reviews", label: "검토 대기", icon: "reviews" },
-    { href: "/settings", label: "계정 설정", icon: "settings" },
-  ],
+  moderator: [{ href: "/admin/reviews", label: "검토 대기", icon: "reviews" }],
 };
 export function availableNavigation(role: NavigationRole, availableRoutes: readonly string[]) {
   return ROLE_NAVIGATION[role].filter((item) => availableRoutes.includes(item.href));
@@ -114,9 +106,7 @@ export function AppNavigation({
         try {
           const items = await api.cases.list();
           if (current()) {
-            setRecent(
-              [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5),
-            );
+            setRecent([...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
             setRecentState("ready");
           }
         } catch {
@@ -217,7 +207,7 @@ export function AppNavigation({
       await sameOwner();
       setRecent((items) => items.filter((item) => item.id !== target.item.id));
       setDeletion(null);
-      window.location.assign("/cases");
+      window.location.assign("/app");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "삭제를 접수하지 못했어요. 다시 확인해 주세요.",
@@ -251,10 +241,7 @@ export function AppNavigation({
     !session?.needsConsent && (
       <div className="sidebar-recent">
         <div className="sidebar-recent__heading">
-          <p className="sidebar-caption">최근 이야기</p>
-          <a href="/cases" className="sidebar-recent__all" aria-label="최근 이야기 전체 보기">
-            전체 보기 <ChevronRight size={13} aria-hidden="true" />
-          </a>
+          <p className="sidebar-caption">내 사건</p>
         </div>
         <section
           className="sidebar-recent__list"
@@ -266,7 +253,10 @@ export function AppNavigation({
             <LoadingContent title="최근 이야기를 불러오는 중" />
           ) : recentState === "error" ? (
             <p className="sidebar-empty" role="status">
-              최근 이야기를 불러오지 못했어요. 전체 보기에서 다시 확인해 주세요.
+              사건을 불러오지 못했어요.
+              <Button variant="ghost" onClick={() => window.dispatchEvent(new Event("focus"))}>
+                다시 불러오기
+              </Button>
             </p>
           ) : recent.length ? (
             <nav aria-label="최근 사건">
@@ -283,43 +273,19 @@ export function AppNavigation({
                         : undefined
                     }
                   >
-                    <span className="sidebar-story__icon">
-                      <MessageCircle size={16} aria-hidden="true" />
-                    </span>
                     <span className="sidebar-story__copy">
                       <strong>{item.title}</strong>
-                      <span className="sidebar-story__meta">
-                        <span>
-                          {item.schemaVersion === "1"
-                            ? "기존 기록"
-                            : item.stage === "intake"
-                              ? "질문 답변 중"
-                              : item.stage === "summary"
-                                ? "요약 확인"
-                                : item.stage === "archived"
-                                  ? "보관한 이야기"
-                                  : "정리 중"}
-                        </span>
-                        <time dateTime={item.updatedAt}>
-                          {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
-                            month: "numeric",
-                            day: "numeric",
-                            timeZone: "Asia/Seoul",
-                          })}
-                        </time>
-                      </span>
                     </span>
                   </a>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="sidebar-story-delete"
-                    aria-label={`${item.title} 삭제`}
+                    aria-label={`${item.title} 사건 삭제`}
                     title="사건 삭제"
                     disabled={deleting || signingOut}
                     onClick={(event) => {
                       event.currentTarget.focus();
-                      setOpen(false);
                       setConfirmation("");
                       setError("");
                       if (session?.user) setDeletion({ item, ownerId: session.user.id });
@@ -345,43 +311,34 @@ export function AppNavigation({
     );
   const renderAccount = () => (
     <div className="sidebar-account">
-      <a href="/help" className="sidebar-help">
-        <CircleHelp size={17} aria-hidden="true" />
-        도움말
-      </a>
       {session?.user ? (
-        <>
-          <div className="sidebar-account__row">
-            <a href={session.needsConsent ? "/consent" : "/settings"} className="sidebar-profile">
-              <span className="sidebar-avatar" aria-hidden="true">
-                {session.user.name.slice(0, 1) || "B"}
-              </span>
-              <span>
-                <strong>{session.user.name || "내 계정"}</strong>
-                <small>
-                  {session.needsConsent
-                    ? "필수 확인 필요"
-                    : session.user.accountType === "lawyer"
-                      ? "변호사 계정"
-                      : "나의 BARO"}
-                </small>
-              </span>
-            </a>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={signingOut ? "로그아웃 중…" : "로그아웃"}
-              title="로그아웃"
-              onClick={() => void signOut()}
-              disabled={signingOut}
-            >
-              {signingOut ? <Spinner /> : <LogOut size={18} aria-hidden="true" />}
-            </Button>
-          </div>
-          <a href="/login" className="sidebar-help">
-            이용 유형 변경
+        <div className="sidebar-account__row">
+          <a href={session.needsConsent ? "/consent" : "/settings"} className="sidebar-profile">
+            <span className="sidebar-avatar" aria-hidden="true">
+              {session.user.name.slice(0, 1) || "B"}
+            </span>
+            <span>
+              <strong>{session.user.name || "내 계정"}</strong>
+              <small>
+                {session.needsConsent
+                  ? "필수 확인 필요"
+                  : session.user.accountType === "lawyer"
+                    ? "변호사 계정"
+                    : "나의 BARO"}
+              </small>
+            </span>
           </a>
-        </>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={signingOut ? "로그아웃 중…" : "로그아웃"}
+            title="로그아웃"
+            onClick={() => void signOut()}
+            disabled={signingOut}
+          >
+            {signingOut ? <Spinner /> : <LogOut size={18} aria-hidden="true" />}
+          </Button>
+        </div>
       ) : (
         (showLogin || session !== null) && (
           <a className="ui-button ui-button--primary sidebar-login" href="/login">
@@ -452,11 +409,11 @@ export function AppNavigation({
         onOpenChange={(value) => {
           if (!value && !deleting) setDeletion(null);
         }}
-        title="사건을 삭제할까요?"
+        title="이 사건을 삭제할까요?"
         description="삭제하면 이 사건과 연결된 자료·리포트에 접근할 수 없어요. 필요한 파일은 먼저 보관해 주세요."
       >
         <p>{deletion?.item.title}</p>
-        <label htmlFor="recent-delete-confirmation">확인하려면 DELETE를 입력하세요.</label>
+        <label htmlFor="recent-delete-confirmation">삭제하려면 DELETE를 입력해 주세요.</label>
         <input
           id="recent-delete-confirmation"
           value={confirmation}
@@ -470,10 +427,11 @@ export function AppNavigation({
         </Button>
         <Button
           variant="destructive"
+          loading={deleting}
           disabled={confirmation !== "DELETE" || deleting}
           onClick={() => void deleteRecent()}
         >
-          {deleting ? "삭제 요청 중…" : "사건 삭제"}
+          {deleting ? "삭제 접수 중…" : "사건 삭제"}
         </Button>
       </Dialog>
     </>
