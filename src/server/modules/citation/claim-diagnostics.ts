@@ -21,6 +21,7 @@ const claimFailureSchema = z.enum([
   "claim_unicode_boundary",
   "quotation_mismatch",
   "semantic_receipt",
+  "unsupported_instrument_number",
 ]);
 export type ClaimFailure = z.infer<typeof claimFailureSchema>;
 
