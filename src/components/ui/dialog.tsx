@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
 import { Button } from "./button";
 import { cn } from "./utils";
 
@@ -16,6 +16,7 @@ export function Dialog({
   description,
   children,
   variant = "dialog",
+  returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +24,8 @@ export function Dialog({
   description?: string;
   children: ReactNode;
   variant?: "dialog" | "sheet";
+  /** Validation flows may return to the invalid field instead of the opener. */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -34,9 +37,9 @@ export function Dialog({
     return () => {
       if (!dialog?.open) return;
       dialog.close();
-      restoreFocus(previousFocus.current);
+      restoreFocus(returnFocusRef?.current ?? previousFocus.current);
     };
-  }, []);
+  }, [returnFocusRef]);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -85,7 +88,7 @@ export function Dialog({
         // A queued close event can arrive after a keyboard user has reopened the dialog.
         if (event.currentTarget.open) return;
         onOpenChange(false);
-        restoreFocus(previousFocus.current);
+        restoreFocus(returnFocusRef?.current ?? previousFocus.current);
       }}
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;
