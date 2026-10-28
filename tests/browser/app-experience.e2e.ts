@@ -220,7 +220,9 @@ test("mobile menu, classic scrollbars, zoom and foreground contrast stay usable"
     const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
     await expect(menu.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
     await menu.getByRole("link", { name: /합성 검증 계정/ }).scrollIntoViewIfNeeded();
-    await expect(menu.getByRole("link", { name: /합성 검증 계정/ })).toBeInViewport({ ratio: 1 });
+    await expect(menu.getByRole("link", { name: /합성 검증 계정/ })).toBeInViewport({
+      ratio: 0.99,
+    });
     await page.screenshot({ path: `.wrangler/ui522/menu-${width}.png` });
     await page.keyboard.press("Escape");
     await expect(opener).toBeFocused();

@@ -37,3 +37,24 @@ PR570–573와 CI 성공을 확인하고 별도 managed worktree에서 진행한
 로컬 성공을 실제 provider 응답·OAuth·production 배포 성공으로 확대하지 않는다.
 랜딩 코드/자산/스타일, DB schema, 모델/공급자, 비용 정책, 원장/hold와 기존 운영 gate는
 변경하지 않는다. 기존 #569 배포·#71의 외부 인수와 독립적인 UI 작업이다.
+
+## 로컬 검증 기록
+
+- Bun1.4.0의 frozen `bun ci` 성공. `validate:quick`·`validate:build` 성공,
+  production bundle·Worker dry-run과 local workerd의 익명 로그인 HTML을 확인했다.
+- 개인/기업의 암호화 저장소→모델 맥락·판례 인용/겹침·법률번호·리포트 단위89개 성공.
+- mock 제품 브라우저74개 성공. 실제 HTTP·합성 signed session/SQL·계정/사실 출처
+  브라우저는51개 성공 뒤 고전 스크롤바의1px 미만 반올림 단언을0.99로 보정한
+  나머지1개도 성공했다. 잘못 설정한 합성 Turnstile 키·제거한 메뉴/목록 경로를
+  전제로 했던 최초 실패는 성공으로 바꾸지 않으며 수정 후 결과와 구분한다.
+- 독립 리포트 브라우저8개 성공 뒤 옛 settings 사건 삭제 버튼을 찾던1개를 현재
+  계정 관리 취소·초점 복귀로 옮겨 성공했다. 웹/HTML/print와 가림·선택 사진·
+  PDF·owner/동의·삭제 검증이며 실제 OAuth나 provider 호출 인수가 아니다.
+- 실제 Workers PDF 생성기로 만든 합성2페이지를 Poppler로 모두 렌더링했다.
+  한글·페이지 구분·제목/본문/출처 위계·header/footer를 확인했다. HTML도390px와
+  desktop/print에서 가로 넘침과 실행 가능한 사용자 markup이 없음을 검사했다.
+- 초기 quick의 시스템 unzip/sh 누락은 Git 도구 경로를 설정해 해소했다.
+  병렬 부하에서 기존 native patch 재구성1건의20초 timeout이 있었고 이후 동일
+  제한의 최종 quick은 전부 통과했다. 과거 실패를 검사 성공으로 덮어쓰지 않는다.
+- 다른 세션 PR576의 CI 성공/main c1a0055를 통합했다. 최종 head CI·main·full·
+  preview의 실제 SHA/결과는 #574/PR575에 기록하며 production 배포는 하지 않는다.
