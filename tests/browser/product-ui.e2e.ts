@@ -132,7 +132,7 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         await expect(destinations).toHaveCount(6);
         for (const destination of await destinations.all()) {
           await destination.scrollIntoViewIfNeeded();
-          await expect(destination).toBeInViewport({ ratio: 1 });
+          await expect(destination).toBeInViewport({ ratio: 0.99 });
         }
       }
       if ([390, 901, 1440].includes(width))

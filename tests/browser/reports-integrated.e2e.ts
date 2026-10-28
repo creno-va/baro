@@ -125,7 +125,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   );
   await page.screenshot({ path: resolve(artifacts, "integrated-review.png"), fullPage: true });
   await page.goto("/settings");
-  const removeCase = page.locator(".sidebar-desktop .sidebar-story-delete");
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  const removeCase = page.locator(".ui-sheet .sidebar-story-delete");
   await removeCase.click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(removeCase).toHaveCount(1);

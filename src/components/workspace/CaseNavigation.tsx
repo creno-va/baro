@@ -54,6 +54,7 @@ export function CaseNavigation({
     revealCurrent();
     const observer = new ResizeObserver(revealCurrent);
     observer.observe(nav);
+    for (const link of nav.querySelectorAll("a")) observer.observe(link);
     void document.fonts.ready.then(revealCurrent);
     return () => observer.disconnect();
   }, []);

@@ -696,7 +696,7 @@
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
-    padding: 0 0 4px;
+    padding: 0 8px 4px 0;
   }
   .app-frame.app-frame--product .workspace-tabs a {
     font-size: 13px;

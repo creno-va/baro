@@ -8,6 +8,7 @@ import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { createReportMarkup } from "./document";
 import { downloadBlob } from "./download";
+import { ReportReading } from "./ReportReading";
 
 type ReportView = BaseReportView & {
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
@@ -496,7 +497,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 aria-label="리포트 검토 본문"
                 hidden={editing}
               >
-                {content}
+                <ReportReading content={content} />
               </section>
               <div className="report-edit-panel">
                 <button

@@ -1,3 +1,5 @@
+import { reportSections } from "../../../utils/report-sections";
+
 /** Workers-only PDF writer. Embedded static TrueType, per-glyph widths and a
  * ToUnicode CMap preserve Korean display, copying and text extraction offline.
  * No scripts, attachments, external font requests or rasterized report text.
@@ -124,8 +126,9 @@ export async function renderReportPdf(
     }
     return output;
   }
-  const title = wrap(input.title, 18),
-    lines = wrap(input.content, 11);
+  const title = wrap(input.title, 23);
+  const displayDate = (value: string) =>
+    `${value.slice(0, 10).replaceAll("-", ".")} · ${value.slice(11, 16)} UTC`;
   const records: Uint8Array[] = [];
   const object = (value: string | Uint8Array) => {
     records.push(typeof value === "string" ? encode(value) : value);
@@ -159,19 +162,20 @@ export async function renderReportPdf(
     `<< /Type /Font /Subtype /Type0 /BaseFont /BaroReport /Encoding /Identity-H /DescendantFonts [${descendant} 0 R] /ToUnicode ${toUnicode} 0 R >>`,
   );
   const children: number[] = [];
-  const text = (value: string, size: number, y: number, color = "0.10 0.14 0.23") => {
+  const text = (value: string, size: number, y: number, color = "0.10 0.14 0.23", x = 52) => {
     const codes = [...value]
       .map((scalar) => character(scalar).cid.toString(16).padStart(4, "0"))
       .join("");
-    return `${color} rg BT /F0 ${size} Tf 1 0 0 1 52 ${y} Tm <${codes}> Tj ET\n`;
+    return `${color} rg BT /F0 ${size} Tf 1 0 0 1 ${x} ${y} Tm <${codes}> Tj ET\n`;
   };
   // Keep every title line; paginate even unusually long titles before body.
-  const all = [
-    ...title.map((value) => ({ value, size: 18, gap: 26 })),
-    { value: `검토 버전 ${input.revision} · ${input.updatedAt}`, size: 9, gap: 27 },
+  type RecordLine = { value: string; size: number; gap: number; heading?: boolean; color?: string };
+  const all: RecordLine[] = [
+    ...title.map((value) => ({ value, size: 23, gap: 33 })),
+    { value: `검토 버전 ${input.revision} · ${displayDate(input.updatedAt)}`, size: 9, gap: 27 },
     ...(input.basis
       ? wrap(
-          `생성 기준: 요약 ${input.basis.summaryRevision} · 사건 ${input.basis.workspaceRevision} · ${input.basis.generatedAt}`,
+          `생성 기준: 요약 ${input.basis.summaryRevision} · 사건 ${input.basis.workspaceRevision} · ${displayDate(input.basis.generatedAt)}`,
           9,
         ).map((value) => ({ value, size: 9, gap: 19 }))
       : []),
@@ -179,25 +183,47 @@ export async function renderReportPdf(
       `제외 자료: ${input.excludedFileCount ?? 0}개 · 식별정보 자동 가림: ${input.maskIdentifiers ? "켜짐" : "꺼짐"} · 생성 기준 이후 변경은 반영되지 않습니다.`,
       9,
     ).map((value) => ({ value, size: 9, gap: 19 })),
-    ...lines.map((value) => ({ value, size: 11, gap: 19 })),
+    ...reportSections(input.content).flatMap((section, index): RecordLine[] => [
+      {
+        value: `${String(index + 1).padStart(2, "0")}  ${section.title}`,
+        size: 13,
+        gap: 25,
+        heading: true,
+        color: "0.12 0.31 0.59",
+      },
+      ...section.lines.flatMap((line) => {
+        const detail = /^\[|^(출처|주의|작성 시각|검증 시각):/.test(line);
+        return wrap(line, detail ? 9 : 10.5).map((value) => ({
+          value,
+          size: detail ? 9 : 10.5,
+          gap: value ? (detail ? 15 : 19) : 9,
+          color: detail ? "0.35 0.40 0.48" : "0.10 0.14 0.23",
+        }));
+      }),
+      { value: "", size: 10, gap: 12 },
+    ]),
   ];
   let cursor = 0;
   do {
     let y = 745,
-      drawing = text("BARO · 상담 준비 리포트", 12, 790, "0.13 0.35 0.78");
+      drawing =
+        text("BARO", 14, 790, "0.13 0.35 0.78") +
+        text("사건 상담 준비 리포트", 9, 791, "0.35 0.40 0.48", 110) +
+        "0.13 0.35 0.78 RG 1.5 w 52 776 m 543 776 l S\n";
     while (cursor < all.length) {
       const record = all[cursor];
-      if (!record || y - record.gap < 82) break;
-      drawing += text(record.value, record.size, y);
+      if (!record || y - record.gap - (record.heading ? 28 : 0) < 82) break;
+      drawing += text(record.value, record.size, y, record.color);
       y -= record.gap;
       cursor++;
     }
+    drawing += "0.85 0.88 0.92 RG 0.5 w 52 69 m 543 69 l S\n";
     drawing += text(
       "법률 판단·원본 진정성·법적 효력을 보장하지 않습니다. 사용자가 직접 전달합니다.",
       8,
       49,
     );
-    drawing += text(`${children.length + 1}`, 9, 30);
+    drawing += text(`${children.length + 1}`, 9, 30, "0.35 0.40 0.48", 530);
     const content = object(stream(encode(drawing)));
     children.push(
       object(

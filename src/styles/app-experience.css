@@ -543,7 +543,7 @@
 
 /* Title-only case history; account controls stay at the foot of the sidebar. */
 .app-frame .sidebar-story {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border-radius: 8px;
 }

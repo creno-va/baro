@@ -19,12 +19,14 @@ export function FactAnswer({
       <p className="fact-answer__question">{prompts.join(" / ") || "확인한 내용"}</p>
       <p className="fact-answer__text">{fact.text}</p>
       {(fact.certainty === "uncertain" ||
+        fact.certainty === "conflicting" ||
         fact.conflictingFactIds.length > 0 ||
         fact.significance === "unfavorable") && (
         <p className="fact-answer__notice">
           {[
             fact.certainty === "uncertain" && "불확실한 내용",
-            fact.conflictingFactIds.length > 0 && "서로 다른 진술 확인 필요",
+            (fact.certainty === "conflicting" || fact.conflictingFactIds.length > 0) &&
+              "서로 다른 진술 확인 필요",
             fact.significance === "unfavorable" && "불리한 사실",
           ]
             .filter(Boolean)
