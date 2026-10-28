@@ -108,13 +108,11 @@ test("long service content fits narrow screens and the menu stays closable after
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await menu.locator(".sidebar-profile").focus();
   await page.keyboard.press("End");
-  const menuScroll = await menu
-    .locator(".ui-dialog__content")
-    .evaluate((element) => ({
-      height: element.clientHeight,
-      scroll: element.scrollHeight,
-      top: element.scrollTop,
-    }));
+  const menuScroll = await menu.locator(".ui-dialog__content").evaluate((element) => ({
+    height: element.clientHeight,
+    scroll: element.scrollHeight,
+    top: element.scrollTop,
+  }));
   if (menuScroll.scroll > menuScroll.height) expect(menuScroll.top).toBeGreaterThan(0);
   expect(await menu.evaluate((element) => element.scrollTop)).toBe(0);
   const close = menu.getByRole("button", { name: "닫기", exact: true });
