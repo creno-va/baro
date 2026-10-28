@@ -783,7 +783,9 @@ export function Workspace({
             ]);
             setLocalAttachments((items) => items.filter((item) => item !== file));
           }
-          autoMaterials.current.add(uploaded.id);
+          // Chat attachments belong to the user's explicit send/cancel flow.
+          // Only standalone material uploads request automatic reflection.
+          if (tab === "files") autoMaterials.current.add(uploaded.id);
           // The upload API already checked this exact file after its ACK. A
           // later whole-workspace read failure must never resend accepted files.
           setRetryUploads(chosen.slice(completed));

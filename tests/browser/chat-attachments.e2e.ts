@@ -175,6 +175,42 @@ test("owner change purges local attachment and text without uploading", async ({
   expect(await messages(page)).toEqual([]);
 });
 
+test("cancelled chat attachments that become ready wait for an explicit send", async ({ page }) => {
+  await seed(page, { "files.upload": ["file_failed"] });
+  await attach(page);
+  const draft = "준비되더라도 전송을 누르기 전에는 보내지 않을 합성 질문";
+  await page.getByLabel("추가 사실 또는 질문").fill(draft);
+  await page.getByLabel("첨부한 파일의 자동 처리에 동의합니다.").check();
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await page.getByRole("button", { name: "전송 대기 취소" }).click();
+  await expect(page.getByText("처리 실패 · 자료에서 확인", { exact: true })).toBeVisible();
+  await page.evaluate((id) => {
+    const key = "baro-api-mock-v1:files";
+    const files = JSON.parse(localStorage.getItem(key) ?? "{}");
+    Object.assign(files[id][0], { status: "ready", failure: null, canRetry: false });
+    localStorage.setItem(key, JSON.stringify(files));
+    window.dispatchEvent(new Event("focus"));
+  }, id);
+  await expect(page.getByText("처리 실패 · 자료에서 확인", { exact: true })).toHaveCount(0);
+  const send = page.getByRole("button", { name: "보내기", exact: true });
+  await expect(send).toBeEnabled();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  expect(await messages(page)).toEqual([]);
+  await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue(draft);
+  await send.click();
+  await expect(page.getByRole("list", { name: "메시지 첨부 파일" })).toContainText(file.name);
+  const sent = (await messages(page)).filter(
+    (message: { role: string }) => message.role === "user",
+  );
+  expect(sent).toHaveLength(1);
+  expect(sent[0].text).toBe(draft);
+});
+
 test("only actual assistant references appear in evidence materials; selected unused files remain attachments", async ({
   page,
 }) => {
