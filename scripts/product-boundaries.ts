@@ -16,6 +16,9 @@ export function productBoundaryFindings(file: string, content: string): string[]
     'console.error(JSON.stringify({event:"v2_deletion_cleanup_failed",environment:event.environment,reason:event.reason,attempts:event.attempts,ageSeconds:event.ageSeconds,stage:event.stage,namespace:event.namespace,errorShape:event.errorShape,errorName:event.errorName,messageClass:event.messageClass,codeClass:event.codeClass,httpStatus:event.httpStatus,}),)';
   // Only the reviewed enum-only diagnostics module may emit these exact fields.
   const dependencyLogs = new Set([
+    'console.warn(JSON.stringify({event:"legal_request_observation",endpointId,attempt,durationMs,httpStatus,reason,}),)',
+    'console.warn(JSON.stringify({event:"legal_source_observation",kind,availability,reason,sourceFailures,verifiedSourceCount,durationMs,}),)',
+    'console.warn(JSON.stringify({event:"legal_upstream_rejection",endpointId,category}))',
     'console.error(JSON.stringify({event:"workspace_dependency_failure",stage:failure?.stage??"unclassified",category:dependencyCategory(error),}),)',
     'console.error(JSON.stringify({event:"workspace_provider_failure",phase,category,httpStatus}),)',
     'console.error(JSON.stringify({event:"workspace_legal_retrieval",kind,availability,reason}))',

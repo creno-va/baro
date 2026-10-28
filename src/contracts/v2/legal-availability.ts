@@ -1,0 +1,51 @@
+import { z } from "zod";
+
+// Opt-in response metadata never grants access or contains an upstream URL/body.
+export const LEGAL_DIAGNOSTICS_HEADER = "x-baro-legal-diagnostics";
+export const legalFailureReasonSchema = z.enum([
+  "configuration_missing",
+  "not_authorized",
+  "budget_exhausted",
+  "cancelled",
+  "timeout",
+  "rate_limited",
+  "upstream_unavailable",
+  "upstream_rejected",
+  "schema_mismatch",
+  "too_large",
+  "unsafe_url",
+  "identity_mismatch",
+  "date_invalid",
+  "no_results",
+  "history_incomplete",
+  "unsupported_format",
+  "rights_unverified",
+  "unknown_publication_date",
+  "update_pending",
+  "image_omitted",
+  "cache_invalid",
+]);
+export type LegalFailureReason = z.infer<typeof legalFailureReasonSchema>;
+export const legalFailureMessages: Record<LegalFailureReason, string> = {
+  configuration_missing: "공식 자료 연결 설정을 확인해야 해요. 저장한 사건은 유지돼요.",
+  not_authorized: "사건 접근 상태가 바뀌어 조회를 멈췄어요. 현재 계정을 확인해 주세요.",
+  budget_exhausted: "이번 조회의 요청 횟수 한도에 도달했어요. 확인된 자료만 표시해요.",
+  cancelled: "공식 자료 조회가 취소됐어요.",
+  timeout: "공식 기관의 응답이 늦어 일부 자료를 확인하지 못했어요. 잠시 후 다시 조회해 주세요.",
+  rate_limited: "공식 기관이 요청을 일시 제한했어요. 시간을 두고 다시 조회해 주세요.",
+  upstream_unavailable: "공식 기관에서 응답 오류가 발생했어요. 잠시 후 다시 조회해 주세요.",
+  upstream_rejected: "공식 기관에서 요청을 받아들이지 않았어요. 연결 설정 확인이 필요해요.",
+  schema_mismatch: "공식 자료의 응답 형식을 확인하지 못해 해당 원문을 사용하지 않았어요.",
+  too_large: "공식 원문이 처리 범위를 넘어 해당 자료를 사용하지 않았어요.",
+  unsafe_url: "공식 출처 주소를 확인하지 못해 해당 자료를 사용하지 않았어요.",
+  identity_mismatch: "목록과 원문의 정보가 일치하지 않아 해당 자료를 사용하지 않았어요.",
+  date_invalid: "공식 자료의 날짜를 확인하지 못해 해당 원문을 사용하지 않았어요.",
+  no_results: "선택한 주제에 해당하는 공식 자료를 찾지 못했어요.",
+  history_incomplete: "법령의 시행 이력을 모두 확인하지 못해 해당 법령을 사용하지 않았어요.",
+  unsupported_format: "본문 전체를 읽을 수 없는 자료가 있어 확인된 원문만 표시해요.",
+  rights_unverified: "자료의 이용 범위를 확인하지 못해 해당 원문을 사용하지 않았어요.",
+  unknown_publication_date: "자료의 기준일을 확인하지 못해 해당 안내를 사용하지 않았어요.",
+  update_pending: "공식 안내가 개정 내용 확인 중이어서 법률 근거에서 제외했어요.",
+  image_omitted: "안내에 포함된 이미지 내용을 모두 확인하지 못해 해당 자료를 사용하지 않았어요.",
+  cache_invalid: "저장된 공식 원문을 다시 검증하지 못해 해당 자료를 사용하지 않았어요.",
+};

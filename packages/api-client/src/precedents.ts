@@ -1,5 +1,6 @@
 import type { SessionScope } from "@baro/client-core";
 import { opaqueIdSchema } from "@baro/contracts/common";
+import { LEGAL_DIAGNOSTICS_HEADER } from "@baro/contracts/v2/legal-availability";
 import {
   type V2PrecedentReadRequest,
   type V2PrecedentSearchRequest,
@@ -40,6 +41,7 @@ export function createPrecedentsClient(dependencies: {
         {
           path: `/api/v2/cases/${encodeURIComponent(caseId)}/precedents${action === "context" ? "" : `/${action}`}`,
           method: action === "context" ? "GET" : "POST",
+          ...(action === "search" ? { headers: { [LEGAL_DIAGNOSTICS_HEADER]: "1" } } : {}),
           ...(body === undefined ? {} : { body }),
           signal: requestSignal,
         },

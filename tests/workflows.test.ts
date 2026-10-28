@@ -502,3 +502,15 @@ test("deployments are manual and preview validates current main before checking 
   expect(verification).toBeLessThan(deploy);
   expect(steps[checkout]?.with?.ref).toBe("${{ inputs.target_sha }}");
 });
+
+test("legal reliability PR checks use only offline fixtures and cannot receive provider secrets or deploy", async () => {
+  const workflow = await Bun.file(".github/workflows/legal-reliability.yml").text();
+  expect(workflow).toContain("pull_request:");
+  expect(workflow).toContain("contents: read");
+  expect(workflow).not.toMatch(
+    /pull_request_target|workflow_dispatch|secrets\.|environment:|deploy-production|bun scripts\/legal-readiness/,
+  );
+  expect(workflow).toContain("tests/legal-reliability.test.ts");
+  expect(workflow).toContain("tests/browser/precedents.config.ts");
+  expect(workflow).toContain("persist-credentials: false");
+});

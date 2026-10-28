@@ -75,13 +75,22 @@ test("unavailable/partial coverage remain distinct and auth/consent hides all pr
   const session = jest.fn();
   const view = await render(
     <PrecedentsScreen
-      state={{ ...initial, result: { ...result, status: "partial", unavailableTopics: ["loan"] } }}
+      state={{
+        ...initial,
+        result: {
+          ...result,
+          status: "partial",
+          unavailableTopics: ["loan"],
+          availabilityIssues: [{ topic: "loan", reason: "timeout" }],
+        },
+      }}
       actions={actions}
       onSession={session}
       onReview={jest.fn()}
     />,
   );
-  expect(screen.getByText("일부 주제의 판례만 확인했어요")).toBeTruthy();
+  expect(screen.getByText("요청한 판례를 일부만 확인했어요")).toBeTruthy();
+  expect(screen.getByText(/빌려준 돈 · 공식 기관의 응답이 늦어/)).toBeTruthy();
   expect(screen.getByText("확인하지 못한 주제: 빌려준 돈")).toBeTruthy();
   await view.rerender(
     <PrecedentsScreen

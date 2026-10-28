@@ -4,10 +4,12 @@ import type {
   createV2OfficialSourceRepository,
   OfficialSourceIdentity,
 } from "../../../db/v2-official-sources";
+import type { LegalOutcomeObservation } from "../diagnostics";
 import { type LegalUpstreamRejection, textHash, upstreamError } from "../service";
 import {
   type Access,
   EXTRACTOR_VERSION,
+  type FailureReason,
   MAX_RESPONSE_BYTES,
   RetrievalFailure,
   type RetrievalOutput,
@@ -22,7 +24,7 @@ import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
 import { safeLegalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";
 import { type LawCandidate, parseStatute, selectStatuteHistory } from "./statutes";
-import { createBoundedTransport, type Transport } from "./transport";
+import { createBoundedTransport, type LegalRequestObservation, type Transport } from "./transport";
 
 type Repo = ReturnType<typeof createV2OfficialSourceRepository>;
 export type UpstreamRejectionObservation = {
@@ -38,11 +40,14 @@ export function createV2LegalRetrieval(
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
     bindCitation: (citation: V2OfficialCitation) => Promise<boolean>;
     observeUpstreamRejection?: (observation: UpstreamRejectionObservation) => void | Promise<void>;
+    observeRequest?: (observation: LegalRequestObservation) => void | Promise<void>;
+    observeOutcome?: (observation: LegalOutcomeObservation) => void | Promise<void>;
   },
 ) {
   const request = createBoundedTransport(options.transport, {
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
+    ...(options.observeRequest ? { observeRequest: options.observeRequest } : {}),
   });
   function lawUrl(
     path: "lawSearch.do" | "lawService.do",
@@ -148,6 +153,7 @@ export function createV2LegalRetrieval(
       if (!parsed.success) throw new RetrievalFailure("schema_mismatch");
       const body = parsed.data,
         outcomes: SourceOutcome[] = [];
+      const durations: number[] = [];
       let totalBytes = 0,
         calls = 0;
       // Every external attempt (including retries) has a unique invocation/attempt
@@ -169,7 +175,7 @@ export function createV2LegalRetrieval(
           sort: "efdes",
           display: "100",
           page: "1",
-          efYd: "00010101~" + body.asOfDate.replaceAll("-", ""),
+          efYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
         });
         const key = url.href;
         const cached = candidates.get(key);
@@ -194,136 +200,25 @@ export function createV2LegalRetrieval(
         return candidate;
       }
       for (const plan of body.plans) {
-        const chunks: SourceChunk[] = [];
-        let reason: SourceOutcome["reason"] = null;
+        const started = performance.now();
+        const verified: SourceChunk[] = [];
+        const limited: SourceChunk[] = [];
+        const failures: FailureReason[] = [];
         let searchTruncated: boolean | undefined;
-        try {
-          if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
-          if (
-            plan.kind !== "official_guide" &&
-            !(await safePermit(() =>
-              access.authorizeQuery(plan.kind === "statute" ? plan.lawTitle : plan.query),
-            ))
-          )
-            throw new RetrievalFailure("not_authorized");
-          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
-          if (plan.kind === "statute") {
-            const candidate = await selectedStatute(plan);
-            for (const article of plan.articles) {
-              const section = `제${BigInt(article.number)}조${BigInt(article.branch) !== 0n ? `의${BigInt(article.branch)}` : ""}`;
-              const cached = await cachedChunk(
-                {
-                  sourceType: "statute",
-                  officialId: candidate.법령ID,
-                  version: candidate.법령일련번호,
-                  section,
-                },
-                {
-                  canonicalUrl: `https://law.go.kr/LSW/lsInfoP.do?lsiSeq=${candidate.법령일련번호}`,
-                  title: candidate.법령명한글,
-                  court: null,
-                  caseNumber: null,
-                  rightsProvenance: OFFICIAL_CATALOG[0].rights,
-                },
-                body.now,
-                body.asOfDate,
-              );
-              if (cached) chunks.push(cached);
-              else
-                chunks.push(
-                  await parseStatute(
-                    await json(
-                      lawUrl("lawService.do", "eflaw", {
-                        MST: candidate.법령일련번호,
-                        efYd: candidate.시행일자.replaceAll("-", ""),
-                        JO: `${article.number.padStart(4, "0")}${article.branch.padStart(2, "0")}`,
-                      }),
-                      "moleg_eflaw_detail",
-                      boundedAccess,
-                    ),
-                    candidate,
-                    article,
-                    body.asOfDate,
-                    body.now,
-                  ),
-                );
-            }
-          } else if (plan.kind === "precedent") {
-            const candidates = precedentCandidates(
-              await json(
-                lawUrl("lawSearch.do", "prec", {
-                  query: plan.query,
-                  search: "2",
-                  // Official court corpus supports the JSON detail contract.
-                  // Unfiltered newest rows can instead be HTML-only tax rulings.
-                  datSrcNm: "대법원",
-                  display: String(plan.limit),
-                  page: "1",
-                  sort: "ddes",
-                  prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
-                }),
-                "moleg_prec_list",
-                boundedAccess,
-              ),
-              body.asOfDate,
-              plan.limit,
-            );
-            if (!candidates.rows.length) throw new RetrievalFailure("no_results");
-            // Unlike statute history, precedent discovery need not enumerate
-            // every result to verify the selected original. Preserve coverage
-            // separately so a valid top-N judgment remains usable as a source.
-            searchTruncated = candidates.truncated;
-            for (const candidate of candidates.rows) {
-              if (candidate.데이터출처명 === "국세법령정보시스템") {
-                reason = "unsupported_format";
-                continue;
-              }
-              const cached = await cachedChunk(
-                {
-                  sourceType: "precedent",
-                  officialId: candidate.판례일련번호,
-                  version: `decision_${candidate.선고일자}`,
-                  section: "판례내용",
-                },
-                {
-                  canonicalUrl: `https://www.law.go.kr/LSW/precInfoP.do?precSeq=${candidate.판례일련번호}`,
-                  title: candidate.사건명,
-                  sourceDate: candidate.선고일자,
-                  court: candidate.법원명,
-                  caseNumber: candidate.사건번호,
-                  rightsProvenance: OFFICIAL_CATALOG[1].rights,
-                },
-                body.now,
-                body.asOfDate,
-              );
-              if (cached) {
-                chunks.push(cached);
-                continue;
-              }
-              const result = await parsePrecedent(
-                await json(
-                  lawUrl("lawService.do", "prec", { ID: candidate.판례일련번호 }),
-                  "moleg_prec_detail",
-                  boundedAccess,
-                ),
-                candidate,
-                body.asOfDate,
-                body.now,
-              );
-              if (!result.full) reason = "unsupported_format";
-              chunks.push(result.chunk);
-            }
-          } else {
-            const parsed = await parseGuide(
-              await request(guideUrl(plan), "easylaw_text_section", boundedAccess, true),
-              plan,
-              body.asOfDate,
-              body.now,
-            );
-            chunks.push(parsed.chunk);
-            reason = parsed.reason;
-          }
-          for (const chunk of chunks) {
+        let schemaFailure: SourceOutcome["schemaFailure"];
+        const failureReason = (error: unknown): FailureReason =>
+          error instanceof RetrievalFailure
+            ? error.reason
+            : error instanceof z.ZodError
+              ? "schema_mismatch"
+              : "upstream_unavailable";
+        // Validate, persist and bind each original independently. A later failed
+        // original cannot demote an earlier verified original to a limited source.
+        const collect = async (
+          work: () => Promise<{ chunk: SourceChunk; reason?: FailureReason | null }>,
+        ) => {
+          try {
+            const { chunk, reason = null } = await work();
             totalBytes += new TextEncoder().encode(chunk.source.body).byteLength;
             if (totalBytes > MAX_RESPONSE_BYTES) throw new RetrievalFailure("too_large");
             if (!(await safePermit(access.authorize)) || access.signal?.aborted)
@@ -340,23 +235,153 @@ export function createV2LegalRetrieval(
               throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "not_authorized");
             if (reason === null && !(await options.bindCitation(chunk.citation)))
               throw new RetrievalFailure("not_authorized");
+            if (reason === null) verified.push(chunk);
+            else {
+              limited.push(chunk);
+              failures.push(reason);
+            }
+          } catch (error) {
+            const reason = failureReason(error);
+            if (reason === "not_authorized" || reason === "cancelled")
+              throw new RetrievalFailure(reason);
+            failures.push(reason);
+            if (error instanceof RetrievalFailure && reason === "schema_mismatch")
+              schemaFailure ??= safeLegalSchemaDiagnostic(error.schemaFailure);
           }
+        };
+        try {
+          if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
+          if (
+            plan.kind !== "official_guide" &&
+            !(await safePermit(() =>
+              access.authorizeQuery(plan.kind === "statute" ? plan.lawTitle : plan.query),
+            ))
+          )
+            throw new RetrievalFailure("not_authorized");
+          if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+          if (plan.kind === "statute") {
+            const candidate = await selectedStatute(plan);
+            for (const article of plan.articles)
+              await collect(async () => {
+                const section = `제${BigInt(article.number)}조${BigInt(article.branch) !== 0n ? `의${BigInt(article.branch)}` : ""}`;
+                const cached = await cachedChunk(
+                  {
+                    sourceType: "statute",
+                    officialId: candidate.법령ID,
+                    version: candidate.법령일련번호,
+                    section,
+                  },
+                  {
+                    canonicalUrl: `https://law.go.kr/LSW/lsInfoP.do?lsiSeq=${candidate.법령일련번호}`,
+                    title: candidate.법령명한글,
+                    court: null,
+                    caseNumber: null,
+                    rightsProvenance: OFFICIAL_CATALOG[0].rights,
+                  },
+                  body.now,
+                  body.asOfDate,
+                );
+                return {
+                  chunk:
+                    cached ??
+                    (await parseStatute(
+                      await json(
+                        lawUrl("lawService.do", "eflaw", {
+                          MST: candidate.법령일련번호,
+                          efYd: candidate.시행일자.replaceAll("-", ""),
+                          JO: `${article.number.padStart(4, "0")}${article.branch.padStart(2, "0")}`,
+                        }),
+                        "moleg_eflaw_detail",
+                        boundedAccess,
+                      ),
+                      candidate,
+                      article,
+                      body.asOfDate,
+                      body.now,
+                    )),
+                };
+              });
+          } else if (plan.kind === "precedent") {
+            const candidates = precedentCandidates(
+              await json(
+                lawUrl("lawSearch.do", "prec", {
+                  query: plan.query,
+                  search: "2",
+                  datSrcNm: "대법원",
+                  display: String(plan.limit),
+                  page: "1",
+                  sort: "ddes",
+                  prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
+                }),
+                "moleg_prec_list",
+                boundedAccess,
+              ),
+              body.asOfDate,
+              plan.limit,
+            );
+            if (!candidates.rows.length)
+              throw new RetrievalFailure(candidates.failures?.[0] ?? "no_results");
+            searchTruncated = candidates.truncated;
+            failures.push(...(candidates.failures ?? []));
+            for (const candidate of candidates.rows)
+              await collect(async () => {
+                if (candidate.데이터출처명 === "국세법령정보시스템")
+                  throw new RetrievalFailure("unsupported_format");
+                const cached = await cachedChunk(
+                  {
+                    sourceType: "precedent",
+                    officialId: candidate.판례일련번호,
+                    version: `decision_${candidate.선고일자}`,
+                    section: "판례내용",
+                  },
+                  {
+                    canonicalUrl: `https://www.law.go.kr/LSW/precInfoP.do?precSeq=${candidate.판례일련번호}`,
+                    title: candidate.사건명,
+                    sourceDate: candidate.선고일자,
+                    court: candidate.법원명,
+                    caseNumber: candidate.사건번호,
+                    rightsProvenance: OFFICIAL_CATALOG[1].rights,
+                  },
+                  body.now,
+                  body.asOfDate,
+                );
+                if (cached) return { chunk: cached };
+                const result = await parsePrecedent(
+                  await json(
+                    lawUrl("lawService.do", "prec", { ID: candidate.판례일련번호 }),
+                    "moleg_prec_detail",
+                    boundedAccess,
+                  ),
+                  candidate,
+                  body.asOfDate,
+                  body.now,
+                );
+                return { chunk: result.chunk, reason: result.full ? null : "unsupported_format" };
+              });
+          } else
+            await collect(async () =>
+              parseGuide(
+                await request(guideUrl(plan), "easylaw_text_section", boundedAccess, true),
+                plan,
+                body.asOfDate,
+                body.now,
+              ),
+            );
+          const chunks = verified.length ? verified : limited;
+          const reason = verified.length ? null : (failures[0] ?? "no_results");
           outcomes.push({
             kind: plan.kind,
-            availability: chunks.length ? (reason ? "limited" : "verified") : "unavailable",
+            availability: verified.length ? "verified" : limited.length ? "limited" : "unavailable",
             reason,
             chunks,
             ...(searchTruncated === undefined ? {} : { searchTruncated }),
+            ...(failures.length ? { sourceFailures: [...new Set(failures)] } : {}),
+            ...(schemaFailure ? { schemaFailure } : {}),
           });
         } catch (error) {
-          const failure =
-            error instanceof RetrievalFailure
-              ? error.reason
-              : error instanceof z.ZodError
-                ? "schema_mismatch"
-                : "upstream_unavailable";
-          const schemaFailure =
-            error instanceof RetrievalFailure && error.reason === "schema_mismatch"
+          const failure = failureReason(error);
+          const diagnostic =
+            error instanceof RetrievalFailure && failure === "schema_mismatch"
               ? safeLegalSchemaDiagnostic(error.schemaFailure)
               : undefined;
           outcomes.push({
@@ -364,9 +389,10 @@ export function createV2LegalRetrieval(
             availability: "unavailable",
             reason: failure,
             chunks: [],
-            ...(schemaFailure ? { schemaFailure } : {}),
+            ...(diagnostic ? { schemaFailure: diagnostic } : {}),
           });
         }
+        durations.push(Math.max(0, Math.round(performance.now() - started)));
       }
       let chunks = [
         ...new Map(
@@ -386,6 +412,25 @@ export function createV2LegalRetrieval(
         }
         chunks = [];
         retrievalHash = emptyHash;
+      }
+      // Emit only finite metadata after the final authorization fence.
+      for (const [index, outcome] of outcomes.entries()) {
+        try {
+          if (options.observeOutcome)
+            void Promise.resolve(
+              options.observeOutcome({
+                kind: outcome.kind,
+                availability: outcome.availability,
+                reason: outcome.reason,
+                sourceFailures: [...(outcome.sourceFailures ?? [])],
+                verifiedSourceCount:
+                  outcome.availability === "verified" ? outcome.chunks.length : 0,
+                durationMs: durations[index] ?? 0,
+              }),
+            ).catch(() => undefined);
+        } catch {
+          /* Diagnostics never change source acceptance. */
+        }
       }
       return {
         schemaVersion: "2",

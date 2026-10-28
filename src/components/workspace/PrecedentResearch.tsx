@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
 import { accessHref } from "../../client/return-path";
+import { legalFailureMessages } from "../../contracts/v2/legal-availability";
 import type {
   V2PrecedentReadResponse,
   V2PrecedentResearchContext,
@@ -313,7 +314,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                   {new Date(result.checkedAt).toLocaleString("ko-KR")}
                 </p>
               </div>
-              {result.status === "partial" && (
+              {result.status === "partial" && !result.availabilityIssues?.length && (
                 <p className="precedent-notice" role="status">
                   {result.unavailableTopics
                     .map((topic) => PRECEDENT_TOPIC_LABELS[topic])
@@ -321,7 +322,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                   주제를 일부 확인하지 못했어요. 확인된 판례만 표시해요.
                 </p>
               )}
-              {result.status === "unavailable" && (
+              {result.status === "unavailable" && !result.availabilityIssues?.length && (
                 <p className="precedent-notice" role="alert">
                   공식 판례를 지금 확인할 수 없어요. 잠시 후 다시 검색해 주세요.
                 </p>
@@ -330,6 +331,15 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                 <p className="precedent-notice">
                   선택한 주제로 확인된 판례가 없어요. 다른 주제로 다시 찾아보세요.
                 </p>
+              )}
+              {!!result.availabilityIssues?.length && (
+                <ul className="precedent-notice" aria-label="공식 자료 확인 상태">
+                  {result.availabilityIssues.map(({ topic, reason }) => (
+                    <li key={`${topic}:${reason}`}>
+                      {PRECEDENT_TOPIC_LABELS[topic]} · {legalFailureMessages[reason]}
+                    </li>
+                  ))}
+                </ul>
               )}
               {result.searchTruncated && (
                 <p className="precedent-scope">
@@ -383,8 +393,17 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                           있어요. 다시 검색해 주세요.
                         </p>
                         {chosen && (
-                          <button type="button" onClick={() => void read(chosen)}>
-                            다시 확인
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void (readError instanceof ApiError && readError.code === "NOT_FOUND"
+                                ? search()
+                                : read(chosen))
+                            }
+                          >
+                            {readError instanceof ApiError && readError.code === "NOT_FOUND"
+                              ? "다시 검색"
+                              : "다시 확인"}
                           </button>
                         )}
                       </div>
@@ -424,6 +443,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
             selected={chosen && document?.citation.id === chosen.citation.id ? chosen : null}
             access={access}
             onSettled={() => setReload((n) => n + 1)}
+            onRefreshSources={() => void search()}
           />
         </>
       )}

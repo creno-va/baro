@@ -17,6 +17,11 @@ import {
   decodeSource,
   type SourceRow,
 } from "../../../db/v2-official-sources";
+import {
+  reportLegalOutcome,
+  reportLegalRejection,
+  reportLegalRequest,
+} from "../../../dependency-diagnostics";
 import { textHash } from "../service";
 import { EXTRACTOR_VERSION, MAX_SOURCE_BYTES } from "../v2/contracts";
 import { OFFICIAL_CATALOG } from "../v2/registry";
@@ -201,6 +206,9 @@ export function createPrecedentResearchService(
       const queries = request.topics.map((topic) => RESEARCH_CONCEPTS[topic]);
       const repository = createV2OfficialSourceRepository(core);
       const retrieval = createV2LegalRetrieval(env, repository, {
+        observeRequest: reportLegalRequest,
+        observeOutcome: reportLegalOutcome,
+        observeUpstreamRejection: reportLegalRejection,
         ...(options.transport ? { transport: options.transport } : {}),
         // Research is read-only for private case state. The short-lived signed
         // result proof below supplies scope; do not add automatic chat citations.
@@ -231,11 +239,21 @@ export function createPrecedentResearchService(
       );
       const items = new Map<string, V2PrecedentSearchResponse["items"][number]>();
       const unavailableTopics: V2PrecedentTopic[] = [];
+      const availabilityIssues: NonNullable<V2PrecedentSearchResponse["availabilityIssues"]> = [];
       for (const [index, outcome] of result.outcomes.entries()) {
         const topic = request.topics[index];
         if (!topic) continue;
+        const reasons = [
+          ...new Set([
+            ...(outcome.reason && outcome.reason !== "no_results" ? [outcome.reason] : []),
+            ...(outcome.sourceFailures ?? []),
+          ]),
+        ];
+        for (const reason of reasons) availabilityIssues.push({ topic, reason });
+        if (reasons.length) unavailableTopics.push(topic);
         if (outcome.availability !== "verified") {
-          if (outcome.reason !== "no_results") unavailableTopics.push(topic);
+          if (outcome.reason !== "no_results" && !unavailableTopics.includes(topic))
+            unavailableTopics.push(topic);
           continue;
         }
         for (const chunk of outcome.chunks) {
@@ -283,6 +301,7 @@ export function createPrecedentResearchService(
         searchTruncated: result.outcomes.some((o) => o.searchTruncated),
         items: [...items.values()],
         unavailableTopics,
+        availabilityIssues,
       });
       if (signal?.aborted || deadline.aborted) throw new PrecedentResearchError("UNAVAILABLE");
       await scope(ownerId, id, request.expectedRevision, request.summaryRevision);

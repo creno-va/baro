@@ -52,15 +52,21 @@ export async function projectWorkspaceSources(output: RetrievalOutput, rejectedS
         rejectedSources > 0 ||
         output.outcomes.some(
           (o) =>
-            o.searchTruncated || o.availability === "limited" || o.availability === "unavailable",
+            o.searchTruncated ||
+            !!o.sourceFailures?.length ||
+            o.availability === "limited" ||
+            o.availability === "unavailable",
         ),
       rejectedSources,
-      outcomes: output.outcomes.map(({ kind, availability, reason, searchTruncated }) => ({
-        kind,
-        availability,
-        reason,
-        ...(searchTruncated === undefined ? {} : { searchTruncated }),
-      })),
+      outcomes: output.outcomes.map(
+        ({ kind, availability, reason, searchTruncated, sourceFailures }) => ({
+          kind,
+          availability,
+          reason,
+          ...(searchTruncated === undefined ? {} : { searchTruncated }),
+          ...(sourceFailures?.length ? { sourceFailures } : {}),
+        }),
+      ),
     },
   };
 }

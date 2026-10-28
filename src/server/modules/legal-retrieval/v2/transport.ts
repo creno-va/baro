@@ -1,11 +1,35 @@
 import { LAW_API_REFERER } from "../request-headers";
-import { type Access, MAX_RESPONSE_BYTES, RetrievalFailure, safePermit } from "./contracts";
+import {
+  type Access,
+  type FailureReason,
+  MAX_RESPONSE_BYTES,
+  RetrievalFailure,
+  safePermit,
+} from "./contracts";
 import { assertOfficialUrl } from "./registry";
 
 export type Transport = (url: string, init: RequestInit) => Promise<Response>;
+export type LegalRequestObservation = {
+  endpointId: string;
+  attempt: number;
+  durationMs: number;
+  httpStatus: number | null;
+  reason: FailureReason | null;
+};
+function retryAfter(value: string | null) {
+  if (!value || value.length > 128) return null;
+  const text = value.trim();
+  if (/^\d+$/.test(text)) return Number(text) * 1000;
+  const date = Date.parse(text);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null;
+}
 export function createBoundedTransport(
   transport: Transport = fetch,
-  options: { timeoutMs?: number; sleep?: (ms: number, signal: AbortSignal) => Promise<void> } = {},
+  options: {
+    timeoutMs?: number;
+    sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+    observeRequest?: (value: LegalRequestObservation) => void | Promise<void>;
+  } = {},
 ) {
   if (
     options.timeoutMs !== undefined &&
@@ -15,8 +39,13 @@ export function createBoundedTransport(
   return async (url: URL, endpointId: string, access: Access, guide = false): Promise<string> => {
     assertOfficialUrl(url.href, guide);
     const invocationId = crypto.randomUUID();
+    const attemptTimeout = options.timeoutMs ?? 10000;
+    // Keep the existing three attempt timeouts plus 100/200ms backoff ceiling.
+    // Provider-directed waits consume this same budget, never extend it.
+    const deadline = performance.now() + attemptTimeout * 3 + 300;
     for (let attempt = 1; attempt <= 3; attempt++) {
       if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
+      if (performance.now() >= deadline) throw new RetrievalFailure("timeout");
       if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
       if (!(await safePermit(() => access.reserveRequest({ invocationId, attempt, endpointId }))))
         throw new RetrievalFailure("budget_exhausted");
@@ -26,11 +55,19 @@ export function createBoundedTransport(
       const finalAuthorized = await safePermit(access.authorize);
       if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
       if (!finalAuthorized) throw new RetrievalFailure("not_authorized");
+      if (performance.now() >= deadline) throw new RetrievalFailure("timeout");
       const controller = new AbortController();
       const externalAbort = () => controller.abort();
       access.signal?.addEventListener("abort", externalAbort, { once: true });
-      const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 10000);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        Math.max(0, Math.min(attemptTimeout, deadline - performance.now())),
+      );
       let retry = false;
+      let retryAfterMs: number | null = null;
+      let lastFailure: RetrievalFailure | undefined;
+      let httpStatus: number | null = null;
+      const started = performance.now();
       try {
         if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
         // Race even test/nonconforming transports; drain cancellation below is also bounded.
@@ -53,6 +90,7 @@ export function createBoundedTransport(
           }),
           aborted,
         ]);
+        httpStatus = response.status;
         const rejectBody = (reason: ConstructorParameters<typeof RetrievalFailure>[0]) => {
           // Cancellation itself can be a stalled producer promise. Do not await
           // it outside the request deadline or retain a retry response body.
@@ -61,6 +99,7 @@ export function createBoundedTransport(
         };
         if (response.status === 429 || response.status >= 500) {
           retry = attempt < 3;
+          retryAfterMs = retryAfter(response.headers.get("retry-after"));
           throw rejectBody(response.status === 429 ? "rate_limited" : "upstream_unavailable");
         }
         if (!response.ok) throw rejectBody("upstream_rejected");
@@ -115,6 +154,8 @@ export function createBoundedTransport(
             issues: [{ field: "length", expected: "declared_bytes" }],
           });
         if (!(await safePermit(access.authorize))) throw new RetrievalFailure("not_authorized");
+        if (controller.signal.aborted)
+          throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "timeout");
         return text;
       } catch (error) {
         if (access.signal?.aborted) throw new RetrievalFailure("cancelled");
@@ -122,6 +163,7 @@ export function createBoundedTransport(
           error instanceof RetrievalFailure
             ? error
             : new RetrievalFailure(controller.signal.aborted ? "timeout" : "upstream_unavailable");
+        lastFailure = failure;
         if (
           !(
             retry ||
@@ -133,19 +175,59 @@ export function createBoundedTransport(
       } finally {
         clearTimeout(timeout);
         access.signal?.removeEventListener("abort", externalAbort);
-      }
-      if (options.sleep) {
         try {
-          await options.sleep(
-            100 * 2 ** (attempt - 1),
-            access.signal ?? new AbortController().signal,
-          );
+          if (options.observeRequest)
+            void Promise.resolve(
+              options.observeRequest({
+                endpointId,
+                attempt,
+                durationMs: Math.max(0, Math.round(performance.now() - started)),
+                httpStatus,
+                reason: access.signal?.aborted ? "cancelled" : (lastFailure?.reason ?? null),
+              }),
+            ).catch(() => undefined);
         } catch {
-          throw new RetrievalFailure(access.signal?.aborted ? "cancelled" : "upstream_unavailable");
+          /* Diagnostics never change results or retries. */
+        }
+      }
+      const delay = Math.max(100 * 2 ** (attempt - 1), retryAfterMs ?? 0);
+      const remaining = deadline - performance.now();
+      if (delay >= remaining) throw lastFailure ?? new RetrievalFailure("timeout");
+      if (options.sleep) {
+        const waitController = new AbortController();
+        const cancel = () => waitController.abort();
+        access.signal?.addEventListener("abort", cancel, { once: true });
+        const timer = setTimeout(cancel, Math.max(0, remaining));
+        try {
+          await Promise.race([
+            options.sleep(delay, waitController.signal),
+            new Promise<never>((_, reject) => {
+              waitController.signal.addEventListener(
+                "abort",
+                () =>
+                  reject(new RetrievalFailure(access.signal?.aborted ? "cancelled" : "timeout")),
+                { once: true },
+              );
+              if (access.signal?.aborted) cancel();
+              if (waitController.signal.aborted)
+                reject(new RetrievalFailure(access.signal?.aborted ? "cancelled" : "timeout"));
+            }),
+          ]);
+        } catch {
+          throw new RetrievalFailure(
+            access.signal?.aborted
+              ? "cancelled"
+              : waitController.signal.aborted
+                ? "timeout"
+                : "upstream_unavailable",
+          );
+        } finally {
+          clearTimeout(timer);
+          access.signal?.removeEventListener("abort", cancel);
         }
       } else
         await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(done, 100 * 2 ** (attempt - 1));
+          const timer = setTimeout(done, delay);
           function done() {
             access.signal?.removeEventListener("abort", cancel);
             resolve();
