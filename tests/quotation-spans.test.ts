@@ -228,6 +228,39 @@ test("generation and audit hide supplier IDs while retaining server citation ide
   expect(f.context).toEqual(original);
 });
 
+test("an exact authorized user report of a law number is preserved without authenticating it", async () => {
+  const f = await fixture();
+  f.context.intake.narrative = "합성 기록에 법률 제1706호라고 적혀 있어요.";
+  const fact = {
+    id: "synthetic_number_report",
+    text: f.context.intake.narrative,
+    attribution: "user_statement" as const,
+    certainty: "reported" as const,
+    significance: "neutral" as const,
+    references: [{ kind: "intake_narrative" as const, intakeRevision: 1 }],
+    conflictingFactIds: [],
+    userEdited: false,
+  };
+  const pipeline = createWorkspacePipeline(
+    {
+      call: async (phase) =>
+        phase === "workspace_audit"
+          ? approved
+          : {
+              ...f.draft,
+              text: "기록에 적힌 내용을 사용자 진술로 구분했어요. 번호의 정확성은 별도 확인이 필요해요.",
+              sourceClaims: [],
+              references: [],
+              facts: [fact],
+            },
+    },
+    { reserve: async () => true, invocation: () => crypto.randomUUID() },
+  );
+  const result = await pipeline.chat(f.context, "synthetic_number_report");
+  expect(result.facts).toEqual([fact]);
+  expect(result.citations).toEqual([]);
+});
+
 test.each([
   undefined,
   "unknown",

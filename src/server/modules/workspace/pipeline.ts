@@ -743,7 +743,21 @@ export function createWorkspacePipeline(
             deps.observeQuotationResolution?.(resolved.resolution);
           } catch {}
         }
-        if (!instrumentNumbersGrounded(draft, draft.sourceClaims, context.sourceTexts ?? []))
+        if (
+          !instrumentNumbersGrounded(
+            {
+              ...draft,
+              // Already checked exact user quotations remain attributed reports;
+              // they do not establish a number in the assistant's explanation.
+              facts: draft.facts.filter(
+                (fact) =>
+                  fact.attribution !== "user_statement" && fact.attribution !== "user_material",
+              ),
+            },
+            draft.sourceClaims,
+            context.sourceTexts ?? [],
+          )
+        )
           throw new WorkspaceOutputPolicyError(
             "unsupported_fact",
             undefined,
