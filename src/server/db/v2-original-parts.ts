@@ -24,7 +24,18 @@ export interface OriginalPartRegistration {
   uploadRevision: number;
   ordinal: number;
   blob: BlobRegistration;
+  /** Server-produced envelope only; never accepted from the HTTP upload DTO. */
+  wrappedKey?: string;
 }
+
+export const originalPartReceiptSchema = z.strictObject({
+  blobId: opaqueIdSchema,
+  keyVersion: z.string(),
+  contentHash: hashSchema,
+  index: z.number().int(),
+  byteLength: z.number().int(),
+  wrappedKey: z.string().min(1).max(2048).optional(),
+});
 
 const pendingMetadataSchema = z.strictObject({
   contentHash: hashSchema,
@@ -342,6 +353,9 @@ export function registerOriginalPart(core: V2Core, actor: Actor, input: Original
         contentHash: b.contentHash,
         index: input.ordinal,
         byteLength: b.logicalBytes,
+        ...(input.wrappedKey === undefined
+          ? {}
+          : { wrappedKey: originalPartReceiptSchema.shape.wrappedKey.parse(input.wrappedKey) }),
       },
     );
     const claimId = crypto.randomUUID();

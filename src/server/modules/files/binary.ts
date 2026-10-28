@@ -124,6 +124,14 @@ export async function encryptPart(
   plaintext: Uint8Array<ArrayBuffer>,
   wrappedKey?: string,
 ) {
+  return (await encryptPartWithKey(cipher, id, plaintext, wrappedKey)).bytes;
+}
+export async function encryptPartWithKey(
+  cipher: EnvelopeCipher,
+  id: PartIdentity,
+  plaintext: Uint8Array<ArrayBuffer>,
+  wrappedKey?: string,
+) {
   if (plaintext.byteLength !== id.byteLength) throw new FileError("INVALID_FILE");
   if (!wrappedKey) {
     if (id.index !== 0) throw new FileError("CONFLICT");
@@ -157,9 +165,17 @@ export async function encryptPart(
   new DataView(bytes.buffer).setUint32(0, encoded.byteLength);
   bytes.set(encoded, 4);
   bytes.set(encrypted, encoded.byteLength + 4);
-  return bytes;
+  return { bytes, wrappedKey };
 }
 export async function decryptPart(
+  cipher: EnvelopeCipher,
+  id: PartIdentity,
+  bytes: Uint8Array<ArrayBuffer>,
+  expectedWrappedKey?: string,
+) {
+  return (await decryptPartWithKey(cipher, id, bytes, expectedWrappedKey)).value;
+}
+export async function decryptPartWithKey(
   cipher: EnvelopeCipher,
   id: PartIdentity,
   bytes: Uint8Array<ArrayBuffer>,
@@ -176,13 +192,14 @@ export async function decryptPart(
       throw new FileError("INVALID_FILE");
     const key = await unwrap(cipher, id, header.wrappedKey);
     const iv = Uint8Array.from(header.iv.match(/../g) ?? [], (b) => Number.parseInt(b, 16));
-    return new Uint8Array(
+    const value = new Uint8Array(
       await crypto.subtle.decrypt(
         { name: "AES-GCM", iv, additionalData: encoded, tagLength: 128 },
         key,
         bytes.slice(offset),
       ),
     );
+    return { value, wrappedKey: header.wrappedKey };
   } catch {
     throw new FileError("INVALID_FILE");
   }

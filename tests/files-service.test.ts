@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { afterEach, expect, test } from "bun:test";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
@@ -7,6 +8,7 @@ import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
+import { originalPartReceiptSchema } from "../src/server/db/v2-original-parts";
 import { digest, encryptPart, hex } from "../src/server/modules/files/binary";
 import {
   createFilesService,
@@ -154,6 +156,177 @@ async function fixture(
   };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+test("file transfer work stays bounded across multiple chunks", async () => {
+  const f = await fixture();
+  let planned = 0;
+  const statement = f.core.statement;
+  f.core.statement = (sql, values = []) => {
+    if (sql.startsWith("SELECT b.id,b.object_key,b.kind")) {
+      const plan = f.db.sqlite
+        .query(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...(values as SQLQueryBindings[])) as { detail: string }[];
+      expect(
+        plan.some(({ detail }) => /SCAN (?:b|part|u|f|w|r|principal)(?:\s|$)/.test(detail)),
+      ).toBe(false);
+      expect(plan.some(({ detail }) => /SEARCH part USING INDEX/.test(detail))).toBe(true);
+      planned++;
+    }
+    return statement(sql, values);
+  };
+  const data = new Uint8Array(V2_LIMITS.chunkBytes * 2 + 7);
+  const s = await reserved(f, data.length);
+  const parts = [];
+  const uploadStart = f.db.queryCount;
+  for (let i = 0; i < 3; i++) {
+    const bytes = data.slice(i * V2_LIMITS.chunkBytes, (i + 1) * V2_LIMITS.chunkBytes);
+    parts.push(
+      await f.service.putPart(
+        f.actor.ownerId,
+        f.workspaceId,
+        s.fileId,
+        s.uploadSession,
+        i,
+        new Response(bytes).body,
+      ),
+    );
+  }
+  const uploadQueries = f.db.queryCount - uploadStart;
+  const uploadGets = f.bucket.calls.get;
+  await f.service.complete(f.actor.ownerId, f.workspaceId, s.fileId, {
+    expectedRevision: f.rev(),
+    uploadSession: s.uploadSession,
+    manifest: { byteLength: data.length, contentHash: hex(sha256(data)), parts },
+  });
+  const start = f.db.queryCount;
+  const gets = f.bucket.calls.get;
+  const content = await f.service.content(f.actor.ownerId, f.workspaceId, s.fileId);
+  expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual(data);
+  expect(uploadQueries).toBeLessThanOrEqual(58);
+  expect(uploadGets).toBe(0);
+  expect(f.db.queryCount - start).toBeLessThanOrEqual(18);
+  expect(f.bucket.calls.get - gets).toBe(3);
+  expect(planned).toBeGreaterThan(0);
+}, 30000);
+for (const mode of ["legacy", "invalid_key", "corrupt_original"] as const) {
+  test(`upload key receipt preserves ${mode} handling without publishing invalid bytes`, async () => {
+    const f = await fixture();
+    const data = new Uint8Array(V2_LIMITS.chunkBytes + 7);
+    const s = await reserved(f, data.length);
+    const first = await f.service.putPart(
+      f.actor.ownerId,
+      f.workspaceId,
+      s.fileId,
+      s.uploadSession,
+      0,
+      new Response(data.slice(0, V2_LIMITS.chunkBytes)).body,
+    );
+    const row = f.db.sqlite
+      .query("SELECT encrypted_payload FROM v2_upload_parts WHERE upload_id=? AND ordinal=0")
+      .get(s.uploadSession) as { encrypted_payload: string };
+    const receipt = await f.core.decrypt(
+      "v2_upload_parts",
+      `${s.uploadSession}-0`,
+      f.actor.ownerId,
+      1,
+      row.encrypted_payload,
+      originalPartReceiptSchema,
+    );
+    expect(receipt.wrappedKey).toBeString();
+    if (mode === "corrupt_original") {
+      const bytes = [...f.bucket.objects.values()][0];
+      if (!bytes) throw new Error("Synthetic stored ciphertext missing");
+      bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 1;
+    } else {
+      const { wrappedKey: _key, ...legacy } = receipt;
+      const payload = await f.core.encrypt(
+        "v2_upload_parts",
+        `${s.uploadSession}-0`,
+        f.actor.ownerId,
+        1,
+        mode === "legacy" ? legacy : { ...legacy, wrappedKey: "invalid-envelope" },
+      );
+      f.db.sqlite
+        .query("UPDATE v2_upload_parts SET encrypted_payload=? WHERE upload_id=? AND ordinal=0")
+        .run(payload, s.uploadSession);
+    }
+    const put = () =>
+      f.service.putPart(
+        f.actor.ownerId,
+        f.workspaceId,
+        s.fileId,
+        s.uploadSession,
+        1,
+        new Response(data.slice(V2_LIMITS.chunkBytes)).body,
+      );
+    if (mode === "invalid_key") {
+      await expect(put()).rejects.toThrow();
+      expect(f.bucket.calls.put).toBe(1);
+      expect(f.bucket.calls.get).toBe(0);
+      return;
+    }
+    const second = await put();
+    expect(f.bucket.calls.get).toBe(mode === "legacy" ? 1 : 0);
+    const complete = () =>
+      f.service.complete(f.actor.ownerId, f.workspaceId, s.fileId, {
+        expectedRevision: f.rev(),
+        uploadSession: s.uploadSession,
+        manifest: {
+          byteLength: data.length,
+          contentHash: hex(sha256(data)),
+          parts: [first, second],
+        },
+      });
+    if (mode === "legacy") {
+      await expect(complete()).resolves.toMatchObject({ status: "uploaded" });
+      const content = await f.service.content(f.actor.ownerId, f.workspaceId, s.fileId);
+      expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual(data);
+    } else {
+      await expect(complete()).rejects.toThrow("INVALID_FILE");
+      expect(
+        f.db.sqlite.query("SELECT state FROM v2_upload_sessions WHERE id=?").get(s.uploadSession),
+      ).toEqual({ state: "open" });
+      await expect(f.service.content(f.actor.ownerId, f.workspaceId, s.fileId)).rejects.toThrow(
+        "NOT_FOUND",
+      );
+    }
+  }, 30000);
+}
+test("receipt key reuse rechecks revoked access before consuming the next upload body", async () => {
+  const f = await fixture();
+  const s = await reserved(f, V2_LIMITS.chunkBytes + 7);
+  await f.service.putPart(
+    f.actor.ownerId,
+    f.workspaceId,
+    s.fileId,
+    s.uploadSession,
+    0,
+    new Response(new Uint8Array(V2_LIMITS.chunkBytes)).body,
+  );
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+  f.core.cipher.decrypt = async (envelope, context) => {
+    const value = await decrypt(envelope, context);
+    if (context.table === "v2_upload_parts")
+      f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+    return value;
+  };
+  let consumed = false;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        consumed = true;
+        controller.enqueue(new Uint8Array(7));
+        controller.close();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  await expect(
+    f.service.putPart(f.actor.ownerId, f.workspaceId, s.fileId, s.uploadSession, 1, body),
+  ).rejects.toThrow("NOT_FOUND");
+  expect(consumed).toBe(false);
+  expect(f.bucket.calls.get).toBe(0);
+  expect(f.bucket.calls.put).toBe(1);
+});
 async function reserved(
   f: Fixture,
   bytes: number,

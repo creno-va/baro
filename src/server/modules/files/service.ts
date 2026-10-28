@@ -29,7 +29,7 @@ import {
 } from "../../db/v2-core";
 import { type CleanupLease, createV2DeletionRepository } from "../../db/v2-deletion";
 import { createV2FilesRepository } from "../../db/v2-files";
-import { stopUnsentOriginalWrite } from "../../db/v2-original-parts";
+import { originalPartReceiptSchema, stopUnsentOriginalWrite } from "../../db/v2-original-parts";
 import { type BlobRegistration, createV2StorageRepository } from "../../db/v2-storage";
 import { createV2StorageCapacityRepository, type WritePermit } from "../../db/v2-storage-capacity";
 import { isPreparedStoragePaidHold } from "../../db/v2-storage-paid-runtime";
@@ -43,14 +43,13 @@ import { authorizeBlobCleanup, createStorageMaintenance } from "../budget/storag
 import { hasCurrentConsent } from "../consent/service";
 import { DefinitiveFileRejection } from "../file-processing/protocol";
 import {
-  decryptPart,
+  decryptPartWithKey,
   digest,
-  encryptPart,
+  encryptPartWithKey,
   FileError,
   hex,
   type PartIdentity,
   readBounded,
-  readHeader,
 } from "./binary";
 import { hasFileStorageMeter, notifyFileStorageFailure, withFileStorageCleanup } from "./limits";
 
@@ -116,13 +115,6 @@ type Part = {
   cipher_hash: string;
   encrypted_payload: string;
 };
-const partReceiptSchema = z.strictObject({
-  blobId: opaqueIdSchema,
-  keyVersion: z.string(),
-  contentHash: hashSchema,
-  index: z.number().int(),
-  byteLength: z.number().int(),
-});
 
 export function createFilesService(core: V2Core, deps: FileServiceDependencies) {
   const files = createV2FilesRepository(core);
@@ -218,23 +210,22 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     ownerId: string,
     workspaceId: string,
     u: Session,
-    p: Part,
+    p: Part | number,
     requireConsent = true,
   ) => {
     const requestSession = requestSessionFence();
+    const pinned = typeof p === "number" ? undefined : p;
     return core
       .statement(
-        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=? AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND (?=0 OR EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${requestSession.sql}`,
+        `SELECT b.id,b.object_key,b.kind,b.visibility,b.logical_bytes,b.cipher_bytes,b.cipher_hash,b.key_version,part.ordinal,part.byte_length,part.blob_id,part.cipher_hash AS part_cipher_hash,part.encrypted_payload FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_parts part ON part.upload_id=u.id JOIN v2_blobs b ON b.id=part.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id JOIN v2_billing_principals principal ON principal.id=b.principal_id WHERE u.id=? AND u.revision=? AND f.id=? AND w.id=? AND w.owner_id=? AND principal.owner_id=w.owner_id AND r.principal_id=b.principal_id AND r.entity_id=f.id AND r.kind='case_original' AND r.state!='released' AND part.ordinal=? ${pinned ? "AND part.blob_id=? AND part.cipher_hash=? AND part.encrypted_payload=?" : ""} AND b.state='stored' AND b.kind='original' AND b.visibility='private' AND (?=0 OR EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${requestSession.sql}`,
         [
           u.id,
           u.revision,
           u.file_id,
           workspaceId,
           ownerId,
-          p.ordinal,
-          p.blob_id,
-          p.cipher_hash,
-          p.encrypted_payload,
+          typeof p === "number" ? p : p.ordinal,
+          ...(pinned ? [pinned.blob_id, pinned.cipher_hash, pinned.encrypted_payload] : []),
           requireConsent ? 1 : 0,
           CURRENT_POLICY_VERSIONS.termsVersion,
           CURRENT_POLICY_VERSIONS.privacyVersion,
@@ -251,17 +242,31 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         cipher_bytes: number;
         cipher_hash: string;
         key_version: string | null;
+        ordinal: number;
+        byte_length: number;
+        blob_id: string;
+        part_cipher_hash: string;
+        encrypted_payload: string;
       }>();
   };
+  const blobPart = (blob: NonNullable<Awaited<ReturnType<typeof authorizedBlob>>>): Part => ({
+    ordinal: blob.ordinal,
+    byte_length: blob.byte_length,
+    blob_id: blob.blob_id,
+    cipher_hash: blob.part_cipher_hash,
+    encrypted_payload: blob.encrypted_payload,
+  });
   const loadPart = async (
     ownerId: string,
     workspaceId: string,
     u: Session,
-    p: Part,
+    source: Part | number,
     wrappedKey?: string,
     requireConsent = true,
   ) => {
-    const blob = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
+    const blob = await authorizedBlob(ownerId, workspaceId, u, source, requireConsent);
+    if (!blob) throw new FileError("NOT_FOUND");
+    const p = typeof source === "number" ? blobPart(blob) : source;
     if (
       blob?.visibility !== "private" ||
       blob.kind !== "original" ||
@@ -298,7 +303,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       ownerId,
       u.revision,
       p.encrypted_payload,
-      partReceiptSchema,
+      originalPartReceiptSchema,
     );
     if (
       receipt.blobId !== p.blob_id ||
@@ -307,18 +312,15 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       receipt.keyVersion !== blob.key_version
     )
       throw new FileError("INVALID_FILE");
-    const value = await decryptPart(
+    const { value, wrappedKey: actualWrappedKey } = await decryptPartWithKey(
       core.cipher,
       identity(ownerId, u, p.ordinal, p.byte_length),
       bytes,
       wrappedKey,
     );
     if ((await digest(value)) !== receipt.contentHash) throw new FileError("INVALID_FILE");
-    const { header } = await readHeader(
-      core.cipher,
-      identity(ownerId, u, p.ordinal, p.byte_length),
-      bytes,
-    );
+    if (receipt.wrappedKey !== undefined && receipt.wrappedKey !== actualWrappedKey)
+      throw new FileError("INVALID_FILE");
     // Finish asynchronous decryption before the last access fence: the caller
     // must not receive even one plaintext chunk after a revoked request session.
     const current = await authorizedBlob(ownerId, workspaceId, u, p, requireConsent);
@@ -333,7 +335,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       throw new FileError("NOT_FOUND");
     return {
       value,
-      wrappedKey: header.wrappedKey,
+      wrappedKey: actualWrappedKey,
       contentHash: receipt.contentHash,
     };
   };
@@ -359,9 +361,14 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
               controller.close();
               return;
             }
-            const p = await part(u, index);
-            if (!p) throw new FileError("INVALID_FILE");
-            const result = await loadPart(ownerId, workspaceId, u, p, wrappedKey, requireConsent);
+            const result = await loadPart(
+              ownerId,
+              workspaceId,
+              u,
+              index,
+              wrappedKey,
+              requireConsent,
+            );
             const expected = manifest.parts[index];
             if (
               !expected ||
@@ -512,9 +519,42 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       if (!prior) requireStorage();
       let wrappedKey: string | undefined;
       if (index !== 0) {
-        const first = await part(u, 0);
-        if (!first) throw new FileError("CONFLICT");
-        wrappedKey = (await loadPart(ownerId, workspaceId, u, first)).wrappedKey;
+        const blob = await authorizedBlob(ownerId, workspaceId, u, 0);
+        if (!blob) throw new FileError("CONFLICT");
+        const first = blobPart(blob);
+        if (blob.logical_bytes !== first.byte_length || blob.cipher_hash !== first.cipher_hash)
+          throw new FileError("NOT_FOUND");
+        const receipt = await core.decrypt(
+          "v2_upload_parts",
+          `${u.id}-0`,
+          ownerId,
+          u.revision,
+          first.encrypted_payload,
+          originalPartReceiptSchema,
+        );
+        if (
+          receipt.blobId !== first.blob_id ||
+          receipt.index !== 0 ||
+          receipt.byteLength !== first.byte_length ||
+          receipt.keyVersion !== blob.key_version
+        )
+          throw new FileError("INVALID_FILE");
+        // New receipts retain the server-generated envelope under the same
+        // owner/upload/ordinal AEAD context. Legacy receipts still verify R2.
+        wrappedKey =
+          receipt.wrappedKey ?? (await loadPart(ownerId, workspaceId, u, first)).wrappedKey;
+        // Receipt decryption also crosses an async boundary. Keep the original
+        // pre-body access fence even when no R2 read is necessary.
+        const current = await authorizedBlob(ownerId, workspaceId, u, first);
+        if (
+          !current ||
+          current.object_key !== blob.object_key ||
+          current.key_version !== blob.key_version ||
+          current.logical_bytes !== blob.logical_bytes ||
+          current.cipher_bytes !== blob.cipher_bytes ||
+          current.cipher_hash !== blob.cipher_hash
+        )
+          throw new FileError("NOT_FOUND");
       }
       const data = await readBounded(body, byteLength);
       const contentHash = await digest(data);
@@ -523,7 +563,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
         if (accepted.contentHash !== contentHash) throw new FileError("CONFLICT");
         return { index, byteLength, contentHash };
       }
-      const bytes = await encryptPart(
+      const { bytes, wrappedKey: storedWrappedKey } = await encryptPartWithKey(
         core.cipher,
         identity(ownerId, u, index, byteLength),
         data,
@@ -702,6 +742,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
             uploadRevision: u.revision,
             ordinal: index,
             blob,
+            ...(index === 0 ? { wrappedKey: storedWrappedKey } : {}),
           }))
         )
           throw new FileError("CONFLICT");

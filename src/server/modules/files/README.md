@@ -13,6 +13,16 @@ key/size and the durable pending intent must match before the atomic part receip
 can publish. The original manifest validates ordered parts and incremental SHA-256
 without retaining the whole file. Download rechecks current access per part.
 
+The first part's encrypted receipt may retain the server-produced wrapped data
+key. Subsequent uploads authorize and decrypt that receipt instead of retrieving
+and decrypting the first 8 MiB again. Legacy receipts without the optional key
+use the original full verification path. The final probe still reads and verifies
+every byte before publication; downloads still verify both ciphertext and content
+hashes, AEAD identity and current access after decryption. Download's first part
+and provenance lookup share one indexed query, and its header is decrypted once.
+No key is added to public DTOs, logs or unencrypted storage. A rollback must retain
+the optional receipt reader for files written by this version.
+
 Server composition supplies physical storage admission, cost observation, a trusted byte-format probe
 and processing enqueue. Missing admission/probe denies new writes/finalization;
 the client cannot provide evidence or mark a file processed. The Worker currently
