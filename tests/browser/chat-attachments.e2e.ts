@@ -354,9 +354,9 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
     .fill("앞서 기억한 합성 사건 내용을 적습니다. ".repeat(50));
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
-  await page.evaluate(() => {
-    window.scrollTo(0, 0);
-    window.dispatchEvent(new Event("scroll"));
+  await page.getByRole("log", { name: "사건 대화" }).evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
   });
   const text = "한 문장씩 편하게 읽으실 수 있어요. 합성 검증입니다.\n".repeat(60);
   await publishSyntheticReply(page, text);
@@ -367,8 +367,95 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
     .poll(async () => (await reply.textContent())?.length ?? 0)
     .toBeGreaterThan(start + 20);
   expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(
+    await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
+  ).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reply).toHaveCount(0);
   await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
   expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(
+    await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
+  ).toBe(0);
+});
+
+test("long chat scrolls internally while tabs and composer stay in place across screen sizes", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.evaluate((id) => {
+    const workspace = JSON.parse(localStorage.getItem("baro-api-mock-v1:workspace") ?? "{}");
+    workspace[id].messages = Array.from({ length: 24 }, (_, index) => ({
+      id: `scroll-message-${index}`,
+      role: index % 2 ? "assistant" : "user",
+      text: `${index + 1}번째 합성 대화입니다. 사실관계와 확인할 내용을 정리합니다.\n`.repeat(5),
+      status: "complete",
+      createdAt: new Date().toISOString(),
+    }));
+    localStorage.setItem("baro-api-mock-v1:workspace", JSON.stringify(workspace));
+  }, id);
+  await page.reload();
+  const log = page.getByRole("log", { name: "사건 대화" });
+  await expect(log.locator("article")).toHaveCount(24);
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
+    { width: 320, height: 650 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(20);
+    await log.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBe(0);
+    const tabs = page.getByRole("navigation", { name: "사건 메뉴" });
+    const before = await tabs.boundingBox();
+    const composer = await page.locator(".workspace-composer").boundingBox();
+    const bounds = await log.boundingBox();
+    if (!before || !composer || !bounds) throw new Error("Synthetic chat layout missing");
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+    expect((await tabs.boundingBox())?.y).toBeCloseTo(before.y, 1);
+    expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
+    if (viewport.height >= 650) {
+      await expect(page.getByLabel("추가 사실 또는 질문")).toBeInViewport();
+      await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeInViewport();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await log.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    await page.mouse.wheel(0, 3000);
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    if (viewport.width === 390 || viewport.width === 1440)
+      await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("navigation", { name: "사건 메뉴" })
+    .getByRole("link", { name: /타임라인/ })
+    .click();
+  await expect(page).toHaveURL(/\/timeline$/);
+  expect(await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY)).not.toBe(
+    "hidden",
+  );
+  await page
+    .getByRole("navigation", { name: "사건 메뉴" })
+    .getByRole("link", { name: "대화", exact: true })
+    .click();
+  await expect(log.locator("article")).toHaveCount(24);
+  await page.getByLabel("사건 관리").click();
+  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  const deletion = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(deletion).toBeVisible();
+  await expect(deletion.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
+  await deletion.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(deletion).toHaveCount(0);
 });
