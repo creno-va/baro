@@ -478,6 +478,8 @@ test("an expired comparison proof requires fresh search and never automatically 
   await seed(page);
   await page.evaluate(
     async ({ id, fixture }) => {
+      const item = fixture.items[0];
+      if (!item) throw new Error("Missing synthetic precedent");
       const { registerHttpMockHandler, registerMockHandlers, ApiError } = await import(
         `${location.origin}/src/client/api/core.ts`
       );
@@ -498,7 +500,7 @@ test("an expired comparison proof requires fresh search and never automatically 
             topics: body.topics,
             items: [
               {
-                ...fixture.items[0],
+                ...item,
                 matchedTopics: [body.topics[0]],
                 readToken: `synthetic_receipt_${searches}.synthetic_signature`,
               },
@@ -508,8 +510,8 @@ test("an expired comparison proof requires fresh search and never automatically 
         "precedents.read": ({ body }: { body: { expectedRevision: number } }) => ({
           schemaVersion: "2",
           workspaceRevision: body.expectedRevision,
-          citation: fixture.items[0].citation,
-          excerpt: fixture.items[0].excerpt,
+          citation: item.citation,
+          excerpt: item.excerpt,
         }),
       });
       registerHttpMockHandler(async (request: Request) => {
