@@ -76,7 +76,10 @@ function coverageText(value: V2Coverage | null) {
     }`;
   };
   if (value.category === "audio") return audio(value.audio);
-  if (value.category === "image") return `이미지 관찰 ${labels[value.observation]}`;
+  if (value.category === "image")
+    return value.observation === "processed"
+      ? "사진 내용 읽기 완료"
+      : `사진 내용 ${labels[value.observation]}`;
   if (value.category === "document") {
     const gaps = value.pages.filter((p) => p.status !== "processed");
     return `${value.pageCount}쪽 중 ${value.pageCount - gaps.length}쪽 처리${
@@ -312,16 +315,23 @@ export async function buildReportSource(
       contentHash: file.manifest.contentHash,
     });
     coverage.push(
-      `${file.name}: ${coverageText(file.coverage)} · 추출·관찰은 진정성을 확인하지 않음`,
+      `${file.name}: ${coverageText(file.coverage)} · 사실 여부와 원본의 진정성은 별도 확인 필요`,
     );
     let cursor = -1;
+    let lastPosition = "";
     do {
       const page = await createV2FileStagingRepository(core).observations(actor, row.id, cursor, 4);
-      for (const { value } of page)
-        if (value.included)
-          coverage.push(
-            `${file.name} · 자료 버전 ${file.revision} · ${sourcePositionText(value.position)} · ${value.userEdited ? "사용자 교정 · 미확인" : value.certainty === "uncertain" ? "자료 관찰 · 미확인" : "자료 관찰"}\n${value.text}`,
-          );
+      for (const { value } of page) {
+        if (!value.included) continue;
+        const position = sourcePositionText(value.position);
+        if (position !== lastPosition) {
+          if (value.position.kind !== "image") coverage.push(position);
+          lastPosition = position;
+        }
+        coverage.push(
+          `${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`,
+        );
+      }
       if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       cursor = page.length === 4 ? (page.at(-1)?.ordinal ?? -1) : -1;
     } while (cursor >= 0);
@@ -464,7 +474,7 @@ export function reportText(
 ) {
   const labels = {
     user_statement: "사용자 진술",
-    user_material: "자료 관찰",
+    user_material: "자료에 적힌 내용",
     official_source: "공식 출처",
     ai_organization: "AI 정리",
   };

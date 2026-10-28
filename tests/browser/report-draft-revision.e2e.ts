@@ -90,6 +90,7 @@ test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only sa
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   await expect.poll(() => calls).toBe(1);
+  await expect(page.getByRole("button", { name: "PDF 만드는 중…", exact: true })).toBeDisabled();
   await page.clock.fastForward(65000);
   await expect(page.locator(".report-progress")).toContainText("요청 시작 후 65초");
   response.release();
@@ -99,6 +100,44 @@ test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only sa
     progressReport.content,
   );
   expect(calls).toBe(1);
+});
+
+test("same-owner access checks retain the report and draft while locking controls, then clear a changed owner", async ({
+  page,
+}) => {
+  const sessionGate = gate();
+  let blocked = false;
+  let checking = false;
+  let ownerId = "synthetic-owner";
+  await progressFixture(page, {
+    async pdf(route) {
+      await route.fulfill({ status: 400, json: {} });
+    },
+    async session(route) {
+      if (checking) {
+        blocked = true;
+        await sessionGate.promise;
+      }
+      await route.fulfill({
+        json: { user: { id: ownerId, name: "합성", accountType: "customer" }, needsConsent: false },
+      });
+    },
+  });
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await editor.fill("확인 중에도 남아 있어야 하는 합성 편집");
+  checking = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => blocked).toBe(true);
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue("확인 중에도 남아 있어야 하는 합성 편집");
+  await expect(editor).toBeDisabled();
+  sessionGate.release();
+  await expect(editor).toBeEnabled();
+  await expect(editor).toHaveValue("확인 중에도 남아 있어야 하는 합성 편집");
+  ownerId = "synthetic-other-owner";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
 });
 
 test("PDF waits for the postflight owner check despite focus, and rejects a changed owner", async ({

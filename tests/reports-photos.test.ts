@@ -109,7 +109,7 @@ test("owned photo observations reach case report text; explicit selection reache
   });
   const html = await f.reports.html(owner, saved.id);
   expect(html).toContain("data:image/jpeg;base64,");
-  expect(html).toContain("자료 버전 2");
+  expect(html).toContain('data-file-revision="2"');
   expect(html).toContain("의학적 판단");
   await f.reports.pdf(owner, saved.id);
   expect(f.rendered).toHaveLength(1);

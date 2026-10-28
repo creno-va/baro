@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const CASE_NARRATIVE_MIN_LENGTH = 5;
+
 // Workers and the browser hash CSP prohibit eval. Configure before constructing schemas:
 // even Zod's caught capability probe otherwise emits a browser CSP violation.
 z.config({ jitless: true });

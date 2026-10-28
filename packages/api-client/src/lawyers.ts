@@ -123,8 +123,35 @@ export function createLawyersClient(dependencies: {
       return decode(selfProfileSchema, await request("/api/v2/me/lawyer/self-profile"));
     },
     async saveMine(profile: LawyerView): Promise<LawyerView> {
-      const parsed = selfProfileSchema.safeParse(profile);
-      if (!parsed.success) throw new ApiError("VALIDATION_ERROR", "프로필 입력을 확인해 주세요.");
+      const parsed = selfProfileSchema.safeParse({
+        ...profile,
+        email: typeof profile?.email === "string" ? profile.email.trim() : profile?.email,
+        phone: typeof profile?.phone === "string" ? profile.phone.trim() : profile?.phone,
+        website: typeof profile?.website === "string" ? profile.website.trim() : profile?.website,
+      });
+      if (!parsed.success) {
+        const field = parsed.error.issues[0]?.path[0];
+        const labels: Record<string, string> = {
+          name: "이름은 100자 이하로 입력해 주세요.",
+          introduction: "소개는 5,000자 이하로 입력해 주세요.",
+          officeName: "사무실 이름은 200자 이하로 입력해 주세요.",
+          address: "사무실 주소는 500자 이하로 입력해 주세요.",
+          region: "활동 지역을 목록에서 선택해 주세요.",
+          practiceAreas: "업무 분야를 목록에서 선택해 주세요.",
+          email: "이메일 주소를 확인해 주세요. 예: lawyer@example.com",
+          phone: "전화번호는 숫자와 +, 공백, 괄호, -로 입력해 주세요.",
+          website: "홈페이지 주소는 https://로 시작하는 공개 웹 주소를 입력해 주세요.",
+          portfolio:
+            "포트폴리오의 제목·본문·링크를 확인해 주세요. 제목은 필수이며 링크는 https://로 시작하는 공개 웹 주소를 입력해야 해요.",
+          photoUrl: "프로필 사진을 다시 선택해 주세요.",
+        };
+        throw new ApiError(
+          "VALIDATION_ERROR",
+          typeof field === "string" && labels[field]
+            ? labels[field]
+            : "프로필이 너무 크거나 연결한 자료가 올바르지 않아요. 사진·자료와 입력 길이를 확인해 주세요.",
+        );
+      }
       return decode(
         selfProfileSchema,
         await request("/api/v2/me/lawyer/self-profile", {

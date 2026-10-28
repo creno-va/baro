@@ -5,8 +5,10 @@ import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
 import { sessionDestination } from "../../client/return-path";
 import { isExplicitSignOut } from "../../client/session-events";
+import { CASE_NARRATIVE_MIN_LENGTH } from "../../contracts/common";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
+import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { ErrorPanel } from "./common";
 
@@ -43,6 +45,7 @@ export function CaseInput({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [lengthError, setLengthError] = useState("");
   const pending = useRef(false);
   const identity = useRef<string | undefined>(undefined);
   const sessionRequest = useRef(0);
@@ -50,7 +53,7 @@ export function CaseInput({
   const mounted = useRef(false);
   const signedOut = useRef(false);
   const count = [...narrative.trim()].length;
-  const valid = count >= 20 && count <= 5000;
+  const valid = count >= CASE_NARRATIVE_MIN_LENGTH && count <= 5000;
   const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
   const clearDraft = useCallback(() => {
     ++operation.current;
@@ -60,6 +63,7 @@ export function CaseInput({
     setContext("individual");
     setCreated(null);
     setError(null);
+    setLengthError("");
   }, []);
   const loadSession = useCallback(async () => {
     if (signedOut.current) return null;
@@ -145,7 +149,15 @@ export function CaseInput({
 
   async function create(event?: SyntheticEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!canCreate || loading || sessionError || !valid || pending.current || created) return;
+    if (!canCreate || loading || sessionError || pending.current || created) return;
+    if (!valid) {
+      setLengthError(
+        count < CASE_NARRATIVE_MIN_LENGTH
+          ? `어떤 일이 있었는지 ${CASE_NARRATIVE_MIN_LENGTH}자 이상 적어주세요. 짧게 시작하고 나중에 보완해도 괜찮아요.`
+          : "이야기는 5,000자까지 적을 수 있어요. 내용을 조금 줄여주세요.",
+      );
+      return;
+    }
     const ticket = ++operation.current;
     const current = () => mounted.current && ticket === operation.current;
     pending.current = true;
@@ -183,151 +195,176 @@ export function CaseInput({
   }
 
   return (
-    <section className="conversation-home" aria-labelledby="conversation-heading">
-      <header className="conversation-greeting">
-        <span className="conversation-emblem" aria-hidden="true">
-          <BrandMark size={48} />
-        </span>
-        <h1 id="conversation-heading">어떤 일이 있었나요?</h1>
-        <p>
-          생각나는 대로 적어주세요.
-          <br />
-          필요한 내용은 BARO가 함께 정리할게요.
-        </p>
-        <div className="conversation-effort">
-          <Check size={15} aria-hidden="true" />
-          질문은 두 차례, 한 번에 최대 3개예요
-        </div>
-      </header>
-      {created && canCreate && !loading && !sessionError ? (
-        <div className="conversation-saved" role="status">
-          <p>이야기를 저장했어요. 필요한 내용만 조금 더 확인할게요.</p>
-          <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
-            질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
-          </ButtonLink>
-        </div>
-      ) : (
-        <>
-          <form className="conversation-entry" onSubmit={(event) => void create(event)}>
-            <label className="conversation-field-label" htmlFor="narrative">
-              지금까지 있었던 일
-            </label>
-            <div className="conversation-composer" aria-busy={busy || loading}>
-              <Textarea
-                id="narrative"
-                value={loading || sessionError ? "" : narrative}
-                onChange={(event) => setNarrative(event.target.value)}
-                disabled={busy || loading || !!sessionError || !canCreate}
-                aria-describedby="narrative-help narrative-count"
-                aria-invalid={count > 5000}
-                placeholder="누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
-              />
-              <div className="conversation-composer-toolbar">
-                <fieldset className="conversation-context" disabled={busy || loading || !canCreate}>
-                  <legend className="sr-only">누구의 사건인가요?</legend>
-                  {(["individual", "company"] as const).map((value) => (
-                    <label key={value} className={subjectContext === value ? "selected" : ""}>
-                      <input
-                        type="radio"
-                        name="subject"
-                        value={value}
-                        checked={!loading && !sessionError && subjectContext === value}
-                        onChange={() => setContext(value)}
-                      />
-                      {value === "individual" ? (
-                        <UserRound size={15} aria-hidden="true" />
-                      ) : (
-                        <Building2 size={15} aria-hidden="true" />
-                      )}
-                      <span>{value === "individual" ? "개인" : "기업"}</span>
-                    </label>
-                  ))}
-                </fieldset>
-                <span className="conversation-context-hint">누구의 사건인가요?</span>
+    <>
+      <section className="conversation-home" aria-labelledby="conversation-heading">
+        <header className="conversation-greeting">
+          <span className="conversation-emblem" aria-hidden="true">
+            <BrandMark size={48} />
+          </span>
+          <h1 id="conversation-heading">어떤 일이 있었나요?</h1>
+          <p>
+            생각나는 대로 적어주세요.
+            <br />
+            필요한 내용은 BARO가 함께 정리할게요.
+          </p>
+          <div className="conversation-effort">
+            <Check size={15} aria-hidden="true" />
+            질문은 두 차례, 한 번에 최대 3개예요
+          </div>
+        </header>
+        {created && canCreate && !loading && !sessionError ? (
+          <div className="conversation-saved" role="status">
+            <p>이야기를 저장했어요. 필요한 내용만 조금 더 확인할게요.</p>
+            <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
+              질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
+            </ButtonLink>
+          </div>
+        ) : (
+          <>
+            <form className="conversation-entry" onSubmit={(event) => void create(event)}>
+              <label className="conversation-field-label" htmlFor="narrative">
+                지금까지 있었던 일
+              </label>
+              <div className="conversation-composer" aria-busy={busy || loading}>
+                <Textarea
+                  id="narrative"
+                  value={loading || sessionError ? "" : narrative}
+                  onChange={(event) => setNarrative(event.target.value)}
+                  disabled={busy || loading || !!sessionError || !canCreate}
+                  aria-describedby="narrative-help narrative-count"
+                  aria-invalid={count > 5000 || Boolean(lengthError)}
+                  placeholder="누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
+                />
+                <div className="conversation-composer-toolbar">
+                  <fieldset
+                    className="conversation-context"
+                    disabled={busy || loading || !canCreate}
+                  >
+                    <legend className="sr-only">누구의 사건인가요?</legend>
+                    {(["individual", "company"] as const).map((value) => (
+                      <label key={value} className={subjectContext === value ? "selected" : ""}>
+                        <input
+                          type="radio"
+                          name="subject"
+                          value={value}
+                          checked={!loading && !sessionError && subjectContext === value}
+                          onChange={() => setContext(value)}
+                        />
+                        {value === "individual" ? (
+                          <UserRound size={15} aria-hidden="true" />
+                        ) : (
+                          <Building2 size={15} aria-hidden="true" />
+                        )}
+                        <span>{value === "individual" ? "개인" : "기업"}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  <span className="conversation-context-hint">누구의 사건인가요?</span>
+                </div>
               </div>
-            </div>
-            <div className="conversation-input-meta">
-              <p id="narrative-help">주민등록번호·계좌번호 전체는 적지 마세요.</p>
-              <p id="narrative-count" aria-live="polite">
-                {count < 20
-                  ? count > 0
-                    ? `${20 - count}자만 더 적어주세요`
-                    : "20자 이상 적어주세요"
-                  : `${count.toLocaleString()} / 5,000자`}
-              </p>
-            </div>
-            {error ? (
-              <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
+              <div className="conversation-input-meta">
+                <p id="narrative-help">주민등록번호·계좌번호 전체는 적지 마세요.</p>
+                <p id="narrative-count" aria-live="polite">
+                  {count < CASE_NARRATIVE_MIN_LENGTH
+                    ? count > 0
+                      ? `${CASE_NARRATIVE_MIN_LENGTH - count}자만 더 적어주세요`
+                      : `${CASE_NARRATIVE_MIN_LENGTH}자 이상이면 시작할 수 있어요`
+                    : `${count.toLocaleString()} / 5,000자`}
+                </p>
+              </div>
+              {error ? (
+                <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
+              ) : null}
+              <div className="conversation-primary-action">
+                {loading || sessionError ? (
+                  <Button disabled>
+                    {sessionError ? "로그인 상태를 확인해 주세요" : "로그인 상태 확인 중…"}
+                  </Button>
+                ) : canCreate ? (
+                  <Button type="submit" loading={busy}>
+                    {busy ? "이야기를 저장하고 있어요…" : "저장하고 계속"}
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <ButtonLink
+                    href={session?.needsConsent ? "/consent" : session?.user ? "/lawyer" : "/login"}
+                  >
+                    {session?.needsConsent
+                      ? "동의하고 시작하기"
+                      : session?.user
+                        ? "변호사 홈으로"
+                        : "로그인하고 시작하기"}
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </ButtonLink>
+                )}
+              </div>
+            </form>
+            {!narrative && !session?.needsConsent && session?.user?.accountType !== "lawyer" ? (
+              <div className="conversation-examples">
+                {examples.map(({ label, text, Icon }) => (
+                  <Button
+                    key={label}
+                    variant="outline"
+                    disabled={loading || !canCreate}
+                    onClick={() => {
+                      setNarrative(text);
+                      document.getElementById("narrative")?.focus();
+                    }}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    {label}
+                  </Button>
+                ))}
+              </div>
             ) : null}
-            <div className="conversation-primary-action">
-              {loading || sessionError ? (
-                <Button disabled>
-                  {sessionError ? "로그인 상태를 확인해 주세요" : "로그인 상태 확인 중…"}
-                </Button>
-              ) : canCreate ? (
-                <Button type="submit" loading={busy} disabled={!valid}>
-                  {busy ? "이야기를 저장하고 있어요…" : "저장하고 계속"}
-                  <ArrowRight size={18} aria-hidden="true" />
-                </Button>
-              ) : (
-                <ButtonLink
-                  href={session?.needsConsent ? "/consent" : session?.user ? "/lawyer" : "/login"}
-                >
-                  {session?.needsConsent
-                    ? "동의하고 시작하기"
-                    : session?.user
-                      ? "변호사 홈으로"
-                      : "로그인하고 시작하기"}
-                  <ArrowRight size={18} aria-hidden="true" />
-                </ButtonLink>
-              )}
-            </div>
-          </form>
-          {!narrative && !session?.needsConsent && session?.user?.accountType !== "lawyer" ? (
-            <div className="conversation-examples">
-              {examples.map(({ label, text, Icon }) => (
-                <Button
-                  key={label}
-                  variant="outline"
-                  disabled={loading || !canCreate}
-                  onClick={() => {
-                    setNarrative(text);
-                    document.getElementById("narrative")?.focus();
-                  }}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  {label}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-          {(!canCreate || busy || loading || !!sessionError) && (
-            <p className="conversation-reassurance" role="status">
-              {busy
-                ? "저장한 뒤 이어서 질문을 확인할 수 있어요."
-                : loading
-                  ? "로그인 상태를 확인하고 있어요."
-                  : sessionError
-                    ? "로그인 상태를 다시 확인해 주세요."
-                    : session?.needsConsent
-                      ? "필수 동의를 확인하면 바로 시작할 수 있어요."
-                      : session?.user?.accountType === "lawyer"
-                        ? "변호사 홈에서 프로필과 활동 정보를 관리할 수 있어요."
-                        : "로그인하면 상황을 저장하고, 언제든 이어서 정리할 수 있어요."}
-            </p>
-          )}
-          {sessionError ? (
-            <ErrorPanel error={sessionError} retry={() => void loadSession()} />
-          ) : null}
-        </>
-      )}
-      <footer className="conversation-home-footer">
-        <p>
-          상황 입력 <span aria-hidden="true">→</span> 질문 두 차례 <span aria-hidden="true">→</span>{" "}
-          요약 확인
-        </p>
-        <p>BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.</p>
-      </footer>
-    </section>
+            {(!canCreate || busy || loading || !!sessionError) && (
+              <p className="conversation-reassurance" role="status">
+                {busy
+                  ? "저장한 뒤 이어서 질문을 확인할 수 있어요."
+                  : loading
+                    ? "로그인 상태를 확인하고 있어요."
+                    : sessionError
+                      ? "로그인 상태를 다시 확인해 주세요."
+                      : session?.needsConsent
+                        ? "필수 동의를 확인하면 바로 시작할 수 있어요."
+                        : session?.user?.accountType === "lawyer"
+                          ? "변호사 홈에서 프로필과 활동 정보를 관리할 수 있어요."
+                          : "로그인하면 상황을 저장하고, 언제든 이어서 정리할 수 있어요."}
+              </p>
+            )}
+            {sessionError ? (
+              <ErrorPanel error={sessionError} retry={() => void loadSession()} />
+            ) : null}
+          </>
+        )}
+        <footer className="conversation-home-footer">
+          <p>
+            상황 입력 <span aria-hidden="true">→</span> 질문 두 차례{" "}
+            <span aria-hidden="true">→</span> 요약 확인
+          </p>
+          <p>BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.</p>
+        </footer>
+      </section>
+      <Dialog
+        open={Boolean(lengthError)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLengthError("");
+            document.getElementById("narrative")?.focus();
+          }
+        }}
+        title={count > 5000 ? "이야기를 조금 줄여주세요" : "이야기를 조금만 더 적어주세요"}
+        description={lengthError}
+      >
+        <Button
+          onClick={() => {
+            setLengthError("");
+            document.getElementById("narrative")?.focus();
+          }}
+        >
+          계속 작성하기
+        </Button>
+      </Dialog>
+    </>
   );
 }

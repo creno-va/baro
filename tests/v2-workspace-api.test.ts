@@ -42,6 +42,36 @@ async function fixture() {
   };
   return { db, owner, env, app, input, headers, verified: () => verified };
 }
+test("a short narrative survives real HTTP, encryption, persisted intake and idempotent replay", async () => {
+  const f = await fixture();
+  const key = crypto.randomUUID();
+  const create = () =>
+    f.app.request(
+      "/api/v2/cases",
+      {
+        method: "POST",
+        headers: { ...f.headers, "idempotency-key": key },
+        body: JSON.stringify({ ...f.input, narrative: "폭행을 당했어요." }),
+      },
+      f.env,
+    );
+  const first = await create();
+  expect(first.status).toBe(201);
+  const value = (await first.json()) as { id: string };
+  expect((await create()).status).toBe(201);
+  expect(f.verified()).toBe(1);
+  const intake = await f.app.request(
+    `/api/v2/cases/${value.id}/intake`,
+    { headers: { cookie: f.owner.cookie } },
+    f.env,
+  );
+  expect(intake.status).toBe(200);
+  expect(await intake.json()).toMatchObject({ narrative: "폭행을 당했어요." });
+  expect(f.db.sqlite.query("SELECT count(*) AS count FROM v2_workspaces").get()).toEqual({
+    count: 1,
+  });
+});
+
 test("HTTP creation retries replay before reusing Turnstile; unavailable AI preserves the saved case", async () => {
   const f = await fixture(),
     key = crypto.randomUUID();

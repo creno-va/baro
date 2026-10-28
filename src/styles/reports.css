@@ -213,6 +213,15 @@
   border-radius: 12px;
   line-height: 1.6;
 }
+
+.report-controls {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 .report-modal {
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;

@@ -720,13 +720,13 @@ export function Workspace({
           // later whole-workspace read failure must never resend accepted files.
           setRetryUploads(chosen.slice(completed));
           setUploadReadbackPending(true);
-          refreshed = Boolean(await load());
-          if (!alive(epoch)) return;
-          if (!refreshed)
-            setNotice(
-              "자료는 접수됐지만 최신 목록을 확인하지 못했어요. 새로고침으로 확인해 주세요.",
-            );
         }
+        // Each accepted upload already has an authorized readback. Refresh the
+        // workspace once per batch, rather than delaying every following file.
+        refreshed = Boolean(await load());
+        if (!alive(epoch)) return;
+        if (!refreshed)
+          setNotice("자료는 접수됐지만 최신 목록을 확인하지 못했어요. 새로고침으로 확인해 주세요.");
         if (!current(epoch)) return;
         setRetryUploads([]);
         complete = true;
@@ -740,6 +740,10 @@ export function Workspace({
         setRetryUploads(chosen.slice(completed + (rejected ? 1 : 0)));
         if (tab === "chat" && rejected)
           setLocalAttachments((items) => items.filter((item) => item !== chosen[completed]));
+        if (completed > 0) {
+          await load();
+          if (!alive(epoch)) return;
+        }
         throw cause;
       }
     });
@@ -1227,6 +1231,34 @@ export function Workspace({
                       }
                     }}
                   >
+                    {view.messages.some(
+                      (message) => message.role === "assistant" && message.status === "complete",
+                    ) && (
+                      <fieldset
+                        className="workspace-suggestions workspace-followups"
+                        aria-label="이어서 물어보기"
+                      >
+                        {[
+                          "지금까지 확인된 내용과 더 확인할 점을 정리해 주세요",
+                          "첨부한 자료의 날짜와 타임라인을 확인해 주세요",
+                        ].map((prompt) => (
+                          <Button
+                            key={prompt}
+                            variant="outline"
+                            size="sm"
+                            disabled={!!busy || readonly || queuedSend}
+                            onClick={() => {
+                              setDraft(prompt);
+                              draftInput.current?.focus();
+                            }}
+                          >
+                            {prompt}
+                            <ArrowRight size={15} aria-hidden="true" />
+                          </Button>
+                        ))}
+                        <a href={`${base}/precedents`}>관련 판례 찾아보기</a>
+                      </fieldset>
+                    )}
                     <div className="workspace-composer-surface">
                       <ChatAttachments
                         local={localAttachments}
@@ -1258,6 +1290,14 @@ export function Workspace({
                             {uploadProgress
                               ? `${uploadProgress.fileName} · ${uploadProgressLabel(uploadProgress.value)}`
                               : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
+                            {uploadProgress && (
+                              <ElapsedTime
+                                startedAt={uploadProgress.startedAt}
+                                label=" · 전송 시작 후"
+                              />
+                            )}
+                            {!busy &&
+                              " 파일 전송은 끝났고, 내용을 읽는 중이에요. 큰 문서나 음성·영상은 더 걸릴 수 있어요."}
                           </span>
                           {!busy && (
                             <Button
@@ -1829,7 +1869,7 @@ export function Workspace({
                                 {fact.certainty === "uncertain"
                                   ? "불확실"
                                   : fact.certainty === "observed"
-                                    ? "자료에서 관찰"
+                                    ? "자료 내용 확인됨 · 사실 여부는 별도 확인 필요"
                                     : "보고된 사실"}
                                 {fact.significance === "unfavorable" ? " · 불리한 사실" : ""}
                                 {fact.conflictingFactIds.length

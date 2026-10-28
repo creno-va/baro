@@ -175,7 +175,8 @@ export async function admittedCase(caseId: string, analysisId: string, length: n
   await emit("case_submitted", flowId, {
     caseIdHash: caseHash,
     analysisIdHash: analysisHash,
-    narrativeLengthBucket: length <= 100 ? "20_100" : length <= 1000 ? "101_1000" : "1001_5000",
+    narrativeLengthBucket:
+      length < 20 ? "5_19" : length <= 100 ? "20_100" : length <= 1000 ? "101_1000" : "1001_5000",
   });
 }
 export async function noteExistingCase(caseId: string, createdAt: string) {

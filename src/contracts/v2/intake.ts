@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   boundedText,
+  CASE_NARRATIVE_MIN_LENGTH,
   displayText,
   hasUniqueIds,
   opaqueIdSchema,
@@ -138,7 +139,7 @@ export const v2IntakeSchema = z
     schemaVersion: v2VersionSchema,
     revision: revisionSchema,
     status: z.enum(["collecting", "generating_questions", "reviewing_summary", "confirmed"]),
-    narrative: boundedText(20, 5000),
+    narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
     batches: z.array(v2QuestionBatchSchema).max(V2_LIMITS.initialBatches),
     summary: v2SummarySchema.nullable(),
     confirmedSummaryRevision: revisionSchema.nullable(),

@@ -26,9 +26,15 @@ test("a customer starts directly on home and reaches adaptive questions without 
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
   const submit = page.getByRole("button", { name: "저장하고 계속" });
-  await expect(submit).toBeDisabled();
-  await narrative.fill("짧은 내용");
-  await expect(submit).toBeDisabled();
+  await expect(submit).toBeEnabled();
+  await narrative.fill("짧음");
+  await submit.click();
+  await expect(page.getByRole("dialog", { name: "이야기를 조금만 더 적어주세요" })).toBeVisible();
+  await expect(
+    page.getByText("어떤 일이 있었는지 5자 이상 적어주세요.", { exact: false }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
+  await page.getByRole("button", { name: "계속 작성하기" }).click();
   await narrative.fill(
     "합성 사건입니다. 회사 거래처에서 계약한 대금을 약속한 날짜가 지나도 지급하지 않았어요.",
   );
@@ -46,6 +52,49 @@ test("a customer starts directly on home and reaches adaptive questions without 
     }),
   ).toEqual(["company"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("a short account is accepted and recent-story deletion requires explicit confirmation", async ({
+  page,
+}) => {
+  await setSession(page, customer);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/app");
+  await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill("폭행을 당했어요.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await expect(page).toHaveURL(/\/intake/);
+  const remove = page.locator(".sidebar-desktop .sidebar-story-delete").first();
+  await expect(remove).toBeVisible();
+  await remove.click();
+  const dialog = page.getByRole("dialog", { name: "사건을 삭제할까요?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
+  await dialog.getByLabel("확인하려면 DELETE를 입력하세요.").fill("DELETE");
+  await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(page).toHaveURL(/\/cases$/);
+  await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
+});
+
+test("help and policy profile entries follow the current role", async ({ page }) => {
+  await setSession(page, customer);
+  for (const url of ["/help", "/policies/ai"]) {
+    await page.goto(url);
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+      s.user.accountType = "lawyer";
+      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
+      window.dispatchEvent(new Event("baro-session-changed"));
+    });
+    await expect(page.locator('a[href="/lawyer"]').first()).toBeVisible();
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+      s.user.accountType = "customer";
+      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
+      window.dispatchEvent(new Event("baro-session-changed"));
+    });
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+  }
 });
 
 test("app redirects guests, pending consent and lawyers before showing the customer composer", async ({
@@ -188,7 +237,7 @@ test("the legacy new-case page follows a real peer-tab login without reload", as
   await expect(page.locator("main").getByRole("link", { name: "로그인하고 시작하기" })).toHaveCount(
     0,
   );
-  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
 });
 
 test("a peer-tab owner switch clears the home draft before any case can be created", async ({
@@ -218,6 +267,6 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
   await expect(narrative).toHaveValue("");
   await expect(page.getByRole("radio", { name: "개인", exact: true })).toBeChecked();
-  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   boundedText,
+  CASE_NARRATIVE_MIN_LENGTH,
   dateSchema,
   displayText,
   hasUniqueIds,
@@ -13,7 +14,7 @@ import { v2FactReferenceSchema, v2OfficialCitationSchema } from "./sources";
 import { v2LookupRequestsSchema } from "./tools";
 
 export const v2CreateCaseRequestSchema = z.strictObject({
-  narrative: boundedText(20, 5000),
+  narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
   subjectContext: z.enum(["individual", "company"]),
   jurisdiction: z.literal("KR"),
   turnstileToken: boundedText(1, 2048),

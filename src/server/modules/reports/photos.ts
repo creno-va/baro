@@ -116,6 +116,19 @@ export async function loadReportPhotos(
         name: selected.name,
         revision: selected.revision,
         dataUrl: dataUrl(bytes, `image/${file.probe.format}`),
+        notes: body.facts
+          .filter((fact) =>
+            fact.references.some(
+              (ref) =>
+                ref.kind === "user_material" &&
+                ref.fileId === id &&
+                ref.fileRevision === selected.revision,
+            ),
+          )
+          .map(
+            (fact) =>
+              `${fact.certainty === "uncertain" || fact.certainty === "conflicting" || fact.userEdited ? "확인 필요: " : "자료 내용: "}${fact.text}`,
+          ),
       });
     } finally {
       bytes.fill(0);
