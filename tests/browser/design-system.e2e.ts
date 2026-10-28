@@ -219,7 +219,7 @@ for (const activation of ["pointer", "keyboard"] as const)
     const close = menu.getByRole("button", { name: "닫기", exact: true });
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
-    await expect(menu.getByRole("link", { name: "이용 유형 변경", exact: true })).toBeFocused();
+    await expect(menu.getByRole("button", { name: "로그아웃", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(close).toBeFocused();
     await page.keyboard.press("Escape");

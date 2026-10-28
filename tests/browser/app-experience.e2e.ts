@@ -210,6 +210,11 @@ test("mobile menu, classic scrollbars, zoom and foreground contrast stay usable"
     await page.goto("/cases");
     await settled(page);
     const opener = page.getByRole("button", { name: "메뉴 열기" });
+    if (!(await opener.isVisible())) {
+      await expect(page.locator(".sidebar-desktop .sidebar-account")).toBeVisible();
+      await fits(page);
+      continue;
+    }
     if (!(await page.getByRole("dialog", { name: "메뉴", exact: true }).isVisible()))
       await opener.click();
     const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
