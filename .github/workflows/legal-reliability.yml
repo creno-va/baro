@@ -6,6 +6,9 @@ on:
       - "src/server/modules/legal-retrieval/**"
       - "src/server/api/v2/precedents.ts"
       - "src/server/modules/citation/**"
+      - "src/server/modules/llm-gateway/prompts.ts"
+      - "tests/instrument-numbers.test.ts"
+      - "tests/quotation-spans.test.ts"
       - "src/server/modules/workspace/pipeline.ts"
       - "src/server/runtime/workspace.ts"
       - "src/contracts/v2/legal-availability.ts"
@@ -44,7 +47,7 @@ jobs:
           bun-version-file: .bun-version
       - run: bun ci
       - name: Offline source transport integrity API and client regressions
-        run: bun test tests/legal-retrieval-benchmark.test.ts tests/legal-reliability.test.ts tests/legal-retrieval-v2.test.ts tests/legal-source-integration.test.ts tests/legal-readiness-v2.test.ts tests/precedent-research-api.test.ts tests/precedent-research-contract.test.ts tests/precedent-comparison.test.ts tests/shared-account-precedents.test.ts tests/mobile-precedents.test.ts tests/mobile-precedents-http.test.ts tests/workspace-source-boundaries.test.ts tests/workspace-pipeline.test.ts
+        run: bun test tests/instrument-numbers.test.ts tests/quotation-spans.test.ts tests/legal-retrieval-benchmark.test.ts tests/legal-reliability.test.ts tests/legal-retrieval-v2.test.ts tests/legal-source-integration.test.ts tests/legal-readiness-v2.test.ts tests/precedent-research-api.test.ts tests/precedent-research-contract.test.ts tests/precedent-comparison.test.ts tests/shared-account-precedents.test.ts tests/mobile-precedents.test.ts tests/mobile-precedents-http.test.ts tests/workspace-source-boundaries.test.ts tests/workspace-pipeline.test.ts
       - name: Install browser for synthetic UI only
         run: bunx playwright install --with-deps chromium
       - name: Synthetic precedent availability and expiry recovery UI

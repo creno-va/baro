@@ -13,6 +13,7 @@ import {
   createWorkspacePipeline,
   type WorkspaceContext,
   WorkspaceOutputPolicyError,
+  workspaceModelInput,
 } from "../src/server/modules/workspace/pipeline";
 
 const quote = "합성 조문: 원문 😀과 두 줄을\n그대로 확인합니다.";
@@ -130,6 +131,81 @@ async function fixture(body = `${"합성 머리말 😀\n".repeat(650)}${quote}\
   return { chunk, context, retrieval, claim, draft };
 }
 
+test.each(["corrected", "still_wrong", "another_lookup", "audit_rejected"])(
+  "a correct quotation never publishes an ungrounded law number (%s)",
+  async (mode) => {
+    const f = await fixture();
+    const original = structuredClone(f.context);
+    const badDraft = { ...f.draft, text: `${quote}\n공식 출처: 법률 제1706호` };
+    const calls: string[] = [];
+    let generations = 0;
+    const pipeline = createWorkspacePipeline(
+      {
+        call: async (phase, input) => {
+          calls.push(phase);
+          expect(JSON.stringify(input)).not.toContain('"officialId"');
+          expect(JSON.stringify(input)).not.toContain('"sourceRetrieval"');
+          if (phase === "workspace_audit") return { ...approved, pass: mode !== "audit_rejected" };
+          generations++;
+          if (generations === 1) return badDraft;
+          expect(input).toMatchObject({
+            draftCorrection: {
+              reason: "unsupported_fact",
+              claimFailure: "unsupported_instrument_number",
+            },
+          });
+          if (mode === "still_wrong") return badDraft;
+          if (mode === "another_lookup")
+            return {
+              ...f.draft,
+              requestedSources: [
+                { kind: "statute", lawTitle: "민법", articles: [{ number: "598", branch: "0" }] },
+              ],
+            };
+          return f.draft;
+        },
+      },
+      { reserve: async () => true, invocation: () => crypto.randomUUID() },
+    );
+    if (mode === "corrected") {
+      const result = await pipeline.chat(f.context, "synthetic_metadata");
+      expect(result.text).toBe(quote);
+      expect(result.citations).toEqual([f.chunk.citation]);
+      expect(result.citations[0]).toHaveProperty("officialId", "1");
+    } else {
+      await expect(pipeline.chat(f.context, "synthetic_metadata")).rejects.toMatchObject({
+        reason:
+          mode === "another_lookup"
+            ? "unauthorized_reference"
+            : mode === "audit_rejected"
+              ? "audit_rejected"
+              : "unsupported_fact",
+        ...(mode === "still_wrong" ? { claimFailure: "unsupported_instrument_number" } : {}),
+      });
+    }
+    expect(generations).toBe(2);
+    expect(calls).toEqual(
+      mode === "corrected" || mode === "audit_rejected"
+        ? ["workspace_chat", "workspace_chat", "workspace_audit"]
+        : ["workspace_chat", "workspace_chat"],
+    );
+    expect(f.context).toEqual(original);
+  },
+);
+
+test("generation and audit hide supplier IDs while retaining server citation identities", async () => {
+  const f = await fixture();
+  const model = workspaceModelInput(f.context) as WorkspaceContext;
+  if (f.chunk.citation.kind !== "statute") throw new Error("Expected synthetic statute");
+  const { officialId: _id, ...evidence } = f.chunk.citation;
+  expect(model.citations).toEqual([evidence]);
+  expect(workspaceModelInput({ context: f.context, draft: {} })).toMatchObject({
+    context: { citations: [evidence] },
+  });
+  expect(f.context.citations).toEqual([f.chunk.citation]);
+  expect(f.context.sourceRetrieval).toBeDefined();
+});
+
 test.each([
   undefined,
   "unknown",
@@ -151,7 +227,10 @@ test.each([
         calls.push(phase);
         if (phase !== "workspace_audit") return f.draft;
         expect(input).toMatchObject({
-          context: { sourceTexts: f.context.sourceTexts, citations: f.context.citations },
+          context: {
+            sourceTexts: f.context.sourceTexts,
+            citations: (workspaceModelInput(f.context) as WorkspaceContext).citations,
+          },
           draft: { sourceClaims: [f.claim] },
         });
         return {
