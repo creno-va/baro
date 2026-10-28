@@ -274,14 +274,16 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   expect(
     (await new AxeBuilder({ page }).include(".account-settings").analyze()).violations,
   ).toEqual([]);
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   expect((await new AxeBuilder({ page }).include(".report-modal").analyze()).violations).toEqual(
     [],
   );
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeFocused();
   await page.goto("/cases/case-demo/reports");
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
