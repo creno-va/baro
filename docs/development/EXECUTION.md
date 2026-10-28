@@ -1,5 +1,11 @@
 # 에이전트 실행 기준
 
+2026-10-29 사건 디테일 채팅 스크롤 요청 #581은 `codex/581-chat-scroll`에서
+메시지 영역만 내부 스크롤하고 탭·입력창을 viewport 안에 유지한다.
+[구현·검증 범위](../quality/CHAT-SCROLL-2026-10-29.md)를 따르며 별도 세션 PR580의
+파일 소유권을 유지한다. 이전 파일 receipt 교정 reader 누락도 함께 정정한다.
+검증 후 병합·preview에만 배포하며 production은 유지한다.
+
 2026-10-29 추가 파일 전송 지연 요청 #577은 `codex/577-file-transfer-performance`에서
 원본 업로드의 첫 조각 반복 읽기와 다운로드 중복 조회·헤더 복호화를 줄인다.
 [측정과 호환 범위](../quality/FILE-TRANSFER-PERFORMANCE-2026-10-29.md)를 따르며

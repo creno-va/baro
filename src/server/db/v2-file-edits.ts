@@ -22,6 +22,7 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { originalPartReceiptSchema } from "./v2-original-parts";
 
 const metadataSchema = z.strictObject({
   name: v2FileSchema.shape.name,
@@ -351,13 +352,7 @@ export function createV2FileEditsRepository(core: V2Core) {
             g.ownerId,
             part.upload_revision,
             part.encrypted_payload,
-            z.strictObject({
-              blobId: opaqueIdSchema,
-              keyVersion: z.string(),
-              contentHash: hashSchema,
-              index: z.number().int(),
-              byteLength: z.number().int(),
-            }),
+            originalPartReceiptSchema,
           );
           const actual = await core.decrypt(
             "v2_blobs",

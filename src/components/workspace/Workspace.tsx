@@ -159,7 +159,8 @@ export function Workspace({
     setReviewState((old) => ({ ...old, dirty }));
   }, []);
   const followingChat = useRef(true);
-  const chatEnd = useRef<HTMLDivElement>(null);
+  const workspaceRoot = useRef<HTMLDivElement>(null);
+  const chatMessages = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
   const operationError = useRef<ReturnType<typeof problem> | null>(null);
@@ -250,8 +251,9 @@ export function Workspace({
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
   const followReply = useCallback(() => {
-    if (followingChat.current)
-      chatEnd.current?.scrollIntoView({ block: "end", behavior: "instant" });
+    const messages = chatMessages.current;
+    if (followingChat.current && messages)
+      messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
   }, []);
   const finishReply = useCallback((id: string) => {
     setProgressiveIds((ids) => {
@@ -354,22 +356,32 @@ export function Workspace({
     : "";
   useEffect(() => {
     if (tab !== "chat" || !latestMessageContent) return;
-    if (!followingChat.current) return;
-    chatEnd.current?.scrollIntoView({
-      block: "end",
-      // Native smooth-scroll frames can outlive a user's move to earlier text.
-      // Use the same immediate following as progressive reply updates.
-      behavior: "instant",
-    });
-  }, [latestMessageContent, tab]);
+    followReply();
+  }, [latestMessageContent, tab, followReply]);
   useEffect(() => {
-    const observe = () => {
-      const end = chatEnd.current;
-      if (end) followingChat.current = end.getBoundingClientRect().top <= window.innerHeight + 200;
+    if (tab !== "chat") return;
+    const frame = workspaceRoot.current?.closest<HTMLElement>(".app-frame");
+    if (!frame) return;
+    let animation = 0;
+    const fit = () => {
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      frame.style.setProperty(
+        "--chat-viewport-height",
+        `${(window.visualViewport?.height ?? window.innerHeight) / zoom}px`,
+      );
+      cancelAnimationFrame(animation);
+      animation = requestAnimationFrame(followReply);
     };
-    window.addEventListener("scroll", observe, { passive: true });
-    return () => window.removeEventListener("scroll", observe);
-  }, []);
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      cancelAnimationFrame(animation);
+      frame.style.removeProperty("--chat-viewport-height");
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
+  }, [tab, followReply]);
   useEffect(() => {
     const input = draftInput.current;
     if (!input) return;
@@ -920,6 +932,7 @@ export function Workspace({
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
     <div
+      ref={workspaceRoot}
       className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
     >
       {/* Keep the chooser's original node attached during temporary access checks. */}
@@ -1108,7 +1121,7 @@ export function Workspace({
       {view && (
         // Only the generic file-preview controls survive a focus check. Their
         // private content has the same gate below; all other tabs keep this gate.
-        <div {...(tab === "files" ? {} : privateContent)}>
+        <div className="workspace-content" {...(tab === "files" ? {} : privateContent)}>
           {!canMutate && (
             <section className="workspace-error" {...privateContent}>
               <p>
@@ -1142,10 +1155,18 @@ export function Workspace({
                     </div>
                   )}
                   <div
+                    ref={chatMessages}
                     className="workspace-messages"
                     role="log"
+                    // biome-ignore lint/a11y/noNoninteractiveTabindex: The named scroll area must support keyboard scrolling.
+                    tabIndex={0}
                     aria-label="사건 대화"
                     aria-live="polite"
+                    onScroll={(event) => {
+                      const messages = event.currentTarget;
+                      followingChat.current =
+                        messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 96;
+                    }}
                   >
                     {!view.messages.length && (
                       <div className="workspace-chat-welcome">
@@ -1276,27 +1297,6 @@ export function Workspace({
                         )}
                       </article>
                     ))}
-                    <div className="workspace-chat-end" ref={chatEnd} />
-                  </div>
-                  <form
-                    className="workspace-composer"
-                    onSubmit={(event) => void send(event)}
-                    onDragOver={(event) => {
-                      if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      if (event.dataTransfer.files.length) {
-                        event.preventDefault();
-                        if (!readonly) chooseAttachments(Array.from(event.dataTransfer.files));
-                      }
-                    }}
-                    onPaste={(event) => {
-                      if (event.clipboardData.files.length) {
-                        event.preventDefault();
-                        if (!readonly) chooseAttachments(Array.from(event.clipboardData.files));
-                      }
-                    }}
-                  >
                     {view.messages.some(
                       (message) => message.role === "assistant" && message.status === "complete",
                     ) && (
@@ -1325,6 +1325,26 @@ export function Workspace({
                         <a href={`${base}/precedents`}>관련 판례 찾아보기</a>
                       </fieldset>
                     )}
+                  </div>
+                  <form
+                    className="workspace-composer"
+                    onSubmit={(event) => void send(event)}
+                    onDragOver={(event) => {
+                      if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (event.dataTransfer.files.length) {
+                        event.preventDefault();
+                        if (!readonly) chooseAttachments(Array.from(event.dataTransfer.files));
+                      }
+                    }}
+                    onPaste={(event) => {
+                      if (event.clipboardData.files.length) {
+                        event.preventDefault();
+                        if (!readonly) chooseAttachments(Array.from(event.clipboardData.files));
+                      }
+                    }}
+                  >
                     <div className="workspace-composer-surface">
                       <ChatAttachments
                         local={localAttachments}

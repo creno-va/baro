@@ -58,3 +58,8 @@ production bundle budget·Worker dry-run·로컬 workerd login HTML까지 통과
 첫 frozen install은 sandbox tempdir EPERM, 첫 dry-run은 sandbox 상위 디렉터리
 읽기 제한으로 실패했고 같은 명령을 승인된 로컬 실행으로 완료했다.
 실제 OAuth·모델·외부 processor 호출이나 production 배포는 수행하지 않았다.
+
+#581 후속 검증에서 최종 main full40740044593의 자료 교정 reader 실패를 확인했다.
+`v2-file-edits.ts`의 별도 strict schema가 새 receipt의 optional wrappedKey를 거절했다.
+[누락 정정과 재검증](./CHAT-SCROLL-2026-10-29.md)에서 공통 reader로 통일한다.
+최초 전체 검증 실패와 수정 후 결과를 구분하며 이 기록을 전체 검증 통과로 해석하지 않는다.
