@@ -12,6 +12,61 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+test("a batch of attachments refreshes the workspace once after both accepted uploads", async ({
+  page,
+}) => {
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const state = window as unknown as { batchReads: number; batchUploads: number };
+    state.batchReads = 0;
+    state.batchUploads = 0;
+    const get = api.workspace.getFiles;
+    const upload = api.files.upload;
+    api.workspace.getFiles = async (...args: Parameters<typeof get>) => {
+      state.batchReads++;
+      return get(...args);
+    };
+    api.files.upload = async (...args: Parameters<typeof upload>) => {
+      state.batchUploads++;
+      return upload(...args);
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles([
+    { name: "batch-first.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic first") },
+    { name: "batch-second.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic second") },
+  ]);
+  await expect(page.getByRole("heading", { name: "batch-second.txt", exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const state = window as unknown as { batchReads: number; batchUploads: number };
+      return { reads: state.batchReads, uploads: state.batchUploads };
+    }),
+  ).toEqual({ reads: 1, uploads: 2 });
+});
+
+test("follow-up prompts and the official precedent entry remain available after an answer", async ({
+  page,
+}) => {
+  await page.goto(base);
+  const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
+  await input.fill("합성 자료의 날짜를 더 정리하고 싶어요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const suggestions = page.getByRole("group", { name: "이어서 물어보기" });
+  await expect(suggestions).toBeVisible();
+  const prompt = "첨부한 자료의 날짜와 타임라인을 확인해 주세요";
+  await suggestions.getByRole("button", { name: prompt }).click();
+  await expect(input).toHaveValue(prompt);
+  await expect(input).toBeFocused();
+  await expect(suggestions.getByRole("link", { name: "관련 판례 찾아보기" })).toHaveAttribute(
+    "href",
+    `${base}/precedents`,
+  );
+});
+
 for (const width of [320, 390, 768, 1440]) {
   test(`workspace navigation and empty composer remain readable at ${width}px`, async ({
     page,

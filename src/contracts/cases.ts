@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   analysisStatusSchema,
   boundedText,
+  CASE_NARRATIVE_MIN_LENGTH,
   caseStatusSchema,
   displayText,
   errorSchema,
@@ -13,7 +14,7 @@ import { questionsSchema } from "./questions";
 import { resultSchema } from "./results";
 
 export const createCaseRequestSchema = z.strictObject({
-  narrative: boundedText(20, 5000),
+  narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
   turnstileToken: boundedText(1, 2048),
 });
 const analysisIdentity = { analysisId: uuidSchema, inputRevision: revisionSchema };

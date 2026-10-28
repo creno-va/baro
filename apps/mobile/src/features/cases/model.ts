@@ -7,6 +7,7 @@ import {
   type QuestionsResult,
 } from "@baro/api-client";
 import type { CaseView } from "@baro/client-core";
+import { CASE_NARRATIVE_MIN_LENGTH } from "@baro/contracts/v1";
 import type { SessionModel, SessionState } from "../session/model";
 
 type Client = ReturnType<typeof createCasesClient> & {
@@ -323,7 +324,10 @@ export function createCasesModel(dependencies: {
         subjectContext: state.subjectContext,
       });
       if (!parsed.success) {
-        publish({ ...state, error: "상황을 20~5,000자로 입력해 주세요." });
+        publish({
+          ...state,
+          error: `상황을 ${CASE_NARRATIVE_MIN_LENGTH}~5,000자로 입력해 주세요.`,
+        });
         return Promise.resolve();
       }
       return mutate((api) => api.create(parsed.data));

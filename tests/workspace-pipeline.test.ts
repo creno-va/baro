@@ -910,6 +910,64 @@ test.each(["user_message", "user_material"] as const)(
   },
 );
 
+test.each([
+  ["observed", false, "observed"],
+  ["uncertain", false, "uncertain"],
+  ["observed", true, "uncertain"],
+] as const)(
+  "dated document quote uses source certainty %s edited=%s and retains its own issue date",
+  async (observationCertainty, userEdited, expected) => {
+    const saved = confirmedChatContext();
+    const reference = {
+      kind: "user_material" as const,
+      fileId: "medical-certificate",
+      fileRevision: 1,
+      position: { kind: "document" as const, page: 1, paragraph: null, table: null },
+    };
+    const text = "진단서 발급일: 2026년 10월 21일";
+    saved.references.files = [
+      { id: reference.fileId, revision: 1, category: "document", pageCount: 1 },
+    ];
+    saved.materials = [{ reference, text, coverage: { observationCertainty, userEdited } }];
+    if (!saved.latestMessage) throw new Error("Missing synthetic request");
+    saved.latestMessage.text = "진단서의 발급일을 타임라인에 반영해 주세요.";
+    const fact = {
+      ...reportedFact(text),
+      attribution: "user_material" as const,
+      references: [reference],
+    };
+    const p = pipeline((phase) =>
+      phase === "workspace_audit"
+        ? approved
+        : {
+            ...chatText("진단서에 적힌 발급일을 정리했어요."),
+            facts: [fact],
+            timeline: [
+              {
+                id: "document-issued",
+                revision: 1,
+                date: "2026-10-21",
+                datePrecision: "day",
+                event: "진단서 발급",
+                certainty: "uncertain",
+                factIds: [fact.id],
+                references: [reference],
+                userEdited: false,
+              },
+            ],
+          },
+    );
+    const result = await p.value.chat(saved, "synthetic-dated-document");
+    expect(result.facts[0]?.certainty).toBe(expected);
+    expect(result.timeline[0]).toMatchObject({
+      date: "2026-10-21",
+      datePrecision: "day",
+      event: "진단서 발급",
+    });
+    expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  },
+);
+
 test("chat generation is told the exact standalone refusal contract enforced by the guard", async () => {
   const { prompts } = await import("../src/server/modules/llm-gateway/prompts");
   expect(prompts.workspace_chat).toContain(

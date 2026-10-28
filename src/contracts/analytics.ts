@@ -30,7 +30,7 @@ export const analyticsEventSchema = z.discriminatedUnion("name", [
     name: z.literal("case_submitted"),
     caseIdHash: hash,
     analysisIdHash: hash,
-    narrativeLengthBucket: z.enum(["20_100", "101_1000", "1001_5000"]),
+    narrativeLengthBucket: z.enum(["5_19", "20_100", "101_1000", "1001_5000"]),
   }),
   z.strictObject({
     ...common,

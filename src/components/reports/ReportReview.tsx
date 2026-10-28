@@ -33,9 +33,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [accessChecking, setAccessChecking] = useState(true);
+  const [accessUnknown, setAccessUnknown] = useState(false);
   const [needsConsent, setNeedsConsent] = useState(false);
   const [initialLimit, setInitialLimit] = useState(false);
   const [exportExhausted, setExportExhausted] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
@@ -60,6 +62,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setInitialLimit(false);
     setExportExhausted(false);
     setFiles([]);
+    setExportingPdf(false);
     setContent("");
     setEditing(false);
     setMask(false);
@@ -72,6 +75,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setReloadConfirm(false);
     setReviewed(false);
     setAccessChecking(false);
+    setAccessUnknown(false);
     setBusy("");
     setBusyStartedAt(null);
   }, []);
@@ -97,6 +101,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         session = await api.session.get();
       } catch (e) {
         if (!current()) throw superseded();
+        setAccessUnknown(true);
         throw e;
       }
       if (!current()) throw superseded();
@@ -124,6 +129,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         );
       }
       setNeedsConsent(session.needsConsent);
+      setAccessUnknown(false);
       owner.current = id;
       return id;
     },
@@ -350,9 +356,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
     <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
       <CaseNavigation
         caseId={caseId}
-        title={report && !accessChecking ? report.title : "사건 정리"}
+        title={report ? report.title : "사건 정리"}
         active="reports"
-        {...(!accessChecking ? { fileCount: files.length } : {})}
+        {...(report ? { fileCount: files.length } : {})}
       />
       <div className="report-canvas">
         <header className="report-heading">
@@ -435,8 +441,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
           </section>
         )}
-        {report && !accessChecking && (
-          <>
+        {report && (
+          <fieldset
+            className="report-controls"
+            disabled={Boolean(busy) || accessChecking || accessUnknown}
+          >
             {needsConsent && (
               <p className="report-callout" role="status">
                 새 리포트 생성과 수정은 필수 동의 후 이용할 수 있어요. 기존 리포트와 저장된
@@ -750,20 +759,26 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     dirty ||
                     !reviewed
                   }
-                  onClick={() =>
-                    void run("PDF 준비 중…", async () => {
-                      downloadBlob(
-                        await ownedResult(api.reports.pdf(report.id)),
-                        `BARO-${report.id}.pdf`,
-                      );
-                      setReport((current) =>
-                        current?.id === report.id ? { ...current, pdfAvailable: true } : current,
-                      );
-                      setNotice("PDF 다운로드를 시작했어요.");
-                    })
-                  }
+                  onClick={async () => {
+                    setExportingPdf(true);
+                    try {
+                      await run("PDF 준비 중…", async () => {
+                        downloadBlob(
+                          await ownedResult(api.reports.pdf(report.id)),
+                          `BARO-${report.id}.pdf`,
+                        );
+                        setReport((current) =>
+                          current?.id === report.id ? { ...current, pdfAvailable: true } : current,
+                        );
+                        setNotice("PDF 다운로드를 시작했어요.");
+                      });
+                    } finally {
+                      setExportingPdf(false);
+                    }
+                  }}
                 >
-                  <Download size={16} aria-hidden="true" /> PDF 다운로드
+                  {exportingPdf ? <Spinner /> : <Download size={16} aria-hidden="true" />}
+                  {exportingPdf ? "PDF 만드는 중…" : "PDF 다운로드"}
                 </button>
               </div>
               <p className="report-option-note">
@@ -774,7 +789,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 변호사에게 전달하는 것은 직접 결정하고 진행해 주세요.
               </p>
             </section>
-          </>
+          </fieldset>
         )}
         {regenerate && report && (
           <ConfirmDialog

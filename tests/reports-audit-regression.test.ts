@@ -343,9 +343,10 @@ test("unedited uncertain observations retain their uncertainty label", async () 
   expect(file?.observations[0]?.certainty).toBe("uncertain");
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   const coverageBlock = report.content.split("자료 처리 범위")[1]?.split("안내")[0] ?? "";
-  expect(coverageBlock).toContain(`자료 관찰 · 미확인\n${observation.text}`);
-  expect(coverageBlock).toContain("미확인");
-  expect(coverageBlock).not.toContain("확인 필요");
+  expect(coverageBlock).toContain(`확인 필요: ${observation.text}`);
+  expect(coverageBlock).toContain("1쪽 · 2번째 문단");
+  expect(coverageBlock).not.toContain("자료 내용 확인됨");
+  expect(coverageBlock).not.toContain("직접 수정한 내용");
   f.db.close();
 });
 
@@ -580,7 +581,9 @@ test("corrected material facts retain user-edit attribution", async () => {
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   const canonical = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(canonical?.body.facts[0]?.userEdited).toBe(true);
-  expect(report.content).toContain(`${fact.text}\n[사용자가 수정한 내용 · 자료 관찰 · 미확인`);
+  expect(report.content).toContain(
+    `${fact.text}\n[사용자가 수정한 내용 · 자료에 적힌 내용 · 미확인`,
+  );
   const factSection = report.content.split("사실·주장·출처")[1]?.split("미확인 사항")[0] ?? "";
   expect(factSection).toContain("사용자가 수정한 내용");
   const { reportText, buildReportSource } = await import("../src/server/modules/reports/source");
@@ -593,6 +596,6 @@ test("corrected material facts retain user-edit attribution", async () => {
   expect(withFlag).not.toBe(withoutFlag);
   const html = await f.reports.html(f.actor.ownerId, report.id);
   expect(html).toContain(fact.text);
-  expect(html).toContain("[사용자가 수정한 내용 · 자료 관찰 · 미확인");
+  expect(html).toContain("[사용자가 수정한 내용 · 자료에 적힌 내용 · 미확인");
   f.db.close();
 });

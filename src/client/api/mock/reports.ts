@@ -113,7 +113,7 @@ function draft(
           : p.kind === "document"
             ? `${p.page}쪽${p.paragraph ? ` · ${p.paragraph}번째 문단` : ""}`
             : "이미지 관찰";
-    return `${position} · ${value.userEdited ? "사용자 교정 · 미확인" : value.certainty === "uncertain" ? "자료 관찰 · 미확인" : "자료 관찰"}\n${value.text}`;
+    return `${p.kind === "image" ? "" : `${position}\n`}${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`;
   };
   const content = [
     "[합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다]",
@@ -130,7 +130,7 @@ function draft(
     "",
     ...facts.map(
       (fact) =>
-        `${fact.text} · ${fact.userEdited ? "사용자 교정" : "사용자 진술"} · ${fact.certainty}`,
+        `${fact.text} · ${fact.userEdited ? "사용자가 수정한 내용" : fact.attribution === "user_material" ? "자료에 적힌 내용" : fact.attribution === "official_source" ? "공식 출처" : fact.attribution === "ai_organization" ? "AI 정리" : "사용자 진술"} · ${{ reported: "진술됨", observed: "자료 내용 확인됨", uncertain: "미확인", conflicting: "상반됨" }[fact.certainty]}`,
     ),
     "",
     "미확인·상반되는 내용",

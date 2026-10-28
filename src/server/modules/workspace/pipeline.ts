@@ -325,6 +325,18 @@ function normalizeNewFacts(context: WorkspaceContext, facts: V2Fact[]) {
     ) {
       fact.certainty = "uncertain";
       changed = true;
+    } else if (
+      fact.certainty === "reported" &&
+      sources.length > 0 &&
+      sources.every((source) => {
+        const coverage = source.coverage as { observationCertainty?: string; userEdited?: boolean };
+        return coverage?.observationCertainty === "observed" && coverage?.userEdited === false;
+      })
+    ) {
+      // This confirms the exact excerpt in a machine-read source, never the
+      // underlying event or the document's authenticity. Users cannot set it.
+      fact.certainty = "observed";
+      changed = true;
     }
   }
   return changed;
@@ -673,7 +685,7 @@ export function createWorkspacePipeline(
             ? ["공식 자료 일부만 확인했어요. 출처별 제한과 원문에서 빠진 범위를 확인해 주세요."]
             : []),
           ...(factsChanged
-            ? ["새 사실의 교정·미확인 표시는 원자료와 실제 사용자 수정 기록을 기준으로 유지했어요."]
+            ? ["새 사실의 확인 상태는 자료에 적힌 내용과 직접 수정한 기록을 기준으로 표시했어요."]
             : []),
           ...(dates.changed
             ? [

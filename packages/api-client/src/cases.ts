@@ -2,6 +2,7 @@ import type { CaseView, QuestionView, SessionScope } from "@baro/client-core";
 import { intakeQuestionContext, workspaceProgressText } from "@baro/client-core";
 import {
   boundedText,
+  CASE_NARRATIVE_MIN_LENGTH,
   caseDetailResponseSchema,
   caseListResponseSchema,
   displayText,
@@ -22,7 +23,7 @@ import { ApiError } from "./errors";
 import type { OperationRequest, OperationRequestOptions } from "./http";
 
 export const createInputSchema = z.object({
-  narrative: boundedText(20, 5000),
+  narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
   subjectContext: z.enum(["individual", "company"]),
 });
 export const answersInputSchema = z

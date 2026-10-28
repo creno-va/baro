@@ -30,6 +30,19 @@ function event(name: string, properties: Record<string, unknown> = {}) {
     ...properties,
   };
 }
+test("short narratives use an additive bucket while existing analytics remain readable", () => {
+  for (const narrativeLengthBucket of ["5_19", "20_100", "101_1000", "1001_5000"])
+    expect(
+      analyticsEventSchema.safeParse(
+        event("case_submitted", {
+          caseIdHash: "a".repeat(64),
+          analysisIdHash: "b".repeat(64),
+          narrativeLengthBucket,
+        }),
+      ).success,
+    ).toBe(true);
+});
+
 test("opt-in precedes adapter work; strict allowlist/dedup/opt-out, no raw strings", async () => {
   const adapter = syntheticAnalyticsAdapter(),
     sdk = createAnalyticsSdk(adapter),

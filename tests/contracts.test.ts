@@ -68,12 +68,12 @@ describe("strict shared contracts", () => {
     expect(questionOutputSchema.safeParse({ schemaVersion: "1", questions }).success).toBe(true);
   });
   test("trimmed code-point narrative and answer boundaries include non-BMP text", () => {
-    for (const length of [20, 5000])
+    for (const length of [5, 5000])
       expect(
         createCaseRequestSchema.parse({ ...input, narrative: `  ${"😀".repeat(length)}  ` })
           .narrative,
       ).toBe("😀".repeat(length));
-    for (const length of [0, 19, 5001])
+    for (const length of [0, 4, 5001])
       expect(
         createCaseRequestSchema.safeParse({ ...input, narrative: "😀".repeat(length) }).success,
       ).toBe(false);

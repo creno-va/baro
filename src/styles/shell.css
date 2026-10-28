@@ -143,6 +143,21 @@ body {
     background 0.18s,
     color 0.18s;
 }
+.sidebar-story-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sidebar-story-row > .sidebar-story {
+  flex: 1;
+}
+.sidebar-story-delete {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.sidebar-story-delete:hover {
+  color: var(--destructive);
+}
 .sidebar-story__icon {
   display: grid;
   place-items: center;

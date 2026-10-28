@@ -10,6 +10,7 @@ import {
   Plus,
   Settings,
   ShieldCheck,
+  Trash2,
   Users,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -17,7 +18,7 @@ import type { CaseView, SessionView } from "../../client/api";
 import { api, apiMode, roleStart } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
-import { Sheet } from "./dialog";
+import { Dialog, Sheet } from "./dialog";
 import { LoadingContent, Spinner } from "./loading";
 
 export type NavigationRole = "visitor" | "user" | "lawyer" | "moderator";
@@ -84,6 +85,10 @@ export function AppNavigation({
   const [recentState, setRecentState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
+  const [deletion, setDeletion] = useState<{ item: CaseView; ownerId: string } | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const deleteLock = useRef(false);
   const sessionRequest = useRef(0);
   const signingOutRef = useRef(false);
   useEffect(() => {
@@ -100,6 +105,8 @@ export function AppNavigation({
         if (owner !== next.user?.id || next.needsConsent || next.user?.accountType !== "customer") {
           setRecent([]);
           setRecentState("loading");
+          setDeletion(null);
+          setConfirmation("");
         }
         owner = next.user?.id;
         setSession(next);
@@ -122,6 +129,7 @@ export function AppNavigation({
         if (!current()) return;
         owner = undefined;
         setRecent([]);
+        setDeletion(null);
         setSession({ user: null, needsConsent: false });
       }
     }
@@ -176,6 +184,7 @@ export function AppNavigation({
     signingOutRef.current = true;
     ++sessionRequest.current;
     setRecent([]);
+    setDeletion(null);
     setSigningOut(true);
     setError("");
     try {
@@ -186,6 +195,36 @@ export function AppNavigation({
       signingOutRef.current = false;
       setError("로그아웃하지 못했어요. 다시 시도해 주세요.");
       setSigningOut(false);
+    }
+  }
+  async function deleteRecent() {
+    if (!deletion || confirmation !== "DELETE" || deleteLock.current) return;
+    const target = deletion;
+    deleteLock.current = true;
+    setDeleting(true);
+    setError("");
+    const sameOwner = async () => {
+      const fresh = await api.session.get();
+      if (fresh.user?.id !== target.ownerId || fresh.user?.accountType !== "customer") {
+        setDeletion(null);
+        setRecent([]);
+        throw new Error("계정이 변경됐어요. 현재 계정의 사건을 다시 확인해 주세요.");
+      }
+    };
+    try {
+      await sameOwner();
+      await api.account.deleteCase(target.item.id, confirmation, target.item.schemaVersion ?? "2");
+      await sameOwner();
+      setRecent((items) => items.filter((item) => item.id !== target.item.id));
+      setDeletion(null);
+      window.location.assign("/cases");
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "삭제를 접수하지 못했어요. 다시 확인해 주세요.",
+      );
+    } finally {
+      deleteLock.current = false;
+      setDeleting(false);
     }
   }
   const renderLinks = () =>
@@ -232,45 +271,63 @@ export function AppNavigation({
           ) : recent.length ? (
             <nav aria-label="최근 사건">
               {recent.map((item) => (
-                <a
-                  key={item.id}
-                  href={caseLink(item)}
-                  title={item.title}
-                  className="sidebar-story"
-                  aria-current={
-                    pathname === `/cases/${encodeURIComponent(item.id)}` ||
-                    pathname.startsWith(`/cases/${encodeURIComponent(item.id)}/`)
-                      ? "page"
-                      : undefined
-                  }
-                >
-                  <span className="sidebar-story__icon">
-                    <MessageCircle size={16} aria-hidden="true" />
-                  </span>
-                  <span className="sidebar-story__copy">
-                    <strong>{item.title}</strong>
-                    <span className="sidebar-story__meta">
-                      <span>
-                        {item.schemaVersion === "1"
-                          ? "기존 기록"
-                          : item.stage === "intake"
-                            ? "질문 답변 중"
-                            : item.stage === "summary"
-                              ? "요약 확인"
-                              : item.stage === "archived"
-                                ? "보관한 이야기"
-                                : "정리 중"}
-                      </span>
-                      <time dateTime={item.updatedAt}>
-                        {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
-                          month: "numeric",
-                          day: "numeric",
-                          timeZone: "Asia/Seoul",
-                        })}
-                      </time>
+                <div className="sidebar-story-row" key={item.id}>
+                  <a
+                    href={caseLink(item)}
+                    title={item.title}
+                    className="sidebar-story"
+                    aria-current={
+                      pathname === `/cases/${encodeURIComponent(item.id)}` ||
+                      pathname.startsWith(`/cases/${encodeURIComponent(item.id)}/`)
+                        ? "page"
+                        : undefined
+                    }
+                  >
+                    <span className="sidebar-story__icon">
+                      <MessageCircle size={16} aria-hidden="true" />
                     </span>
-                  </span>
-                </a>
+                    <span className="sidebar-story__copy">
+                      <strong>{item.title}</strong>
+                      <span className="sidebar-story__meta">
+                        <span>
+                          {item.schemaVersion === "1"
+                            ? "기존 기록"
+                            : item.stage === "intake"
+                              ? "질문 답변 중"
+                              : item.stage === "summary"
+                                ? "요약 확인"
+                                : item.stage === "archived"
+                                  ? "보관한 이야기"
+                                  : "정리 중"}
+                        </span>
+                        <time dateTime={item.updatedAt}>
+                          {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
+                            month: "numeric",
+                            day: "numeric",
+                            timeZone: "Asia/Seoul",
+                          })}
+                        </time>
+                      </span>
+                    </span>
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="sidebar-story-delete"
+                    aria-label={`${item.title} 삭제`}
+                    title="사건 삭제"
+                    disabled={deleting || signingOut}
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      setOpen(false);
+                      setConfirmation("");
+                      setError("");
+                      if (session?.user) setDeletion({ item, ownerId: session.user.id });
+                    }}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </Button>
+                </div>
               ))}
             </nav>
           ) : (
@@ -390,6 +447,35 @@ export function AppNavigation({
         {renderRecent()}
         {renderAccount()}
       </Sheet>
+      <Dialog
+        open={Boolean(deletion)}
+        onOpenChange={(value) => {
+          if (!value && !deleting) setDeletion(null);
+        }}
+        title="사건을 삭제할까요?"
+        description="삭제하면 이 사건과 연결된 자료·리포트에 접근할 수 없어요. 필요한 파일은 먼저 보관해 주세요."
+      >
+        <p>{deletion?.item.title}</p>
+        <label htmlFor="recent-delete-confirmation">확인하려면 DELETE를 입력하세요.</label>
+        <input
+          id="recent-delete-confirmation"
+          value={confirmation}
+          disabled={deleting}
+          autoComplete="off"
+          onChange={(event) => setConfirmation(event.target.value)}
+        />
+        {error && <p role="alert">{error}</p>}
+        <Button variant="outline" disabled={deleting} onClick={() => setDeletion(null)}>
+          취소
+        </Button>
+        <Button
+          variant="destructive"
+          disabled={confirmation !== "DELETE" || deleting}
+          onClick={() => void deleteRecent()}
+        >
+          {deleting ? "삭제 요청 중…" : "사건 삭제"}
+        </Button>
+      </Dialog>
     </>
   );
 }

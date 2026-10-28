@@ -1,3 +1,4 @@
+import { CASE_NARRATIVE_MIN_LENGTH } from "@baro/contracts/v1";
 import { Button } from "../../../ui/Button";
 import { Card } from "../../../ui/Card";
 import { Choice } from "../../../ui/Choice";
@@ -147,8 +148,8 @@ export function CasesScreen({
             onChangeText={actions.setNarrative}
           />
           <Text variant="muted">
-            20~5,000자. 저장 전에 보안 확인을 진행해요. 저장하지 않은 내용은 앱을 종료하면 사라질 수
-            있어요.
+            {CASE_NARRATIVE_MIN_LENGTH}~5,000자. 저장 전에 보안 확인을 진행해요. 저장하지 않은
+            내용은 앱을 종료하면 사라질 수 있어요.
           </Text>
           <Button
             variant="primary"

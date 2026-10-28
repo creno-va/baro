@@ -528,11 +528,17 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                                   <option value="reported">사용자 진술</option>
                                 )}
                                 {edit.certainty === "observed" && (
-                                  <option value="observed">자료에서 관찰됨</option>
+                                  <option value="observed">자료 내용 확인됨 (자동 확인)</option>
                                 )}
                                 <option value="uncertain">아직 확인하지 못했어요</option>
                                 <option value="conflicting">다른 사실과 모순</option>
                               </select>
+                              {edit.certainty === "observed" && (
+                                <small>
+                                  자료에 적힌 내용과 연결됐어요. 사실 여부나 원본의 진정성을
+                                  보증하지 않아요.
+                                </small>
+                              )}
                             </label>
                             {edit.certainty === "conflicting" && (
                               <fieldset className="summary-conflicts">
