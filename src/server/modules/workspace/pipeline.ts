@@ -27,6 +27,7 @@ import {
   type WorkspaceFactFailure,
 } from "../../dependency-diagnostics";
 import type { ClaimFailure } from "../citation/claim-diagnostics";
+import { instrumentNumbersGrounded } from "../citation/instrument-numbers";
 import { type QuotationResolution, resolveQuotationSpans } from "../citation/quotation-spans";
 import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation/v2-validate";
 import type { lookupCatalog } from "../external-tools/catalog";
@@ -348,6 +349,14 @@ function normalizeNewFacts(context: WorkspaceContext, facts: V2Fact[]) {
 export function workspaceModelInput(input: unknown): unknown {
   if (!input || typeof input !== "object") return input;
   const { sourceRetrieval: _proof, ...rest } = input as Record<string, unknown>;
+  // Citation IDs still bind claims, but supplier database IDs are not legal
+  // numbers and have no role in the generation/audit evidence projection.
+  if (Array.isArray(rest.citations))
+    rest.citations = rest.citations.map((citation) => {
+      const { officialId: _internalId, ...evidence } = citation;
+      return evidence;
+    });
+  if (Array.isArray(rest.history)) rest.history = rest.history.map(workspaceModelInput);
   if (rest.precedentComparison) {
     const context = rest as unknown as WorkspaceContext;
     return {
@@ -735,6 +744,28 @@ export function createWorkspacePipeline(
             deps.observeQuotationResolution?.(resolved.resolution);
           } catch {}
         }
+        if (
+          !instrumentNumbersGrounded(
+            {
+              ...draft,
+              // Already checked exact user quotations remain attributed reports;
+              // they do not establish a number in the assistant's explanation.
+              facts: draft.facts.filter(
+                (fact) =>
+                  fact.attribution !== "user_statement" && fact.attribution !== "user_material",
+              ),
+            },
+            draft.sourceClaims,
+            context.sourceTexts ?? [],
+          )
+        )
+          throw new WorkspaceOutputPolicyError(
+            "unsupported_fact",
+            undefined,
+            undefined,
+            undefined,
+            "unsupported_instrument_number",
+          );
         const checked = await audit("workspace_chat", context, draft, requestId);
         if (draft.sourceClaims.length) {
           const retrieval = context.sourceRetrieval;
@@ -834,8 +865,11 @@ export function createWorkspacePipeline(
               finding.target === "timeline" &&
               finding.basis === "intake_narrative",
           );
-        if (!bodyFailure && !timelineFailure) throw error;
-        // One shared newly admitted correction for either narrow failure. Never expose the
+        const metadataFailure =
+          error.reason === "unsupported_fact" &&
+          error.claimFailure === "unsupported_instrument_number";
+        if (!bodyFailure && !timelineFailure && !metadataFailure) throw error;
+        // One shared newly admitted correction for these narrow failures. Never expose the
         // rejected draft, repeat lookup side effects, or relax the full validation/audit.
         draft = workspaceChatOutputSchema.parse(
           await call(
@@ -847,14 +881,19 @@ export function createWorkspacePipeline(
                     reason: "prohibited_content",
                     contentFailure: { field: "chat_text", category: "strategy" },
                   }
-                : {
-                    reason: "audit_rejected",
-                    auditFailure: {
-                      code: "unsupported_fact",
-                      target: "timeline",
-                      basis: "intake_narrative",
+                : metadataFailure
+                  ? {
+                      reason: "unsupported_fact",
+                      claimFailure: "unsupported_instrument_number",
+                    }
+                  : {
+                      reason: "audit_rejected",
+                      auditFailure: {
+                        code: "unsupported_fact",
+                        target: "timeline",
+                        basis: "intake_narrative",
+                      },
                     },
-                  },
             },
             requestId,
           ),
