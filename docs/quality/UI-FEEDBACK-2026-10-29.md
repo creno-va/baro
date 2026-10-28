@@ -58,3 +58,10 @@ PR570–573와 CI 성공을 확인하고 별도 managed worktree에서 진행한
   제한의 최종 quick은 전부 통과했다. 과거 실패를 검사 성공으로 덮어쓰지 않는다.
 - 다른 세션 PR576의 CI 성공/main c1a0055를 통합했다. 최종 head CI·main·full·
   preview의 실제 SHA/결과는 #574/PR575에 기록하며 production 배포는 하지 않는다.
+
+후속 #577 점검 중 기존 main `bf14048`의 수동 full40733110468이
+`conversation-home.e2e.ts`의 옛 DELETE label과 `/cases` 이동 기대에서 실패한 것을
+확인했다. 현재 삭제 확인 label과 `/app` 이동으로 테스트를 정정했고 명시적 DELETE
+입력 전 버튼 비활성·입력 후 삭제·사이드바 제거 검증은 유지했다. 동일 Chromium
+home suite9개가 모두 통과했다. `b75bda8`의 동일 원인 full40738186137은 취소하고
+후속 테스트 PR 병합 뒤 최종 main SHA 전체 검증을 다시 수행한다. 제품 코드는 바꾸지 않는다.
