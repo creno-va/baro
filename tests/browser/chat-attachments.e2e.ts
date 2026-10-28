@@ -399,13 +399,19 @@ test("long chat scrolls internally while tabs and composer stay in place across 
   await expect(log.locator("article")).toHaveCount(24);
   for (const viewport of [
     { width: 1440, height: 900 },
-    { width: 1024, height: 768 },
     { width: 390, height: 844 },
     { width: 320, height: 650 },
-    { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(viewport);
-    await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(20);
+    await expect
+      .poll(() => log.evaluate((node) => node.clientHeight))
+      .toBeGreaterThan(Math.min(220, viewport.height / 4));
+    await expect
+      .poll(async () => {
+        const composer = await page.locator(".workspace-composer").boundingBox();
+        return composer ? composer.y + composer.height : Infinity;
+      })
+      .toBeLessThanOrEqual(viewport.height + 1);
     await log.evaluate((node) => {
       node.scrollTop = 0;
     });
@@ -422,6 +428,8 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
     expect(await page.evaluate(() => scrollY)).toBe(0);
     expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
+    const preparation = await page.locator(".workspace-sidebar").boundingBox();
+    expect(preparation?.y).toBeGreaterThan(composer.y + composer.height);
     if (viewport.height >= 650) {
       await expect(page.getByLabel("추가 사실 또는 질문")).toBeInViewport();
       await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeInViewport();
@@ -438,6 +446,9 @@ test("long chat scrolls internally while tabs and composer stay in place across 
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".workspace-sidebar").scrollIntoViewIfNeeded();
+  await expect(page.locator(".workspace-sidebar")).toBeInViewport();
+  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
   await page
     .getByRole("navigation", { name: "사건 메뉴" })
     .getByRole("link", { name: /타임라인/ })

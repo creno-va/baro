@@ -1483,53 +1483,17 @@
   margin: 6px 0;
 }
 
-/* Only the conversation scrolls; the case tabs and composer share the viewport. */
-body:has(.workspace--chat) {
-  overflow: hidden;
-}
-.app-frame:has(.workspace--chat) {
-  height: var(--chat-viewport-height, 100dvh);
-  min-height: 0;
-}
-.app-frame .app-surface:has(.workspace--chat) {
-  height: 100%;
-  min-height: 0;
-}
-.app-frame.app-frame--product .case-shell:has(.workspace--chat) {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  padding-block: 16px 8px;
-}
-.case-shell > astro-island:has(.workspace--chat) {
-  display: contents;
-}
-.app-frame.app-frame--product .workspace--chat {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  padding-bottom: 0;
-}
+/* Reserve viewport space only for the conversation, ending at its composer.
+   Case preparation, saved status and utilities continue below the panel. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
-  flex: 0 0 auto;
   margin-bottom: 8px;
 }
-.workspace--chat .workspace-content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-.app-frame.app-frame--product .workspace--chat .workspace-grid {
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  gap: 0;
+.workspace--chat .workspace-chat-heading {
+  display: none;
 }
 .app-frame.app-frame--product .workspace--chat .workspace-main {
-  flex: 1;
+  flex: none;
+  height: var(--chat-panel-height, max(160px, calc(100svh - 300px)));
   min-height: 0;
 }
 .app-frame.app-frame--product .workspace--chat .workspace-messages {
@@ -1556,25 +1520,6 @@ body:has(.workspace--chat) {
   min-height: 3rem;
   max-height: min(8rem, 25dvh);
 }
-.app-frame.app-frame--product .workspace--chat .workspace-sidebar {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 35%;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
 .workspace--chat > .workspace-feedback:empty {
   display: none;
-}
-.app-frame.app-frame--product .case-shell:has(.workspace--chat) > .case-utilities {
-  flex: 0 0 auto;
-  margin: 0 auto;
-  max-height: 25%;
-  overflow-y: auto;
-}
-.app-frame.app-frame--product .case-shell:has(.workspace--chat) > .case-notice {
-  flex: 0 0 auto;
-  margin: 0 auto;
-  padding: 0 4px;
-  font-size: 10px;
 }
