@@ -73,6 +73,7 @@ export async function loadReportPhotos(
   actor: Actor,
   workspaceId: string,
   body: V2ReportBody,
+  reviewedContent: string,
   ids: readonly string[],
   excluded: readonly string[],
   files: FilesService,
@@ -117,6 +118,9 @@ export async function loadReportPhotos(
         revision: selected.revision,
         dataUrl: dataUrl(bytes, `image/${file.probe.format}`),
         notes: body.facts
+          // Source facts are immutable; the saved review may deliberately redact them.
+          // Omit edited/removed text rather than restoring it in a generated caption.
+          .filter((fact) => reviewedContent.includes(fact.text))
           .filter((fact) =>
             fact.references.some(
               (ref) =>

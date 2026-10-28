@@ -596,6 +596,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
               a,
               data.row.workspace_id,
               data.body,
+              data.review.content,
               data.review.includedPhotoIds,
               data.review.excludedFileIds,
               deps.files,

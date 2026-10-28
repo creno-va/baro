@@ -553,6 +553,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
                 actor,
                 r.workspace_id,
                 data.body,
+                data.review.content,
                 data.review.includedPhotoIds,
                 data.review.excludedFileIds,
                 deps.files,

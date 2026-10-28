@@ -136,6 +136,69 @@ test("photo captions retain manual correction attribution and never present AI o
   f.db.close();
 });
 
+test.each(["removed", "redacted"] as const)(
+  "photo captions never restore %s text from a saved review in HTML or PDF input",
+  async (edit) => {
+    const f = await photoFixture();
+    try {
+      const id = crypto.randomUUID();
+      const marker = "SYNTHETIC_PRIVATE_NAME_567";
+      const fact: V2Fact = {
+        id,
+        text: `공유에서 가릴 합성 이름 ${marker}`,
+        attribution: "user_material",
+        certainty: "uncertain",
+        significance: "neutral",
+        references: [
+          {
+            kind: "user_material",
+            fileId: f.id,
+            fileRevision: 2,
+            position: { kind: "image", region: null },
+          },
+        ],
+        conflictingFactIds: [],
+        userEdited: true,
+      };
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_facts(id,entity_id,workspace_id,summary_revision,encrypted_payload) VALUES(?,?,?,1,?)",
+        )
+        .run(id, id, f.workspaceId, await f.core.encrypt("v2_facts", id, f.actor.ownerId, 1, fact));
+      const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
+      const original = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+        expectedRevision: draft.revision,
+        content: draft.content,
+        maskIdentifiers: false,
+        excludedFileIds: [],
+        includedPhotoIds: [f.id],
+      });
+      const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+        expectedRevision: original.revision,
+        content:
+          edit === "removed"
+            ? original.content.replaceAll(fact.text, "")
+            : original.content.replaceAll(marker, "[가림]"),
+        maskIdentifiers: false,
+        excludedFileIds: [],
+        includedPhotoIds: [f.id],
+      });
+      expect(saved.content.includes(marker)).toBe(false);
+      const html = await f.reports.html(f.actor.ownerId, saved.id);
+      expect(html).toContain("data:image/jpeg;base64,");
+      expect(html.includes(marker)).toBe(false);
+      await f.reports.pdf(f.actor.ownerId, saved.id);
+      expect(f.rendered).toHaveLength(1);
+      expect(f.rendered[0]).toContain("data:image/jpeg;base64,");
+      expect(f.rendered[0]?.includes(marker)).toBe(false);
+      // Editing a new report never mutates its original source facts or older review.
+      expect((await f.reports.html(f.actor.ownerId, original.id)).includes(marker)).toBe(true);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
 test("owned photo observations reach case report text; explicit selection reaches both HTML and PDF input with revision provenance", async () => {
   const f = await photoFixture(),
     owner = f.actor.ownerId;
