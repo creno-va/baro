@@ -156,6 +156,11 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
         .evaluate((node) => Math.abs(node.getBoundingClientRect().top) < innerHeight),
     )
     .toBe(true);
+  await expect
+    .poll(() =>
+      page.locator(".lawyer-result-anchor").evaluate((node) => node.getBoundingClientRect().top),
+    )
+    .toBeGreaterThanOrEqual(64);
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("합성 변호사");
   await page.getByRole("button", { name: "프로필 공개", exact: true }).click();

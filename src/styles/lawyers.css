@@ -635,3 +635,7 @@
     transition: none;
   }
 }
+
+.lawyer-result-anchor {
+  scroll-margin-top: 96px;
+}
