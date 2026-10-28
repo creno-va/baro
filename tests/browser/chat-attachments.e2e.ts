@@ -405,6 +405,22 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(viewport);
+    // The visualViewport resize handler runs after setViewportSize resolves.
+    // Capture the baseline only after that height and its layout are applied.
+    await page.waitForFunction(() => {
+      const frame = document.querySelector<HTMLElement>(".app-frame");
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      return (
+        frame?.style.getPropertyValue("--chat-viewport-height") ===
+        `${(window.visualViewport?.height ?? innerHeight) / zoom}px`
+      );
+    });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(20);
     await log.evaluate((node) => {
       node.scrollTop = 0;

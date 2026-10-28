@@ -26,9 +26,11 @@ const report = {
   photos: [
     {
       id: "synthetic-photo",
-      name: "상해 관찰 합성 표식.jpg",
+      name: "상해 관찰 합성 표식 010-1234-5678.jpg",
       revision: 3,
-      notes: ["확인 필요: 사진설명표식 · 사진의 촬영 날짜는 확인되지 않았습니다."],
+      notes: [
+        "확인 필요: 사진설명표식 synthetic@example.com · 사진의 촬영 날짜는 확인되지 않았습니다.",
+      ],
       dataUrl: `data:image/jpeg;base64,${base64(jpeg)}`,
     },
     {

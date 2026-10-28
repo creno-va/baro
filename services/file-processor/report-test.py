@@ -28,6 +28,7 @@ text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decod
 for phrase in ["사건 상담 준비", "촬영 날짜", "선택한 근거 사진", "사진설명표식", "문서설명표식", "원문 대조 필요", "합성 기록 25"]:
     assert phrase in text, phrase
 assert "자료 버전 3" not in text and "자료 버전 4" not in text
+assert "010-1234-5678" in text and "synthetic@example.com" in text
 images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
 assert sum(" jpeg " in line for line in images.splitlines()) >= 2, images
 info = subprocess.check_output(["pdfinfo", str(output)]).decode("utf-8")
@@ -37,7 +38,13 @@ with tempfile.TemporaryDirectory() as temporary:
     masked = Path(temporary) / "masked.pdf"
     masked.write_bytes(render((root / "masked.html").read_text(encoding="utf-8")))
     masked_images = subprocess.check_output(["pdfimages", "-list", str(masked)]).decode("utf-8")
-    assert not any(" jpeg " in line for line in masked_images.splitlines())
+    # Text masking preserves photos explicitly selected by the user; pixels are
+    # unmodified and the warning must survive actual PDF rendering too.
+    assert sum(" jpeg " in line for line in masked_images.splitlines()) >= 2
+    masked_text = subprocess.check_output(["pdftotext", "-layout", str(masked), "-"]).decode("utf-8")
+    assert "010-1234-5678" not in masked_text and "synthetic@example.com" not in masked_text
+    assert "사진설명표식" in masked_text and "문서설명표식" in masked_text
+    assert "사진 속 개인정보는 자동으로 가려지지 않습니다" in " ".join(masked_text.split())
 for url in ["file:///etc/passwd", "http://127.0.0.1/", "https://example.com/private", "data:image/png;base64,invalid", "data:text/html;base64,PGgxPmJhZDwvaDE+"]:
     try:
         resource(url)
