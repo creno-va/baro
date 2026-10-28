@@ -2,6 +2,7 @@ import { ExternalLink, Scale, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
+import { precedentBrief } from "../../client/precedent-brief";
 import { accessHref } from "../../client/return-path";
 import { legalFailureMessages } from "../../contracts/v2/legal-availability";
 import type {
@@ -367,7 +368,19 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                               .map((topic) => PRECEDENT_TOPIC_LABELS[topic])
                               .join(" · ")}
                           </p>
-                          <p className="precedent-snippet">{item.excerpt.text}</p>
+                          <p className="precedent-snippet">
+                            <strong>어떤 판결인가요?</strong>
+                            <br />
+                            {precedentBrief(item.excerpt.text)}
+                            <small>
+                              확인한 판결 원문에서 간추린 부분이에요. 내 사건과 같은 상황인지는 아래
+                              비교에서 확인해 주세요.
+                            </small>
+                          </p>
+                          <details className="precedent-original-excerpt">
+                            <summary>판결 원문 일부 보기</summary>
+                            <p>{item.excerpt.text}</p>
+                          </details>
                           <button
                             type="button"
                             aria-pressed={selected === item.id}
@@ -424,7 +437,10 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                           <ExternalLink size={15} aria-hidden="true" />
                           <span className="sr-only"> (새 창)</span>
                         </a>
-                        <p className="precedent-body">{document.excerpt.text}</p>
+                        <details open key={document.citation.id}>
+                          <summary>선택한 판결 원문 보기</summary>
+                          <p className="precedent-body">{document.excerpt.text}</p>
+                        </details>
                         {document.excerpt.truncated && (
                           <p className="precedent-scope">
                             긴 원문 중 일부를 표시했어요. 전체 내용은 공식 원문에서 확인해 주세요.

@@ -302,23 +302,34 @@ export function createV2LegalRetrieval(
                 };
               });
           } else if (plan.kind === "precedent") {
-            const candidates = precedentCandidates(
-              await json(
-                lawUrl("lawSearch.do", "prec", {
-                  query: plan.query,
-                  search: "2",
-                  datSrcNm: "대법원",
-                  display: String(plan.limit),
-                  page: "1",
-                  sort: "ddes",
-                  prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
-                }),
-                "moleg_prec_list",
-                boundedAccess,
-              ),
-              body.asOfDate,
-              plan.limit,
-            );
+            const discover = async (search: "1" | "2") =>
+              precedentCandidates(
+                await json(
+                  lawUrl("lawSearch.do", "prec", {
+                    query: plan.query,
+                    search,
+                    datSrcNm: "대법원",
+                    display: String(plan.limit),
+                    page: "1",
+                    sort: "ddes",
+                    prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
+                  }),
+                  "moleg_prec_list",
+                  boundedAccess,
+                ),
+                body.asOfDate,
+                plan.limit,
+              );
+            let candidates = await discover(plan.searchScope === "case_name" ? "1" : "2");
+            // A shared subject is enough for discovery. Never require comparison
+            // scores, the same outcome or private narrative in the external query.
+            // Fall back only after a genuine empty list, never after provider errors.
+            if (
+              plan.searchScope === "case_name" &&
+              !candidates.rows.length &&
+              !candidates.failures?.length
+            )
+              candidates = await discover("2");
             if (!candidates.rows.length)
               throw new RetrievalFailure(candidates.failures?.[0] ?? "no_results");
             searchTruncated = candidates.truncated;

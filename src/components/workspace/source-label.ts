@@ -13,9 +13,9 @@ export function positionLabel(position: V2SourcePosition): string {
     : "이미지 전체";
 }
 export function referenceLabel(reference: V2FactReference): string {
-  if (reference.kind === "intake_narrative") return "처음 입력한 이야기";
+  if (reference.kind === "intake_narrative") return "처음 작성한 사건 설명";
   if (reference.kind === "intake_answer") return "추가 질문에 대한 답변";
-  if (reference.kind === "user_message") return "추가 대화의 사용자 진술";
+  if (reference.kind === "user_message") return "추가 대화에서 설명한 내용";
   if (reference.kind === "official_source") return "검증한 공식 출처";
   return positionLabel(reference.position);
 }

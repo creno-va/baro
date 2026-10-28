@@ -787,3 +787,20 @@ test("an expired read proof fails closed while a fresh explicit search restores 
     ).status,
   ).toBe(200);
 });
+
+test("case-name discovery falls back to full text only after a real empty list", async () => {
+  const f = await fixture();
+  const searches: string[] = [];
+  f.upstream(async (url) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith("lawSearch.do")) {
+      searches.push(u.searchParams.get("search") ?? "");
+      return json(u.searchParams.get("search") === "1" ? { PrecSearch: { totalCnt: 0 } } : list);
+    }
+    return json(detail);
+  });
+  const result = await searchBody(await f.request("/search", await f.searchInput()));
+  expect(searches).toEqual(["1", "2"]);
+  expect(result.items).toHaveLength(1);
+  expect(result.items[0]?.citation.kind).toBe("precedent");
+});

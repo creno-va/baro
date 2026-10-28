@@ -461,7 +461,7 @@ export const sourcePositionText = (p: V2SourcePosition) =>
       ? `${secondsLabel(p.startSeconds)}–${secondsLabel(p.endSeconds)}초`
       : p.kind === "video"
         ? `${secondsLabel(p.timestampSeconds)}초 · 프레임 ${p.frameIndex} · ${p.sampling === "one_second" ? "1초 표본" : "장면 전환 표본"}`
-        : "이미지 관찰";
+        : "사진";
 
 type ReportDisplayContext = {
   readonly intakeRevision: number;
@@ -473,30 +473,19 @@ export function reportText(
   display?: ReportDisplayContext,
 ) {
   const labels = {
-    user_statement: "사용자 진술",
+    user_statement: "의뢰인이 설명한 내용",
     user_material: "자료에 적힌 내용",
     official_source: "공식 출처",
     ai_organization: "AI 정리",
   };
   const certainty = {
-    reported: "진술됨",
-    observed: "자료에서 관찰",
-    uncertain: "미확인",
-    conflicting: "상반됨",
+    reported: "의뢰인 설명",
+    observed: "자료 근거 있음",
+    uncertain: "추가 확인 필요",
+    conflicting: "다른 설명과 일치하지 않음",
   };
   const actionStatus = { todo: "진행 전", done: "완료", skipped: "건너뜀" };
-  const answerLabel = (questionId: string, revision: number) => {
-    const matches =
-      display?.intakeRevision === revision
-        ? display.questions.filter((question) => question.id === questionId)
-        : [];
-    const question = matches.length === 1 ? matches[0] : undefined;
-    // Historical bodies may not retain their question metadata. Preserve their
-    // revision and source kind without exposing IDs or guessing a question order.
-    return question
-      ? `${question.round}차 질문 ${question.number}번 답변`
-      : "추가 질문에 대한 답변";
-  };
+  const answerLabel = () => "상담 전 확인 질문에 대한 답변";
   const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
   const questionContext = (references: V2ReportBody["facts"][number]["references"]) => {
     const prompts = references.flatMap((ref) => {
@@ -516,11 +505,11 @@ export function reportText(
         ref.kind === "user_material"
           ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? "참조 자료"} · ${sourcePositionText(ref.position)}`
           : ref.kind === "user_message"
-            ? "추가 대화의 사용자 진술"
+            ? "추가 대화에서 의뢰인이 설명한 내용"
             : ref.kind === "intake_narrative"
-              ? "처음 입력한 이야기"
+              ? "의뢰인이 처음 작성한 사건 설명"
               : ref.kind === "intake_answer"
-                ? answerLabel(ref.questionId, ref.intakeRevision)
+                ? answerLabel()
                 : citationLabel(ref.citationId),
       )
       .join(" / ");
@@ -534,7 +523,7 @@ export function reportText(
     "사실·주장·출처",
     ...body.facts.map(
       (fact) =>
-        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "사용자가 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]${questionContext(fact.references)}`,
+        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "의뢰인이 직접 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]${questionContext(fact.references)}`,
     ),
     "",
     "미확인 사항",

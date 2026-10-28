@@ -44,6 +44,7 @@ export const planSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("precedent"),
     query: displayText(100),
+    searchScope: z.enum(["case_name", "full_text"]).optional(),
     limit: z.number().int().min(1).max(10).default(3),
   }),
   z.strictObject({

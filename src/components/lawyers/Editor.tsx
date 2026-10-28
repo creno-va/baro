@@ -91,6 +91,12 @@ export function Editor() {
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [notice, setNotice] = useState("");
+  const resultAnchor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (busy || (!error && !notice)) return;
+    resultAnchor.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    resultAnchor.current?.focus({ preventScroll: true });
+  }, [busy, error, notice]);
   const [preview, setPreview] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
@@ -337,7 +343,13 @@ export function Editor() {
   };
   const save = async () => {
     if (!draft || busy || !canMutate) return;
-    await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.", "save");
+    await mutate(
+      () => api.lawyers.saveMine(draft),
+      saved?.published
+        ? "공개 프로필의 변경 내용을 저장했어요."
+        : "프로필을 비공개로 저장했어요. 변호사 찾기에 표시하려면 아래에서 공개에 동의해 주세요.",
+      "save",
+    );
   };
   const publish = async (published: boolean) => {
     if (!saved || busy || !canMutate || (published && dirty)) return;
@@ -514,6 +526,7 @@ export function Editor() {
           </div>
         }
       />
+      <div ref={resultAnchor} tabIndex={-1} className="lawyer-result-anchor" />
       {error && (
         <StatePanel
           variant={
@@ -556,6 +569,18 @@ export function Editor() {
       {notice && (
         <p className="lawyer-notice" role="status">
           {notice}
+          {saved && !saved.published && (
+            <>
+              {" "}
+              <a href="#profile-publication">공개 설정으로 이동</a>
+            </>
+          )}
+          {saved?.published && (
+            <>
+              {" "}
+              <a href="/lawyers">변호사 찾기에서 확인</a>
+            </>
+          )}
         </p>
       )}
       {busyAction && !accessUnknown && (
@@ -1025,7 +1050,9 @@ export function Editor() {
           )}
           <Card>
             <CardHeader>
-              <CardTitle>공개 설정</CardTitle>
+              <CardTitle>
+                <span id="profile-publication">공개 설정</span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p>
@@ -1033,7 +1060,8 @@ export function Editor() {
                 전환하면 목록과 상세에서 보이지 않아요.
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                공개 여부를 바꾸기 전에 변경 내용을 저장하세요.
+                저장은 작성 내용을 보관하는 기능이에요. 저장만으로 공개되지는 않아요. 공개 여부를
+                바꾸기 전에 변경 내용을 저장하세요.
               </p>
               <div className="mt-4">
                 <Button

@@ -146,7 +146,16 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   );
   await page.getByRole("button", { name: "편집으로 돌아가기" }).click();
   await page.getByRole("button", { name: "프로필 저장" }).click();
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "공개 설정으로 이동" })).toBeVisible();
+  expect(profile.published).toBe(false);
+  await expect
+    .poll(() =>
+      page
+        .locator(".lawyer-result-anchor")
+        .evaluate((node) => Math.abs(node.getBoundingClientRect().top) < innerHeight),
+    )
+    .toBe(true);
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("합성 변호사");
   await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
@@ -220,7 +229,7 @@ test("keyboard cancel, save error/retry and stale revision preserve the user's d
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("수정 중");
   fail = false;
   await page.getByRole("button", { name: "프로필 저장" }).click();
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toBeVisible();
   await page.getByLabel("이름", { exact: true }).fill("취소할 변경");
   await page.getByRole("button", { name: "변경 취소", exact: true }).click();
   await page.getByRole("button", { name: "계속 편집" }).click();
@@ -262,7 +271,7 @@ test("peer-tab account switch removes old edits, preview and publication confirm
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("B 저장 프로필");
   releaseSave();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("B 저장 프로필");
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toHaveCount(0);
   await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
   await page.getByLabel("내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.").check();
   user = { id: "customer", name: "고객", accountType: "customer" };
@@ -426,7 +435,7 @@ test("text body persists separately from its title, previews, publishes, edits a
   const body = "첫 번째 문단입니다.\n<script>window.untrusted = true</script>\n마지막 문단";
   await page.getByLabel("활동 본문 1").fill(body);
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("활동 본문 1")).toHaveValue(body);
   await page.getByRole("button", { name: "미리보기", exact: true }).click();
@@ -441,13 +450,13 @@ test("text body persists separately from its title, previews, publishes, edits a
   await page.goto("/lawyer");
   await page.getByLabel("활동 본문 1").fill("수정한 포트폴리오 본문");
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toBeVisible();
   await page.goto("/lawyers/text-portfolio");
   await expect(page.getByText("수정한 포트폴리오 본문", { exact: true })).toBeVisible();
   await page.goto("/lawyer");
   await page.getByRole("button", { name: "포트폴리오 1 삭제", exact: true }).click();
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
-  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /프로필.*저장했어요/ })).toBeVisible();
   await page.reload();
   await expect(page.getByText("등록된 포트폴리오가 없어요.", { exact: true })).toBeVisible();
 });

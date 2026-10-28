@@ -227,7 +227,12 @@ export function createPrecedentResearchService(
         {
           now: checkedAt,
           asOfDate: new Date(Date.parse(checkedAt) + 9 * 3600000).toISOString().slice(0, 10),
-          plans: queries.map((query) => ({ kind: "precedent", query, limit: 3 })),
+          plans: queries.map((query) => ({
+            kind: "precedent",
+            query,
+            searchScope: "case_name",
+            limit: 3,
+          })),
         },
         {
           authorize: authorized,

@@ -128,7 +128,7 @@ test("report labels follow actual encrypted question rounds and localize action 
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   for (const question of f.questions) {
     expect(report.content).toContain(
-      `${question.text}\n[사용자 진술 · ${question.round}차 질문 ${question.number}번 답변]`,
+      `${question.text}\n[의뢰인이 설명한 내용 · 상담 전 확인 질문에 대한 답변]`,
     );
     expect(report.content).not.toContain(question.id);
   }
@@ -144,11 +144,11 @@ test("report labels follow actual encrypted question rounds and localize action 
   const stored = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(stored?.body).toEqual(source.body);
   const html = await f.reports.html(f.actor.ownerId, report.id);
-  expect(html).toContain("2차 질문 3번 답변");
+  expect(html).toContain("상담 전 확인 질문에 대한 답변");
   expect(html).toContain("합성 행동 todo (진행 전)");
   const pdf = await f.reports.pdf(f.actor.ownerId, report.id);
   const text = pdfText(await new Response(pdf.body).text());
-  expect(text).toContain("2차 질문 3번 답변");
+  expect(text).toContain("상담 전 확인 질문에 대한 답변");
   expect(text).toContain("합성 행동 todo (진행 전)");
   const manual = `사용자 편집본 todo · ${f.questions[0]?.id}`;
   const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
@@ -161,7 +161,7 @@ test("report labels follow actual encrypted question rounds and localize action 
   const generated = await f.reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: saved.revision,
   });
-  expect(generated.content).toContain("2차 질문 3번 답변");
+  expect(generated.content).toContain("상담 전 확인 질문에 대한 답변");
   expect(await f.reports.html(f.actor.ownerId, saved.id)).toContain(manual);
   const excluded = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: generated.revision,
@@ -169,7 +169,7 @@ test("report labels follow actual encrypted question rounds and localize action 
     maskIdentifiers: false,
     excludedFileIds: [selected.session.fileId],
   });
-  expect(excluded.content).toContain("2차 질문 3번 답변");
+  expect(excluded.content).toContain("상담 전 확인 질문에 대한 답변");
   expect(excluded.content).toContain("합성 행동 todo (진행 전)");
 });
 
@@ -181,8 +181,8 @@ test("historical body without display context hides internal answer and message 
   body.facts[0]?.references.push({ kind: "user_message", messageId, workspaceRevision: 1 });
   const original = structuredClone(body);
   const text = reportText(body, source.coverage);
-  expect(text).toContain("추가 질문에 대한 답변");
-  expect(text).toContain("추가 대화의 사용자 진술");
+  expect(text).toContain("상담 전 확인 질문에 대한 답변");
+  expect(text).toContain("추가 대화에서 의뢰인이 설명한 내용");
   expect(text).not.toContain("차 질문");
   expect(text).not.toContain(messageId);
   for (const question of f.questions) expect(text).not.toContain(question.id);
@@ -211,7 +211,9 @@ for (const condition of ["wrong_revision", "unknown_question", "duplicate_questi
     }
     const original = structuredClone(body);
     const text = reportText(body, source.coverage, display);
-    expect(text).toContain(`${body.facts[0]?.text}\n[사용자 진술 · 추가 질문에 대한 답변]`);
+    expect(text).toContain(
+      `${body.facts[0]?.text}\n[의뢰인이 설명한 내용 · 상담 전 확인 질문에 대한 답변]`,
+    );
     expect(text).not.toContain(first.questionId);
     expect(body).toEqual(original);
     expect(text).not.toContain("입력 버전");
