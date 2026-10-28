@@ -66,12 +66,12 @@ test("a short account is accepted and recent-story deletion requires explicit co
   const remove = page.locator(".sidebar-desktop .sidebar-story-delete").first();
   await expect(remove).toBeVisible();
   await remove.click();
-  const dialog = page.getByRole("dialog", { name: "사건을 삭제할까요?" });
+  const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
-  await dialog.getByLabel("확인하려면 DELETE를 입력하세요.").fill("DELETE");
+  await dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await expect(page).toHaveURL(/\/cases$/);
+  await expect(page).toHaveURL(/\/app$/);
   await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
 });
 
