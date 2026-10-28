@@ -155,7 +155,7 @@ export function Workspace({
     setReviewState((old) => ({ ...old, dirty }));
   }, []);
   const followingChat = useRef(true);
-  const workspaceRoot = useRef<HTMLDivElement>(null);
+  const chatPanel = useRef<HTMLElement>(null);
   const chatMessages = useRef<HTMLDivElement>(null);
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const latest = useRef(0);
@@ -350,29 +350,34 @@ export function Workspace({
     followReply();
   }, [latestMessageContent, tab, followReply]);
   useEffect(() => {
-    if (tab !== "chat") return;
-    const frame = workspaceRoot.current?.closest<HTMLElement>(".app-frame");
-    if (!frame) return;
+    if (tab !== "chat" || !view) return;
+    const panel = chatPanel.current;
+    if (!panel) return;
     let animation = 0;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      frame.style.setProperty(
-        "--chat-viewport-height",
-        `${(window.visualViewport?.height ?? window.innerHeight) / zoom}px`,
+      const top = panel.getBoundingClientRect().top + window.scrollY;
+      panel.style.setProperty(
+        "--chat-panel-height",
+        `${Math.max(160, ((window.visualViewport?.height ?? window.innerHeight) - top - 12) / zoom)}px`,
       );
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(followReply);
     };
     fit();
+    const navigation = panel.closest(".workspace")?.querySelector(".case-navigation");
+    const observer = new ResizeObserver(fit);
+    if (navigation) observer.observe(navigation);
     window.addEventListener("resize", fit);
     window.visualViewport?.addEventListener("resize", fit);
     return () => {
       cancelAnimationFrame(animation);
-      frame.style.removeProperty("--chat-viewport-height");
+      observer.disconnect();
+      panel.style.removeProperty("--chat-panel-height");
       window.removeEventListener("resize", fit);
       window.visualViewport?.removeEventListener("resize", fit);
     };
-  }, [tab, followReply]);
+  }, [tab, view, followReply]);
   useEffect(() => {
     const input = draftInput.current;
     if (!input) return;
@@ -867,7 +872,6 @@ export function Workspace({
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
     <div
-      ref={workspaceRoot}
       className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
     >
       {/* Keep the chooser's original node attached during temporary access checks. */}
@@ -1081,7 +1085,7 @@ export function Workspace({
             </section>
           )}
           <div className="workspace-grid">
-            <section className="workspace-main" aria-label={tabLabels[tab]}>
+            <section ref={chatPanel} className="workspace-main" aria-label={tabLabels[tab]}>
               {tab === "chat" && (
                 <>
                   {!!view.messages.length && (
@@ -1468,17 +1472,6 @@ export function Workspace({
                       {messageTooLong &&
                         " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
                     </p>
-                    <details className="workspace-chat-guide">
-                      <summary>대화·자료 안내</summary>
-                      <p className="workspace-chat-notice" id="workspace-chat-notice">
-                        사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료
-                        탭에서 확인해요.
-                        <br />
-                        BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
-                        <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게
-                        확인해 주세요.
-                      </p>
-                    </details>
                   </form>
                 </>
               )}
@@ -1833,6 +1826,19 @@ export function Workspace({
                 </>
               )}
             </section>
+            {tab === "chat" && (
+              <details className="workspace-chat-guide">
+                <summary>대화·자료 안내</summary>
+                <p className="workspace-chat-notice" id="workspace-chat-notice">
+                  사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료 탭에서
+                  확인해요.
+                  <br />
+                  BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
+                  <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게 확인해
+                  주세요.
+                </p>
+              </details>
+            )}
             <aside
               className="workspace-sidebar"
               aria-label="사건 요약 및 준비 현황"
