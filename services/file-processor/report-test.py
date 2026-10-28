@@ -15,6 +15,8 @@ from weasyprint.formatting_structure.boxes import TextBox
 
 root = Path("/report-fixture")
 source = (root / "report.html").read_text(encoding="utf-8")
+for revision in [3, 4]:
+    assert f'data-file-revision="{revision}"' in source
 output = root / "report.pdf"
 document = HTML(string=source, url_fetcher=resource).render()
 for page in document.pages:
@@ -23,8 +25,9 @@ for page in document.pages:
             assert box.position_x + box.width <= page.width - 55, (box.text, box.position_x, box.width, page.width)
 output.write_bytes(render(source))
 text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decode("utf-8")
-for phrase in ["사건 상담 준비", "촬영 날짜", "선택한 근거 사진", "자료 버전 3", "자료 버전 4", "합성 기록 25"]:
+for phrase in ["사건 상담 준비", "촬영 날짜", "선택한 근거 사진", "사진설명표식", "문서설명표식", "원문 대조 필요", "합성 기록 25"]:
     assert phrase in text, phrase
+assert "자료 버전 3" not in text and "자료 버전 4" not in text
 images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
 assert sum(" jpeg " in line for line in images.splitlines()) >= 2, images
 info = subprocess.check_output(["pdfinfo", str(output)]).decode("utf-8")

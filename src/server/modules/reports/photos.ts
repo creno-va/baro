@@ -120,6 +120,7 @@ export async function loadReportPhotos(
           .filter((fact) =>
             fact.references.some(
               (ref) =>
+                fact.attribution === "user_material" &&
                 ref.kind === "user_material" &&
                 ref.fileId === id &&
                 ref.fileRevision === selected.revision,
@@ -127,7 +128,7 @@ export async function loadReportPhotos(
           )
           .map(
             (fact) =>
-              `${fact.certainty === "uncertain" || fact.certainty === "conflicting" || fact.userEdited ? "확인 필요: " : "자료 내용: "}${fact.text}`,
+              `${fact.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : fact.certainty === "conflicting" ? "서로 다른 내용 확인 필요: " : fact.certainty === "uncertain" ? "확인 필요: " : "자료 내용: "}${fact.text}`,
           ),
       });
     } finally {

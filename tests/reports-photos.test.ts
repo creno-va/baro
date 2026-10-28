@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createReportHtml } from "../src/components/reports/document";
+import type { V2Fact } from "../src/contracts/v2";
 import { createV2Core, snapshotStatements } from "../src/server/db/v2-core";
 import { renderReportPdf } from "../src/server/modules/reports/pdf";
 import { createReportDependencies } from "../src/server/modules/reports/runtime";
@@ -91,6 +92,49 @@ async function photoFixture() {
   });
   return { ...f, reports, id, rendered, reads: () => reads };
 }
+
+test("photo captions retain manual correction attribution and never present AI organization as document text", async () => {
+  const f = await photoFixture();
+  const reference = {
+    kind: "user_material" as const,
+    fileId: f.id,
+    fileRevision: 2,
+    position: { kind: "image" as const, region: null },
+  };
+  for (const attribution of ["user_material", "ai_organization"] as const) {
+    const id = crypto.randomUUID();
+    const fact: V2Fact = {
+      id,
+      text:
+        attribution === "user_material" ? "직접 고친 합성 사진 설명" : "원문이 아닌 합성 AI 정리",
+      attribution,
+      certainty: "uncertain",
+      significance: "neutral",
+      references: [reference],
+      conflictingFactIds: [],
+      userEdited: attribution === "user_material",
+    };
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_facts(id,entity_id,workspace_id,summary_revision,encrypted_payload) VALUES(?,?,?,1,?)",
+      )
+      .run(id, id, f.workspaceId, await f.core.encrypt("v2_facts", id, f.actor.ownerId, 1, fact));
+  }
+  const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: draft.revision,
+    content: draft.content,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+    includedPhotoIds: [f.id],
+  });
+  const html = await f.reports.html(f.actor.ownerId, saved.id);
+  const caption = html.match(/<figcaption>([\s\S]*?)<\/figcaption>/)?.[1] ?? "";
+  expect(caption).toContain("직접 수정한 내용 (원문 대조 필요): 직접 고친 합성 사진 설명");
+  expect(caption).not.toContain("원문이 아닌 합성 AI 정리");
+  expect(html).toContain("원문이 아닌 합성 AI 정리");
+  f.db.close();
+});
 
 test("owned photo observations reach case report text; explicit selection reaches both HTML and PDF input with revision provenance", async () => {
   const f = await photoFixture(),
