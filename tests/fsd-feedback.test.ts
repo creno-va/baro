@@ -90,7 +90,7 @@ test("profile contact whitespace is normalized and invalid fields explain why no
   expect(writes).toHaveLength(1);
 });
 
-test("selected photo captions keep the exact related text escaped and disappear under masking", () => {
+test("selected photo captions stay escaped while text masking preserves explicit photos", () => {
   const report = {
     title: "합성 리포트",
     content: "사건 요약\n합성 내용",
@@ -102,10 +102,10 @@ test("selected photo captions keep the exact related text escaped and disappear 
     photos: [
       {
         id: "synthetic-photo",
-        name: "합성사진.png",
+        name: "합성사진-010-1234-5678.png",
         revision: 3,
         dataUrl: "data:image/png;base64,AA==",
-        notes: ["확인 필요: <script>합성 관찰</script>"],
+        notes: ["확인 필요: <script>합성 관찰</script> synthetic@example.com"],
       },
     ],
   };
@@ -113,7 +113,13 @@ test("selected photo captions keep the exact related text escaped and disappear 
   expect(markup).toContain("확인 필요: &lt;script&gt;합성 관찰&lt;/script&gt;");
   expect(markup).not.toContain("<script>");
   expect(markup).not.toContain("자료 버전 3");
-  expect(createReportMarkup({ ...report, maskIdentifiers: true })).not.toContain("data:image/png");
+  const masked = createReportMarkup({ ...report, maskIdentifiers: true });
+  expect(masked).toContain("data:image/png");
+  expect(masked).toContain("확인 필요: &lt;script&gt;합성 관찰&lt;/script&gt;");
+  expect(masked).not.toContain("<script>");
+  expect(masked).not.toContain("010-1234-5678");
+  expect(masked).not.toContain("synthetic@example.com");
+  expect(masked).toContain("사진 속 개인정보는 자동으로 가려지지 않습니다");
   expect(createReportMarkup({ ...report, excludedFileIds: ["synthetic-photo"] })).not.toContain(
     "data:image/png",
   );
