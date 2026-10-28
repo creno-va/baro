@@ -347,6 +347,7 @@ export async function runSample(
   scenario: Scenario,
   delayMs: number,
   shape: Shape,
+  failureContract: "atomic" | "per-original" = "atomic",
 ) {
   const f = await fixture(factory, { scenario, delayMs, shape });
   try {
@@ -388,13 +389,25 @@ export async function runSample(
       assert.ok(output);
       await verify(output);
       if (scenario === "timeout-terminal") {
-        assert.equal(output.legalSourceStatus, "unavailable");
-        assert.equal(output.outcomes[0]?.reason, "timeout");
-        assert.equal(output.chunks.length, 0);
+        if (failureContract === "per-original") {
+          assert.equal(output.legalSourceStatus, "verified");
+          assert.equal(output.outcomes[0]?.availability, "verified");
+          assert.equal(output.outcomes[0]?.reason, null);
+          assert.deepEqual(output.outcomes[0]?.sourceFailures, ["timeout"]);
+          assert.deepEqual(
+            output.chunks.map((c) => c.source.section),
+            ["제598조", "제603조"],
+          );
+        } else {
+          assert.equal(output.legalSourceStatus, "unavailable");
+          assert.equal(output.outcomes[0]?.reason, "timeout");
+          assert.equal(output.chunks.length, 0);
+        }
       } else assert.equal(output.legalSourceStatus, "verified");
     }
     return {
       scenario,
+      failureContract,
       delayMs,
       shape,
       wallMs,

@@ -15,6 +15,7 @@ on:
       - "src/components/workspace/PrecedentComparisonPanel.tsx"
       - "packages/api-client/src/precedents.ts"
       - "apps/mobile/src/features/precedents/**"
+      - "scripts/benchmarks/retrieval/**"
       - "tests/legal-*.test.ts"
       - "tests/precedent-*.test.ts"
       - "tests/browser/precedents*"
@@ -37,12 +38,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
       - run: bun ci
       - name: Offline source transport integrity API and client regressions
-        run: bun test tests/legal-reliability.test.ts tests/legal-retrieval-v2.test.ts tests/legal-source-integration.test.ts tests/legal-readiness-v2.test.ts tests/precedent-research-api.test.ts tests/precedent-research-contract.test.ts tests/precedent-comparison.test.ts tests/shared-account-precedents.test.ts tests/mobile-precedents.test.ts tests/mobile-precedents-http.test.ts tests/workspace-source-boundaries.test.ts tests/workspace-pipeline.test.ts
+        run: bun test tests/legal-retrieval-benchmark.test.ts tests/legal-reliability.test.ts tests/legal-retrieval-v2.test.ts tests/legal-source-integration.test.ts tests/legal-readiness-v2.test.ts tests/precedent-research-api.test.ts tests/precedent-research-contract.test.ts tests/precedent-comparison.test.ts tests/shared-account-precedents.test.ts tests/mobile-precedents.test.ts tests/mobile-precedents-http.test.ts tests/workspace-source-boundaries.test.ts tests/workspace-pipeline.test.ts
       - name: Install browser for synthetic UI only
         run: bunx playwright install --with-deps chromium
       - name: Synthetic precedent availability and expiry recovery UI

@@ -26,12 +26,32 @@ for (const variant of variants) {
       for (const scenario of scenarios) {
         const samples = [];
         for (let i = 0; i < repetitions; i++)
-          samples.push(await runSample(factory, scenario, delayMs, shape));
+          samples.push(
+            await runSample(
+              factory,
+              scenario,
+              delayMs,
+              shape,
+              variant === "product" ? "per-original" : "atomic",
+            ),
+          );
         const first = samples[0];
         assert.ok(first);
         const key = `${shape}:${delayMs}:${scenario}`;
         if (variant === "baseline") signatures.set(key, first.signature);
-        assert.equal(first.signature, signatures.get(key), `${variant} output equivalence ${key}`);
+        const intentionalPartial = variant === "product" && scenario === "timeout-terminal";
+        if (intentionalPartial)
+          assert.notEqual(
+            first.signature,
+            signatures.get(key),
+            "Product preserves verified originals; the pinned historical baseline discards them",
+          );
+        else
+          assert.equal(
+            first.signature,
+            signatures.get(key),
+            `${variant} output equivalence ${key}`,
+          );
         for (const s of samples) {
           assert.equal(s.signature, first.signature);
           for (const counter of [
@@ -49,6 +69,9 @@ for (const variant of variants) {
         const { signature: _signature, ...row } = first;
         rows.push({
           variant,
+          outputComparison: intentionalPartial
+            ? "intentional-per-original-contract"
+            : "equivalent-to-baseline",
           ...row,
           wallMs: median(samples.map((s) => s.wallMs)),
           waitWallMs: median(samples.map((s) => s.waitWallMs)),
