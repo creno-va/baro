@@ -195,7 +195,7 @@ test.each(["corrected", "still_wrong", "another_lookup", "audit_rejected"])(
 
 test("generation and audit hide supplier IDs while retaining server citation identities", async () => {
   const f = await fixture();
-  const model = workspaceModelInput(f.context) as WorkspaceContext;
+  const model = workspaceModelInput(f.context) as { citations: unknown[] };
   if (f.chunk.citation.kind !== "statute") throw new Error("Expected synthetic statute");
   const { officialId: _id, ...evidence } = f.chunk.citation;
   expect(model.citations).toEqual([evidence]);
