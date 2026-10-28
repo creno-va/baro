@@ -195,15 +195,37 @@ test.each(["corrected", "still_wrong", "another_lookup", "audit_rejected"])(
 
 test("generation and audit hide supplier IDs while retaining server citation identities", async () => {
   const f = await fixture();
-  const model = workspaceModelInput(f.context) as { citations: unknown[] };
+  f.context.history = [
+    {
+      schemaVersion: "2",
+      id: "synthetic_prior_assistant",
+      operationId: "synthetic_prior_operation",
+      workspaceRevision: 1,
+      createdAt: "2026-10-17T00:00:00.000Z",
+      role: "assistant",
+      safety: "validated",
+      text: "이전 합성 출처 확인 기록",
+      references: f.draft.references,
+      citations: [f.chunk.citation],
+      warnings: [],
+    },
+  ];
+  const original = structuredClone(f.context);
+  const model = workspaceModelInput(f.context) as {
+    citations: unknown[];
+    history: { citations: unknown[] }[];
+  };
   if (f.chunk.citation.kind !== "statute") throw new Error("Expected synthetic statute");
   const { officialId: _id, ...evidence } = f.chunk.citation;
   expect(model.citations).toEqual([evidence]);
+  expect(model.history[0]?.citations).toEqual([evidence]);
+  expect(JSON.stringify(model)).not.toContain('"officialId"');
   expect(workspaceModelInput({ context: f.context, draft: {} })).toMatchObject({
     context: { citations: [evidence] },
   });
   expect(f.context.citations).toEqual([f.chunk.citation]);
   expect(f.context.sourceRetrieval).toBeDefined();
+  expect(f.context).toEqual(original);
 });
 
 test.each([

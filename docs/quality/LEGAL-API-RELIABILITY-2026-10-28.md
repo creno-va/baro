@@ -76,7 +76,7 @@ main3f3b77d 실제 production 검증에서 조문 인용과 공식 링크는 맞
 [lsiSeq284415](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=284415)는 법률 제21454호이며,
 내부 officialId1706은 법률 번호가 아니다. 과거 잘못된 합성 대화와 실패 증거는 보존한다.
 
-생성·독립 검수에 전달하는 citation에서 officialId를 제외한다. 서버 원문·citation·binding과
+생성·독립 검수에 전달하는 현재·이전 대화의 citation에서 officialId를 제외한다. 서버 원문·citation·binding과
 재검증에는 기존 ID를 그대로 보존한다. 법률·명령·규칙 등의 공포 번호는 실제 인용하는
 sourceClaims의 동일 자료·UTF-16 범위 안에 같은 종류와 번호가 있을 때만 허용한다.
 조문 인용이 정확하거나 AI 검수가 통과했어도 근거 없는 번호는 게시하지 않는다.

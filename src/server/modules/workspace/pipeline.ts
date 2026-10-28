@@ -355,6 +355,7 @@ export function workspaceModelInput(input: unknown): unknown {
       const { officialId: _internalId, ...evidence } = citation;
       return evidence;
     });
+  if (Array.isArray(rest.history)) rest.history = rest.history.map(workspaceModelInput);
   if (rest.precedentComparison) {
     const context = rest as unknown as WorkspaceContext;
     return {
