@@ -12,7 +12,7 @@ import {
 import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
 
 for (const variant of variants) {
-  test(`${variant}: actual SQLite/hash/date output equals pinned retrieval`, async () => {
+  test(`${variant}: actual SQLite/hash/date output follows the explicit historical or per-original contract`, async () => {
     const baseline = await loadFactory("baseline"),
       factory = await loadFactory(variant);
     for (const scenario of [
@@ -27,9 +27,22 @@ for (const variant of variants) {
       "duplicate-rejected",
     ] as const) {
       const before = await runSample(baseline, scenario, 0, "article");
-      const after = await runSample(factory, scenario, 0, "article");
-      expect(after.signature).toBe(before.signature);
-      expect(after.upstreamResponseBytes).toBeLessThanOrEqual(before.upstreamResponseBytes);
+      const after = await runSample(
+        factory,
+        scenario,
+        0,
+        "article",
+        variant === "product" ? "per-original" : "atomic",
+      );
+      if (variant === "product" && scenario === "timeout-terminal") {
+        // The exact surviving sources/reason/hash/date are checked by runSample.
+        expect(after.signature).not.toBe(before.signature);
+        expect(after.calls).toBe(6);
+        expect(before.calls).toBe(5);
+      } else {
+        expect(after.signature).toBe(before.signature);
+        expect(after.upstreamResponseBytes).toBeLessThanOrEqual(before.upstreamResponseBytes);
+      }
       expect(after.peakInFlight).toBeLessThanOrEqual(variant === "concurrency-2" ? 2 : 1);
       if (variant === "product" && scenario === "cold-overlap") {
         expect(before.calls).toBe(5);
@@ -224,11 +237,14 @@ test("expired source plus terminal upstream failure cannot return stale original
     config.scenario = "timeout-terminal";
     f.start();
     const failed = await f.service.retrieve(f.input(), f.access);
-    expect(failed.chunks).toEqual([]);
-    expect(failed.outcomes[0]?.reason).toBe("timeout");
-    expect(f.metrics().calls).toBe(5);
+    await verify(failed);
+    expect(failed.chunks.map((c) => c.source.section)).toEqual(["제598조", "제603조"]);
+    expect(failed.chunks.every((c) => c.source.verifiedAt === f.guard.now)).toBe(true);
+    expect(failed.chunks.some((c) => c.source.section === "제600조")).toBe(false);
+    expect(failed.outcomes[0]?.sourceFailures).toEqual(["timeout"]);
+    expect(f.metrics().calls).toBe(6);
     expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
-      n: 3,
+      n: 5,
     });
   } finally {
     f.db.close();
@@ -241,12 +257,13 @@ test("request reservation denial preserves budget failure without another transp
     f.access.reserveRequest = async () => ++attempts <= 2;
     f.start();
     const failed = await f.service.retrieve(f.input(), f.access);
-    expect(failed.chunks).toEqual([]);
-    expect(failed.outcomes[0]?.reason).toBe("budget_exhausted");
+    await verify(failed);
+    expect(failed.chunks.map((c) => c.source.section)).toEqual(["제598조"]);
+    expect(failed.outcomes[0]?.sourceFailures).toEqual(["budget_exhausted"]);
     expect(f.metrics().calls).toBe(2);
-    expect(attempts).toBe(3);
+    expect(attempts).toBe(4);
     expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
-      n: 0,
+      n: 1,
     });
   } finally {
     f.db.close();
