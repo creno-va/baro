@@ -46,6 +46,7 @@ export function CaseInput({
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [lengthError, setLengthError] = useState("");
+  const narrativeRef = useRef<HTMLTextAreaElement>(null);
   const pending = useRef(false);
   const identity = useRef<string | undefined>(undefined);
   const sessionRequest = useRef(0);
@@ -227,6 +228,7 @@ export function CaseInput({
               </label>
               <div className="conversation-composer" aria-busy={busy || loading}>
                 <Textarea
+                  ref={narrativeRef}
                   id="narrative"
                   value={loading || sessionError ? "" : narrative}
                   onChange={(event) => setNarrative(event.target.value)}
@@ -346,24 +348,17 @@ export function CaseInput({
         </footer>
       </section>
       <Dialog
+        returnFocusRef={narrativeRef}
         open={Boolean(lengthError)}
         onOpenChange={(open) => {
           if (!open) {
             setLengthError("");
-            document.getElementById("narrative")?.focus();
           }
         }}
         title={count > 5000 ? "이야기를 조금 줄여주세요" : "이야기를 조금만 더 적어주세요"}
         description={lengthError}
       >
-        <Button
-          onClick={() => {
-            setLengthError("");
-            document.getElementById("narrative")?.focus();
-          }}
-        >
-          계속 작성하기
-        </Button>
+        <Button onClick={() => setLengthError("")}>계속 작성하기</Button>
       </Dialog>
     </>
   );
