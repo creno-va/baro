@@ -238,23 +238,29 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
   await page.goto("/cases");
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "사건을 불러오지 못했어요" }),
+  ).toBeVisible();
   fail = false;
-  await page.getByRole("button", { name: "다시 시도" }).click();
-  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await page.getByRole("button", { name: "다시 불러오기" }).click();
+  await expect(page.locator(".sidebar-desktop .sidebar-empty")).toContainText("나누던 이야기");
   present = true;
   await page.reload();
-  await expect(page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+  await expect(
+    page.locator(".sidebar-desktop").getByRole("link", { name: /금전 대여 사건/ }),
+  ).toBeVisible();
   gate = "UNAUTHENTICATED";
   await page.reload();
-  await expect(page.getByRole("link", { name: "로그인하기", exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
   gate = "CONSENT_REQUIRED";
   await page.reload();
-  await expect(page.getByRole("link", { name: "동의 확인" })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
   gate = null;
   await page.goto("/login");
   await page.goBack();
-  await expect(page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+  await expect(
+    page.locator(".sidebar-desktop").getByRole("link", { name: /금전 대여 사건/ }),
+  ).toBeVisible();
 });
 test("real signed session submits admission into SQL and reloads owner-scoped list at 320px/200%", async ({
   page,
@@ -314,8 +320,10 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
     });
     expect(admitted.status).toBe(201);
     await page.reload();
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
     await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
     await page.reload();
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
     await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
     expect(
       await page.evaluate(

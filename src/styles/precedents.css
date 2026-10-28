@@ -316,3 +316,116 @@
     display: none;
   }
 }
+
+.comparison-score {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 24px 0 12px;
+}
+.comparison-score > strong {
+  color: #1855b3;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -2px;
+}
+.comparison-score > strong span {
+  font-size: 24px;
+}
+.comparison-score h4,
+.comparison-score p {
+  margin: 4px 0;
+}
+.comparison-score p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.comparison-result progress {
+  width: 100%;
+  height: 8px;
+  accent-color: #2563eb;
+}
+.comparison-indicators {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.precedent-workspace .comparison-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  text-align: left;
+  font-size: 13px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.comparison-indicator strong {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.precedent-workspace .comparison-indicator--yes {
+  border-color: #b4d0fc;
+  background: #eff6ff;
+}
+.comparison-indicator--yes strong {
+  color: #1855b3;
+}
+.comparison-excerpt {
+  margin-top: 24px;
+}
+.precedent-workspace .comparison-highlight {
+  display: inline;
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 3px;
+  color: #174b9b;
+  background: #dbeafe;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-decoration-break: clone;
+}
+.precedent-workspace .comparison-highlight:hover {
+  background: #bfdbfe;
+}
+.comparison-reason {
+  margin-block: 20px;
+}
+.comparison-reason h5 {
+  margin: 16px 0 8px;
+}
+.comparison-reason blockquote {
+  margin: 8px 0;
+  padding: 12px;
+  border-left: 2px solid var(--border);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.comparison-reason mark {
+  background: transparent;
+  color: inherit;
+}
+.comparison-reason .comparison-match {
+  background: #dbeafe;
+  color: #174b9b;
+}
+@media (max-width: 480px) {
+  .comparison-indicators {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .comparison-score {
+    gap: 12px;
+  }
+}

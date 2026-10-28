@@ -27,12 +27,14 @@ export function CaseNavigation({
   title,
   active,
   fileCount,
+  subjectContext,
   action,
 }: {
   caseId: string;
   title: string;
   active: (typeof menus)[number]["id"];
   fileCount?: number | undefined;
+  subjectContext?: "individual" | "company" | undefined;
   action?: ReactNode;
 }) {
   const base = `/cases/${encodeURIComponent(caseId)}`;
@@ -52,13 +54,14 @@ export function CaseNavigation({
     revealCurrent();
     const observer = new ResizeObserver(revealCurrent);
     observer.observe(nav);
+    for (const link of nav.querySelectorAll("a")) observer.observe(link);
     void document.fonts.ready.then(revealCurrent);
     return () => observer.disconnect();
   }, []);
   return (
     <div className="case-navigation">
-      <a className="workspace-back" href="/cases">
-        <ArrowLeft size={16} aria-hidden="true" /> 내 사건
+      <a className="workspace-back" href="/app">
+        <ArrowLeft size={16} aria-hidden="true" /> 새 사건 입력
       </a>
       <header className="workspace-header">
         <h1 title={title}>{title}</h1>
@@ -79,6 +82,13 @@ export function CaseNavigation({
           </details>
         )}
       </header>
+      {subjectContext && (
+        <p className="case-subject-context">
+          {subjectContext === "company"
+            ? "기업 사건 · 사업 관계와 담당 역할을 중심으로 정리"
+            : "개인 사건 · 나와 상대방 사이의 일을 중심으로 정리"}
+        </p>
+      )}
       <nav
         ref={navigation}
         className="workspace-tabs"

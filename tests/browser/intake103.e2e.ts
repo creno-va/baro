@@ -237,7 +237,7 @@ for (const kind of ["list", "workspace"] as const) {
     await recoveryWorkspace(page);
     if (kind === "list") {
       await page.goto("/cases");
-      await expect(page.locator(".intake-case-card")).toHaveCount(1);
+      await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
     }
     await page.evaluate(async (kind) => {
       const modulePath = "/src/client/api/index.ts";
@@ -252,7 +252,7 @@ for (const kind of ["list", "workspace"] as const) {
       };
       (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace = state;
       // AppNavigation also reads cases/session; schedule only the screen under test.
-      const owner = kind === "list" ? "CaseList.tsx" : "Workspace.tsx";
+      const owner = kind === "list" ? "app-navigation.tsx" : "Workspace.tsx";
       const session = api.session.get.bind(api.session);
       api.session.get = async () => {
         const owned = new Error().stack?.includes(owner);
@@ -279,7 +279,8 @@ for (const kind of ["list", "workspace"] as const) {
           return value;
         }
         if (ordinal === 2) {
-          state.holdingSession = true;
+          state.holdingSession = kind !== "list";
+          if (kind === "list") state.sessionHeld = true;
           return update(value);
         }
         return value;
@@ -322,7 +323,10 @@ for (const kind of ["list", "workspace"] as const) {
       (window as unknown as { customerReadRace: CustomerReadRace }).customerReadRace.releaseNew(),
     );
     await expect(
-      page.getByRole("main").getByText("최신 조회 복구 결과", { exact: true }),
+      (kind === "list" ? page.locator(".sidebar-desktop") : page.getByRole("main")).getByText(
+        "최신 조회 복구 결과",
+        { exact: true },
+      ),
     ).toBeVisible();
   });
 }
@@ -733,9 +737,8 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
     if (new URL(request.url()).origin !== localOrigin) external.push(request.url());
   });
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "아직 정리한 사건이 없어요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
-  await page.getByRole("link", { name: "첫 사건 만들기" }).click();
   await expect(page.locator(".conversation-home")).toHaveCSS("view-transition-name", "intake-page");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await narrative.fill(
@@ -769,7 +772,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await openAnswerTools(page);
   const resumeLater = page.getByRole("button", { name: "나중에 이어하기" });
   await resumeLater.click();
-  const exitDialog = page.getByRole("dialog", { name: "내 사건에서 다시 이어갈 수 있어요" });
+  const exitDialog = page.getByRole("dialog", { name: "사이드바에서 다시 이어갈 수 있어요" });
   await expect(exitDialog).toBeVisible();
   await expect(exitDialog).toHaveJSProperty("open", true);
   await expect(exitDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
@@ -781,8 +784,13 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(exitDialog).toBeHidden();
   await expect(resumeLater).toBeFocused();
   await resumeLater.press("Enter");
-  await page.getByRole("link", { name: "목록으로 이동" }).click();
-  await page.getByRole("link").filter({ hasText: "이어 답하기" }).click();
+  await page.getByRole("link", { name: "입력 화면으로 이동" }).click();
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page
+    .getByRole("dialog", { name: "메뉴", exact: true })
+    .locator(".sidebar-story")
+    .first()
+    .click();
   await expect(
     page.getByRole("heading", {
       name: "얼마의 금액이 관련되어 있나요?",
@@ -862,7 +870,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
   await page.goto("/cases");
-  await expect(page.getByText("정리 진행 중", { exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
   expect(external).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -895,7 +903,7 @@ test("storage failure retains form input and retry completes exactly one creatio
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
   await expect(page).toHaveURL(/\/intake/);
   await page.goto("/cases");
-  await expect(page.locator(".intake-case-card")).toHaveCount(1);
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
 });
 test("stale summary cannot overwrite newer content; keyboard and 200 percent layout work", async ({
   page,
@@ -971,7 +979,7 @@ test("a new form with identical input creates a new case after the previous requ
   }
   expect(ids[0]).not.toBe(ids[1]);
   await page.goto("/cases");
-  await expect(page.locator(".intake-case-card")).toHaveCount(2);
+  await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(2);
 });
 
 test("new follow-up generation retains the submitted answer and polls past the stale question URL", async ({

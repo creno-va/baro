@@ -3,19 +3,16 @@ import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentComparisonApi } from "../../client/api/precedent-comparison";
 import { workspaceProgressText } from "../../client/api/workspace-progress";
 import { opaqueIdSchema } from "../../contracts";
-import {
-  PRECEDENT_COMPARISON_CRITERIA,
-  type V2PrecedentComparisonState,
-} from "../../contracts/v2/precedent-comparison";
+import type { V2PrecedentComparisonState } from "../../contracts/v2/precedent-comparison";
 import type {
   V2PrecedentResearchContext,
   V2PrecedentSearchResponse,
 } from "../../contracts/v2/precedent-research";
 import type { useCustomerAccess } from "../intake/useCustomerAccess";
 import { Button } from "../ui/button";
+import { ComparisonResult } from "./ComparisonResult";
 
 const terminal = new Set(["completed", "failed", "cancelled", "superseded"]);
-const labels = { yes: "Y · 일치", no: "N · 다름", unknown: "확인 불가" };
 export function PrecedentComparisonPanel({
   caseId,
   context,
@@ -238,16 +235,12 @@ export function PrecedentComparisonPanel({
       )}
       {comparison && (
         <>
-          <h4>확인한 항목 일치율 {comparison.percentage}%</h4>
-          <progress value={comparison.percentage} max={100} aria-label="확인한 항목 일치율" />
-          <p>
-            전체 8개 중 {comparison.matchedCount}개 일치 · {comparison.knownCount}개 비교 가능 ·{" "}
-            {8 - comparison.knownCount}개 확인 불가
-          </p>
-          <p className="precedent-scope">
-            이 비율은 사실 항목의 일치 정도이며 판결 결과나 승소 가능성을 뜻하지 않아요. 포함된 사건
-            사실과 판결문 발췌 범위만 비교했어요.
-          </p>
+          {selected && selected.citation.id !== comparison.source.citation.id && (
+            <p className="precedent-notice" role="status">
+              아래는 이전에 비교한 판례의 결과예요. 선택한 판례는 비교 버튼을 눌러 확인해 주세요.
+            </p>
+          )}
+          <ComparisonResult key={state.job.id} comparison={comparison} />
           {state.stale && (
             <p role="status" className="precedent-notice">
               비교 이후 사건이나 확인한 원문 상태가 바뀌었어요. 최신 요약과 판례로 다시 비교해
@@ -266,34 +259,6 @@ export function PrecedentComparisonPanel({
           <p className="precedent-metadata">
             {new Date(comparison.checkedAt).toLocaleString("ko-KR")}에 비교
           </p>
-          <ol aria-label="판례 비교 항목">
-            {comparison.metrics.map((metric) => (
-              <li key={metric.criterion}>
-                <details className="precedent-card">
-                  <summary>
-                    {PRECEDENT_COMPARISON_CRITERIA[metric.criterion]} · {labels[metric.verdict]}
-                  </summary>
-                  <p>{metric.explanation}</p>
-                  {!!metric.caseEvidence.length && (
-                    <div>
-                      <strong>내 사건 근거</strong>
-                      {metric.caseEvidence.map((e) => (
-                        <blockquote key={`${e.factId}:${e.text}`}>{e.text}</blockquote>
-                      ))}
-                    </div>
-                  )}
-                  {!!metric.precedentEvidence.length && (
-                    <div>
-                      <strong>판례 원문 근거</strong>
-                      {metric.precedentEvidence.map((e) => (
-                        <blockquote key={`${e.startUtf16}:${e.endUtf16}`}>{e.text}</blockquote>
-                      ))}
-                    </div>
-                  )}
-                </details>
-              </li>
-            ))}
-          </ol>
         </>
       )}
     </section>

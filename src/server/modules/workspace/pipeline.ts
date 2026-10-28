@@ -55,6 +55,7 @@ import { normalizeIntakeQuestion } from "./questions";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
+  subjectContext?: "individual" | "company";
   /** Server clock only; never derived from user text or persisted event timestamps. */
   calendar?: { localDate: string; timeZone: "Asia/Seoul" };
   intake: V2Intake;

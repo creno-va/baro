@@ -224,17 +224,17 @@ test("review, masking, exclusions, PDF-only downloads and persistent cascading d
   }
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "설정과 사용량" })).toBeVisible();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "보관한 사건" })).toHaveCount(0);
+  // The case-management surface owns deletion; settings only manages the account.
+  await page.goto("/cases/case-demo/delete");
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "합성 대여금 사건" })).toBeVisible();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
-  await page.getByRole("button", { name: "삭제 요청 확인" }).click();
-  await expect(page.locator(".settings-success")).toContainText("사건 삭제를 접수");
+  await page.goto("/cases/case-demo/delete");
+  await page.getByRole("textbox", { name: "삭제하려면 DELETE를 입력해 주세요." }).fill("DELETE");
+  await page.getByRole("dialog").getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(page).toHaveURL("/settings");
   await page.reload();
-  await expect(page.getByText("보관한 사건이 없어요.")).toBeVisible();
   const state = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}"),
   );
@@ -274,14 +274,16 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   expect(
     (await new AxeBuilder({ page }).include(".account-settings").analyze()).violations,
   ).toEqual([]);
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   expect((await new AxeBuilder({ page }).include(".report-modal").analyze()).violations).toEqual(
     [],
   );
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+  ).toBeFocused();
   await page.goto("/cases/case-demo/reports");
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();

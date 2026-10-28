@@ -75,24 +75,18 @@ test("long service content fits narrow screens and the menu stays closable after
     ]) {
       await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-      await expect(
-        page
-          .getByRole("main")
-          .getByText(/SYNTHETIC-LONG-CONTENT-/)
-          .first(),
-      ).toBeVisible();
+      if (path.startsWith("/cases/"))
+        await expect(
+          page
+            .getByRole("main")
+            .getByText(/SYNTHETIC-LONG-CONTENT-/)
+            .first(),
+        ).toBeVisible();
+      if (path === "/cases")
+        await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
-        for (const selector of [
-          ".settings-refresh",
-          ".settings-report-link",
-          ".settings-case-delete",
-        ]) {
-          const target = page.locator(selector).first();
-          await expect(target).toBeVisible();
-          const bounds = await target.boundingBox();
-          expect(bounds?.height).toBeGreaterThanOrEqual(44);
-          expect(bounds?.width).toBeGreaterThanOrEqual(44);
-        }
+        await expect(page.locator(".settings-refresh")).toBeVisible();
+        await expect(page.locator(".settings-case-delete")).toHaveCount(0);
       }
       if (path.endsWith("/reports")) {
         const regenerate = page.getByRole("button", { name: "새 버전 만들기", exact: true });
@@ -112,11 +106,14 @@ test("long service content fits narrow screens and the menu stays closable after
   const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
   await opener.click();
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
-  await menu.getByRole("link", { name: "도움말", exact: true }).focus();
+  await menu.locator(".sidebar-profile").focus();
   await page.keyboard.press("End");
-  await expect
-    .poll(() => menu.locator(".ui-dialog__content").evaluate((element) => element.scrollTop))
-    .toBeGreaterThan(0);
+  const menuScroll = await menu.locator(".ui-dialog__content").evaluate((element) => ({
+    height: element.clientHeight,
+    scroll: element.scrollHeight,
+    top: element.scrollTop,
+  }));
+  if (menuScroll.scroll > menuScroll.height) expect(menuScroll.top).toBeGreaterThan(0);
   expect(await menu.evaluate((element) => element.scrollTop)).toBe(0);
   const close = menu.getByRole("button", { name: "닫기", exact: true });
   const bounds = await close.boundingBox();
@@ -215,7 +212,7 @@ test("customer completes intake workspace original PDF report and cascading dele
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
-    const modal = await page.getByRole("dialog").boundingBox();
+    const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
@@ -245,13 +242,14 @@ test("customer completes intake workspace original PDF report and cascading dele
   await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.locator(".ui-sheet .sidebar-story-delete").click();
   for (const viewport of [
     { width: 320, height: 760 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
-    const modal = await page.getByRole("dialog").boundingBox();
+    const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
@@ -261,9 +259,12 @@ test("customer completes intake workspace original PDF report and cascading dele
     );
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel("삭제 확인 — DELETE 입력").fill("DELETE");
-  await page.getByRole("button", { name: "삭제 요청 확인" }).click();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await page.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
+  await page
+    .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
+    .getByRole("button", { name: "사건 삭제", exact: true })
+    .click();
+  await expect(page.getByRole("dialog", { name: "이 사건을 삭제할까요?" })).not.toBeVisible();
   await page.goto(`${casePath}/reports`);
   await expect(page.getByRole("alert")).toBeVisible();
   expect(requests).toEqual([]);

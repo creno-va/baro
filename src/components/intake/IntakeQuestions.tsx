@@ -790,11 +790,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   <Dialog
                     open={exit}
                     onOpenChange={setExit}
-                    title="내 사건에서 다시 이어갈 수 있어요"
+                    title="사이드바에서 다시 이어갈 수 있어요"
                     description="수정 중인 답변은 저장한 뒤 이동해 주세요."
                   >
                     <div className="intake-actions">
-                      <ButtonLink href="/cases">목록으로 이동</ButtonLink>
+                      <ButtonLink href="/app">입력 화면으로 이동</ButtonLink>
                       <Button variant="outline" onClick={() => setExit(false)}>
                         계속 답하기
                       </Button>

@@ -257,7 +257,8 @@ test("fact sources identify the referenced material and page", async ({ page }) 
   });
   await page.goto(base);
   await page.getByText("사건 요약과 준비 현황", { exact: true }).click();
-  const link = page.locator(".workspace-fact-source").getByRole("link");
+  await page.locator(".fact-answer__sources > summary").click();
+  const link = page.locator(".fact-answer__sources").getByRole("link");
   await expect(link).toHaveAttribute("href", `${base}/files?file=${files[1].id}`);
   await expect(link).toContainText("7쪽");
 });

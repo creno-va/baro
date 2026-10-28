@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   Clock3,
-  FileText,
   FolderOpen,
   HardDrive,
   HelpCircle,
@@ -13,11 +12,9 @@ import {
   Mic,
   RefreshCw,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
-import type { CaseView } from "../client/api/types";
 import { accountDeleted } from "../server/modules/analytics/browser";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
 import { LoadingContent, Spinner } from "./ui/loading";
@@ -30,27 +27,23 @@ const isSuperseded = (error: unknown) =>
 type Access = Awaited<ReturnType<typeof api.account.deletionAccess>>;
 export function AccountSettings() {
   const [usage, setUsage] = useState<Awaited<ReturnType<typeof api.account.usage>> | null>(null);
-  const [cases, setCases] = useState<CaseView[]>([]);
   const [access, setAccess] = useState<Access | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [target, setTarget] = useState<CaseView | "account" | null>(null);
+  const [target, setTarget] = useState<"account" | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [deleted, setDeleted] = useState(false);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const owner = useRef<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [accountType, setAccountType] = useState<"customer" | "lawyer" | null>(null);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     lock.current = false;
     owner.current = null;
     setUsage(null);
-    setAccountType(null);
-    setCases([]);
     setAccess(null);
     setReady(false);
     setTarget(null);
@@ -97,12 +90,7 @@ export function AccountSettings() {
       const session = await api.session.get();
       if (sequence !== loadSequence.current) return;
       if (!session.user) throw new Error("로그인 후 설정을 다시 확인해 주세요.");
-      setAccountType(session.user.accountType);
-      const results = await Promise.allSettled([
-        api.account.usage(),
-        session.user.accountType === "customer" ? api.cases.list() : Promise.resolve([]),
-        api.account.deletionAccess(),
-      ]);
+      const results = await Promise.allSettled([api.account.usage(), api.account.deletionAccess()]);
       if (sequence !== loadSequence.current) return;
       await checkOwner();
       if (sequence !== loadSequence.current) return;
@@ -112,13 +100,8 @@ export function AccountSettings() {
         setUsage(null);
         problems.push("사용량을 확인하지 못했어요.");
       }
-      if (results[1].status === "fulfilled") setCases(results[1].value);
-      else {
-        setCases([]);
-        problems.push("사건 목록을 확인하지 못했어요.");
-      }
-      if (results[2].status === "fulfilled") {
-        const value = results[2].value;
+      if (results[1].status === "fulfilled") {
+        const value = results[1].value;
         if (value.ownerTag !== owner.current) {
           throw new Error("계정이 변경됐어요. 설정을 다시 불러와 주세요.");
         }
@@ -242,30 +225,12 @@ export function AccountSettings() {
         throw Object.assign(new Error("삭제 전 같은 계정으로 다시 인증해 주세요."), {
           code: "REAUTHENTICATION_REQUIRED",
         });
-      const sequence = loadSequence.current;
       if (target === "account") {
         await api.account.deleteAccount(confirmation);
         sessionStorage.removeItem(markerKey);
         setDeleted(true);
         setTarget(null);
         await accountDeleted().catch(() => false);
-      } else {
-        await api.account.deleteCase(target.id, confirmation, target.schemaVersion ?? "2");
-        await verifyOwner();
-        if (sequence !== loadSequence.current) return;
-        setCases(cases.filter((item) => item.id !== target.id));
-        setTarget(null);
-        setNotice(
-          "사건 삭제를 접수하고 접근을 차단했어요. 원격 자료 정리는 별도 절차에 따라 진행돼요.",
-        );
-        try {
-          const refreshed = await api.account.usage();
-          await verifyOwner();
-          if (sequence === loadSequence.current) setUsage(refreshed);
-        } catch {
-          setUsage(null);
-          setError("삭제는 접수했지만 사용량을 다시 확인하지 못했어요. ‘다시 확인’을 눌러 주세요.");
-        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "삭제를 확인하지 못했어요. 다시 확인해 주세요.");
@@ -288,7 +253,7 @@ export function AccountSettings() {
       setBusy("");
     }
   }
-  const open = (value: CaseView | "account") => {
+  const open = (value: "account") => {
     setTarget(value);
     setConfirmation("");
     setError("");
@@ -319,7 +284,7 @@ export function AccountSettings() {
         <div>
           <span className="settings-eyebrow">내 계정</span>
           <h1>설정과 사용량</h1>
-          <p>나의 이용 현황과 보관한 이야기를 한곳에서 관리해요.</p>
+          <p>이용 현황과 계정 정보를 관리해요.</p>
         </div>
         <button
           className="settings-refresh"
@@ -333,7 +298,6 @@ export function AccountSettings() {
       </header>
       <nav className="settings-jump" aria-label="설정 바로가기">
         <a href="#settings-usage-title">사용량</a>
-        {accountType === "customer" && <a href="#settings-cases-title">보관한 사건</a>}
         <a href="#settings-help-title">도움말과 정책</a>
         <a href="#settings-danger-title">계정 관리</a>
       </nav>
@@ -379,6 +343,7 @@ export function AccountSettings() {
                   "계정 저장 공간",
                   { used: usage.storageBytes.used / 1e9, limit: usage.storageBytes.limit / 1e9 },
                   "GB",
+                  FolderOpen,
                   HardDrive,
                 ],
               ] as const
@@ -450,73 +415,6 @@ export function AccountSettings() {
         </details>
       </section>
       <div className="settings-details-grid">
-        {accountType === "customer" && (
-          <section className="settings-card settings-cases" aria-labelledby="settings-cases-title">
-            <div className="settings-section-heading">
-              <span className="settings-section-icon">
-                <FolderOpen size={23} aria-hidden="true" />
-              </span>
-              <div>
-                <h2 id="settings-cases-title">보관한 사건</h2>
-                <p>나의 이야기를 확인하고 관리해요.</p>
-              </div>
-              {!checking && <span className="settings-count">{cases.length}</span>}
-            </div>
-            <div className="settings-case-list">
-              {!busy && !checking && cases.length === 0 && (
-                <div className="settings-empty">
-                  <FolderOpen size={30} aria-hidden="true" />
-                  <p>보관한 사건이 없어요.</p>
-                  <a className="settings-text-link" href="/cases/new">
-                    새 사건 만들기 <ArrowRight size={16} aria-hidden="true" />
-                  </a>
-                </div>
-              )}
-              {!checking &&
-                cases.map((item) => (
-                  <div className="settings-case" key={item.id}>
-                    <span className="settings-case-icon">
-                      <FileText size={20} aria-hidden="true" />
-                    </span>
-                    <div className="settings-case-info">
-                      <a
-                        className="settings-case-title"
-                        href={`/cases/${encodeURIComponent(item.id)}`}
-                      >
-                        {item.title}
-                      </a>
-                      <p className="settings-muted">
-                        {new Date(item.updatedAt).toLocaleDateString("ko-KR")} ·{" "}
-                        {item.schemaVersion === "1" ? "기존 사건" : "사건 정리"}
-                      </p>
-                      {item.schemaVersion !== "1" && (
-                        <a
-                          className="settings-report-link"
-                          href={`/cases/${encodeURIComponent(item.id)}/reports`}
-                        >
-                          리포트 확인 <ChevronRight size={14} aria-hidden="true" />
-                        </a>
-                      )}
-                    </div>
-                    <button
-                      className="settings-case-delete"
-                      type="button"
-                      disabled={Boolean(busy) || checking}
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        open(item);
-                      }}
-                    >
-                      <Trash2 size={15} aria-hidden="true" /> 사건 삭제
-                    </button>
-                  </div>
-                ))}
-            </div>
-            <p className="settings-case-note">
-              삭제하기 전에 필요한 PDF와 자료를 다운로드하세요. 삭제 후 되돌릴 수 없어요.
-            </p>
-          </section>
-        )}
         <section className="settings-card settings-help" aria-labelledby="settings-help-title">
           <div className="settings-section-heading">
             <span className="settings-section-icon settings-section-icon-neutral">
@@ -616,21 +514,15 @@ export function AccountSettings() {
       </section>
       {target && (
         <ConfirmDialog
-          title={
-            target === "account"
-              ? "계정과 모든 사건을 삭제할까요?"
-              : `‘${target.title}’ 사건을 삭제할까요?`
-          }
+          title="계정과 모든 사건을 삭제할까요?"
           busy={Boolean(busy)}
           onCancel={() => {
             if (!busy) setTarget(null);
           }}
         >
           <p>
-            {target === "account"
-              ? "계정의 사건·자료·리포트·프로필 접근을 차단하고 세션을 종료해요."
-              : "이 사건의 대화·자료·리포트 접근을 차단해요."}{" "}
-            삭제를 접수한 뒤 원격 자료 정리가 진행돼요.
+            계정의 사건·자료·리포트·프로필 접근을 차단하고 세션을 종료해요. 삭제를 접수한 뒤 원격
+            자료 정리가 진행돼요.
           </p>
           <label htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</label>
           <input

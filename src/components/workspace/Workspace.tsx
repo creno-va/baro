@@ -27,7 +27,7 @@ import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
-import { FactQuestionContext } from "../intake/FactQuestionContext";
+import { FactAnswer } from "../intake/FactAnswer";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -880,6 +880,7 @@ export function Workspace({
           (ready ? view?.case.title : null) ??
           (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
         }
+        subjectContext={ready ? view?.case.subjectContext : undefined}
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
         action={
@@ -902,7 +903,7 @@ export function Workspace({
         <CaseDeleteDialog
           item={view.case}
           onClose={() => setDeletingCase(false)}
-          onDeleted={() => window.location.replace("/cases")}
+          onDeleted={() => window.location.replace("/app")}
         />
       )}
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
@@ -1853,51 +1854,12 @@ export function Workspace({
                         <ul className="workspace-facts">
                           {view.facts.map((fact) => (
                             <li key={fact.id}>
-                              <FactQuestionContext
-                                references={fact.references}
+                              <FactAnswer
+                                fact={fact}
                                 context={view.case.intakeQuestions}
-                                className="workspace-fact-source"
+                                base={base}
+                                files={view.files}
                               />
-                              <p>{fact.text}</p>
-                              <small>
-                                {fact.attribution === "user_statement"
-                                  ? "사용자 진술"
-                                  : fact.attribution === "official_source"
-                                    ? "공식 자료"
-                                    : "자료에서 추출"}{" "}
-                                ·{" "}
-                                {fact.certainty === "uncertain"
-                                  ? "불확실"
-                                  : fact.certainty === "observed"
-                                    ? "자료 내용 확인됨 · 사실 여부는 별도 확인 필요"
-                                    : "보고된 사실"}
-                                {fact.significance === "unfavorable" ? " · 불리한 사실" : ""}
-                                {fact.conflictingFactIds.length
-                                  ? " · 서로 다른 진술 확인 필요"
-                                  : ""}
-                              </small>
-                              {fact.references.map((ref) => (
-                                <span key={JSON.stringify(ref)} className="workspace-fact-source">
-                                  {ref.kind === "user_material" ? (
-                                    <a
-                                      href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
-                                    >
-                                      자료:{" "}
-                                      {view.files.find((file) => file.id === ref.fileId)?.name ??
-                                        "원본 범위 확인"}{" "}
-                                      · {referenceLabel(ref)}
-                                    </a>
-                                  ) : ref.kind === "user_message" ? (
-                                    "대화에서 제공"
-                                  ) : ref.kind === "intake_answer" ? (
-                                    "질문 답변에서 제공"
-                                  ) : ref.kind === "intake_narrative" ? (
-                                    "처음 제공한 이야기"
-                                  ) : (
-                                    "공식 출처"
-                                  )}
-                                </span>
-                              ))}
                             </li>
                           ))}
                         </ul>
@@ -1933,6 +1895,11 @@ export function Workspace({
                     ))}
                     <section>
                       <h2>준비 현황</h2>
+                      <p>
+                        {view.case.subjectContext === "company"
+                          ? "회사와 상대방의 계약 관계, 담당자의 역할, 업무 지시·승인 기록과 정산 자료를 확인해 보세요. 회사 내부 자료는 전달 범위를 먼저 확인해 주세요."
+                          : "상대방과 주고받은 약속, 날짜별 대화와 입금·피해 자료를 확인해 보세요. 개인 식별정보는 필요한 범위만 남겨 주세요."}
+                      </p>
                       <a href={`${base}/files`}>
                         자료 <span>{view.files.length}개</span>
                       </a>

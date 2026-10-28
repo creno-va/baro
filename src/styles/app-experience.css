@@ -540,3 +540,46 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Title-only case history; account controls stay at the foot of the sidebar. */
+.app-frame .sidebar-story {
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.app-frame .sidebar-story__copy strong {
+  font-size: 14px;
+  font-weight: 450;
+}
+.app-frame .sidebar-story-row {
+  position: relative;
+  gap: 0;
+  border-radius: 8px;
+}
+.app-frame .sidebar-story-row:hover {
+  background: var(--muted);
+}
+.app-frame .sidebar-story-row .sidebar-story {
+  padding-right: 40px;
+}
+.app-frame .sidebar-story-delete {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  opacity: 0;
+}
+.app-frame .sidebar-story-row:hover .sidebar-story-delete,
+.app-frame .sidebar-story-row:focus-within .sidebar-story-delete {
+  opacity: 1;
+}
+.conversation-subject-help {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+@media (hover: none) {
+  .app-frame .sidebar-story-delete {
+    opacity: 1;
+  }
+}
