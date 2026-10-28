@@ -474,7 +474,9 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       // Explicit owner revocation below must still purge it completely.
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(editor).toBeDisabled();
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "검토 내용 저장", exact: true }),
+      ).toBeDisabled();
       phase = "current";
       // An explicit peer invalidation bypasses the old pending read. Focus alone
       // cannot create a newer authoritative response while that read is pending.
