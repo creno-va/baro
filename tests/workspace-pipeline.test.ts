@@ -1421,3 +1421,21 @@ test("body and timeline rejection share the same single correction ceiling", asy
     "workspace_audit",
   ]);
 });
+
+test("chat explains an official guide update separately from network failure without inventing legal sources", async () => {
+  const context = confirmedChatContext();
+  context.sourceStatus = "unavailable";
+  context.sourceCoverage = {
+    sourcesPartial: true,
+    rejectedSources: 0,
+    outcomes: [{ kind: "official_guide", availability: "limited", reason: "update_pending" }],
+  };
+  const p = pipeline((phase) =>
+    phase === "workspace_audit" ? approved : chatText("현재 제공하신 사실만 정리했어요."),
+  );
+  const result = await p.value.chat(context, "synthetic-guide-status");
+  expect(result.warnings.some((warning) => warning.includes("공식 안내가 개정 내용 확인 중"))).toBe(
+    true,
+  );
+  expect(result.citations).toEqual([]);
+});

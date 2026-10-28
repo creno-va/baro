@@ -1,0 +1,50 @@
+name: Legal reliability
+
+on:
+  pull_request:
+    paths:
+      - "src/server/modules/legal-retrieval/**"
+      - "src/server/api/v2/precedents.ts"
+      - "src/server/modules/citation/**"
+      - "src/server/modules/workspace/pipeline.ts"
+      - "src/server/runtime/workspace.ts"
+      - "src/contracts/v2/legal-availability.ts"
+      - "src/contracts/v2/precedent-research.ts"
+      - "src/contracts/v2/sources.ts"
+      - "src/components/workspace/PrecedentResearch.tsx"
+      - "packages/api-client/src/precedents.ts"
+      - "apps/mobile/src/features/precedents/**"
+      - "tests/legal-*.test.ts"
+      - "tests/precedent-*.test.ts"
+      - "tests/browser/precedents*"
+      - ".github/workflows/legal-reliability.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legal-reliability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  legal:
+    name: Legal retrieval regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun ci
+      - name: Offline source transport integrity API and client regressions
+        run: bun test tests/legal-reliability.test.ts tests/legal-retrieval-v2.test.ts tests/legal-source-integration.test.ts tests/legal-readiness-v2.test.ts tests/precedent-research-api.test.ts tests/precedent-research-contract.test.ts tests/precedent-comparison.test.ts tests/shared-account-precedents.test.ts tests/mobile-precedents.test.ts tests/mobile-precedents-http.test.ts tests/workspace-source-boundaries.test.ts tests/workspace-pipeline.test.ts
+      - name: Install browser for synthetic UI only
+        run: bunx playwright install --with-deps chromium
+      - name: Synthetic precedent availability and expiry recovery UI
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+        run: bunx playwright test --config tests/browser/precedents.config.ts --workers 1 --reporter line

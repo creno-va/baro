@@ -1527,3 +1527,145 @@ test("corrupted cached text is rejected and cannot refresh or bind a mismatched 
     n: 1,
   });
 });
+
+for (const position of ["first", "last"] as const) {
+  test.each(["http", "identity", "summary", "malformed", "timeout"] as const)(
+    `${position} failed precedent %s preserves only independently verified originals`,
+    async (mode) => {
+      const f = await fixture();
+      const rawList = JSON.parse(
+        precedents.find((v) => v.id === "precedent_list_candidate")?.response.body ?? "{}",
+      );
+      const rawDetail = syntheticPrecedentDetail(
+        precedents.find((v) => v.id === "precedent_verified")?.response.body ?? "{}",
+      );
+      const good = rawList.PrecSearch.prec[0];
+      const bad = { ...good, 판례일련번호: "999000569", 사건명: "합성 확인 불가 판례" };
+      if (mode === "malformed") delete bad.법원명;
+      const list = {
+        PrecSearch: { totalCnt: 2, prec: position === "first" ? [bad, good] : [good, bad] },
+      };
+      const service = f.service({
+        timeoutMs: 50,
+        transport: async (url) => {
+          const u = new URL(url);
+          if (u.pathname.endsWith("lawSearch.do")) return response(list);
+          if (u.searchParams.get("ID") !== bad.판례일련번호) return response(rawDetail);
+          if (mode === "timeout") return new Promise<Response>(() => {});
+          if (mode === "http") return response({}, 403);
+          const detail = structuredClone(rawDetail);
+          detail.PrecService.판례정보일련번호 =
+            mode === "identity" ? "999000570" : bad.판례일련번호;
+          detail.PrecService.사건명 = bad.사건명;
+          if (mode === "summary") delete detail.PrecService.판례내용;
+          return response(detail);
+        },
+      });
+      const result = await service.retrieve(
+        input([{ kind: "precedent", query: "합성 개념", limit: 3 }]),
+        f.access,
+      );
+      expect(result.outcomes[0]?.availability).toBe("verified");
+      expect(result.outcomes[0]?.reason).toBeNull();
+      expect(result.chunks).toHaveLength(1);
+      const surviving = result.chunks[0];
+      if (surviving?.citation.kind !== "precedent") throw new Error("Missing verified precedent");
+      expect(surviving.citation.officialId).toBe(String(good.판례일련번호));
+      const quote = surviving.span.text.slice(0, 160);
+      expect(
+        (
+          await validateV2Claims(
+            [
+              {
+                id: "partial-original-claim",
+                kind: "quotation",
+                text: quote,
+                citationId: surviving.citation.id,
+                startUtf16: 0,
+                endUtf16: quote.length,
+              },
+            ],
+            [surviving.citation],
+            result,
+          )
+        ).valid,
+      ).toBe(true);
+      expect(result.outcomes[0]?.sourceFailures).toEqual([
+        (
+          {
+            http: "upstream_rejected",
+            identity: "identity_mismatch",
+            summary: "unsupported_format",
+            malformed: "schema_mismatch",
+            timeout: "timeout",
+          } as const
+        )[mode],
+      ]);
+      const projected = await projectWorkspaceSources(result);
+      expect(projected.citations).toHaveLength(1);
+      expect(projected.sourceCoverage.sourcesPartial).toBe(true);
+      expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+        n: 1,
+      });
+    },
+  );
+}
+
+test("revocation after a verified original clears every partial result", async () => {
+  const f = await fixture();
+  const list = JSON.parse(
+    precedents.find((v) => v.id === "precedent_list_candidate")?.response.body ?? "{}",
+  );
+  const detail = syntheticPrecedentDetail(
+    precedents.find((v) => v.id === "precedent_verified")?.response.body ?? "{}",
+  );
+  const good = list.PrecSearch.prec[0];
+  list.PrecSearch.prec.push({ ...good, 판례일련번호: "999000569" });
+  list.PrecSearch.totalCnt = 2;
+  let allowed = true;
+  const result = await f
+    .service({
+      transport: async (url) => {
+        const u = new URL(url);
+        if (u.pathname.endsWith("lawSearch.do")) return response(list);
+        if (u.searchParams.get("ID") === "999000569") {
+          allowed = false;
+          return response({}, 403);
+        }
+        return response(detail);
+      },
+    })
+    .retrieve(input([{ kind: "precedent", query: "합성 개념", limit: 3 }]), {
+      ...f.access,
+      authorize: async () => allowed,
+    });
+  expect(result.chunks).toEqual([]);
+  expect(result.outcomes[0]?.reason).toBe("not_authorized");
+});
+
+test.each([false, true])(
+  "one failed statute article preserves the other verified article, failureFirst=%s",
+  async (failureFirst) => {
+    const f = await fixture();
+    const good = { number: "598", branch: "0" };
+    const bad = { number: "600", branch: "0" };
+    const result = await f
+      .service({
+        transport: async (url) => {
+          const u = new URL(url);
+          if (u.pathname.endsWith("lawSearch.do")) return response(syntheticCompleteList);
+          return u.searchParams.get("JO") === "060000"
+            ? response({}, 403)
+            : response(officialDetail);
+        },
+      })
+      .retrieve(
+        input([{ ...statutePlan, articles: failureFirst ? [bad, good] : [good, bad] }]),
+        f.access,
+      );
+    expect(result.chunks).toHaveLength(1);
+    expect(result.outcomes[0]?.availability).toBe("verified");
+    expect(result.outcomes[0]?.sourceFailures).toEqual(["upstream_rejected"]);
+    expect((await projectWorkspaceSources(result)).sourceCoverage.sourcesPartial).toBe(true);
+  },
+);

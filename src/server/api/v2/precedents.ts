@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema } from "../../../contracts";
+import { LEGAL_DIAGNOSTICS_HEADER } from "../../../contracts/v2/legal-availability";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
@@ -152,11 +153,12 @@ export function createPrecedentsApi(
         return c.json(errorBody(c, "RATE_LIMITED", "잠시 후 다시 시도해 주세요.", true), 429);
       const s = await service(c.env),
         input = await c.req.json();
-      return c.json(
-        action === "search"
-          ? await s.search(access.ownerId, c.req.param("id"), input, c.req.raw.signal)
-          : await s.read(access.ownerId, c.req.param("id"), input),
-      );
+      if (action === "read") return c.json(await s.read(access.ownerId, c.req.param("id"), input));
+      const result = await s.search(access.ownerId, c.req.param("id"), input, c.req.raw.signal);
+      if (c.req.header(LEGAL_DIAGNOSTICS_HEADER) === "1") return c.json(result);
+      // Older strict clients must receive exactly their original wire shape.
+      const { availabilityIssues: _issues, ...legacy } = result;
+      return c.json(legacy);
     });
   return app;
 }

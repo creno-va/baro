@@ -6,7 +6,13 @@ import { createV2AccountingRepository } from "../db/v2-accounting";
 import { createV2Core, type V2Core } from "../db/v2-core";
 import { createV2JobsRepository } from "../db/v2-jobs";
 import { createV2OfficialSourceRepository } from "../db/v2-official-sources";
-import { reportLegalRetrieval, reportProviderFailure } from "../dependency-diagnostics";
+import {
+  reportLegalOutcome,
+  reportLegalRejection,
+  reportLegalRequest,
+  reportLegalRetrieval,
+  reportProviderFailure,
+} from "../dependency-diagnostics";
 import { paidHoldRequestSchema } from "../modules/budget/contracts";
 import { createGatewayExecutionPlanner, type TokenBounds } from "../modules/budget/execution-plan";
 import {
@@ -510,6 +516,9 @@ export async function runWorkspaceRuntime(
               .first());
           };
           const retrieval = createV2LegalRetrieval(env, sourceRepository, {
+            observeRequest: reportLegalRequest,
+            observeOutcome: reportLegalOutcome,
+            observeUpstreamRejection: reportLegalRejection,
             bindCitation: (citation) =>
               sourceRepository.bindCitation(
                 {

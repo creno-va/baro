@@ -1,3 +1,4 @@
+import { legalFailureMessages } from "@baro/contracts/v2/legal-availability";
 import { v2PrecedentTopicSchema } from "@baro/contracts/v2/precedent-research";
 import { PRECEDENT_TOPIC_LABELS } from "@baro/contracts/v2/precedent-topics";
 import { useState } from "react";
@@ -111,13 +112,18 @@ export function PrecedentsScreen({
             {
               {
                 complete: "선택 주제의 확인된 판례",
-                partial: "일부 주제의 판례만 확인했어요",
+                partial: "요청한 판례를 일부만 확인했어요",
                 empty: "선택 주제에서 확인된 판례가 없어요",
                 unavailable: "공식 판례를 현재 확인할 수 없어요",
               }[result.status]
             }
           </Text>
           <Text variant="muted">확인 시각: {result.checkedAt}</Text>
+          {result.availabilityIssues?.map(({ topic, reason }) => (
+            <Text key={`${topic}:${reason}`} variant="muted">
+              {PRECEDENT_TOPIC_LABELS[topic]} · {legalFailureMessages[reason]}
+            </Text>
+          ))}
           {result.unavailableTopics.length ? (
             <Text>
               확인하지 못한 주제:{" "}

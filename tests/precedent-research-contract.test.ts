@@ -89,3 +89,28 @@ test("empty, unavailable and partial research cannot masquerade as complete", ()
       false,
     );
 });
+
+test("availability metadata is optional, finite, unique and restricted to selected unavailable topics", () => {
+  const partial = {
+    ...fixture,
+    status: "partial",
+    unavailableTopics: ["loan"],
+    availabilityIssues: [{ topic: "loan", reason: "timeout" }],
+  };
+  expect(v2PrecedentSearchResponseSchema.safeParse(partial).success).toBe(true);
+  for (const availabilityIssues of [
+    [{ topic: "loan", reason: "raw private upstream message" }],
+    [{ topic: "lease", reason: "timeout" }],
+    [{ topic: "loan", reason: "timeout", url: "https://private.invalid" }],
+    [
+      { topic: "loan", reason: "timeout" },
+      { topic: "loan", reason: "timeout" },
+    ],
+  ])
+    expect(
+      v2PrecedentSearchResponseSchema.safeParse({ ...partial, availabilityIssues }).success,
+    ).toBe(false);
+  expect(
+    v2PrecedentSearchResponseSchema.safeParse({ ...partial, unavailableTopics: [] }).success,
+  ).toBe(false);
+});

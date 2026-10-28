@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dateSchema, displayText, timestampSchema } from "../../../../contracts";
 import type { V2OfficialCitation } from "../../../../contracts/v2";
+import type { LegalFailureReason } from "../../../../contracts/v2/legal-availability";
 import type { OfficialSourceWrite } from "../../../db/v2-official-sources";
 import type { LegalSchemaDiagnostic } from "./schema-diagnostics";
 
@@ -89,28 +90,7 @@ export const requestSchema = z
 export type RetrievalPlan = z.infer<typeof planSchema>;
 export type SourceKind = RetrievalPlan["kind"];
 export type Availability = "verified" | "limited" | "unavailable" | "not_requested";
-export type FailureReason =
-  | "configuration_missing"
-  | "not_authorized"
-  | "budget_exhausted"
-  | "cancelled"
-  | "timeout"
-  | "rate_limited"
-  | "upstream_unavailable"
-  | "upstream_rejected"
-  | "schema_mismatch"
-  | "too_large"
-  | "unsafe_url"
-  | "identity_mismatch"
-  | "date_invalid"
-  | "no_results"
-  | "history_incomplete"
-  | "unsupported_format"
-  | "rights_unverified"
-  | "unknown_publication_date"
-  | "update_pending"
-  | "image_omitted"
-  | "cache_invalid";
+export type FailureReason = LegalFailureReason;
 export class RetrievalFailure extends Error {
   constructor(
     readonly reason: FailureReason,
@@ -133,6 +113,8 @@ export type SourceOutcome = {
   schemaFailure?: LegalSchemaDiagnostic;
   /** A bounded precedent search is partial discovery, not an unverified original. */
   searchTruncated?: boolean;
+  /** Failures of other originals never invalidate independently verified chunks. */
+  sourceFailures?: FailureReason[];
 };
 export type RetrievalOutput = {
   schemaVersion: "2";

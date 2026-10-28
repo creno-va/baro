@@ -273,3 +273,27 @@ test("v2 readiness executes product source/hash/claim checks in local workerd", 
     await mf.dispose();
   }
 }, 30000);
+
+test("a verified partial original never becomes a successful readiness receipt", async () => {
+  const values = responses();
+  values.prec_list.PrecSearch.prec.push({
+    ...values.prec_list.PrecSearch.prec[0],
+    판례일련번호: "999000569",
+  });
+  values.prec_list.PrecSearch.totalCnt = 2;
+  const send = transport(values);
+  const receipt = await inspectLegalV2({ LAW_API_OC: "synthetic-private-only" }, NOW, {
+    plans: legalReadinessScope("core_sources").plans,
+    transport: async (url, init) =>
+      new URL(url).searchParams.get("ID") === "999000569"
+        ? new Response("", { status: 403 })
+        : send(url, init),
+  });
+  expect(receipt.claimIntegrity).toBe(true);
+  expect(receipt.verifiedSourceCount).toBe(2);
+  expect(receipt.outcomes.find((outcome) => outcome.kind === "precedent")).toMatchObject({
+    availability: "verified",
+    sourceFailures: ["upstream_rejected"],
+  });
+  expect(legalDiagnosticReceipt(receipt).status).toBe("diagnostic_failed");
+});

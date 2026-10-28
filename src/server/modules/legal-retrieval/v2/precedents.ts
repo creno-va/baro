@@ -42,16 +42,31 @@ export function precedentCandidates(value: unknown, asOfDate: string, limit: num
   const root = z
     .object({
       PrecSearch: z.object({
-        prec: z.union([candidate, z.array(candidate).max(100)]).optional(),
+        prec: z.union([z.object({}).passthrough(), z.array(z.unknown()).max(100)]).optional(),
         totalCnt: z.coerce.number().int().nonnegative(),
       }),
     })
     .parse(value).PrecSearch;
   const rows = root.prec ? (Array.isArray(root.prec) ? root.prec : [root.prec]) : [];
   if (rows.length > root.totalCnt) throw new RetrievalFailure("schema_mismatch");
+  if (root.totalCnt > 0 && !rows.length) throw new RetrievalFailure("schema_mismatch");
+  const valid: PrecedentCandidate[] = [];
+  let malformed = false;
+  for (const row of rows) {
+    const parsed = candidate.safeParse(row);
+    if (!parsed.success) {
+      malformed = true;
+      continue;
+    }
+    valid.push(parsed.data);
+  }
+  if (malformed && !valid.length) throw new RetrievalFailure("schema_mismatch");
+  if (new Set(valid.map((row) => row.판례일련번호)).size !== valid.length)
+    throw new RetrievalFailure("identity_mismatch");
   return {
-    rows: rows.filter((row) => row.선고일자 <= asOfDate).slice(0, limit),
+    rows: valid.filter((row) => row.선고일자 <= asOfDate).slice(0, limit),
     truncated: root.totalCnt > rows.length,
+    ...(malformed ? { failures: ["schema_mismatch" as const] } : {}),
   };
 }
 // PrecService and field types were checked against the public documented

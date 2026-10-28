@@ -3,6 +3,7 @@ export * from "./directory";
 export * from "./files";
 export * from "./intake";
 export * from "./lawyers";
+export * from "./legal-availability";
 export * from "./reports";
 export * from "./sources";
 export * from "./tools";

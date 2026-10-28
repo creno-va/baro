@@ -223,3 +223,22 @@ test("an unexpected successful case payload is not accepted as deletion", async 
   await expect(f.api.deleteCase("synthetic_case", "DELETE")).rejects.toThrow();
   expect(f.scope.snapshot()).toBe(0);
 });
+
+test("research opts into finite availability diagnostics and remains compatible with a legacy server response", async () => {
+  const calls: { headers?: Record<string, string> }[] = [];
+  const api = createPrecedentsClient({
+    scope: createSessionScope(),
+    request: (async (_operation, _input, options) => {
+      calls.push(options ?? {});
+      return search;
+    }) as OperationRequest,
+  });
+  const value = await api.search("synthetic-case", {
+    expectedRevision: 7,
+    summaryRevision: 2,
+    topics: ["loan"],
+  });
+  expect(value.items).toHaveLength(1);
+  expect(value.availabilityIssues).toBeUndefined();
+  expect(calls[0]?.headers).toEqual({ "x-baro-legal-diagnostics": "1" });
+});

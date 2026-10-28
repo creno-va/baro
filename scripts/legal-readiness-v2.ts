@@ -202,18 +202,19 @@ export async function inspectLegalV2(
     status:
       plans.length === 3 &&
       new Set(plans.map((plan) => plan.kind)).size === 3 &&
-      output.outcomes.every((o) => o.availability === "verified") &&
+      output.outcomes.every((o) => o.availability === "verified" && !o.sourceFailures?.length) &&
       claimCheck?.valid === true
         ? ("passed" as const)
         : ("failed" as const),
     outcomes: output.outcomes.map(
-      ({ kind, availability, reason, searchTruncated, schemaFailure: failure }) => {
+      ({ kind, availability, reason, searchTruncated, sourceFailures, schemaFailure: failure }) => {
         const schemaFailure = safeLegalSchemaDiagnostic(failure);
         return {
           kind,
           availability,
           reason,
           ...(searchTruncated === undefined ? {} : { searchTruncated }),
+          ...(sourceFailures?.length ? { sourceFailures } : {}),
           ...(schemaFailure ? { schemaFailure } : {}),
         };
       },
@@ -250,7 +251,9 @@ export function legalDiagnosticReceipt(observed: Awaited<ReturnType<typeof inspe
     claimIntegrity: observed.claimIntegrity,
     status:
       observed.outcomes.length > 0 &&
-      observed.outcomes.every((outcome) => outcome.availability === "verified") &&
+      observed.outcomes.every(
+        (outcome) => outcome.availability === "verified" && !outcome.sourceFailures?.length,
+      ) &&
       observed.claimIntegrity === true
         ? ("diagnostic_passed" as const)
         : ("diagnostic_failed" as const),

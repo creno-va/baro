@@ -1,3 +1,8 @@
+import {
+  safeLegalOutcome,
+  safeLegalRejection,
+  safeLegalRequest,
+} from "./modules/legal-retrieval/diagnostics";
 import { safeLegalSchemaDiagnostic } from "./modules/legal-retrieval/v2/schema-diagnostics";
 
 /** Static categories only: original messages, SQL, identities and causes never leave here. */
@@ -320,4 +325,43 @@ export function reportWorkspaceFactFailure(value: unknown, boundary: unknown) {
     referenceCount,
     availableSourceCount,
   };
+}
+
+/** Legal observations are finite validated metadata, never upstream payloads. */
+export function reportLegalRequest(value: unknown) {
+  const data = safeLegalRequest(value);
+  if (!data || (data.reason === null && data.durationMs < 2000)) return;
+  const { endpointId, attempt, durationMs, httpStatus, reason } = data;
+  console.warn(
+    JSON.stringify({
+      event: "legal_request_observation",
+      endpointId,
+      attempt,
+      durationMs,
+      httpStatus,
+      reason,
+    }),
+  );
+}
+export function reportLegalOutcome(value: unknown) {
+  const data = safeLegalOutcome(value);
+  if (!data || (data.availability === "verified" && !data.sourceFailures.length)) return;
+  const { kind, availability, reason, sourceFailures, verifiedSourceCount, durationMs } = data;
+  console.warn(
+    JSON.stringify({
+      event: "legal_source_observation",
+      kind,
+      availability,
+      reason,
+      sourceFailures,
+      verifiedSourceCount,
+      durationMs,
+    }),
+  );
+}
+export function reportLegalRejection(value: unknown) {
+  const data = safeLegalRejection(value);
+  if (!data) return;
+  const { endpointId, category } = data;
+  console.warn(JSON.stringify({ event: "legal_upstream_rejection", endpointId, category }));
 }

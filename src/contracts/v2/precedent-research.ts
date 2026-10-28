@@ -6,6 +6,7 @@ import {
   revisionSchema,
   timestampSchema,
 } from "../common";
+import { legalFailureReasonSchema } from "./legal-availability";
 import { v2PrecedentCitationSchema } from "./sources";
 
 // Public topic IDs only. Neither a case narrative nor arbitrary search text is
@@ -112,6 +113,15 @@ export const v2PrecedentSearchResponseSchema = z
     topics,
     status: z.enum(["complete", "partial", "empty", "unavailable"]),
     searchTruncated: z.boolean(),
+    availabilityIssues: z
+      .array(
+        z.strictObject({
+          topic: v2PrecedentTopicSchema,
+          reason: legalFailureReasonSchema,
+        }),
+      )
+      .max(42)
+      .optional(),
     // Availability concerns the returned original, never a match/merits score.
     items: z.array(v2PrecedentResearchItemSchema).max(6).refine(hasUniqueIds),
     unavailableTopics: z
@@ -125,6 +135,17 @@ export const v2PrecedentSearchResponseSchema = z
     const checkedDate = new Date(checked + 9 * 3600000).toISOString().slice(0, 10);
     if (value.items.some((item) => item.citation.decisionDate > checkedDate)) return false;
     const selected = new Set(value.topics);
+    if (
+      value.availabilityIssues?.some(
+        (issue) => !selected.has(issue.topic) || !value.unavailableTopics.includes(issue.topic),
+      )
+    )
+      return false;
+    if (
+      new Set(value.availabilityIssues?.map((issue) => `${issue.topic}:${issue.reason}`)).size !==
+      (value.availabilityIssues?.length ?? 0)
+    )
+      return false;
     if (value.items.some((item) => item.matchedTopics.some((topic) => !selected.has(topic))))
       return false;
     if (value.unavailableTopics.some((topic) => !selected.has(topic))) return false;

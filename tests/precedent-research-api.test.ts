@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import { Hono } from "hono";
+import { z } from "zod";
 import { modelBounds, observationSchema, provisionAiRuntime } from "../scripts/provision-ai-budget";
 import { v2AcceptedOperationSchema } from "../src/contracts/v2";
+import { LEGAL_DIAGNOSTICS_HEADER } from "../src/contracts/v2/legal-availability";
 import {
   PRECEDENT_COMPARISON_CRITERIA,
   v2PrecedentComparisonStateSchema,
@@ -716,4 +718,72 @@ test("corrected numeric quotes still cannot publish when the independent audit r
       (m) => m.role === "assistant",
     ),
   ).toHaveLength(0);
+});
+
+test("mixed originals retain a verified research result and diagnostics require explicit legacy-safe opt-in", async () => {
+  const f = await fixture();
+  const input = await f.searchInput();
+  const mixed = structuredClone(list);
+  mixed.PrecSearch.prec.push({ ...mixed.PrecSearch.prec[0], 판례일련번호: "999000569" });
+  mixed.PrecSearch.totalCnt = mixed.PrecSearch.prec.length;
+  f.upstream(async (url) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith("lawSearch.do")) return json(mixed);
+    return u.searchParams.get("ID") === "999000569"
+      ? json({ private: "SYNTHETIC_PRIVATE" }, 403)
+      : json(detail);
+  });
+  const legacyRaw = await (await f.request("/search", input)).json();
+  const legacy = v2PrecedentSearchResponseSchema.parse(legacyRaw);
+  expect(legacy.status).toBe("partial");
+  expect(legacy.items).toHaveLength(1);
+  expect(legacyRaw).not.toHaveProperty("availabilityIssues");
+  const { availabilityIssues: _optional, ...oldShape } = v2PrecedentSearchResponseSchema.shape;
+  expect(z.strictObject(oldShape).safeParse(legacy).success).toBe(true);
+  const response = await f.app.request(
+    `${f.path}/search`,
+    {
+      method: "POST",
+      headers: {
+        cookie: f.owner.cookie,
+        origin: f.env.BETTER_AUTH_URL,
+        "content-type": "application/json",
+        [LEGAL_DIAGNOSTICS_HEADER]: "1",
+      },
+      body: JSON.stringify(input),
+    },
+    f.env,
+  );
+  expect(response.status).toBe(200);
+  const result = await searchBody(response);
+  expect(result.status).toBe("partial");
+  expect(result.items).toHaveLength(1);
+  expect(result.availabilityIssues).toEqual([{ topic: "contract", reason: "upstream_rejected" }]);
+  expect(JSON.stringify(result)).not.toContain("SYNTHETIC_PRIVATE");
+});
+
+test("an expired read proof fails closed while a fresh explicit search restores access", async () => {
+  const f = await fixture();
+  const input = await f.searchInput();
+  const first = await searchBody(await f.request("/search", input));
+  const item = first.items[0];
+  if (!item) throw new Error("Missing synthetic original");
+  f.clock(new Date(Date.parse(first.checkedAt) + 600001).toISOString());
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: first.workspaceRevision,
+        readToken: item.readToken,
+      })
+    ).status,
+  ).toBe(404);
+  const refreshed = await searchBody(await f.request("/search", input));
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: refreshed.workspaceRevision,
+        readToken: refreshed.items[0]?.readToken,
+      })
+    ).status,
+  ).toBe(200);
 });

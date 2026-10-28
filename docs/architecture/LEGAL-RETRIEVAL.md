@@ -1,5 +1,7 @@
 # 법률정보 검색과 인용
 
+2026-10-28 간헐 실패 후속 #569는 [원문별 부분 성공·제한 재시도·호환 진단 계약](../quality/LEGAL-API-RELIABILITY-2026-10-28.md)을 따른다.
+
 - Canonical source: 국가법령정보 공동활용 Open API
 - Scope: 대한민국 현행 법령의 조문
 - Out of scope for MVP: 판례, 행정해석, 블로그, 언론, 모델 기억

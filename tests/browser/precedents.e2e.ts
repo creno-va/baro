@@ -471,3 +471,70 @@ test("a delayed admission receipt cannot erase an already recovered completed co
     ),
   ).toBe(1);
 });
+
+test("specific partial-source reasons stay visible and an expired proof triggers new search instead of the same read", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.evaluate(async (fixture) => {
+    const { registerMockHandlers, ApiError } = await import(
+      `${location.origin}/src/client/api/core.ts`
+    );
+    const state = window as unknown as { legalSearches: number; legalReads: number };
+    state.legalSearches = 0;
+    state.legalReads = 0;
+    registerMockHandlers({
+      "precedents.search": ({
+        body,
+      }: {
+        body: { expectedRevision: number; summaryRevision: number; topics: string[] };
+      }) => {
+        state.legalSearches++;
+        return {
+          ...fixture,
+          workspaceRevision: body.expectedRevision,
+          summaryRevision: body.summaryRevision,
+          checkedAt: new Date().toISOString(),
+          topics: body.topics,
+          status: "partial",
+          items: [{ ...fixture.items[0], matchedTopics: [body.topics[0]] }],
+          unavailableTopics: [body.topics[0]],
+          availabilityIssues: [{ topic: body.topics[0], reason: "timeout" }],
+        };
+      },
+      "precedents.read": () => {
+        state.legalReads++;
+        throw new ApiError("NOT_FOUND", "합성 조회권 만료");
+      },
+    });
+  }, syntheticSearch);
+  await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+  await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toContainText(
+    "공식 기관의 응답이 늦어",
+  );
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page
+    .getByRole("list", { name: "관련 판례 목록" })
+    .getByRole("button", { name: /판례 내용 보기/ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "선택한 판례" })
+    .getByRole("button", { name: "다시 검색", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { legalSearches: number }).legalSearches))
+    .toBe(2);
+  expect(await page.evaluate(() => (window as unknown as { legalReads: number }).legalReads)).toBe(
+    1,
+  );
+  await expect(
+    page.getByRole("list", { name: "관련 판례 목록" }).getByRole("listitem"),
+  ).toHaveCount(1);
+});

@@ -16,6 +16,7 @@ import {
   v2ReferenceIsAuthorized,
   v2ToolResultsSchema,
 } from "../../../contracts/v2";
+import { legalFailureMessages } from "../../../contracts/v2/legal-availability";
 import {
   type precedentComparisonSourceSchema,
   type V2PrecedentComparison,
@@ -680,6 +681,15 @@ export function createWorkspacePipeline(
         );
         draft.timeline = dates.timeline;
         const serverWarnings = [
+          ...new Set(
+            context.sourceCoverage?.outcomes
+              .flatMap((outcome) => [
+                ...(outcome.reason ? [legalFailureMessages[outcome.reason]] : []),
+                ...(outcome.sourceFailures ?? []).map((reason) => legalFailureMessages[reason]),
+              ])
+              .filter((message): message is string => !!message)
+              .slice(0, 8) ?? [],
+          ),
           ...(context.sourceStatus === "unavailable" ? [unavailableSourceWarning] : []),
           ...(context.sourceCoverage?.sourcesPartial
             ? ["공식 자료 일부만 확인했어요. 출처별 제한과 원문에서 빠진 범위를 확인해 주세요."]
