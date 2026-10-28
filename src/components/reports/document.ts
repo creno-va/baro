@@ -61,17 +61,17 @@ export function createReportMarkup(report: ReportDocument, embedded = false) {
       return `<section class="section${kind}"><div class="section-head"><span class="number">${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(section.title)}</h2></div><div class="lines">${lines}</div></section>`;
     })
     .join("");
-  const photos = report.maskIdentifiers
-    ? []
-    : (report.photos ?? []).filter((photo) => !report.excludedFileIds.includes(photo.id));
+  const photos = (report.photos ?? []).filter(
+    (photo) => !report.excludedFileIds.includes(photo.id),
+  );
   const photoMarkup = photos
     .map((photo, index) => {
       if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo.dataUrl)) return "";
-      return `<figure class="evidence-photo" data-file-revision="${escapeHtml(String(photo.revision))}"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/><figcaption><strong>근거 사진 ${index + 1} · ${escapeHtml(photo.name)}</strong><br>${(photo.notes ?? []).map((note) => escapeHtml(note)).join("<br>")}<br>리포트용 사진 사본 · 사실 여부는 원본과 대조해 주세요.</figcaption></figure>`;
+      return `<figure class="evidence-photo" data-file-revision="${escapeHtml(String(photo.revision))}"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/><figcaption><strong>근거 사진 ${index + 1} · ${escapeHtml(report.maskIdentifiers ? maskReportText(photo.name) : photo.name)}</strong><br>${(photo.notes ?? []).map((note) => escapeHtml(report.maskIdentifiers ? maskReportText(note) : note)).join("<br>")}<br>리포트용 사진 사본 · 사실 여부는 원본과 대조해 주세요.</figcaption></figure>`;
     })
     .join("");
   const photoSection = photoMarkup
-    ? `<section class="photo-section"><h2>선택한 근거 사진</h2><p>직접 선택한 사진과 관련 내용을 함께 표시합니다. 문서 기재나 사진의 모습만으로 원인·촬영 시점·의학적 판단·진정성을 확인할 수 없습니다.</p>${photoMarkup}</section>`
+    ? `<section class="photo-section"><h2>선택한 근거 사진</h2><p>직접 선택한 사진과 관련 내용을 함께 표시합니다. 사진 속 개인정보는 자동으로 가려지지 않습니다. 문서 기재나 사진의 모습만으로 원인·촬영 시점·의학적 판단·진정성을 확인할 수 없습니다.</p>${photoMarkup}</section>`
     : "";
   return `<div class="baro-report"><article class="sheet"><header class="masthead"><div class="brand"><img src="${embedded ? embeddedLogo : "/brand/logo.svg"}" alt="바로 로고" width="31" height="36"><span>BARO</span></div><div class="masthead-note">사건 상담 준비 리포트</div></header><div class="hero"><p class="eyebrow">사건 상담 준비 · 검토본 ${report.revision}</p><h1>${escapeHtml(title)}</h1><p class="hero-subtitle">확인한 사실과 자료, 앞으로 준비할 내용을 한곳에 정리했어요.</p><div class="tags"><span class="tag dark">리포트 ${report.revision}</span><span class="tag">${escapeHtml(date)}</span><span class="tag">${report.maskIdentifiers ? "식별정보 자동 가림 적용" : "식별정보 검토 필요"}</span>${report.stale ? '<span class="tag warm">이전 생성 기준</span>' : ""}</div></div>${report.stale ? '<p class="stale">사건·자료 또는 공식 출처의 확인 상태가 바뀌었습니다. 이 문서는 아래 생성 기준의 저장된 리포트이며, 최신 내용은 새 버전에서 확인하세요.</p>' : ""}<div class="layout"><div class="content">${body}</div><aside class="sidebar"><h2>생성 기준</h2><dl class="meta"><div><dt>리포트 버전</dt><dd>${report.revision}</dd></div>${report.basis ? `<div><dt>요약 · 사건 버전</dt><dd>${report.basis.summaryRevision} · ${report.basis.workspaceRevision}</dd></div>` : ""}<div><dt>작성 시각</dt><dd>${escapeHtml(date)}</dd></div><div><dt>리포트 제외 자료</dt><dd>${report.excludedFileIds.length}개</dd></div></dl><p class="aside-note"><strong>전달 전 확인해 주세요</strong>내용과 출처, 미확인 사항을 원본과 비교해 주세요. 자동 가림 외에 남아 있는 식별정보도 직접 확인해야 합니다.</p><p class="aside-note"><strong>자료 관찰과 사실은 다릅니다</strong>교정한 내용과 AI의 정리는 원본의 진정성이나 법적 효력을 증명하지 않습니다.</p></aside></div>${photoSection}<footer class="footer"><p><strong>상담을 준비하는 자료입니다.</strong><br>법률 판단과 사건의 결과를 보장하지 않습니다. 전달할 내용과 상대는 사용자가 직접 결정합니다.</p><p>BARO · 검토본 ${report.revision}</p></footer></article></div>`;
 }

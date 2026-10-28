@@ -418,12 +418,7 @@ async function capture(page: Page, name: string) {
 }
 
 async function openAnswerTools(page: Page) {
-  const tools = page
-    .locator("details")
-    .filter({ has: page.locator("summary", { hasText: "답변 관리" }) });
-  await expect(tools).toBeVisible();
-  if (!(await tools.evaluate((element) => element.hasAttribute("open"))))
-    await tools.locator("summary").click();
+  await expect(page.getByRole("button", { name: "이전 질문", exact: true })).toBeVisible();
 }
 
 async function holdGeneration(page: Page, stage: "questions" | "summary", failed = false) {
@@ -755,12 +750,13 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.setViewportSize({ width: 1280, height: 900 });
   await capture(page, "question-desktop");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toBeHidden();
-  await expect(page.getByRole("button", { name: "나중에 이어하기" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 9월");
   await openAnswerTools(page);
-  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+  await page.getByRole("button", { name: "나중에 이어하기", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "답변이 저장됐어요" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "계속 답하기" }).click();
   await page.reload();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 9월");
   await page.getByRole("button", { name: "다음 질문", exact: true }).click();
@@ -1133,8 +1129,9 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("처음에는 100만 원이라고 적었어요.");
   await openAnswerTools(page);
-  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+  await page.getByRole("button", { name: "나중에 이어하기", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "답변이 저장됐어요" })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "계속 답하기" }).click();
   await holdGeneration(page, "summary", true);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toBeVisible();
@@ -1488,4 +1485,63 @@ test("choice fact shows its original question separately in summary on desktop a
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByText("질문: 차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("choice questions accept a detailed custom answer and later action persists it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/cases/new");
+  await page
+    .getByLabel("지금까지 있었던 일")
+    .fill("합성 중고거래에서 주문한 물건과 다른 것을 받았어요.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  await expect(page.getByLabel("답변", { exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/src/client/api/cases.ts";
+    const { casesApi } = await import(path);
+    const get = casesApi.getQuestions.bind(casesApi);
+    casesApi.getQuestions = async (...args: Parameters<typeof get>) => {
+      const result = await get(...args);
+      result.questions[0] = {
+        ...result.questions[0],
+        kind: "choice",
+        options: ["물건을 못 받음", "다른 물건을 받음"],
+      };
+      return result;
+    };
+    window.dispatchEvent(new Event("focus"));
+  });
+  const custom = page.getByRole("textbox", { name: /직접 입력/ });
+  await custom.fill("상자를 열었더니 카메라 대신 벽돌이 들어 있었어요.");
+  await page.getByRole("button", { name: "나중에 이어하기", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "계속 답하기" }).click();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
+    "상자를 열었더니 카메라 대신 벽돌이 들어 있었어요.",
+  );
+  await page.screenshot({ path: ".wrangler/mobile-feedback-answer.png", fullPage: true });
+});
+
+test("each missing-information answer is saved in the review and removed from unresolved questions", async ({
+  page,
+}) => {
+  await page.goto("/cases/new");
+  await page.getByLabel("지금까지 있었던 일").fill("합성 거래 내용을 정리하고 싶어요.");
+  await page.getByRole("button", { name: "저장하고 계속" }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  await expect(page).toHaveURL(/\/summary/);
+  const facts = page.locator("details.summary-facts");
+  if (!(await facts.evaluate((node) => node.hasAttribute("open"))))
+    await facts.locator(":scope > summary").click();
+  const gaps = page.locator('[id^="summary-gap-answer-"]');
+  const count = await gaps.count();
+  expect(count).toBeGreaterThan(0);
+  await gaps.first().fill("합성 추가 답변: 10월에 거래했습니다.");
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/합성 추가 답변/);
+  await expect(gaps).toHaveCount(count - 1);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/합성 추가 답변/);
 });

@@ -51,6 +51,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const [factEdits, setFactEdits] = useState<
     Record<string, Pick<V2Fact, "text" | "certainty" | "conflictingFactIds">>
   >({});
+  const [gapAnswers, setGapAnswers] = useState<Record<string, string>>({});
   const [unknownsDraft, setUnknownsDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,6 +93,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       setSummary("");
       setFactEdits({});
       setUnknownsDraft(null);
+      setGapAnswers({});
       setChecked(false);
       setConfirming(false);
       setBusy(false);
@@ -105,13 +107,21 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     true,
   );
   const { ticket, current, alive, verify, ready, canMutate, version, deny } = access;
+  const answeredGaps = Object.entries(gapAnswers).filter(([, answer]) => answer.trim());
+  const completedSummary = [
+    summary.trim(),
+    ...answeredGaps.map(
+      ([question, answer]) => `추가로 설명한 내용 · ${question}\n${answer.trim()}`,
+    ),
+  ].join("\n\n");
   const dirty =
-    !!item &&
-    (summary !== item.summary ||
-      Object.keys(factEdits).length > 0 ||
-      (unknownsDraft !== null &&
-        unknownsDraft !== (item.summaryDetails?.unknowns ?? []).join("\n")));
-  const summaryTooLong = [...summary.trim()].length > 5000;
+    answeredGaps.length > 0 ||
+    (!!item &&
+      (summary !== item.summary ||
+        Object.keys(factEdits).length > 0 ||
+        (unknownsDraft !== null &&
+          unknownsDraft !== (item.summaryDetails?.unknowns ?? []).join("\n"))));
+  const summaryTooLong = [...completedSummary].length > 5000;
   const factTooLong = Object.values(factEdits).some((edit) => [...edit.text].length > 2000);
   draftDirty.current = dirty;
   const locked =
@@ -176,6 +186,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         if (replace) {
           setFactEdits({});
           setUnknownsDraft(null);
+          setGapAnswers({});
         }
         setSummary((draft) =>
           !replace && savedItem.current && draft !== savedItem.current.summary
@@ -230,16 +241,16 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       const wasActive = editingActive;
       let next = await api.cases.saveSummary(caseId, {
         expectedRevision: item.revision,
-        summary: summary.trim(),
+        summary: completedSummary,
         ...(Object.keys(factEdits).length
           ? { factEdits: Object.entries(factEdits).map(([factId, edit]) => ({ factId, ...edit })) }
           : {}),
-        ...(unknownsDraft !== null
+        ...(unknownsDraft !== null || answeredGaps.length > 0
           ? {
-              unknowns: unknownsDraft
+              unknowns: (unknownsDraft ?? item.summaryDetails?.unknowns.join("\n") ?? "")
                 .split("\n")
                 .map((line) => line.trim())
-                .filter(Boolean),
+                .filter((line) => line && !gapAnswers[line]?.trim()),
             }
           : {}),
       });
@@ -256,6 +267,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         setSummary(next.summary);
         setFactEdits({});
         setUnknownsDraft(null);
+        setGapAnswers({});
         setChecked(true);
         failedOperation.current = "confirm";
         next = await api.cases.confirmSummary(caseId, { expectedRevision: next.revision });
@@ -271,6 +283,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       setSummary(next.summary);
       setFactEdits({});
       setUnknownsDraft(null);
+      setGapAnswers({});
       setChecked(false);
       setNotice("수정한 요약이 저장됐어요.");
     } catch (cause) {
@@ -462,8 +475,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     <section aria-label="구조화된 사실 편집">
                       <h2>사실·모순·정보 공백 확인</h2>
                       <p id="fact-certainty-help" className="intake-muted">
-                        내가 설명한 내용은 ‘사용자 진술’, 기억이나 근거를 더 확인해야 하면 ‘아직
-                        확인하지 못했어요’를 선택하세요.
+                        사실 내용을 고칠 수 있어요. 출처와 확인 상태는 시스템이 구분해요.
+                        불확실하거나 서로 다른 내용이 있으면 아래 추가 확인 설정에서 표시할 수
+                        있어요.
                       </p>
                       {item.summaryDetails.facts.map((fact) => {
                         const edit = factEdits[fact.id] ?? fact;
@@ -509,37 +523,40 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                             {[...edit.text].length > 2000 && (
                               <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
                             )}
-                            <label>
-                              확인 상태
-                              <select
-                                aria-label="확인 상태"
-                                aria-describedby="fact-certainty-help"
-                                value={edit.certainty}
-                                onChange={(e) => {
-                                  const certainty = e.target.value as V2Fact["certainty"];
-                                  update({
-                                    certainty,
-                                    conflictingFactIds:
-                                      certainty === "conflicting" ? edit.conflictingFactIds : [],
-                                  });
-                                }}
-                              >
-                                {fact.attribution === "user_statement" && (
-                                  <option value="reported">사용자 진술</option>
-                                )}
+                            <details>
+                              <summary>추가 확인 설정 · 근거는 자동으로 구분해요</summary>
+                              <label>
+                                확인 상태
+                                <select
+                                  aria-label="확인 상태"
+                                  aria-describedby="fact-certainty-help"
+                                  value={edit.certainty}
+                                  onChange={(e) => {
+                                    const certainty = e.target.value as V2Fact["certainty"];
+                                    update({
+                                      certainty,
+                                      conflictingFactIds:
+                                        certainty === "conflicting" ? edit.conflictingFactIds : [],
+                                    });
+                                  }}
+                                >
+                                  {fact.attribution === "user_statement" && (
+                                    <option value="reported">사용자 진술</option>
+                                  )}
+                                  {edit.certainty === "observed" && (
+                                    <option value="observed">자료 내용 확인됨 (자동 확인)</option>
+                                  )}
+                                  <option value="uncertain">아직 확인하지 못했어요</option>
+                                  <option value="conflicting">다른 사실과 모순</option>
+                                </select>
                                 {edit.certainty === "observed" && (
-                                  <option value="observed">자료 내용 확인됨 (자동 확인)</option>
+                                  <small>
+                                    자료에 적힌 내용과 연결됐어요. 사실 여부나 원본의 진정성을
+                                    보증하지 않아요.
+                                  </small>
                                 )}
-                                <option value="uncertain">아직 확인하지 못했어요</option>
-                                <option value="conflicting">다른 사실과 모순</option>
-                              </select>
-                              {edit.certainty === "observed" && (
-                                <small>
-                                  자료에 적힌 내용과 연결됐어요. 사실 여부나 원본의 진정성을
-                                  보증하지 않아요.
-                                </small>
-                              )}
-                            </label>
+                              </label>
+                            </details>
                             {edit.certainty === "conflicting" && (
                               <fieldset className="summary-conflicts">
                                 <legend>
@@ -571,17 +588,45 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                           </fieldset>
                         );
                       })}
-                      <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
-                      <Textarea
-                        id="summary-unknowns"
-                        value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
-                        disabled={locked}
-                        onChange={(e) => {
-                          setUnknownsDraft(e.target.value);
-                          setChecked(false);
-                          setConfirming(false);
-                        }}
-                      />
+                      <h3>더 확인할 내용 · 아래 칸에서 항목을 수정하거나 답을 덧붙일 수 있어요</h3>
+                      {(unknownsDraft ?? item.summaryDetails.unknowns.join("\n"))
+                        .split("\n")
+                        .map((unknown, i, all) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: Editable ordered text slots preserve identity while their text changes; slots cannot be reordered here.
+                          <div className="summary-gap" key={`gap-${i}`}>
+                            <label htmlFor={`summary-unknown-${i}`}>확인할 내용 {i + 1}</label>
+                            <Textarea
+                              id={`summary-unknown-${i}`}
+                              rows={3}
+                              value={unknown}
+                              disabled={locked}
+                              placeholder="알고 있는 내용을 뒤에 덧붙이거나 확인할 항목을 수정해 주세요."
+                              onChange={(e) => {
+                                const next = [...all];
+                                next[i] = e.target.value.replaceAll("\n", " ");
+                                setUnknownsDraft(next.join("\n"));
+                                setChecked(false);
+                                setConfirming(false);
+                              }}
+                            />
+                            <label htmlFor={`summary-gap-answer-${i}`}>알고 있는 내용 입력</label>
+                            <Textarea
+                              id={`summary-gap-answer-${i}`}
+                              rows={2}
+                              value={gapAnswers[unknown] ?? ""}
+                              disabled={locked}
+                              placeholder="알고 있는 내용만 적어 주세요. 모르면 비워두어도 돼요."
+                              onChange={(e) => {
+                                setGapAnswers((old) => ({ ...old, [unknown]: e.target.value }));
+                                setChecked(false);
+                                setConfirming(false);
+                              }}
+                            />
+                            <small>
+                              저장하면 답변은 요약에 추가되고 이 항목은 더 확인할 내용에서 빠져요.
+                            </small>
+                          </div>
+                        ))}
                     </section>
                   </details>
                 )}
@@ -614,6 +659,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         setSummary(item.summary);
                         setFactEdits({});
                         setUnknownsDraft(null);
+                        setGapAnswers({});
                         setChecked(false);
                         setConfirming(false);
                         setNotice("");

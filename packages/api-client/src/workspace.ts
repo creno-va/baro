@@ -606,6 +606,7 @@ export function createWorkspaceClient(dependencies: {
       const [title, ...detail] = item.event.split("\n");
       return {
         id: item.id,
+        references: item.references,
         revision: item.revision,
         date: item.date ?? "",
         datePrecision: item.datePrecision,

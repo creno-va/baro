@@ -143,6 +143,10 @@ export function Workspace({
   const linkedFile = useRef("");
   const uploadInput = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const autoMaterials = useRef(new Set<string>());
+  const [batchFiles, setBatchFiles] = useState<string[]>([]);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressGesture = useRef({ x: 0, y: 0, selected: false });
   const reviewDirty = useRef(false);
   const reviewBusy = useRef(false);
   const [reviewState, setReviewState] = useState({ dirty: false, busy: false });
@@ -168,6 +172,8 @@ export function Workspace({
     acknowledgedTimeline.current = false;
     setTimelineRecovery(false);
     sendAttempt.current = null;
+    autoMaterials.current.clear();
+    setBatchFiles([]);
     lookupAttempt.current = null;
     setLookupOpen(false);
     previousMessages.current = null;
@@ -231,6 +237,9 @@ export function Workspace({
       newestMessageAt.current,
     );
     setView(next);
+    setBatchFiles((ids) =>
+      ids.filter((id) => next.files.some((file) => file.id === id && file.status === "ready")),
+    );
     setChatAttachments((files) =>
       files.map((file) => next.files.find((item) => item.id === file.id) ?? file),
     );
@@ -645,28 +654,74 @@ export function Workspace({
     });
     return accepted;
   }
-  async function reflectMaterial(fileId: string) {
-    if (reviewDirty.current || reviewBusy.current) return;
+  const reflectLatest = useRef<(ids: string[]) => Promise<void>>(async () => {});
+  reflectLatest.current = reflectMaterials;
+  useEffect(() => {
+    if (
+      !ready ||
+      readonly ||
+      busy ||
+      error ||
+      !view ||
+      view.case.stage !== "active" ||
+      view.messages.some((m) => m.status === "pending")
+    )
+      return;
+    if (
+      view.files.some(
+        (file) =>
+          autoMaterials.current.has(file.id) &&
+          ["uploading", "processing", "waiting"].includes(file.status),
+      )
+    )
+      return;
+    const ids = view.files
+      .filter((file) => file.status === "ready" && autoMaterials.current.has(file.id))
+      .map((file) => file.id);
+    if (!ids.length) return;
+    // Remove before dispatch: a failure offers explicit retry, never a paid loop.
+    for (const id of ids) autoMaterials.current.delete(id);
+    void reflectLatest.current(ids);
+  }, [ready, readonly, busy, view, error]);
+  useEffect(
+    () => () => {
+      if (pressTimer.current) clearTimeout(pressTimer.current);
+    },
+    [],
+  );
+  async function reflectMaterials(fileIds: string[]) {
+    if (reviewDirty.current || reviewBusy.current || !fileIds.length) return;
     await run("reflect-material", async (epoch) => {
       const currentView = await api.workspace.get(caseId);
       if (!(await verify(false, true)) || !current(epoch)) return;
+      if (currentView.messages.some((m) => m.status === "pending")) {
+        apply(currentView);
+        setNotice("이전 자료를 정리하고 있어요. 완료 후 다시 반영해 주세요.");
+        return;
+      }
       const text =
-        "선택한 자료의 포함된 교정 내용을 기존 사실과 대조해 사건의 사실·관련 인물·타임라인을 정리해 주세요. 원문에 없는 내용은 추측하지 말고, 달라진 내용과 확인할 부분을 알려 주세요.";
+        "선택한 자료의 포함된 교정 내용을 기존 사실과 대조해 사건의 사실·관련 인물·타임라인·다음 행동을 갱신해 주세요. 원문에 없는 내용은 추측하지 말고, 자료에서 확인한 내용은 정보 공백으로 반복하지 마세요.";
       if (
         !sendAttempt.current ||
-        sendAttempt.current.selectedFileIds[0] !== fileId ||
-        sendAttempt.current.text !== text
+        JSON.stringify(sendAttempt.current.selectedFileIds) !== JSON.stringify(fileIds)
       )
         sendAttempt.current = {
           expectedRevision: currentView.case.revision,
           text,
-          selectedFileIds: [fileId],
+          selectedFileIds: fileIds,
         };
-      await api.workspace.sendMessage(caseId, sendAttempt.current);
+      const next = await api.workspace.sendMessage(caseId, sendAttempt.current);
       if (!(await verify()) || !current(epoch)) return;
+      apply(next);
       sendAttempt.current = null;
-      window.location.assign(base);
+      setPreview(null);
+      setNotice(
+        `${fileIds.length}개 자료 반영을 접수했어요. 정리가 끝나면 사실·타임라인·다음 행동이 갱신돼요.`,
+      );
     });
+  }
+  async function reflectMaterial(fileId: string) {
+    return reflectMaterials([fileId]);
   }
   async function upload(files: FileList | File[] | null) {
     if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
@@ -716,6 +771,7 @@ export function Workspace({
             ]);
             setLocalAttachments((items) => items.filter((item) => item !== file));
           }
+          autoMaterials.current.add(uploaded.id);
           // The upload API already checked this exact file after its ACK. A
           // later whole-workspace read failure must never resend accepted files.
           setRetryUploads(chosen.slice(completed));
@@ -850,7 +906,16 @@ export function Workspace({
       ...(view?.messages
         .filter((message) => message.role === "assistant" && message.status === "complete")
         .flatMap((message) => message.references ?? []) ?? []),
-    ].flatMap((ref) => (ref.kind === "user_material" ? [ref.fileId] : [])),
+    ].flatMap((ref) =>
+      ref.kind === "user_material" &&
+      view?.files.some(
+        (file) =>
+          file.id === ref.fileId &&
+          (file.revision === undefined || file.revision === ref.fileRevision),
+      )
+        ? [ref.fileId]
+        : [],
+    ),
   );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   return (
@@ -1567,11 +1632,120 @@ export function Workspace({
                       수 있어요.
                     </p>
                   )}
+                  <p className="workspace-muted">
+                    자료 처리가 끝나면 사건에 자동으로 반영해요. 잘못 읽은 내용은 ‘자료 확인’에서
+                    수정할 수 있어요.
+                  </p>
+                  {batchFiles.length > 0 && (
+                    <fieldset className="workspace-buttons" aria-label="선택 자료 작업">
+                      <Button
+                        disabled={!!busy || readonly}
+                        onClick={() => void reflectMaterials(batchFiles)}
+                      >
+                        선택 자료 {batchFiles.length}개 반영
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={!!busy || !ready}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `선택한 ${batchFiles.length}개 자료의 원본과 처리 결과를 삭제할까요?`,
+                            )
+                          )
+                            return;
+                          void run("delete", async (epoch) => {
+                            for (const id of batchFiles) {
+                              if (!(await verify()) || !current(epoch)) return;
+                              await api.files.remove(caseId, id);
+                              setBatchFiles((old) => old.filter((value) => value !== id));
+                            }
+                            await load();
+                          });
+                        }}
+                      >
+                        선택 자료 삭제
+                      </Button>
+                      <Button variant="ghost" onClick={() => setBatchFiles([])}>
+                        선택 해제
+                      </Button>
+                    </fieldset>
+                  )}
                   <ul className="workspace-file-list">
                     {view.files
                       .filter((file) => !evidenceOnly || evidenceIds.has(file.id))
                       .map((file) => (
-                        <li key={file.id}>
+                        <li
+                          key={file.id}
+                          onPointerDown={(event) => {
+                            if (pressTimer.current) clearTimeout(pressTimer.current);
+                            pressGesture.current = {
+                              x: event.clientX,
+                              y: event.clientY,
+                              selected: false,
+                            };
+                            if (
+                              !ready ||
+                              busy ||
+                              file.status !== "ready" ||
+                              (event.target instanceof Element &&
+                                event.target.closest("a,button,input,label,textarea"))
+                            )
+                              return;
+                            try {
+                              event.currentTarget.setPointerCapture(event.pointerId);
+                            } catch {
+                              /* Synthetic pointers may have no capture target. */
+                            }
+                            pressTimer.current = setTimeout(() => {
+                              pressGesture.current.selected = true;
+                              setBatchFiles((old) =>
+                                old.includes(file.id) ? old : [...old, file.id],
+                              );
+                            }, 1000);
+                          }}
+                          onPointerUp={() => {
+                            if (pressTimer.current) clearTimeout(pressTimer.current);
+                          }}
+                          onPointerCancel={() => {
+                            if (pressTimer.current) clearTimeout(pressTimer.current);
+                            pressGesture.current.selected = false;
+                          }}
+                          onPointerMove={(event) => {
+                            if (
+                              Math.hypot(
+                                event.clientX - pressGesture.current.x,
+                                event.clientY - pressGesture.current.y,
+                              ) > 8 &&
+                              pressTimer.current
+                            )
+                              clearTimeout(pressTimer.current);
+                          }}
+                          onClickCapture={(event) => {
+                            if (!pressGesture.current.selected) return;
+                            pressGesture.current.selected = false;
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onPointerLeave={() => {
+                            if (pressTimer.current) clearTimeout(pressTimer.current);
+                          }}
+                        >
+                          <label className="workspace-material-select">
+                            <input
+                              type="checkbox"
+                              checked={batchFiles.includes(file.id)}
+                              disabled={!!busy || !ready || file.status !== "ready"}
+                              onChange={(e) =>
+                                setBatchFiles((old) =>
+                                  e.target.checked
+                                    ? [...old, file.id]
+                                    : old.filter((id) => id !== file.id),
+                                )
+                              }
+                            />
+                            선택<span className="sr-only"> {file.name}</span>
+                          </label>
                           <div className="workspace-file-title" {...privateContent}>
                             <FileText size={24} />
                             <div>
@@ -1584,7 +1758,11 @@ export function Workspace({
                                 <span
                                   className={`workspace-status workspace-status--${file.status}`}
                                 >
-                                  {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
+                                  {file.uploadRejection
+                                    ? "등록 거절"
+                                    : evidenceIds.has(file.id) && file.status === "ready"
+                                      ? "반영 완료 · 자료 근거 연결"
+                                      : fileStatus[file.status]}
                                 </span>
                               </p>
                             </div>
@@ -1697,7 +1875,11 @@ export function Workspace({
                           <div>
                             <h3>{item.title}</h3>
                             <p>{item.detail}</p>
-                            <span className="workspace-muted">사용자 확인 필요</span>
+                            <span className="workspace-muted">
+                              {item.references?.some((ref) => ref.kind === "user_material")
+                                ? "자료 근거 연결됨 · 사실 여부는 별도 확인"
+                                : "사용자가 설명한 일정"}
+                            </span>
                           </div>
                           <Button
                             variant="ghost"
@@ -1983,6 +2165,15 @@ export function Workspace({
         {preview && (
           <div className="workspace-preview" hidden={!ready} inert={!ready}>
             <h3>{preview.name}</h3>
+            {error && (
+              <p
+                role="alert"
+                className="workspace-error"
+                ref={(node) => node?.scrollIntoView({ block: "nearest" })}
+              >
+                {error.message}
+              </p>
+            )}
             <p>
               {preview.uploadRejection ? "등록 거절" : fileStatus[preview.status]} ·{" "}
               {size(preview.sizeBytes)}

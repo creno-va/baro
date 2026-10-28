@@ -529,9 +529,25 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const l = await lease(actor.ownerId, r);
     const written: string[] = [];
     try {
-      const font = await reportReadStep("font", () => deps.font());
       const authorize = () => fence.check(l);
       await authorize();
+      const choices = selected
+        ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
+        : [];
+      const plannedSources: ZipSource[] = choices.map((file) => ({
+        ...file,
+        open: async () => {
+          await authorize();
+          const content = await deps.files.content(actor.ownerId, r.workspace_id, file.id);
+          if (content.name !== file.name || content.byteLength !== file.byteLength)
+            throw new ReportError("STALE_REVISION");
+          return content.body;
+        },
+      }));
+      const zipSize = selected ? zipByteLength(plannedSources) : undefined;
+      if (zipSize && zipSize > MAX_SELECTED_ZIP_BYTES)
+        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+      const font = await reportReadStep("font", () => deps.font());
       const report = {
         title: data.review.title,
         content: data.review.content,
@@ -545,20 +561,19 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         },
         excludedFileIds: data.review.excludedFileIds,
         maskIdentifiers: data.review.maskIdentifiers,
-        photos:
-          data.review.maskIdentifiers || !data.review.includedPhotoIds?.length
-            ? []
-            : await loadReportPhotos(
-                core,
-                actor,
-                r.workspace_id,
-                data.body,
-                data.review.content,
-                data.review.includedPhotoIds,
-                data.review.excludedFileIds,
-                deps.files,
-                authorize,
-              ),
+        photos: !data.review.includedPhotoIds?.length
+          ? []
+          : await loadReportPhotos(
+              core,
+              actor,
+              r.workspace_id,
+              data.body,
+              data.review.content,
+              data.review.includedPhotoIds,
+              data.review.excludedFileIds,
+              deps.files,
+              authorize,
+            ),
       };
       let rawFont = "";
       for (let offset = 0; offset < font.length; offset += 8192)
@@ -592,22 +607,6 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
             })();
       await authorize();
 
-      const choices = selected
-        ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
-        : [];
-      const plannedSources: ZipSource[] = choices.map((file) => ({
-        ...file,
-        open: async () => {
-          await authorize();
-          const content = await deps.files.content(actor.ownerId, r.workspace_id, file.id);
-          if (content.name !== file.name || content.byteLength !== file.byteLength)
-            throw new ReportError("STALE_REVISION");
-          return content.body;
-        },
-      }));
-      const zipSize = selected ? zipByteLength(plannedSources) : undefined;
-      if (zipSize && zipSize > MAX_SELECTED_ZIP_BYTES)
-        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       const originalParts = choices.length
         ? await core
             .statement(

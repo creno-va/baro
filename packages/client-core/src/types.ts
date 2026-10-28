@@ -57,6 +57,7 @@ export type ActionView = {
   done: boolean;
 };
 export type TimelineView = {
+  references?: V2FactReference[];
   id: string;
   revision?: number | undefined;
   date: string;

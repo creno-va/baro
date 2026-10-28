@@ -167,9 +167,12 @@ test("partial intake answers persist but advance validates all server questions 
   accepts(v2AnswersForBatchSchema(batch), partial);
   rejects(v2AnswersForBatchSchema(batch, true), partial);
   accepts(v2AnswersForBatchSchema(batch, true), { expectedRevision: 2, answers: batch.answers });
+  accepts(v2AnswersForBatchSchema(batch), {
+    expectedRevision: 2,
+    answers: [{ questionId: "q2", status: "answered", value: "선택지에 없는 자세한 직접 답변" }],
+  });
   for (const answer of [
     rejectedFixtures.skippedWithValue,
-    { questionId: "q2", status: "answered", value: "없는 선택지" },
     { questionId: "foreign", status: "unknown" },
   ])
     rejects(v2AnswersForBatchSchema(batch), { expectedRevision: 2, answers: [answer] });

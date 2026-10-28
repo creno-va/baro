@@ -18,6 +18,13 @@ export function FactAnswer({
     <div className="fact-answer">
       <p className="fact-answer__question">{prompts.join(" / ") || "확인한 내용"}</p>
       <p className="fact-answer__text">{fact.text}</p>
+      {fact.references.some((ref) => ref.kind === "user_material") && (
+        <p className="fact-answer__notice">
+          {fact.certainty === "observed"
+            ? "자료 근거 있음 · 사실 여부는 별도 확인"
+            : "자료 근거 연결됨 · 내용 대조 필요"}
+        </p>
+      )}
       {(fact.certainty === "uncertain" ||
         fact.certainty === "conflicting" ||
         fact.conflictingFactIds.length > 0 ||

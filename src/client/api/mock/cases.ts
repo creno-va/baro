@@ -199,7 +199,8 @@ export const casesMockHandlers = {
         const q = value.questions.find((q) => q.id === answer.questionId);
         if (
           !q ||
-          (answer.state === "answered" && q.kind === "choice" && !q.options?.includes(answer.value))
+          (answer.state === "answered" &&
+            (!answer.value.trim() || [...answer.value.trim()].length > 1000))
         )
           throw new ApiError("VALIDATION_ERROR", "질문에 맞는 답변을 선택해 주세요.");
       }

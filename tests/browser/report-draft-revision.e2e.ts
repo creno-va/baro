@@ -368,3 +368,63 @@ test("initial report limit allows exclusions before any report exists", async ({
   );
   expect(exclusions).toEqual(["large-file"]);
 });
+
+test("a browser-blocked automatic PDF download exposes a real temporary link and revokes it on account change", async ({
+  page,
+}) => {
+  let owner = "synthetic-owner";
+  await progressFixture(page, {
+    session: async (route) =>
+      route.fulfill({
+        json: { user: { id: owner, name: "합성", accountType: "customer" }, needsConsent: false },
+      }),
+    pdf: async (route) =>
+      route.fulfill({
+        contentType: "application/pdf",
+        body: "%PDF-1.7\nsynthetic authorized PDF\n%%EOF",
+      }),
+  });
+  await page.goto("/cases/synthetic-progress-case/reports");
+  await page.getByLabel("내용·식별정보·선택한 사진을 확인했어요").check();
+  await page.evaluate(() => {
+    HTMLAnchorElement.prototype.click = () => {};
+  });
+  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+  const fallback = page.getByRole("link", { name: /PDF 직접 열기/ });
+  await expect(fallback).toHaveAttribute("href", /^blob:/);
+  expect(
+    await fallback.evaluate(async (link) => (await fetch((link as HTMLAnchorElement).href)).text()),
+  ).toContain("%PDF-1.7");
+  owner = "synthetic-other-owner";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(fallback).toHaveCount(0);
+});
+
+test("privacy settings save independently while unsaved report text stays in the editor", async ({
+  page,
+}) => {
+  let current = { ...progressReport };
+  const writes: { content: string; maskIdentifiers: boolean }[] = [];
+  await progressFixture(page, {
+    pdf: async (route) =>
+      route.fulfill({ contentType: "application/pdf", body: "%PDF-1.7\n%%EOF" }),
+    report: async (route) => {
+      if (route.request().method() === "PATCH") {
+        const body = route.request().postDataJSON();
+        writes.push(body);
+        current = { ...current, ...body, revision: current.revision + 1 };
+      }
+      return route.fulfill({ json: current });
+    },
+  });
+  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  await editor.fill("아직 저장하지 않은 별도 본문");
+  await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).uncheck();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]?.content).toBe(progressReport.content);
+  expect(writes[0]?.maskIdentifiers).toBe(false);
+  await expect(editor).toHaveValue("아직 저장하지 않은 별도 본문");
+  await expect(
+    page.getByText("개인정보·사진 설정을 저장했어요. 작성 중인 본문은 그대로 남아 있어요."),
+  ).toBeVisible();
+});

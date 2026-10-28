@@ -127,7 +127,7 @@ describe("B persistent API mock", () => {
         {
           id: item.id,
           expectedRevision: 1,
-          answers: [{ questionId: "missing-question", state: "answered", value: "없는 선택" }],
+          answers: [{ questionId: "missing-question", state: "answered", value: "" }],
         },
         context(),
       ),
@@ -285,7 +285,7 @@ describe("B persistent API mock", () => {
         {
           id: item.id,
           expectedRevision: result.revision,
-          answers: [{ questionId: "legacy-choice", state: "answered", value: "없는 선택" }],
+          answers: [{ questionId: "legacy-choice", state: "answered", value: "" }],
         },
         context(),
       ),

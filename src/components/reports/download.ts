@@ -21,6 +21,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return url;
 }
 const encode = (text: string) => new TextEncoder().encode(text);
 const join = (parts: Uint8Array[]) => {

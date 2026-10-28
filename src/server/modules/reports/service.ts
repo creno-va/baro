@@ -405,6 +405,17 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     }
     return id;
   }
+  const defaultPhotos = (source: Awaited<ReturnType<typeof buildReportSource>>) => {
+    let total = 0;
+    return source.eligiblePhotoIds
+      .filter((id) => {
+        const bytes = source.body.selectedFiles.find((file) => file.id === id)?.byteLength ?? 0;
+        if (total + bytes > 8_000_000) return false;
+        total += bytes;
+        return true;
+      })
+      .slice(0, 12);
+  };
   const exports = createReportExports(core, deps, { row, read, canonical, actor });
   return {
     async get(ownerId: string, caseId: string) {
@@ -420,6 +431,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         content: reportText(source.body, source.coverage, source.display),
         excludedFileIds: [],
         maskIdentifiers: false,
+        includedPhotoIds: defaultPhotos(source),
         sourceDigest: source.digest,
         parentReportId: null,
       };
@@ -547,6 +559,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         content: reportText(source.body, source.coverage, source.display),
         excludedFileIds: value.excludedFileIds ?? [],
         maskIdentifiers: false,
+        includedPhotoIds: defaultPhotos(source),
         sourceDigest: source.digest,
         parentReportId: null,
       };
@@ -588,20 +601,19 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
           .first<number>("n");
         if (current !== selectedPhotos.length) throw new ReportError("STALE_REVISION");
       };
-      const photos =
-        report.maskIdentifiers || !data.review.includedPhotoIds?.length
-          ? []
-          : await loadReportPhotos(
-              core,
-              a,
-              data.row.workspace_id,
-              data.body,
-              data.review.content,
-              data.review.includedPhotoIds,
-              data.review.excludedFileIds,
-              deps.files,
-              authorize,
-            );
+      const photos = !data.review.includedPhotoIds?.length
+        ? []
+        : await loadReportPhotos(
+            core,
+            a,
+            data.row.workspace_id,
+            data.body,
+            data.review.content,
+            data.review.includedPhotoIds,
+            data.review.excludedFileIds,
+            deps.files,
+            authorize,
+          );
       const document = createReportHtml({ ...report, photos });
       // Saved-report presentation only; no new AI processing, report revision or blob.
       // Recheck ownership and deletion after all asynchronous source reads.

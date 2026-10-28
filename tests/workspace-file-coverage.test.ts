@@ -132,7 +132,13 @@ test("large observations keep compact bound while workspace reads metadata and r
   } while (pages < 4);
   expect([count, pages]).toEqual([11, 3]);
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
-  for (let i = 0; i < 11; i++) expect(report.content).toContain(`END_${i}`);
+  expect(report.content).toContain("포함한 추출 내용 11개");
+  for (let i = 0; i < 11; i++) expect(report.content).not.toContain(`END_${i}`);
+  expect(
+    f.db.sqlite
+      .query("SELECT count(*) AS n FROM v2_file_observations WHERE file_id=? AND file_revision=2")
+      .get(f.selectedFileId),
+  ).toEqual({ n: 11 });
   const original = await files.original(f.workspaceId, f.selectedFileId);
   expect(await original.text()).toBe(f.original);
 });

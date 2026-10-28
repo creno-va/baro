@@ -438,8 +438,8 @@ test("initial oversized source recovers with report-only exclusions", async () =
       id: entityId,
       text: `합성 관찰 ${ordinal} ${"자료 내용 ".repeat(740)}`,
       position: { kind: "document", page: 1, paragraph: ordinal + 1, table: null },
-      certainty: "observed",
-      userEdited: false,
+      certainty: "uncertain",
+      userEdited: true,
       included: true,
     };
     expect(observation.text.length).toBeLessThanOrEqual(5000);

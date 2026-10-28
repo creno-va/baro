@@ -2436,3 +2436,58 @@ test("current file checkpoint and status update survive reload and reset on expl
   await expect(page.getByText("결과 확인 가능", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/마지막 상태 갱신 후|최근 확인 단계|자료 등록 후/)).toHaveCount(0);
 });
+
+test("newly processed attachments reflect once as a batch and selected originals can be deleted together", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${base}/files`);
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = await import(path);
+    const original = api.workspace.sendMessage;
+    const state = window as unknown as { materialCalls: number; reflectedIds: string[] };
+    state.materialCalls = 0;
+    state.reflectedIds = [];
+    api.workspace.sendMessage = async (...args: Parameters<typeof original>) => {
+      state.materialCalls++;
+      state.reflectedIds = [...(args[1] as { selectedFileIds: string[] }).selectedFileIds];
+      return original(...args);
+    };
+  });
+  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles([
+    { name: "auto-first.txt", mimeType: "text/plain", buffer: Buffer.from("합성 첫 자료") },
+    { name: "auto-second.txt", mimeType: "text/plain", buffer: Buffer.from("합성 둘째 자료") },
+  ]);
+  await expect
+    .poll(
+      () => page.evaluate(() => (window as unknown as { materialCalls: number }).materialCalls),
+      { timeout: 15000 },
+    )
+    .toBe(1);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { reflectedIds: string[] }).reflectedIds.length,
+    ),
+  ).toBe(2);
+  const firstCard = page.getByRole("heading", { name: "auto-first.txt", exact: true });
+  await firstCard.scrollIntoViewIfNeeded();
+  const bounds = await firstCard.boundingBox();
+  if (!bounds) throw new Error("Missing synthetic material title");
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(1100);
+  await page.mouse.up();
+  await expect(page.getByRole("checkbox", { name: /선택 auto-first/ })).toBeChecked();
+  await page.getByRole("checkbox", { name: /선택 auto-second/ }).check();
+  await expect(page.getByRole("button", { name: "선택 자료 2개 반영" })).toBeVisible();
+  await page.screenshot({ path: ".wrangler/mobile-feedback-materials.png", fullPage: true });
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "선택 자료 삭제", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "아직 자료가 없어요" })).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as unknown as { materialCalls: number }).materialCalls),
+  ).toBe(1);
+});

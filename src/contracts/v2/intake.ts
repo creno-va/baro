@@ -30,12 +30,7 @@ export const v2QuestionBatchSchema = z
       new Set(answers.map((a) => a.questionId)).size === answers.length &&
       answers.every((answer) => {
         const question = questions.find((q) => q.id === answer.questionId);
-        return (
-          question !== undefined &&
-          (answer.status !== "answered" ||
-            question.answerType === "text" ||
-            question.options.includes(answer.value))
-        );
+        return question !== undefined;
       }),
     "Answer does not match this batch",
   );
@@ -54,14 +49,9 @@ export function v2AnswersForBatchSchema(batch: unknown, complete = false) {
       (!complete || answers.length === approved.questions.length) &&
       answers.every((answer) => {
         const question = approved.questions.find((q) => q.id === answer.questionId);
-        return (
-          question !== undefined &&
-          (answer.status !== "answered" ||
-            question.answerType === "text" ||
-            question.options.includes(answer.value))
-        );
+        return question !== undefined;
       }),
-    "Unknown question, invalid choice, or incomplete batch",
+    "Unknown question or incomplete batch",
   );
 }
 export const v2SummarySchema = z.strictObject({

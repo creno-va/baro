@@ -588,7 +588,7 @@ test("canonical four-ready report generation and review preserve source fences w
     f.work.map(({ operation, calls, statements }) => ({ operation, calls, statements })),
   ).toEqual([
     { operation: "get_initial", calls: 127, statements: 166 },
-    { operation: "save_review", calls: 135, statements: 176 },
+    { operation: "save_review", calls: 138, statements: 179 },
     { operation: "generate", calls: 127, statements: 166 },
   ]);
   expect(f.work.every((work) => work.r2.get === 0 && work.r2.put === 0)).toBe(true);
@@ -739,7 +739,10 @@ for (const selection of [1, 2, 4])
     await assertOriginalZip(archive, f.originals);
     const work = f.work.at(-1);
     expect(work?.statements).toBeLessThanOrEqual(800);
-    expect(work?.r2).toMatchObject({ get: selection * 3 + 1, put: 2 });
+    expect(work?.r2).toMatchObject({
+      get: selection * 3 + 1 + (report.includedPhotoIds?.length ?? 0),
+      put: 2,
+    });
     if (process.env.BARO_REPORT_WORK_METRICS === "true")
       console.info(
         JSON.stringify({
@@ -799,7 +802,19 @@ for (const overflow of [false, true])
     // The real report PDF is five chunks. Eleven ZIP chunks reach exactly800;
     // the next byte creates a twelfth ZIP chunk and must fail before any IO.
     const f = await fixture(true, 4, 11 * 262144 + (overflow ? 1 : 0));
-    const report = await f.client.get(f.workspace.id);
+    const initial = await f.client.get(f.workspace.id);
+    // This boundary isolates the text PDF/ZIP chunk plan. Photos now default
+    // on; explicitly deselect them through the real review API before measuring.
+    const report = await f.client.save(
+      f.workspace.id,
+      {
+        content: initial.content,
+        maskIdentifiers: initial.maskIdentifiers,
+        includedPhotoIds: [],
+        excludedFileIds: initial.excludedFileIds,
+      },
+      initial.revision,
+    );
     const originalPlan = reportLimits.reportWorkPlan,
       plans: reportLimits.ReportWorkPlan[] = [];
     const observer = spyOn(reportLimits, "reportWorkPlan").mockImplementation((input) => {

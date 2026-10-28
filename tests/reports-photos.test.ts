@@ -205,8 +205,8 @@ test("owned photo observations reach case report text; explicit selection reache
   const draft = await f.reports.get(owner, f.workspaceId);
   expect(draft.content).toContain("촬영 날짜와 사건과의 관계");
   expect(draft.photoCandidates?.map((photo) => photo.id)).toEqual([f.id]);
-  expect(draft.includedPhotoIds).toEqual([]);
-  expect(await f.reports.html(owner, draft.id)).not.toContain("data:image/jpeg");
+  expect(draft.includedPhotoIds).toEqual([f.id]);
+  expect(await f.reports.html(owner, draft.id)).toContain("data:image/jpeg");
   const saved = await f.reports.save(owner, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: draft.revision,
     content: draft.content,
@@ -227,7 +227,7 @@ test("owned photo observations reach case report text; explicit selection reache
     expect(new TextDecoder().decode(value)).not.toContain("촬영 날짜와 사건과의 관계");
 });
 
-test("identifier masking excludes image pixels entirely, preserves the choice, and performs no photo reads", async () => {
+test("text identifier masking preserves explicitly selected photos and warns that their pixels are unmasked", async () => {
   const f = await photoFixture(),
     owner = f.actor.ownerId,
     draft = await f.reports.get(owner, f.workspaceId);
@@ -239,10 +239,10 @@ test("identifier masking excludes image pixels entirely, preserves the choice, a
     includedPhotoIds: [f.id],
   });
   expect(saved.includedPhotoIds).toEqual([f.id]);
-  expect(await f.reports.html(owner, saved.id)).not.toContain("data:image/jpeg");
+  expect(await f.reports.html(owner, saved.id)).toContain("data:image/jpeg");
   await f.reports.pdf(owner, saved.id);
-  expect(f.rendered[0]).not.toContain("data:image/jpeg");
-  expect(f.reads()).toBe(0);
+  expect(f.rendered[0]).toContain("data:image/jpeg");
+  expect(f.reads()).toBe(2);
 });
 
 test("foreign, duplicate, excluded and stale photo choices fail before export; deletion revokes already-open sources", async () => {
@@ -266,7 +266,7 @@ test("foreign, duplicate, excluded and stale photo choices fail before export; d
   await expect(f.reports.pdf(owner, saved.id)).rejects.toThrow("STALE_REVISION");
 });
 
-test("report template escapes captions, rejects remote/SVG photo URLs and excludes selected photos under masking", () => {
+test("report template escapes captions, rejects remote/SVG photo URLs and preserves explicit photos under text-only masking", () => {
   const photo = {
     id: "photo",
     name: '<img src=x onerror="bad">',
@@ -296,7 +296,10 @@ test("report template escapes captions, rejects remote/SVG photo URLs and exclud
       photos: [{ ...photo, dataUrl: "data:image/svg+xml;base64,PHN2Zz4=" }],
     }),
   ).not.toContain("PHN2Zz4=");
-  expect(createReportHtml({ ...document, maskIdentifiers: true })).not.toContain("/9j/2Q==");
+  expect(createReportHtml({ ...document, maskIdentifiers: true })).toContain("/9j/2Q==");
+  expect(createReportHtml({ ...document, maskIdentifiers: true })).toContain(
+    "사진 속 개인정보는 자동으로 가려지지 않습니다",
+  );
   expect(createReportHtml({ ...document, excludedFileIds: ["photo"] })).not.toContain("/9j/2Q==");
 });
 
@@ -420,4 +423,29 @@ test("historical photo preview keeps its immutable basis after an unrelated sour
   expect(html).toContain("이전 생성 기준");
   expect(html).toContain("data:image/jpeg;base64,");
   await expect(f.reports.pdf(owner, saved.id)).rejects.toThrow("STALE_REVISION");
+});
+
+test("text masking also covers photo filenames and derived captions without silently dropping the explicit image", () => {
+  const html = createReportHtml({
+    title: "합성",
+    content: "사건 요약\n합성 본문",
+    revision: 1,
+    updatedAt: "2026-10-29T00:00:00Z",
+    excludedFileIds: [],
+    maskIdentifiers: true,
+    stale: false,
+    photos: [
+      {
+        id: "synthetic",
+        name: "photo-010-1234-5678.jpg",
+        revision: 1,
+        dataUrl: "data:image/jpeg;base64,/9j/2Q==",
+        notes: ["합성 연락처 synthetic@example.com"],
+      },
+    ],
+  });
+  expect(html).toContain("/9j/2Q==");
+  expect(html).not.toContain("010-1234-5678");
+  expect(html).not.toContain("synthetic@example.com");
+  expect(html).toContain("사진 속 개인정보는 자동으로 가려지지 않습니다");
 });

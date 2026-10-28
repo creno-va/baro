@@ -262,7 +262,7 @@ test("explicit initial intent recovers an oversized first report by exclusion an
       text: `${ordinal} 합성 자료 ${"가".repeat(1900)}`,
       position: { kind: "document", page: 1, paragraph: ordinal + 1, table: null },
       certainty: "uncertain",
-      userEdited: false,
+      userEdited: true,
       included: true,
     });
     f.db.sqlite

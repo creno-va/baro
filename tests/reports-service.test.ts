@@ -477,8 +477,8 @@ test("excluding a material rebuilds the rendered review, removing its observed t
     id: entity,
     text: "제외 대상 비공개 문장",
     position: { kind: "document", page: 1, paragraph: null, table: null },
-    certainty: "observed",
-    userEdited: false,
+    certainty: "uncertain",
+    userEdited: true,
     included: true,
   });
   f.db.sqlite

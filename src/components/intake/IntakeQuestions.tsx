@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
@@ -637,27 +637,29 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                             </label>
                           ))}
                         </fieldset>
-                      ) : (
-                        <>
-                          <label className="sr-only" htmlFor="question-answer">
-                            답변
-                          </label>
-                          <Textarea
-                            id="question-answer"
-                            value={answerState === "answered" ? value : ""}
-                            disabled={locked}
-                            onChange={(event) => {
-                              setValue(event.target.value);
-                              setAnswerState("answered");
-                            }}
-                            placeholder="여기에 편하게 적어주세요."
-                          />
-                          {answerTooLong && (
-                            <p role="alert">
-                              답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
-                            </p>
-                          )}
-                        </>
+                      ) : null}
+                      <label
+                        className={question.kind === "choice" ? "intake-custom-answer" : "sr-only"}
+                        htmlFor="question-answer"
+                      >
+                        {question.kind === "choice"
+                          ? "직접 입력 (선택지에 없는 내용도 적을 수 있어요)"
+                          : "답변"}
+                      </label>
+                      <Textarea
+                        id="question-answer"
+                        value={answerState === "answered" ? value : ""}
+                        disabled={locked}
+                        onChange={(event) => {
+                          setValue(event.target.value);
+                          setAnswerState("answered");
+                        }}
+                        placeholder="여기에 편하게 적어주세요."
+                      />
+                      {answerTooLong && (
+                        <p role="alert">
+                          답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
+                        </p>
                       )}
                       {answerState === "unknown" || answerState === "skipped" ? (
                         <p className="intake-scene-answer-state">
@@ -750,48 +752,48 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     <p className="intake-scene-notice" role="status">
                       {waiting ? "" : notice}
                     </p>
-                    <details className="intake-scene-management">
-                      <summary>답변 관리</summary>
-                      <div className="intake-scene-tools">
-                        <Button
-                          variant="ghost"
-                          disabled={busy || waiting || leaving || index === 0}
-                          onClick={() => navigateQuestion(index - 1)}
-                        >
-                          <ArrowLeft size={15} aria-hidden="true" />
-                          이전 질문
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={
-                            locked ||
-                            !answerState ||
-                            (answerState === "answered" && (!value.trim() || answerTooLong))
+                    <div className="intake-scene-tools">
+                      <Button
+                        variant="ghost"
+                        disabled={busy || waiting || leaving || index === 0}
+                        onClick={() => navigateQuestion(index - 1)}
+                      >
+                        <ArrowLeft size={15} aria-hidden="true" />
+                        이전 질문
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={
+                          busy ||
+                          leaving ||
+                          waiting ||
+                          (dirty &&
+                            (!answerState ||
+                              (answerState === "answered" && (!value.trim() || answerTooLong))))
+                        }
+                        onClick={async () => {
+                          const exitEpoch = ticket();
+                          if (dirty) {
+                            await save(false);
+                            if (
+                              failedOperation.current ||
+                              pending.current ||
+                              !accessCurrent(exitEpoch)
+                            )
+                              return;
                           }
-                          onClick={() => void save(false)}
-                        >
-                          <Save size={15} aria-hidden="true" />
-                          답변 저장
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          aria-haspopup="dialog"
-                          onClick={(event) => {
-                            event.currentTarget.focus();
-                            setExit(true);
-                          }}
-                          disabled={busy || leaving}
-                        >
-                          나중에 이어하기
-                        </Button>
-                      </div>
-                    </details>
+                          setExit(true);
+                        }}
+                      >
+                        나중에 이어하기
+                      </Button>
+                    </div>
                   </form>
                   <Dialog
                     open={exit}
                     onOpenChange={setExit}
                     title="사이드바에서 다시 이어갈 수 있어요"
-                    description="수정 중인 답변은 저장한 뒤 이동해 주세요."
+                    description="답변은 다음 질문으로 이동하거나 나중에 이어하기를 누르면 저장돼요."
                   >
                     <div className="intake-actions">
                       <ButtonLink href="/app">입력 화면으로 이동</ButtonLink>

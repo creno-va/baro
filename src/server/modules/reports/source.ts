@@ -297,6 +297,7 @@ export async function buildReportSource(
     throw new ReportError("VALIDATION_ERROR");
   const selectedFiles: V2ReportBody["selectedFiles"] = [],
     coverage: string[] = [];
+  const eligiblePhotoIds: string[] = [];
   for (const row of fileRows.results) {
     if (excluded.includes(row.id)) continue;
     const file = await reportFile(core, actor, row.id);
@@ -314,11 +315,19 @@ export async function buildReportSource(
       byteLength: file.manifest.byteLength,
       contentHash: file.manifest.contentHash,
     });
+    if (
+      file.probe?.category === "image" &&
+      ["jpeg", "png", "webp"].includes(file.probe.format) &&
+      file.manifest.byteLength <= 5_000_000
+    )
+      eligiblePhotoIds.push(file.id);
     coverage.push(
       `${file.name}: ${coverageText(file.coverage)} · 사실 여부와 원본의 진정성은 별도 확인 필요`,
     );
     let cursor = -1;
     let lastPosition = "";
+    let includedCount = 0;
+    let uncertainCount = 0;
     do {
       const page = await createV2FileStagingRepository(core).observations(actor, row.id, cursor, 4);
       for (const { value } of page) {
@@ -328,13 +337,22 @@ export async function buildReportSource(
           if (value.position.kind !== "image") coverage.push(position);
           lastPosition = position;
         }
-        coverage.push(
-          `${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`,
-        );
+        includedCount++;
+        if (value.certainty === "uncertain") {
+          uncertainCount++;
+          if (!value.userEdited && uncertainCount <= 2)
+            coverage.push(
+              `확인 필요: ${value.text.slice(0, 500)}${value.text.length > 500 ? "… (전체 내용은 자료 확인에서 볼 수 있어요)" : ""}`,
+            );
+        }
+        if (value.userEdited) coverage.push(`직접 수정한 내용 (원문 대조 필요): ${value.text}`);
       }
       if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       cursor = page.length === 4 ? (page.at(-1)?.ordinal ?? -1) : -1;
     } while (cursor >= 0);
+    coverage.push(
+      `포함한 추출 내용 ${includedCount}개${uncertainCount ? ` · 원문 대조가 필요한 내용 ${uncertainCount}개` : ""}. 세부 내용은 해당 자료의 원본과 자료 확인에서 볼 수 있어요.`,
+    );
   }
   const selected = new Set(selectedFiles.map((f) => f.id));
   const allowed = (refs: V2ReportBody["facts"][number]["references"]) =>
@@ -452,7 +470,7 @@ export async function buildReportSource(
       })),
     ),
   };
-  return { current, digest, body, coverage, display };
+  return { current, digest, body, coverage, display, eligiblePhotoIds };
 }
 export const sourcePositionText = (p: V2SourcePosition) =>
   p.kind === "document"

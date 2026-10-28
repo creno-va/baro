@@ -25,6 +25,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [busy, setBusy] = useState("");
   const [busyStartedAt, setBusyStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const resultAnchor = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
@@ -39,11 +40,24 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [initialLimit, setInitialLimit] = useState(false);
   const [exportExhausted, setExportExhausted] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfLink, setPdfLink] = useState("");
+  const pdfUrl = useRef("");
+  useEffect(() => {
+    if (!pdfLink) return;
+    const timeout = window.setTimeout(() => setPdfLink(""), 60000);
+    return () => {
+      window.clearTimeout(timeout);
+      URL.revokeObjectURL(pdfLink);
+    };
+  }, [pdfLink]);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
+    if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current);
+    pdfUrl.current = "";
+    setPdfLink("");
     setReport(value);
     setIncludedPhotos(value.includedPhotoIds ?? []);
     setSavedPreview("");
@@ -64,6 +78,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setExportExhausted(false);
     setFiles([]);
     setExportingPdf(false);
+    if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current);
+    pdfUrl.current = "";
+    setPdfLink("");
     setContent("");
     setEditing(false);
     setMask(false);
@@ -259,6 +276,11 @@ export function ReportReview({ caseId }: { caseId: string }) {
       document.removeEventListener("visibilitychange", check);
     };
   }, [load, clearOwnerState, verifyOwner, caseId]);
+  useEffect(() => {
+    if (!error || busy) return;
+    resultAnchor.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    resultAnchor.current?.focus({ preventScroll: true });
+  }, [error, busy]);
   const dirty = Boolean(
     report &&
       (content !== report.content ||
@@ -266,6 +288,47 @@ export function ReportReview({ caseId }: { caseId: string }) {
         JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
         JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)),
   );
+  const settingsAttempt = useRef("");
+  const settingsKey = JSON.stringify([report?.id, mask, includedPhotos, excluded]);
+  const settingsChanged =
+    !!report &&
+    (mask !== report.maskIdentifiers ||
+      JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
+      JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds));
+  const saveLatest = useRef<() => void>(() => {});
+  saveLatest.current = () => {
+    if (!lock.current) void run("설정 저장 중…", saveSettings);
+  };
+  useEffect(() => {
+    if (
+      !report ||
+      !settingsChanged ||
+      (content !== report.content &&
+        JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)) ||
+      busy ||
+      accessChecking ||
+      accessUnknown ||
+      needsConsent ||
+      report.stale
+    )
+      return;
+    if (settingsAttempt.current === settingsKey) return;
+    const timer = window.setTimeout(() => {
+      settingsAttempt.current = settingsKey;
+      saveLatest.current();
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [
+    report,
+    settingsChanged,
+    settingsKey,
+    excluded,
+    content,
+    busy,
+    accessChecking,
+    accessUnknown,
+    needsConsent,
+  ]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -327,6 +390,30 @@ export function ReportReview({ caseId }: { caseId: string }) {
       content !== report.content &&
       JSON.stringify([...excluded].sort()) !== JSON.stringify([...report.excludedFileIds].sort()),
   );
+  async function saveSettings() {
+    if (!report) return;
+    const pendingContent = content;
+    const preserveDraft = pendingContent !== report.content;
+    const value = await ownedResult(
+      api.reports.save(
+        caseId,
+        {
+          content: report.content,
+          maskIdentifiers: mask,
+          includedPhotoIds: includedPhotos,
+          excludedFileIds: excluded,
+        },
+        report.revision,
+      ),
+    );
+    accept(value);
+    if (preserveDraft) setContent(pendingContent);
+    setNotice(
+      preserveDraft
+        ? "개인정보·사진 설정을 저장했어요. 작성 중인 본문은 그대로 남아 있어요."
+        : "개인정보·자료 설정을 저장했어요.",
+    );
+  }
   async function save() {
     const pendingExclusions = excluded;
     accept(
@@ -355,6 +442,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
   return (
     <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
+      <div ref={resultAnchor} tabIndex={-1} />
       <CaseNavigation
         caseId={caseId}
         title={report ? report.title : "사건 정리"}
@@ -569,7 +657,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   type="button"
                   disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
                   onClick={() => void run("저장 중…", save)}
-                  className={dirty ? "report-save is-dirty" : "report-save"}
+                  className={dirty ? "report-save is-dirty ui-button--primary" : "report-save"}
                 >
                   <Save size={16} aria-hidden="true" />{" "}
                   {splitSave ? "본문 편집 먼저 저장" : "검토 내용 저장"}
@@ -582,9 +670,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <span>
                   <strong>개인정보·자료 설정</strong>
                   <span className="report-options-status">
-                    {mask ? "자동 가림 켜짐" : "자동 가림 꺼짐"} · 근거 사진{" "}
-                    {mask ? 0 : includedPhotos.length}개
-                    {excluded.length > 0 ? ` · 자료 ${excluded.length}개 제외` : ""}
+                    {mask ? "자동 가림 켜짐" : "자동 가림 꺼짐"} · 근거 사진 {includedPhotos.length}
+                    개{excluded.length > 0 ? ` · 자료 ${excluded.length}개 제외` : ""}
                   </span>
                 </span>
                 <ChevronDown size={18} className="report-options-chevron" aria-hidden="true" />
@@ -613,8 +700,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <section aria-labelledby="report-files-heading">
                   <h2 id="report-files-heading">자료 제외와 근거 사진 선택</h2>
                   <p>
-                    본문에서 제외할 자료와 PDF에 포함할 근거 사진을 선택하세요. 사진 속 식별정보는
-                    직접 확인해 주세요.
+                    본문에서 제외할 자료와 PDF에 포함할 근거 사진을 선택하세요. 사진은 자동 가림이
+                    적용되지 않아요. 사진 속 개인정보를 확인하고 필요한 경우 사진 선택을 해제해
+                    주세요.
                   </p>
                   {!files.length && <p>등록한 자료가 없어요. PDF만 다운로드할 수 있어요.</p>}
                   {files.map((file) => (
@@ -654,7 +742,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
                               Boolean(busy) ||
                               needsConsent ||
                               excluded.includes(file.id) ||
-                              mask ||
                               file.status !== "ready" ||
                               !report.photoCandidates?.some((photo) => photo.id === file.id) ||
                               (!includedPhotos.includes(file.id) && includedPhotos.length >= 12)
@@ -714,8 +801,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   }}
                 />
                 <p>
-                  리포트 제외 자료: {excluded.length}개 · 근거 사진:{" "}
-                  {mask ? 0 : includedPhotos.length}개
+                  리포트 제외 자료: {excluded.length}개 · 근거 사진: {includedPhotos.length}개
                 </p>
               </section>
             )}
@@ -764,10 +850,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     setExportingPdf(true);
                     try {
                       await run("PDF 준비 중…", async () => {
-                        downloadBlob(
+                        const url = downloadBlob(
                           await ownedResult(api.reports.pdf(report.id)),
                           `BARO-${report.id}.pdf`,
                         );
+                        pdfUrl.current = url;
+                        setPdfLink(url);
                         setReport((current) =>
                           current?.id === report.id ? { ...current, pdfAvailable: true } : current,
                         );
@@ -781,6 +869,16 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   {exportingPdf ? <Spinner /> : <Download size={16} aria-hidden="true" />}
                   {exportingPdf ? "PDF 만드는 중…" : "PDF 다운로드"}
                 </button>
+                {pdfLink && !accessChecking && !accessUnknown && !dirty && (
+                  <a
+                    href={pdfLink}
+                    download={`BARO-${report.id}.pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    다운로드가 시작되지 않으면 PDF 직접 열기·저장 (1분간 유효)
+                  </a>
+                )}
               </div>
               <p className="report-option-note">
                 리포트는 PDF로 저장해요. 선택 사진의 개인정보와 본문·출처를 확인한 뒤 전달해 주세요.

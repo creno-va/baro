@@ -65,6 +65,13 @@ export function FileReview({
   const [loadingAfter, setLoadingAfter] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState<unknown>(null);
+  const errorAnchor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error && !busy) {
+      errorAnchor.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      errorAnchor.current?.focus({ preventScroll: true });
+    }
+  }, [error, busy]);
   const saved = useRef(review);
   saved.current = review;
   const draftDirty = useRef(false);
@@ -230,6 +237,7 @@ export function FileReview({
   const rows = review?.coverage ? coverageRows(review.coverage) : [];
   return (
     <section aria-label="자료 내용 검토" aria-busy={busy || loadingAfter !== null}>
+      <div ref={errorAnchor} tabIndex={-1} />
       <h3>추출 내용 확인·수정</h3>
       {error ? (
         <ErrorPanel
@@ -285,7 +293,18 @@ export function FileReview({
               </Button>
             )}
           </details>
-          {review.observations.map(({ value, original, ordinal }) => {
+          <aside className="workspace-material-summary">
+            <h4>자료에서 읽은 주요 내용</h4>
+            <p>
+              {importantObservations(review.observations)
+                .filter((row) => row.value.included)
+                .slice(0, 2)
+                .map((row) => row.value.text)
+                .join(" · ") || "포함한 내용이 없어요."}
+            </p>
+            <small>읽은 내용을 간추려 보여줘요. 아래에서 원문과 비교하고 고칠 수 있어요.</small>
+          </aside>
+          {importantObservations(review.observations).map(({ value, original, ordinal }) => {
             const draft = drafts[value.id] ?? value;
             const update = (next: { text: string; included: boolean }) =>
               setDrafts((old) => {
@@ -426,4 +445,10 @@ export function FileReview({
       )}
     </section>
   );
+}
+
+function importantObservations(rows: FileReviewView["observations"]) {
+  const priority = (text: string) =>
+    /^\s*(?:\[문서 기재\]\s*)?(?:상단 바|상태 바|상품 정보|날짜 구분|대화 일자)/.test(text) ? 1 : 0;
+  return [...rows].sort((a, b) => priority(a.value.text) - priority(b.value.text));
 }
