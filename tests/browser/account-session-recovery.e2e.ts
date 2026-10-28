@@ -470,10 +470,13 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       await expect(page.getByRole("main").getByRole("status")).toContainText(
         "계정 접근 상태 확인 중…",
       );
-      await expect(editor).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(
-        0,
-      );
+      // Foreground revalidation preserves the known owner's draft read-only.
+      // Explicit owner revocation below must still purge it completely.
+      await expect(editor).toHaveValue("Unsaved current report correction");
+      await expect(editor).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "검토 내용 저장", exact: true }),
+      ).toBeDisabled();
       phase = "current";
       // An explicit peer invalidation bypasses the old pending read. Focus alone
       // cannot create a newer authoritative response while that read is pending.
