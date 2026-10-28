@@ -87,8 +87,9 @@ test("session revoked during the last header decryption cannot release original 
         const decrypt = core.cipher.decrypt.bind(core.cipher);
         core.cipher.decrypt = async (envelope, context) => {
           const value = await decrypt(envelope, context);
-          // The receipt and two authenticated header reads use this table.
-          if (context.table === "v2_upload_parts" && ++headers === 3)
+          // Receipt + the single authenticated header read; revocation still
+          // happens after decryption and before the final access fence.
+          if (context.table === "v2_upload_parts" && ++headers === 2)
             f.db.sqlite.query("DELETE FROM session WHERE user_id=?").run(f.actor.ownerId);
           return value;
         };
@@ -106,5 +107,5 @@ test("session revoked during the last header decryption cannot release original 
   if (!reader) throw new Error("synthetic stream missing");
   await expect(reader.read().then(({ done }) => done)).rejects.toThrow("INVALID_FILE");
   reader.releaseLock();
-  expect(headers).toBe(3);
+  expect(headers).toBe(2);
 });

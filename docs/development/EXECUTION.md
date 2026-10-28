@@ -1,5 +1,10 @@
 # 에이전트 실행 기준
 
+2026-10-29 추가 파일 전송 지연 요청 #577은 `codex/577-file-transfer-performance`에서
+원본 업로드의 첫 조각 반복 읽기와 다운로드 중복 조회·헤더 복호화를 줄인다.
+[측정과 호환 범위](../quality/FILE-TRANSFER-PERFORMANCE-2026-10-29.md)를 따르며
+별도 운영 세션과 범위를 공유했다. PR 검증 후 병합·preview 전용 배포하며 production은 변경하지 않는다.
+
 2026-10-29 사용자 UI/UX 피드백 #574는 `codex/574-ui-feedback`의 별도 worktree에서
 사이드바 사건 조회·모바일 웹 rail/로그인·사실 Q/A·판례 근거 강조와 개인/기업 맥락을 정비한다.
 [동작과 검증 경계](../quality/UI-FEEDBACK-2026-10-29.md)를 따르며 기존 #569 배포 세션과

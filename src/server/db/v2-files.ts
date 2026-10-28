@@ -34,6 +34,7 @@ import {
 import {
   abandonOriginalPart,
   type OriginalPartRegistration,
+  originalPartReceiptSchema,
   prepareOriginalPart,
   registerOriginalPart,
 } from "./v2-original-parts";
@@ -814,13 +815,7 @@ export function createV2FilesRepository(core: V2Core) {
             g.ownerId,
             upload.revision,
             part.encrypted_payload,
-            z.strictObject({
-              blobId: opaqueIdSchema,
-              keyVersion: z.string(),
-              contentHash: hashSchema,
-              index: z.number().int(),
-              byteLength: z.number().int(),
-            }),
+            originalPartReceiptSchema,
           );
           const actualBlob = await core.decrypt(
             "v2_blobs",
