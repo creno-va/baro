@@ -52,6 +52,58 @@ async function prepareSavedPdf(page: import("@playwright/test").Page) {
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
+test("report review edits in place and saves before a full-width PDF download", async ({
+  page,
+}) => {
+  await page.goto("/cases/case-demo/reports");
+  await expect(page.locator(".report-edit-toggle")).toBeVisible();
+  await page.evaluate(() => {
+    const key = "baro.reports.browser-test.v1",
+      state = JSON.parse(localStorage.getItem(key) ?? "{}");
+    state.reports["case-demo"].content =
+      "사건 요약\n합성 송금 자료\n\n사실·주장·출처\n보존할 합성 근거\n\n미확인 사항\n반환 약속 날짜\n\n공식 출처\n\n준비할 행동\n원본 보관";
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.reload();
+  const report = page.locator(".report-review");
+  await expect(report.getByRole("heading", { name: "미확인 사항", exact: true })).toBeVisible();
+  await expect(report.getByRole("heading", { name: "사실·주장·출처", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("heading", { name: "공식 출처", exact: true })).toHaveCount(0);
+  await expect(
+    report.locator(
+      ".report-steps,.report-options,.report-reading-section--uncertain,.report-success",
+    ),
+  ).toHaveCount(0);
+  await expect(
+    report.getByRole("button", { name: /전달 내용 미리보기|검토 내용 저장/ }),
+  ).toHaveCount(0);
+  await expect(report.getByRole("checkbox")).toHaveCount(1);
+  await expect(
+    report.getByRole("checkbox", { name: "식별정보 가리기", exact: true }),
+  ).toBeVisible();
+  await openReportEditor(page);
+  await report
+    .getByRole("textbox", { name: "사건 요약 수정", exact: true })
+    .fill("다운로드에 반영할 수정한 합성 요약");
+  const download = page.waitForEvent("download");
+  await report.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/u);
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}").reports["case-demo"]
+        .content,
+  );
+  expect(stored).toContain("다운로드에 반영할 수정한 합성 요약");
+  expect(stored).toContain("보존할 합성 근거");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await report.locator(".report-canvas").boundingBox(),
+      button = await report
+        .getByRole("button", { name: "PDF 다운로드", exact: true })
+        .boundingBox();
+    expect(Math.abs((bounds?.width ?? 0) - (button?.width ?? 0))).toBeLessThan(2);
+  }
+});
 test("same-tab signout immediately clears report preview and saved ZIP", async ({ page }) => {
   await page.goto("/cases/case-demo/reports");
   await openReportEditor(page);

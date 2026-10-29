@@ -447,7 +447,7 @@
   box-shadow: none;
 }
 .app-frame.app-frame--product .report-canvas {
-  max-width: 840px;
+  max-width: none;
 }
 .app-frame.app-frame--product .report-heading {
   text-align: left;
@@ -523,9 +523,8 @@
 }
 .app-frame.app-frame--product .report-export {
   display: block;
-  padding: 28px;
-  border-radius: var(--product-radius);
-  background: var(--product-subtle);
+  padding: 0;
+  background: transparent;
 }
 
 @media (min-width: 901px) and (max-width: 1100px) {
@@ -745,7 +744,7 @@
     font-size: 14px;
   }
   .app-frame.app-frame--product .report-export {
-    padding: 20px;
+    padding: 0;
   }
   .app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
     padding-top: 0;
