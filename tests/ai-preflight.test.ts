@@ -39,7 +39,7 @@ async function fixture() {
       MONTHLY_BUDGET_CAP_ENABLED: "false",
       AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(modelBounds(observed, provisioned.evidenceHash)),
     }).map(([name, text]) => ({ name, type: "plain_text", text })),
-    { name: "DB", type: "d1", id: "e8cdcf75-5bd8-469e-848e-f31816df4327" },
+    { name: "DB", type: "d1", id: "c1612b14-6ab1-4d2e-82dc-33e596b31337" },
     { name: "AI", type: "ai" },
     ...[
       "WORKSPACE_PROCESSING",

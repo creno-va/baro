@@ -19,12 +19,12 @@ const targets = {
   preview: {
     worker: "baro-preview",
     origin: "https://preview.baro.site",
-    database: "e8cdcf75-5bd8-469e-848e-f31816df4327",
+    database: "c1612b14-6ab1-4d2e-82dc-33e596b31337",
   },
   production: {
     worker: "baro-production",
     origin: "https://baro.site",
-    database: "d315e93f-2fac-4cc2-bf99-e9d6eb31523f",
+    database: "fa914862-848d-4eb1-bc69-e82a020df11a",
   },
 };
 const accountId = "9e844969d0c44b2449f3951d1f301654";

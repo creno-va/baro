@@ -1,4 +1,4 @@
-name: Reset full D1 data and seed ten synthetic lawyers (manual)
+name: Prepare fresh D1 databases with ten synthetic lawyers (manual)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: Type reset-both-databases-and-seed-ten-synthetic-lawyers
+        description: Type prepare-fresh-databases-with-ten-synthetic-lawyers
         required: true
         type: string
 
@@ -17,13 +17,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: baro-reset-application-data
+  group: baro-fresh-application-data
   cancel-in-progress: false
 
 jobs:
   preview:
-    name: Reset preview D1 data
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
+    name: Prepare fresh preview D1
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'prepare-fresh-databases-with-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -45,8 +45,8 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
-      - name: Verify offline full-reset contracts
-        run: bun test tests/reset-application-data.test.ts
+      - name: Verify fresh database contracts
+        run: bun test tests/fresh-application-data.test.ts
       - name: Verify current main and its CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,27 +57,27 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
           bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
-      - name: Reset full database data and verify ten synthetic profiles
+      - name: Migrate fresh database and verify ten synthetic profiles
         env:
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CASE_DATA_KEY_V1: ${{ secrets.CASE_DATA_KEY_V1 }}
-          RESET_ENVIRONMENT: preview
-          RESET_CONFIRMATION: ${{ inputs.confirmation }}
-        run: bun scripts/reset-application-data.ts
+          FRESH_ENVIRONMENT: preview
+          FRESH_CONFIRMATION: ${{ inputs.confirmation }}
+        run: bun scripts/fresh-application-data.ts
       - name: Save aggregate operator receipt only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: application-reset-preview-${{ inputs.target_sha }}
-          path: .wrangler/reset/receipt-preview.json
+          name: application-fresh-preview-${{ inputs.target_sha }}
+          path: .wrangler/fresh/receipt-preview.json
           if-no-files-found: ignore
           retention-days: 30
 
   production:
     needs: preview
-    name: Reset production D1 data
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
+    name: Prepare fresh production D1
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'prepare-fresh-databases-with-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -99,8 +99,8 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
-      - name: Verify offline full-reset contracts
-        run: bun test tests/reset-application-data.test.ts
+      - name: Verify fresh database contracts
+        run: bun test tests/fresh-application-data.test.ts
       - name: Verify current main and its CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,19 +111,19 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
           bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
-      - name: Reset full database data and verify ten synthetic profiles
+      - name: Migrate fresh database and verify ten synthetic profiles
         env:
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CASE_DATA_KEY_V1: ${{ secrets.CASE_DATA_KEY_V1 }}
-          RESET_ENVIRONMENT: production
-          RESET_CONFIRMATION: ${{ inputs.confirmation }}
-        run: bun scripts/reset-application-data.ts
+          FRESH_ENVIRONMENT: production
+          FRESH_CONFIRMATION: ${{ inputs.confirmation }}
+        run: bun scripts/fresh-application-data.ts
       - name: Save aggregate operator receipt only
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: application-reset-production-${{ inputs.target_sha }}
-          path: .wrangler/reset/receipt-production.json
+          name: application-fresh-production-${{ inputs.target_sha }}
+          path: .wrangler/fresh/receipt-production.json
           if-no-files-found: ignore
           retention-days: 30

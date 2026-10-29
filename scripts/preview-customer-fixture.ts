@@ -24,7 +24,7 @@ const PROBE_KEY = "baro-test-fixture:customer-intake-v1:atomicity-probe";
 const PROBE_VALUE = "rollback-probe-only-v1";
 const EXPECTED_SCHEMA = "0018_external_lookup_admission";
 const ACCOUNT = "9e844969d0c44b2449f3951d1f301654";
-const DATABASE = "e8cdcf75-5bd8-469e-848e-f31816df4327";
+const DATABASE = "c1612b14-6ab1-4d2e-82dc-33e596b31337";
 const ORIGIN = "https://preview.baro.site";
 const DATA = workspaceCreateDataSchema.parse({
   narrative:

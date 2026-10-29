@@ -144,7 +144,7 @@ test("preview inspection pins its own release, database and workflow without mut
     fetcher,
   );
   expect(calls[0]?.url).toBe("https://preview.baro.site/api/health/ready");
-  expect(calls[1]?.url).toContain("d1/database/e8cdcf75-5bd8-469e-848e-f31816df4327/query");
+  expect(calls[1]?.url).toContain("d1/database/c1612b14-6ab1-4d2e-82dc-33e596b31337/query");
   expect(calls[2]?.url).toContain("workflows/baro-workspace-preview/instances/synthetic-chat-1");
   expect(JSON.parse(calls[1]?.body ?? "").sql).toStartWith("SELECT ");
   expect(result.jobs[0]?.diagnostic).toEqual({ policyReason: "audit_rejected" });

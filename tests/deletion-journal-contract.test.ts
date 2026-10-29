@@ -66,6 +66,8 @@ test("isolated journal cannot target ordinary preview, production or a different
     { databaseId: "E8CDCF75-5BD8-469E-848E-F31816DF4327" },
     { databaseId: "d315e93f-2fac-4cc2-bf99-e9d6eb31523f" },
     { databaseId: "D315E93F-2FAC-4CC2-BF99-E9D6EB31523F" },
+    { databaseId: "c1612b14-6ab1-4d2e-82dc-33e596b31337" },
+    { databaseId: "fa914862-848d-4eb1-bc69-e82a020df11a" },
     { credentials: "forbidden" },
   ]) {
     expect(isolatedDrillResourceSchema.safeParse({ ...resource, ...change }).success).toBe(false);

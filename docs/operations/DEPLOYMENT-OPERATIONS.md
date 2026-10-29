@@ -26,30 +26,28 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
-### 승인된 실제 D1 전체 데이터 초기화와 합성 변호사 시딩
+### 기존 DB 보존과 새 DB 전환
 
-`reset-application-data.yml`은 사용자가 preview·production 실제 D1의 기존 데이터 전부
-삭제와 합성 변호사10개씩 시딩을 명시적으로 승인한 경우에만 수동 실행한다. 현재 main의
-정확한 SHA·성공한 main CI·지정 운영자·명시적 확인문·각 Environment 보호를 검사한다.
-preview 성공 후 production을 수행하며 앱을 배포하거나 암호화 키를 교체하지 않는다.
+2026-10-29 사용자는 기존 DB를 보존하고 새 DB로 전환하도록 승인했다. 기존 전체 삭제
+workflow는 실행하지 않고 제거했다. `fresh-application-data.yml`은 정확한 main SHA·성공한
+main CI·지정 운영자·확인문·각 Environment 보호를 유지한다. preview 성공 뒤 production의
+새 DB에 기존 migration과 합성 변호사10개를 넣는다. 기존 DB에는 쓰지 않는다.
 
-D1 복구 bookmark를 기록하고 신규 합성 프로필만 실제 공개 조회로 먼저 검증한다.
-이후 원자적 SQL import에서 기존 업무/원장 테이블을 재구성하고 승인된 migration을
-다시 적용한다. 계정·OAuth 연결·세션·사건·자료/리포트·기존 프로필·비용/실행 원장 등
-기존 행은 모두 제거한다. 원장의 미정산을 성공/정산으로 바꾸지 않으며 원래 DB 상태는
-기록한 Time Travel 복구 지점으로 구분한다. migration 이력과 관리형 D1 내부 테이블,
-스키마 및 필수 기술용량 설정만 유지·재구성한다. R2 bucket 자체 삭제는 포함하지 않는다.
+새 DB는 preview `c1612b14-6ab1-4d2e-82dc-33e596b31337`, production
+`fa914862-848d-4eb1-bc69-e82a020df11a`다. 시딩은 비어 있는 새 DB에서만 수행하며
+기존 환경 키를 GitHub 안에서 사용한다. 원래 DB는 기술용량 합계만 읽는다. 신규 합성
+프로필 복호화·공개 projection·계정10/프로필10/사건0/세션0/FK를 검증한다.
 
-환경 키는 GitHub Environment 안에서만 사용한다. 기존 고객 payload는 읽거나 복호화하지
-않으며, 시딩된 합성 계정은 로그인 세션·SSO 연결·자격 검증을 갖지 않는다. 프로필에는 합성
-소개와 self_declared를 사용한다. artifact에는 복구 bookmark·합계·새 합성 ID만 기록한다.
-실행 중 작업이 있으면 초기화를 중단한다. probe 실패 시 신규 합성 행만 정리하고,
-원자적 초기화 응답이 불명확하면 추가 삭제/재실행 대신 실제 상태부터 확인한다.
+시딩과 서비스 연결 전환은 분리한다. 검증 후 Worker의 DB 바인딩만 전환하며 앱 코드·
+릴리스·키·나머지 바인딩을 유지한다. 실제 공개 프로필과 준비 상태 확인에 실패하면
+기존 DB 바인딩으로 복원한다. 원래 DB와 R2 객체는 삭제하지 않는다. artifact는 새 합성
+ID와 합계만 포함한다. 서비스 연결 전환 후 `wrangler.jsonc`와 운영 도구의 현재 DB ID도
+같은 값으로 갱신하며, 복구 도구의 보호 대상에는 새 ID와 기존 ID를 모두 남긴다.
 
 ```bash
-gh workflow run reset-application-data.yml --ref main \
+gh workflow run fresh-application-data.yml --ref main \
   -f target_sha=<현재_main_40자_SHA> \
-  -f confirmation=reset-both-databases-and-seed-ten-synthetic-lawyers
+  -f confirmation=prepare-fresh-databases-with-ten-synthetic-lawyers
 ```
 
 - pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행

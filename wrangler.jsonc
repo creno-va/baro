@@ -70,8 +70,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "baro-preview",
-      "database_id": "e8cdcf75-5bd8-469e-848e-f31816df4327",
+      "database_name": "baro-preview-fresh-20261029-e6a9c119",
+      "database_id": "c1612b14-6ab1-4d2e-82dc-33e596b31337",
       "migrations_dir": "drizzle"
     }
   ],
@@ -165,8 +165,8 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "baro-preview",
-          "database_id": "e8cdcf75-5bd8-469e-848e-f31816df4327",
+          "database_name": "baro-preview-fresh-20261029-e6a9c119",
+          "database_id": "c1612b14-6ab1-4d2e-82dc-33e596b31337",
           "migrations_dir": "drizzle"
         }
       ],
@@ -297,8 +297,8 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "baro-production",
-          "database_id": "d315e93f-2fac-4cc2-bf99-e9d6eb31523f",
+          "database_name": "baro-production-fresh-20261029-e6a9c119",
+          "database_id": "fa914862-848d-4eb1-bc69-e82a020df11a",
           "migrations_dir": "drizzle"
         }
       ],
