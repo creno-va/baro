@@ -296,11 +296,6 @@ export function AccountSettings() {
           {busy || checking ? <Spinner /> : <RefreshCw aria-hidden="true" size={16} />} 다시 확인
         </button>
       </header>
-      <nav className="settings-jump" aria-label="설정 바로가기">
-        <a href="#settings-usage-title">사용량</a>
-        <a href="#settings-help-title">도움말과 정책</a>
-        <a href="#settings-danger-title">계정 관리</a>
-      </nav>
       {(busy || checking) && (
         <p className="settings-loading settings-progress" role="status">
           <RefreshCw size={15} aria-hidden="true" /> {busy || "계정 접근 상태 확인 중…"}

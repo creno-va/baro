@@ -386,22 +386,11 @@
 }
 
 /* Account management uses sections rather than a wall of nested cards. */
-.app-frame.app-frame--product .settings-jump,
 .app-frame.app-frame--product .report-steps {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   margin: 0 0 32px;
-}
-.app-frame.app-frame--product .settings-jump a {
-  display: inline-flex;
-  align-items: center;
-  padding: 10px 16px;
-  min-height: 44px;
-  border-radius: 12px;
-  background: var(--product-subtle);
-  font-size: 13px;
-  text-decoration: none;
 }
 .app-frame.app-frame--product .settings-card {
   border: 0;
