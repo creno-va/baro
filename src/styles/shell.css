@@ -98,20 +98,6 @@ body {
   padding-top: 22px;
   border-top: 1px solid #e9edf2;
 }
-.sidebar-recent__heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
-  margin-bottom: 9px;
-}
-.sidebar-caption {
-  color: var(--muted-foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin: 0;
-}
 .sidebar-recent__all {
   display: inline-flex;
   align-items: center;

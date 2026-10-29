@@ -697,6 +697,10 @@
   color: var(--muted-foreground);
   font-size: 0.8rem;
 }
+.intake-flow .intake-scene-nav > .ui-button {
+  padding-inline: 0;
+  border-inline-width: 0;
+}
 .intake-flow .intake-scene-nav > span {
   padding-right: 12px;
 }
