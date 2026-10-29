@@ -1742,6 +1742,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     page,
   }) => {
     await page.goto(`${base}/files`);
+    await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
     await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
       name: "private-session-original.txt",
       mimeType: "text/plain",
@@ -1841,6 +1842,7 @@ for (const order of ["foreground-first", "background-first"] as const)
       page,
     }) => {
       await page.goto(`${base}/files`);
+      await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
       await page.evaluate(async () => {
         const path = "/tests/helpers/workspace-client-fixture.ts";
         const { api } = (await import(
