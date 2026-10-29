@@ -6,6 +6,45 @@ import { openReportEditor } from "../helpers/report-controls";
 const id = "product-review-case";
 const base = `/cases/${id}`;
 
+test("active summary has a primary save action that persists and applies changes", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto(`${base}/summary?from=timeline`);
+  await hydrated(page);
+  const save = page.getByRole("button", { name: "수정 내용 저장", exact: true });
+  const editor = page.getByRole("textbox", { name: "요약 편집", exact: true });
+  await expect(save).toBeVisible();
+  await expect(save).toHaveClass(/ui-button--primary/);
+  await expect(save).toBeDisabled();
+  await expect(page.locator(".intake-actions a")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true })).toHaveCount(
+    1,
+  );
+  await editor.fill("수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
+  await expect(save).toBeDisabled();
+  expect(
+    await page.evaluate(
+      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].stage,
+      id,
+    ),
+  ).toBe("active");
+  await page.reload();
+  await expect(editor).toHaveValue(
+    "수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.",
+  );
+  await editor.fill("   ");
+  await expect(save).toBeDisabled();
+  await editor.fill("긴".repeat(5001));
+  await expect(save).toBeDisabled();
+  await expect(
+    page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }),
+  ).toHaveAttribute("href", `${base}/timeline`);
+});
+
 async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
   else await page.mouse.click(5, 85);
