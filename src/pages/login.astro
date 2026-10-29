@@ -44,7 +44,6 @@ const errorMessage = oauthErrors.includes("account_not_linked")
         {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
         <AuthButtons client:load />
         <footer class="login-footer">
-          <p>처음이라면, 로그인 후 가입을 이어갈 수 있어요.</p>
           <div class="login-policy-links">
             <a href="/policies/terms">이용약관</a>
             <span aria-hidden="true">·</span>

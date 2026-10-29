@@ -249,9 +249,6 @@
   color: var(--muted-foreground);
   font-size: 12px;
 }
-.login-footer > p {
-  margin: 0;
-}
 .login-policy-links {
   display: flex;
   flex-wrap: wrap;
@@ -394,7 +391,6 @@
     border: 0;
     padding-top: 0;
   }
-  .login-footer > p,
   .login-help {
     display: none;
   }
