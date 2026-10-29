@@ -31,6 +31,7 @@ import { makeChunk } from "../v2/source";
 import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../v2/source-authority";
 import type { Transport } from "../v2/transport";
 import { isWorkspacePublicQuery } from "../v2/workspace-plans";
+import { createPrecedentRelevance } from "./relevance";
 import { signResearchToken, verifyResearchToken } from "./tokens";
 import { RESEARCH_CONCEPTS, recommendPrecedentTopics, researchExcerpt } from "./topics";
 
@@ -205,10 +206,21 @@ export function createPrecedentResearchService(
     },
     async search(ownerId: string, id: string, raw: unknown, signal?: AbortSignal) {
       const request = v2PrecedentSearchRequestSchema.parse(raw);
-      await scope(ownerId, id, request.expectedRevision, request.summaryRevision);
+      const current = await scope(ownerId, id, request.expectedRevision, request.summaryRevision);
       if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32)
         throw new PrecedentResearchError("UNAVAILABLE");
       const checkedAt = now();
+      const summary = await readSnapshot(
+        core,
+        { ownerId, now: checkedAt },
+        current.snapshotId,
+        "summary",
+        id,
+        request.summaryRevision,
+        v2SummarySchema,
+      );
+      if (!summary) throw new PrecedentResearchError("REVIEW_REQUIRED");
+      const relevance = createPrecedentRelevance(summary);
       const authorized = async () => {
         try {
           await scope(ownerId, id, request.expectedRevision, request.summaryRevision);
@@ -224,6 +236,7 @@ export function createPrecedentResearchService(
         observeOutcome: reportLegalOutcome,
         observeUpstreamRejection: reportLegalRejection,
         ...(options.transport ? { transport: options.transport } : {}),
+        precedentDiscovery: { rank: relevance.candidates },
         // Research is read-only for private case state. The short-lived signed
         // result proof below supplies scope; do not add automatic chat citations.
         bindCitation: async (citation) =>
@@ -241,7 +254,7 @@ export function createPrecedentResearchService(
         {
           now: checkedAt,
           asOfDate: new Date(Date.parse(checkedAt) + 9 * 3600000).toISOString().slice(0, 10),
-          plans: queries.map((query) => ({ kind: "precedent", query, limit: 3 })),
+          plans: queries.map((query) => ({ kind: "precedent", query, limit: 4 })),
         },
         {
           authorize: authorized,
@@ -252,6 +265,7 @@ export function createPrecedentResearchService(
         },
       );
       const items = new Map<string, V2PrecedentSearchResponse["items"][number]>();
+      const ranks = new Map<string, number>();
       const unavailableTopics: V2PrecedentTopic[] = [];
       const availabilityIssues: NonNullable<V2PrecedentSearchResponse["availabilityIssues"]> = [];
       for (const [index, outcome] of result.outcomes.entries()) {
@@ -273,6 +287,9 @@ export function createPrecedentResearchService(
         for (const chunk of outcome.chunks) {
           const citation = chunk.citation;
           if (citation.kind !== "precedent") continue;
+          const ranked = relevance.score(citation.title, chunk.source.body, [topic]);
+          if (!ranked.relevant || ranked.score <= 0) continue;
+          ranks.set(citation.sourceId, Math.max(ranks.get(citation.sourceId) ?? 0, ranked.score));
           const prior = items.get(citation.sourceId);
           if (prior) {
             if (!prior.matchedTopics.includes(topic)) prior.matchedTopics.push(topic);
@@ -299,6 +316,20 @@ export function createPrecedentResearchService(
           });
         }
       }
+      const ordered = [...items.values()].sort(
+        (a, b) =>
+          (ranks.get(b.citation.sourceId) ?? 0) - (ranks.get(a.citation.sourceId) ?? 0) ||
+          b.citation.decisionDate.localeCompare(a.citation.decisionDate) ||
+          a.id.localeCompare(b.id),
+      );
+      const retained = new Set(
+        request.topics.flatMap((topic) =>
+          ordered
+            .filter((item) => item.matchedTopics.includes(topic))
+            .slice(0, 3)
+            .map((item) => item.id),
+        ),
+      );
       const response = v2PrecedentSearchResponseSchema.parse({
         schemaVersion: "2",
         workspaceRevision: request.expectedRevision,
@@ -312,8 +343,9 @@ export function createPrecedentResearchService(
           : unavailableTopics.length
             ? "unavailable"
             : "empty",
-        searchTruncated: result.outcomes.some((o) => o.searchTruncated),
-        items: [...items.values()],
+        searchTruncated:
+          result.outcomes.some((o) => o.searchTruncated) || ordered.length > retained.size,
+        items: ordered.filter((item) => retained.has(item.id)),
         unavailableTopics,
         availabilityIssues,
       });

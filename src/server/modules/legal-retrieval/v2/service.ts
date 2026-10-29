@@ -19,7 +19,7 @@ import {
   safePermit,
 } from "./contracts";
 import { parseGuide } from "./guides";
-import { parsePrecedent, precedentCandidates } from "./precedents";
+import { parsePrecedent, type PrecedentCandidate, precedentCandidates } from "./precedents";
 import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
 import { safeLegalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";
@@ -42,6 +42,10 @@ export function createV2LegalRetrieval(
     observeUpstreamRejection?: (observation: UpstreamRejectionObservation) => void | Promise<void>;
     observeRequest?: (observation: LegalRequestObservation) => void | Promise<void>;
     observeOutcome?: (observation: LegalOutcomeObservation) => void | Promise<void>;
+    /** Server-only research ranking. Never supplied by a model or wire request. */
+    precedentDiscovery?: {
+      rank: (rows: readonly PrecedentCandidate[], query: string) => readonly string[];
+    };
   },
 ) {
   const request = createBoundedTransport(options.transport, {
@@ -302,28 +306,51 @@ export function createV2LegalRetrieval(
                 };
               });
           } else if (plan.kind === "precedent") {
-            const candidates = precedentCandidates(
-              await json(
-                lawUrl("lawSearch.do", "prec", {
-                  query: plan.query,
-                  search: "2",
-                  datSrcNm: "대법원",
-                  display: String(plan.limit),
-                  page: "1",
-                  sort: "ddes",
-                  prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
-                }),
-                "moleg_prec_list",
-                boundedAccess,
-              ),
-              body.asOfDate,
-              plan.limit,
-            );
+            // Research considers a wider title-first pool before spending any
+            // detail requests. Ordinary chat retrieval keeps its original scope.
+            // Official scope/display parameters: open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precListGuide
+            const discover = async (search: "1" | "2") =>
+              precedentCandidates(
+                await json(
+                  lawUrl("lawSearch.do", "prec", {
+                    query: plan.query,
+                    search,
+                    datSrcNm: "대법원",
+                    display: String(options.precedentDiscovery ? 40 : plan.limit),
+                    page: "1",
+                    sort: "ddes",
+                    prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
+                  }),
+                  "moleg_prec_list",
+                  boundedAccess,
+                ),
+                body.asOfDate,
+                options.precedentDiscovery ? 40 : plan.limit,
+              );
+            let candidates = await discover(options.precedentDiscovery ? "1" : "2");
+            if (
+              options.precedentDiscovery &&
+              !candidates.rows.length &&
+              !candidates.failures?.length
+            )
+              candidates = await discover("2");
             if (!candidates.rows.length)
               throw new RetrievalFailure(candidates.failures?.[0] ?? "no_results");
-            searchTruncated = candidates.truncated;
+            const ranked = options.precedentDiscovery?.rank(candidates.rows, plan.query);
+            // Resolve IDs back to the validated upstream rows. A ranking hook
+            // cannot forge a candidate's identity or proof metadata.
+            const byId = new Map(candidates.rows.map((row) => [row.판례일련번호, row]));
+            const selected = ranked
+              ? [...new Set(ranked)]
+                  .flatMap((id) => {
+                    const row = byId.get(id);
+                    return row ? [row] : [];
+                  })
+                  .slice(0, plan.limit)
+              : candidates.rows;
+            searchTruncated = candidates.truncated || candidates.rows.length > selected.length;
             failures.push(...(candidates.failures ?? []));
-            for (const candidate of candidates.rows)
+            for (const candidate of selected)
               await collect(async () => {
                 if (candidate.데이터출처명 === "국세법령정보시스템")
                   throw new RetrievalFailure("unsupported_format");

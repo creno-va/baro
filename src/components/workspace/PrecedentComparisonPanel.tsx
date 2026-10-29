@@ -17,6 +17,9 @@ export function PrecedentComparisonPanel({
   caseId,
   context,
   selected,
+  sourceId,
+  sourceNeedsRefresh,
+  onRecovered,
   access,
   onSettled,
   onRefreshSources,
@@ -24,6 +27,9 @@ export function PrecedentComparisonPanel({
   caseId: string;
   context: V2PrecedentResearchContext;
   selected: V2PrecedentSearchResponse["items"][number] | null;
+  sourceId: string | null;
+  sourceNeedsRefresh: boolean;
+  onRecovered: (comparison: V2PrecedentComparisonState["comparison"]) => void;
   access: ReturnType<typeof useCustomerAccess>;
   onSettled: () => void;
   onRefreshSources: () => void;
@@ -39,6 +45,11 @@ export function PrecedentComparisonPanel({
   const settled = useRef("");
   const completed = useRef(onSettled);
   completed.current = onSettled;
+  const recovered = useRef(onRecovered);
+  recovered.current = onRecovered;
+  useEffect(() => {
+    if (state?.comparison) recovered.current(state.comparison);
+  }, [state?.comparison]);
   const key = `baro-precedent-comparison:${caseId}`;
   useEffect(() => () => startController.current?.abort(), []);
   const remember = useCallback(
@@ -151,7 +162,7 @@ export function PrecedentComparisonPanel({
   const pending = starting || (!!jobId && (!state || !terminal.has(state.job.status)));
   const sourceExpired = !!selected && selected.readToken === expiredToken;
   async function start() {
-    if (!selected || pending || sourceExpired) return;
+    if (!selected || pending || sourceExpired || sourceNeedsRefresh) return;
     const controller = new AbortController();
     startController.current = controller;
     const ticket = access.ticket();
@@ -193,21 +204,25 @@ export function PrecedentComparisonPanel({
     }
   }
   if (!access.ready) return null;
-  const comparison = state?.comparison;
+  const comparison =
+    state?.comparison && state.comparison.source.citation.id === sourceId ? state.comparison : null;
   return (
-    <section className="precedent-document precedent-comparison" aria-label="유사 판례 비교">
-      <h3>내 사건과 얼마나 비슷한가요?</h3>
-      <p>판례를 선택하면 사건의 사실과 8개 항목을 비교해요. 모르는 내용은 추측하지 않아요.</p>
+    <section className="precedent-comparison" aria-label="유사 판례 비교">
+      <h3 className="sr-only">사건과 판례 비교</h3>
       <Button
         className="precedent-primary"
-        disabled={!selected || pending || sourceExpired || !access.canMutate}
+        disabled={!selected || pending || sourceExpired || sourceNeedsRefresh || !access.canMutate}
         onClick={() => void start()}
       >
-        {pending ? "비교하고 있어요" : "선택한 판례와 내 사건 비교"}
+        {pending ? "비교하고 있어요" : "내 사건과 유사도 비교"}
       </Button>
-      {sourceExpired && (
-        <div role="alert">
-          <p>판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요.</p>
+      {(sourceExpired || sourceNeedsRefresh) && !pending && (
+        <div role={sourceExpired ? "alert" : undefined}>
+          <p>
+            {sourceExpired
+              ? "판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요."
+              : "새 비교를 시작하려면 최신 사건으로 판례를 다시 검색해 주세요."}
+          </p>
           <Button
             disabled={pending}
             onClick={() => {
@@ -233,15 +248,13 @@ export function PrecedentComparisonPanel({
           비교를 완료하지 못했어요. 최신 요약과 판례를 다시 확인한 뒤 비교해 주세요.
         </p>
       )}
-      {comparison && (
+      {comparison && state && (
         <>
-          {selected && selected.citation.id !== comparison.source.citation.id && (
-            <p className="precedent-notice" role="status">
-              아래는 이전에 비교한 판례의 결과예요. 선택한 판례는 비교 버튼을 눌러 확인해 주세요.
-            </p>
-          )}
           <ComparisonResult key={state.job.id} comparison={comparison} />
-          {state.stale && (
+          {(state.stale ||
+            comparison.summaryRevision !== context.summaryRevision ||
+            (context.workspaceRevision !== comparison.basedOnWorkspaceRevision &&
+              context.workspaceRevision !== comparison.publishedWorkspaceRevision)) && (
             <p role="status" className="precedent-notice">
               비교 이후 사건이나 확인한 원문 상태가 바뀌었어요. 최신 요약과 판례로 다시 비교해
               주세요.
