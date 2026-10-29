@@ -933,16 +933,19 @@
   border-bottom: 1px solid var(--border);
   transition: background 160ms;
 }
-.workspace-action-list label {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+.workspace-action-list > li > label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
   padding: 24px 4px;
   margin: 0;
   cursor: pointer;
 }
-.workspace-action-list input {
-  margin-top: 4px;
+.workspace-action-list > li > label > input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
 }
 .workspace-action-list label > span {
   min-width: 0;
