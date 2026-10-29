@@ -396,7 +396,7 @@ test("account deletion preserves signed session, OAuth callback and SQL revoke g
     });
     await page.goto("/settings?real-account=true");
     await openAccountDeletion(page);
-    await page.getByRole("button", { name: "google로 재인증" }).click();
+    await page.getByRole("button", { name: "Google로 재인증" }).click();
     await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
     await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
     await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();
