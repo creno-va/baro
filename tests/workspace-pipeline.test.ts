@@ -1439,3 +1439,178 @@ test("chat explains an official guide update separately from network failure wit
   );
   expect(result.citations).toEqual([]);
 });
+
+function materialChatContext(source: string) {
+  const saved = confirmedChatContext();
+  if (!saved.latestMessage) throw new Error("Missing synthetic message");
+  saved.latestMessage = {
+    ...saved.latestMessage,
+    text: "첨부한 거래 자료를 반영해 주세요.",
+    selectedFileIds: ["synthetic-receipt"],
+  };
+  const reference = {
+    kind: "user_material" as const,
+    fileId: "synthetic-receipt",
+    fileRevision: 2,
+    position: { kind: "document" as const, page: 1, paragraph: null, table: null },
+  };
+  saved.references.files = [
+    { id: reference.fileId, revision: 2, category: "document", pageCount: 1 },
+  ];
+  saved.materials = [
+    { reference, text: source, coverage: { observationCertainty: "observed", userEdited: false } },
+  ];
+  const fact = (text: string): V2Fact => ({
+    id: "synthetic-material-fact",
+    text,
+    attribution: "user_material",
+    certainty: "reported",
+    significance: "neutral",
+    references: [reference],
+    conflictingFactIds: [],
+    userEdited: false,
+  });
+  return { saved, reference, fact };
+}
+
+test("receipt whitespace is repaired to an exact quote before fact validation and audit", async () => {
+  const source = "거래일자 : 2026. 10. 01.";
+  const f = materialChatContext(source);
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : {
+          ...chatText("자료에 기재된 거래일자를 정리했어요."),
+          facts: [f.fact("거래일자:2026.10.01.")],
+          unknowns: ["이 거래와 약속의 관계"],
+        },
+  );
+  const result = await value.chat(f.saved, "material-whitespace");
+  expect(result.facts[0]?.text).toBe(source);
+  expect(result.facts[0]?.certainty).toBe("observed");
+  expect("unknowns" in result && result.unknowns).toEqual(["이 거래와 약속의 관계"]);
+  expect(calls.map((c) => c.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+});
+
+test("a paraphrased receipt fact gets one bounded correction followed by full source validation and audit", async () => {
+  const f = materialChatContext("송금일자: 2026-10-01\n플랫폼: 합성페이\n계좌 끝4자리: 1234");
+  let generated = 0;
+  const { value, calls } = pipeline((phase, input) => {
+    if (phase === "workspace_audit") return approved;
+    generated++;
+    if (generated === 2)
+      expect(input).toMatchObject({
+        draftCorrection: {
+          reason: "unsupported_fact",
+          factFailure: { category: "source_text_mismatch", referenceKind: "user_material" },
+        },
+      });
+    return {
+      ...chatText("자료의 송금일자와 플랫폼을 정리했어요. 약속한 반환일은 추가 확인이 필요해요."),
+      facts: [f.fact(generated === 1 ? "2026년 10월 1일 송금했다." : "송금일자: 2026-10-01")],
+      unknowns: ["약속한 반환일"],
+    };
+  });
+  const result = await value.chat(f.saved, "material-quote-correction");
+  expect(result.facts[0]?.text).toBe("송금일자: 2026-10-01");
+  expect(calls.map((c) => c.phase)).toEqual([
+    "workspace_chat",
+    "workspace_chat",
+    "workspace_audit",
+  ]);
+});
+
+test("repeated unsupported attachment paraphrases stay rejected after the single correction", async () => {
+  const f = materialChatContext("송금일자: 2026-10-01");
+  const { value, calls } = pipeline(() => ({
+    ...chatText("자료를 정리했어요."),
+    facts: [f.fact("2026년 10월 2일에 송금했다.")],
+  }));
+  await expect(value.chat(f.saved, "material-quote-rejected")).rejects.toMatchObject({
+    reason: "unsupported_fact",
+    factFailure: { category: "source_text_mismatch" },
+  });
+  expect(calls.map((c) => c.phase)).toEqual(["workspace_chat", "workspace_chat"]);
+});
+
+test("read-only replies cannot replace saved remaining questions", async () => {
+  const { value } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : { ...chatText("저장한 내용을 확인했어요."), unknowns: [] },
+  );
+  const result = await value.chat(confirmedChatContext(), "read-only-gaps");
+  expect("unknowns" in result && result.unknowns).toBeNull();
+});
+
+test("partial summary context cannot replace gaps that were not all loaded", async () => {
+  const f = materialChatContext("송금일자: 2026-10-01");
+  f.saved.contextCoverage = {
+    factsPartial: false,
+    partiesPartial: false,
+    summaryPartial: true,
+    messagesPartial: false,
+    materialsPartial: false,
+  };
+  const { value } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : {
+          ...chatText("읽힌 자료의 송금일자를 정리했어요."),
+          facts: [f.fact("송금일자: 2026-10-01")],
+          unknowns: [],
+        },
+  );
+  const result = await value.chat(f.saved, "partial-material-gaps");
+  expect("unknowns" in result && result.unknowns).toBeNull();
+  expect(result.facts).toHaveLength(1);
+});
+
+test("an attachment reply containing a private identifier is regenerated before publication and fully audited", async () => {
+  const f = materialChatContext("송금일자: 2026-10-01\n연락처: synthetic@example.test");
+  let generated = 0;
+  const { value, calls } = pipeline((phase, input) => {
+    if (phase === "workspace_audit") return approved;
+    generated++;
+    if (generated === 2)
+      expect(input).toMatchObject({
+        draftCorrection: {
+          reason: "prohibited_content",
+          contentFailure: { field: "chat_text", category: "private_identifier" },
+        },
+      });
+    return {
+      ...chatText(
+        generated === 1
+          ? "연락처는 synthetic@example.test입니다."
+          : "자료에 기재된 송금일자를 정리했어요.",
+      ),
+      facts: [f.fact("송금일자: 2026-10-01")],
+    };
+  });
+  const result = await value.chat(f.saved, "material-private-correction");
+  expect(result.text).not.toContain("synthetic@example.test");
+  expect(calls.map((c) => c.phase)).toEqual([
+    "workspace_chat",
+    "workspace_chat",
+    "workspace_audit",
+  ]);
+});
+
+test("unchanged existing people are not copied into the material update delta", async () => {
+  const f = materialChatContext("송금일자: 2026-10-01");
+  const party = { id: "synthetic-party", label: "상대방", role: "거래 상대" };
+  if (!f.saved.confirmedSummary) throw new Error("Missing synthetic summary");
+  f.saved.confirmedSummary.parties = [party];
+  const { value, calls } = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : {
+          ...chatText("자료의 송금일자를 정리했어요."),
+          facts: [f.fact("송금일자: 2026-10-01")],
+          parties: [party],
+        },
+  );
+  expect((await value.chat(f.saved, "material-existing-person")).parties).toEqual([]);
+  expect(calls.at(-1)?.input).toMatchObject({ draft: { parties: [] } });
+});

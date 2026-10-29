@@ -194,7 +194,7 @@ export async function readWorkspaceContext(
         fileId: file.id,
         fileRevision: file.revision,
         startOrdinal: 0,
-        count: 16,
+        count: 32,
       },
       MATERIAL_CONTEXT_BYTES - materialBytes,
     );

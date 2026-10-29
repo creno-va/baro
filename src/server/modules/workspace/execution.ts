@@ -293,6 +293,7 @@ export async function executeWorkspace(
           },
           facts: response.facts,
           parties: response.parties,
+          ...("unknowns" in response ? { unknowns: response.unknowns } : {}),
           actions: response.actions,
           timeline: response.timeline,
           toolResults: response.toolResults,

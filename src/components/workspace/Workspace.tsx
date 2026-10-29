@@ -44,6 +44,8 @@ import { TimelineEvidence } from "./TimelineEvidence";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
+const materialReflectionRequest =
+  "선택한 자료에서 읽은 정보를 먼저 요약하고, 근거가 있는 사실·관련 인물·타임라인에 반영해 주세요. 거래 자료라면 거래일자와 송금일시, 플랫폼·은행, 금액, 거래 상태를 각각 구분하고 계좌는 확인되는 끝 4자리만 표시해 주세요. 기존 내용과 다른 점을 설명하고, 이미 나온 정보는 다시 묻지 말고 자료만으로 확인되지 않는 내용만 알려 주세요. 원문에 없는 내용은 추측하지 마세요.";
 const fileStatus: Record<FileView["status"], string> = {
   uploading: "업로드 중",
   processing: "처리 중",
@@ -643,7 +645,7 @@ export function Workspace({
       return;
     }
     setQueuedSend(false);
-    const text = draft.trim() || "첨부한 파일에서 사건과 관련된 내용을 확인하고 정리해 주세요.";
+    const text = draft.trim() || materialReflectionRequest;
     const fileIds = [...new Set([...selected, ...chatAttachments.map((file) => file.id)])];
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -700,8 +702,7 @@ export function Workspace({
     await run("reflect-material", async (epoch) => {
       const currentView = await api.workspace.get(caseId);
       if (!(await verify(false, true)) || !current(epoch)) return;
-      const text =
-        "선택한 자료의 포함된 교정 내용을 기존 사실과 대조해 사건의 사실·관련 인물·타임라인을 정리해 주세요. 원문에 없는 내용은 추측하지 말고, 달라진 내용과 확인할 부분을 알려 주세요.";
+      const text = materialReflectionRequest;
       if (
         !sendAttempt.current ||
         sendAttempt.current.selectedFileIds[0] !== fileId ||

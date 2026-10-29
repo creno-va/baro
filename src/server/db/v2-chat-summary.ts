@@ -128,7 +128,7 @@ export async function prepareChatSummary(
   g: WorkspaceGuard,
   lease: JobLease,
   sourceRevision: number,
-  additions: { facts: V2Fact[]; parties: V2Summary["parties"] },
+  additions: { facts: V2Fact[]; parties: V2Summary["parties"]; unknowns?: V2Summary["unknowns"] },
   guideHosts: readonly string[],
   diagnostics = createWorkspacePublicationDiagnostics(),
 ) {
@@ -175,7 +175,9 @@ export async function prepareChatSummary(
         const party = v2SummarySchema.shape.parties.element.parse(raw);
         if (ids.parties.has(party.id)) throw invalid("duplicate_party_id");
         ids.parties.add(party.id);
-        value = party;
+        // A validated update to an existing person belongs in the new snapshot,
+        // not a second entry with the same ID. The old snapshot stays immutable.
+        value = additions.parties.find((update) => update.id === party.id) ?? party;
       } else if (field === "unknowns" || field === "notices")
         value = v2SummarySchema.shape[field].element.parse(raw);
       else {
@@ -207,10 +209,17 @@ export async function prepareChatSummary(
         yield `${firstField ? "" : ","}${JSON.stringify(event.field)}:${arrays.has(event.field) ? "[" : ""}`;
         firstField = false;
         firstItem = true;
-      } else if (event.kind === "value") yield await item(event.field, event.value);
-      else if (arrays.has(event.field)) {
-        if (event.field === "facts" || event.field === "parties")
-          for (const value of additions[event.field]) yield await item(event.field, value);
+      } else if (event.kind === "value") {
+        if (event.field !== "unknowns" || additions.unknowns === undefined)
+          yield await item(event.field, event.value);
+      } else if (arrays.has(event.field)) {
+        if (event.field === "facts")
+          for (const value of additions.facts) yield await item(event.field, value);
+        if (event.field === "parties")
+          for (const value of additions.parties)
+            if (!ids.parties.has(value.id)) yield await item(event.field, value);
+        if (event.field === "unknowns" && additions.unknowns !== undefined)
+          for (const value of additions.unknowns) yield await item(event.field, value);
         yield "]";
       }
     }

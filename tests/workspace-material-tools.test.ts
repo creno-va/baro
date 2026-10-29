@@ -70,8 +70,8 @@ test("material tool reads beyond the first eight excerpts without leaking exclus
   const f = await fixture();
   try {
     const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId, f.latest);
-    expect(context.materials).toHaveLength(16);
-    expect(context.materialWindows?.[0]).toMatchObject({ observationCount: 40, nextOrdinal: 16 });
+    expect(context.materials).toHaveLength(31);
+    expect(context.materialWindows?.[0]).toMatchObject({ observationCount: 40, nextOrdinal: 32 });
     const result = await readMaterialWindow(f.core, f.actor, f.workspaceId, {
       fileId: f.fileId,
       fileRevision: f.fileRevision,
@@ -167,7 +167,7 @@ test("a follow-up reopens its earlier attachment and skips a deleted historical 
     };
     const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId, followup);
     expect(context.references.files.map((file) => file.id)).toContain(f.fileId);
-    expect(context.materials.length).toBe(16);
+    expect(context.materials.length).toBe(31);
     f.db.sqlite.query("UPDATE v2_files SET state='deleting' WHERE id=?").run(f.fileId);
     const after = await readWorkspaceContext(f.core, f.actor, f.workspaceId, followup);
     expect(after.materials).toEqual([]);

@@ -52,6 +52,7 @@ import {
 } from "../llm-gateway/v2/schemas";
 import type { WorkspaceAuditFailure } from "./audit-diagnostics";
 import type { WorkspaceContentFailure } from "./content-diagnostics";
+import { exactMaterialQuote } from "./material-quotes";
 import type { MaterialWindow, MaterialWindowRequest } from "./materials";
 import { newPreparationEntries } from "./preparation-additions";
 import { normalizeIntakeQuestion } from "./questions";
@@ -207,6 +208,8 @@ function chatContentFailure(
     const text = JSON.stringify(party);
     if (prohibited(text)) return textFailure("party", text, canonical);
   }
+  for (const unknown of draft.unknowns ?? [])
+    if (prohibited(unknown)) return textFailure("unknown", unknown, canonical);
   return entity("chat_draft", "unclassified");
 }
 
@@ -654,6 +657,37 @@ export function createWorkspacePipeline(
       if (draft.requestedMaterials.length || draft.requestedTools.length)
         throw new WorkspaceOutputPolicyError("unauthorized_reference");
       const finishDraft = async () => {
+        for (const fact of draft.facts) {
+          if (fact.attribution !== "user_material") continue;
+          const sources = context.materials
+            .filter((material) =>
+              fact.references.some(
+                (ref) => JSON.stringify(ref) === JSON.stringify(material.reference),
+              ),
+            )
+            .map((material) => material.text);
+          const quote = exactMaterialQuote(fact.text, sources);
+          if (quote !== null) fact.text = quote;
+        }
+        // Only new/changed people belong in the delta. A repeated person must
+        // not make the complete otherwise-validated attachment response fail.
+        draft.parties = draft.parties.filter(
+          (party) =>
+            !context.confirmedSummary?.parties.some(
+              (existing) =>
+                existing.id === party.id &&
+                existing.label === party.label &&
+                existing.role === party.role,
+            ),
+        );
+        if (
+          context.contextCoverage?.summaryPartial ||
+          (!draft.facts.length &&
+            !draft.parties.length &&
+            !context.latestMessage?.selectedFileIds.length) ||
+          JSON.stringify(draft.unknowns) === JSON.stringify(context.confirmedSummary?.unknowns)
+        )
+          draft.unknowns = null;
         const factsChanged = normalizeNewFacts(context, draft.facts);
         assertWorkspaceFacts(context, draft.facts, draft.sourceClaims);
         assertWorkspaceReferences(context, [
@@ -683,7 +717,8 @@ export function createWorkspacePipeline(
               prohibited(entry.event),
           ) ||
           prohibitedChatText(draft.text) ||
-          draft.parties.some((party) => prohibited(JSON.stringify(party)))
+          draft.parties.some((party) => prohibited(JSON.stringify(party))) ||
+          draft.unknowns?.some(prohibited)
         )
           throw new WorkspaceOutputPolicyError(
             "prohibited_content",
@@ -873,7 +908,10 @@ export function createWorkspacePipeline(
           error.contentFailure?.field === "chat_text" &&
           error.contentFailure.category === "strategy" &&
           !error.contentFailure.canonicalRefusalOpening &&
-          (draft.timeline.length > 0 || draft.actions.length > 0);
+          (draft.timeline.length > 0 ||
+            draft.actions.length > 0 ||
+            ((context.latestMessage?.selectedFileIds.length ?? 0) > 0 &&
+              context.materials.length > 0));
         const auditFailure = error.auditFailure;
         const timelineFailure =
           error.reason === "audit_rejected" &&
@@ -892,7 +930,24 @@ export function createWorkspacePipeline(
         const metadataFailure =
           error.reason === "unsupported_fact" &&
           error.claimFailure === "unsupported_instrument_number";
-        if (!bodyFailure && !timelineFailure && !metadataFailure) throw error;
+        const materialFactFailure =
+          error.reason === "unsupported_fact" &&
+          error.factFailure?.category === "source_text_mismatch" &&
+          error.factFailure.attribution === "user_material" &&
+          error.factFailure.availableSourceCount > 0;
+        const materialIdentifierFailure =
+          error.reason === "prohibited_content" &&
+          error.contentFailure?.category === "private_identifier" &&
+          (context.latestMessage?.selectedFileIds.length ?? 0) > 0 &&
+          context.materials.length > 0;
+        if (
+          !bodyFailure &&
+          !timelineFailure &&
+          !metadataFailure &&
+          !materialFactFailure &&
+          !materialIdentifierFailure
+        )
+          throw error;
         // One shared newly admitted correction for these narrow failures. Never expose the
         // rejected draft, repeat lookup side effects, or relax the full validation/audit.
         draft = workspaceChatOutputSchema.parse(
@@ -900,24 +955,40 @@ export function createWorkspacePipeline(
             "workspace_chat",
             {
               ...context,
-              draftCorrection: bodyFailure
+              draftCorrection: materialFactFailure
                 ? {
-                    reason: "prohibited_content",
-                    contentFailure: { field: "chat_text", category: "strategy" },
-                  }
-                : metadataFailure
-                  ? {
-                      reason: "unsupported_fact",
-                      claimFailure: "unsupported_instrument_number",
-                    }
-                  : {
-                      reason: "audit_rejected",
-                      auditFailure: {
-                        code: "unsupported_fact",
-                        target: "timeline",
-                        basis: "intake_narrative",
-                      },
+                    reason: "unsupported_fact",
+                    factFailure: {
+                      category: "source_text_mismatch",
+                      referenceKind: "user_material",
                     },
+                  }
+                : materialIdentifierFailure
+                  ? {
+                      reason: "prohibited_content",
+                      contentFailure: {
+                        field: error.contentFailure?.field ?? "chat_text",
+                        category: "private_identifier",
+                      },
+                    }
+                  : bodyFailure
+                    ? {
+                        reason: "prohibited_content",
+                        contentFailure: { field: "chat_text", category: "strategy" },
+                      }
+                    : metadataFailure
+                      ? {
+                          reason: "unsupported_fact",
+                          claimFailure: "unsupported_instrument_number",
+                        }
+                      : {
+                          reason: "audit_rejected",
+                          auditFailure: {
+                            code: "unsupported_fact",
+                            target: "timeline",
+                            basis: "intake_narrative",
+                          },
+                        },
             },
             requestId,
           ),

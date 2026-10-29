@@ -7,6 +7,7 @@ const contentFailureSchema = z.strictObject({
     "action_text",
     "timeline_event",
     "party",
+    "unknown",
     "fact_relation",
     "action_state",
     "action_relation",
