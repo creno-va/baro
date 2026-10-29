@@ -976,7 +976,8 @@
   padding: 28px 0 0;
 }
 .workspace-next h3 {
-  font-size: 1rem;
+  font-size: 1.125rem;
+  font-weight: 650;
   margin: 0 0 10px;
 }
 .workspace-next p {
