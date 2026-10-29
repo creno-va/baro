@@ -45,6 +45,7 @@ export function createV2WorkspaceResponseRepository(
         message: V2AssistantMessage;
         facts: V2Fact[];
         parties: V2Summary["parties"];
+        unknowns?: V2Summary["unknowns"] | null;
         actions: V2Action[];
         timeline: V2TimelineEntry[];
         toolResults?: V2ToolResult[];
@@ -61,6 +62,8 @@ export function createV2WorkspaceResponseRepository(
           return diagnostics.reject("message_mismatch");
         const facts = parse(z.array(v2FactSchema).max(5), input.facts);
         const parties = parse(v2SummarySchema.shape.parties.max(5), input.parties);
+        const unknowns =
+          input.unknowns == null ? null : parse(v2SummarySchema.shape.unknowns, input.unknowns);
         const actions = parse(z.array(v2ActionSchema).max(5), input.actions);
         const timeline = parse(z.array(v2TimelineEntrySchema).max(5), input.timeline);
         const toolResults = parse(v2ToolResultsSchema, input.toolResults ?? []);
@@ -82,6 +85,7 @@ export function createV2WorkspaceResponseRepository(
             comparison.publishedWorkspaceRevision !== g.expectedRevision + 1 ||
             facts.length ||
             parties.length ||
+            unknowns !== null ||
             actions.length ||
             timeline.length ||
             !message.citations.some(
@@ -146,14 +150,16 @@ export function createV2WorkspaceResponseRepository(
         ] as const)
           if (new Set(values.map((v) => v.id)).size !== values.length)
             return diagnostics.reject(reason);
+        // The streamed merged snapshot enforces the 30-person limit. Updates
+        // replace an existing person, so input length is not the number added.
         const summary =
-          facts.length || parties.length
+          facts.length || parties.length || unknowns !== null
             ? await prepareChatSummary(
                 core,
                 g,
                 lease,
                 revision,
-                { facts, parties },
+                { facts, parties, ...(unknowns !== null ? { unknowns } : {}) },
                 guideHosts,
                 diagnostics,
               )
@@ -171,9 +177,7 @@ export function createV2WorkspaceResponseRepository(
             claimId,
             `${execution.sql} AND w.status='active' AND w.current_job_id=? AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND operation_id=? AND kind='chat_response') AND ${refs.sql} AND ${sourceAuthority.sql} AND ${summaryGuard}
           AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=?) + ? <= 300
-          AND (SELECT count(*) FROM v2_parties WHERE workspace_id=w.id AND summary_revision=?) + ? <= 30
           AND NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=w.id AND summary_revision=? AND entity_id IN (SELECT value FROM json_each(?)))
-          AND NOT EXISTS(SELECT 1 FROM v2_parties WHERE workspace_id=w.id AND summary_revision=? AND entity_id IN (SELECT value FROM json_each(?)))
           AND NOT EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id IN (SELECT value FROM json_each(?)))
           AND NOT EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id IN (SELECT value FROM json_each(?)))`,
             [
@@ -201,11 +205,7 @@ export function createV2WorkspaceResponseRepository(
               revision,
               facts.length,
               revision,
-              parties.length,
-              revision,
               JSON.stringify(facts.map((f) => f.id)),
-              revision,
-              JSON.stringify(parties.map((p) => p.id)),
               JSON.stringify(actions.map((a) => a.id)),
               JSON.stringify(timeline.map((t) => t.id)),
             ],

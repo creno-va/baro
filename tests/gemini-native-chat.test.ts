@@ -14,6 +14,7 @@ const draft = {
   facts: [],
   actions: [],
   parties: [],
+  unknowns: null,
   requestedSources: [],
   sourceClaims: [],
   timeline: [],
@@ -29,7 +30,7 @@ test("compact chat definitions preserve required fields, closed objects and lega
   const decoder = z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]);
   expect(decoder.safeParse({ output: draft }).success).toBe(true);
   expect(decoder.safeParse({ output: { ...draft, invented: true } }).success).toBe(false);
-  const { requestedTools: _, ...legacy } = draft;
+  const { requestedTools: _, unknowns: _gaps, ...legacy } = draft;
   expect(decoder.safeParse({ output: legacy }).success).toBe(false);
   expect(workspaceChatOutputSchema.parse(legacy)).toEqual(draft);
   expect(

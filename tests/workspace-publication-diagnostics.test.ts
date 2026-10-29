@@ -137,7 +137,12 @@ test("duplicate action IDs rejected after a passing audit produce only a finite 
     admitted = await admit(f);
   const output = spyOn(console, "error").mockImplementation(() => {});
   try {
-    const result = await execute(f, admitted, { ...draft(), actions: [a, a] });
+    // Distinct content must not let one reused ID survive publication. Exact
+    // semantic repeats are already collapsed by preparation refresh.
+    const result = await execute(f, admitted, {
+      ...draft(),
+      actions: [a, { ...a, title: "다른 준비 항목" }],
+    });
     expect(result).toMatchObject({
       status: "failed",
       publicationFailure: {
@@ -165,7 +170,7 @@ test("duplicate action IDs rejected after a passing audit produce only a finite 
   }
 });
 
-test("existing summary party collision retains SNAPSHOT_INVALID and distinguishes the merge check", async () => {
+test("a material update revises an existing person and remaining gaps without duplicating the person", async () => {
   const f = await reportFixture(),
     party = { id: crypto.randomUUID(), label: "보관자", role: "자료 보관" };
   expect((await execute(f, await admit(f), { ...draft(), parties: [party] })).status).toBe(
@@ -192,16 +197,48 @@ test("existing summary party collision retains SNAPSHOT_INVALID and distinguishe
     );
   if (!acquired) throw new Error("Missing synthetic lease");
   const failures: WorkspacePublicationFailure[] = [];
-  await expect(
-    createV2WorkspaceResponseRepository(f.core).commit(
+  const updatedParty = { ...party, role: "송금 자료의 수취인으로 기재" };
+  const unknowns = [...intake.summary.unknowns, "송금 자료와 약속의 관계"];
+  expect(
+    await createV2WorkspaceResponseRepository(f.core).commit(
       admitted.guard(),
       acquired.lease,
-      { ...admitted.input, parties: [party] },
+      { ...admitted.input, parties: [updatedParty], unknowns },
       (value) => failures.push(value),
     ),
-  ).rejects.toMatchObject({ code: "SNAPSHOT_INVALID" });
-  expect(failures).toEqual([{ stage: "summary_copy", reason: "duplicate_party_id" }]);
-  expect((await workspace.readIntake(f.actor, f.workspaceId))?.summary).toEqual(intake.summary);
+  ).toBe(true);
+  expect(failures).toEqual([]);
+  const next = (await workspace.readIntake(f.actor, f.workspaceId))?.summary;
+  expect(next?.parties).toEqual([updatedParty]);
+  expect(next?.unknowns).toEqual(unknowns);
+  expect(next?.facts).toEqual(intake.summary.facts);
+});
+
+test("a gaps-only update can clear resolved checks without dropping the original snapshot", async () => {
+  const f = await reportFixture(),
+    admitted = await admit(f);
+  const workspace = createV2WorkspaceRepository(f.core.binding, f.core.cipher);
+  const before = await workspace.readIntake(f.actor, f.workspaceId);
+  if (!before?.summary) throw new Error("Missing synthetic summary");
+  expect(before.summary.unknowns.length).toBeGreaterThan(0);
+  const acquired = await admitted.jobs.acquire(
+    f.actor,
+    admitted.jobId,
+    crypto.randomUUID(),
+    "2026-10-06T00:04:00.000Z",
+  );
+  if (!acquired) throw new Error("Missing synthetic lease");
+  expect(
+    await createV2WorkspaceResponseRepository(f.core).commit(admitted.guard(), acquired.lease, {
+      ...admitted.input,
+      unknowns: [],
+    }),
+  ).toBe(true);
+  const after = await workspace.readIntake(f.actor, f.workspaceId);
+  expect(after?.summary?.unknowns).toEqual([]);
+  expect(after?.summary?.facts).toEqual(before.summary.facts);
+  expect(after?.summary?.parties).toEqual(before.summary.parties);
+  expect(before.summary.unknowns.length).toBeGreaterThan(0);
 });
 
 test("final CAS loss keeps false and publishes no message while its diagnostic sink may throw", async () => {

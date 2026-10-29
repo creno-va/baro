@@ -175,12 +175,37 @@
 }
 .workspace-context-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 28px;
   padding: 4px 0 22px;
 }
-.workspace-context-content--files {
-  grid-template-columns: minmax(0, 1fr);
+.workspace-context-content > section {
+  min-width: 0;
+}
+.workspace-context-content > section > h2 {
+  margin-top: 0;
+}
+.workspace-context-overview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.workspace-summary-review {
+  margin-top: auto;
+  padding-top: 24px;
+}
+.workspace-context-notices {
+  grid-column: 1 / -1;
+}
+.workspace-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.workspace-section-actions .ui-button {
+  flex-shrink: 0;
 }
 .workspace-sidebar h2 {
   font-size: 0.9rem;
@@ -799,6 +824,42 @@
 .workspace-timeline .workspace-muted {
   font-size: 0.72rem;
 }
+.timeline-evidence {
+  margin-top: 12px;
+}
+.timeline-evidence-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.timeline-evidence-sources {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+.timeline-evidence-sources > summary {
+  width: fit-content;
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+.timeline-evidence-links {
+  display: grid;
+  gap: 6px;
+}
+.timeline-evidence-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-block: 6px;
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+.timeline-evidence-links small {
+  display: block;
+  line-height: 1.6;
+}
 .workspace-count {
   font-size: 0.8rem;
   color: var(--primary);
@@ -1214,18 +1275,7 @@
   justify-content: flex-end;
   margin-top: -12px;
 }
-.workspace-summary-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--primary);
-  font-weight: 650;
-}
+
 .workspace-material-apply {
   padding: 16px;
   border: 1px solid #c8dcfa;
@@ -1455,20 +1505,20 @@
   margin: 6px 0;
 }
 
-/* Empty chat fits below the header; existing conversations keep a full viewport.
-   Messages retain their internal scroll in either state. */
+/* Every conversation fits below the case header and tabs, including its composer.
+   Only the message history takes the remaining internal scroll area. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
   margin-bottom: 8px;
 }
 .workspace--chat .workspace-chat-heading {
   display: none;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-main {
+.workspace--chat .workspace-main {
   flex: none;
-  height: var(--chat-panel-height, 100svh);
+  height: var(--chat-panel-height, calc(100svh - 240px));
   min-height: 0;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-messages {
+.workspace--chat .workspace-messages {
   flex: 1;
   max-width: none;
   min-height: 0;
@@ -1481,19 +1531,27 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-composer {
+.workspace--chat .workspace-composer {
   position: static;
   flex: 0 1 auto;
   max-width: none;
-  max-height: 55%;
+  max-height: min(100%, max(88px, 55%));
   overflow-y: auto;
   overscroll-behavior-y: auto;
   margin-inline: auto;
 }
-.app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
-  flex: none;
-  max-height: none;
-}
 .workspace--chat > .workspace-feedback:empty {
   display: none;
+}
+
+@media (max-width: 640px) {
+  .workspace-section-heading:has(.workspace-section-actions) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .workspace-section-actions {
+    align-self: flex-end;
+    max-width: 100%;
+  }
 }

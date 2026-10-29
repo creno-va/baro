@@ -1,4 +1,4 @@
-import { ChevronDown, Download, Eye, FileText, RefreshCw, Save, Settings2 } from "lucide-react";
+import { Download, Pencil, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
@@ -6,7 +6,6 @@ import { isExplicitSignOut } from "../../client/session-events";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { createReportMarkup } from "./document";
 import { downloadBlob } from "./download";
 import { ReportReading } from "./ReportReading";
 
@@ -26,13 +25,9 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [busyStartedAt, setBusyStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [preview, setPreview] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [savedPreview, setSavedPreview] = useState("");
   const [regenerate, setRegenerate] = useState(false);
   const [reloadConfirm, setReloadConfirm] = useState(false);
-  const [reviewed, setReviewed] = useState(false);
   const [accessChecking, setAccessChecking] = useState(true);
   const [accessUnknown, setAccessUnknown] = useState(false);
   const [needsConsent, setNeedsConsent] = useState(false);
@@ -45,13 +40,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
     setReport(value);
+    setEditing(false);
     setIncludedPhotos(value.includedPhotoIds ?? []);
-    setSavedPreview("");
-    setPreview(false);
+
     setContent(value.content);
     setMask(value.maskIdentifiers);
     setExcluded(value.excludedFileIds);
-    setReviewed(false);
+
     setInitialLimit(false);
     setExportExhausted(false);
   }, []);
@@ -69,12 +64,10 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setMask(false);
     setExcluded([]);
     setIncludedPhotos([]);
-    setNotice("");
-    setPreview(false);
-    setSavedPreview("");
+
     setRegenerate(false);
     setReloadConfirm(false);
-    setReviewed(false);
+
     setAccessChecking(false);
     setAccessUnknown(false);
     setBusy("");
@@ -217,11 +210,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
         setIncludedPhotos((ids) =>
           ids.filter((id) => materials.some((file) => file.id === id && file.status === "ready")),
         );
-        setReviewed(false);
+
         // Content, masking and exclusions intentionally stay in the editor.
-        setNotice(
-          "사건·자료 상태를 다시 확인했어요. 다른 곳에서 새 버전을 만든 경우 다시 불러와 주세요.",
-        );
       })()
         .catch((e: unknown) => {
           const failure = e as { code?: string; ownerRevoked?: boolean };
@@ -281,7 +271,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setBusy("계정 접근 상태 확인 중…");
     setBusyStartedAt(performance.now());
     setError("");
-    setNotice("");
+
     try {
       await verifyOwner();
       setBusy(label);
@@ -322,33 +312,22 @@ export function ReportReview({ caseId }: { caseId: string }) {
     await verifyOwner(() => sequence === loadSequence.current);
     return value;
   }
-  const splitSave = Boolean(
-    report &&
-      content !== report.content &&
-      JSON.stringify([...excluded].sort()) !== JSON.stringify([...report.excludedFileIds].sort()),
-  );
   async function save() {
-    const pendingExclusions = excluded;
-    accept(
-      await ownedResult(
-        api.reports.save(
-          caseId,
-          {
-            content,
-            maskIdentifiers: mask,
-            includedPhotoIds: includedPhotos,
-            excludedFileIds: splitSave ? (report?.excludedFileIds ?? []) : excluded,
-          },
-          report?.revision,
-        ),
+    if (!report) throw new Error("리포트를 다시 확인해 주세요.");
+    const value = await ownedResult(
+      api.reports.save(
+        caseId,
+        {
+          content,
+          maskIdentifiers: mask,
+          includedPhotoIds: mask ? [] : includedPhotos,
+          excludedFileIds: excluded,
+        },
+        report.revision,
       ),
     );
-    if (splitSave) {
-      setExcluded(pendingExclusions);
-      setNotice(
-        "본문 편집을 먼저 저장했어요. 자료 제외를 적용하려면 다시 저장하고 구성된 본문을 확인해 주세요.",
-      );
-    } else setNotice("검토 내용을 저장했어요.");
+    accept(value);
+    return value;
   }
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
@@ -363,23 +342,21 @@ export function ReportReview({ caseId }: { caseId: string }) {
       />
       <div className="report-canvas">
         <header className="report-heading">
-          <span className="report-heading-icon" aria-hidden="true">
-            <FileText size={24} />
-          </span>
-          <h2>전달할 리포트를 준비해요</h2>
-          <p>내용을 확인하고, 필요한 자료만 골라 다운로드하세요.</p>
+          <div>
+            <h2>전달할 리포트를 준비해요</h2>
+            <p>내용을 확인하고, 필요한 부분을 고쳐 다운로드하세요.</p>
+          </div>
+          {report && (
+            <button
+              type="button"
+              className="report-regenerate"
+              disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
+              onClick={() => setRegenerate(true)}
+            >
+              <RefreshCw size={16} aria-hidden="true" />새 버전 만들기
+            </button>
+          )}
         </header>
-        <nav className="report-steps" aria-label="리포트 준비 순서">
-          <a href="#report-editor-heading">
-            <span>1</span>내용 확인
-          </a>
-          <a href="#report-options">
-            <span>2</span>개인정보·자료
-          </a>
-          <a href="#report-export-heading">
-            <span>3</span>다운로드
-          </a>
-        </nav>
         {(busy || accessChecking) && (
           <p role="status" className="report-progress">
             <Spinner />
@@ -405,11 +382,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
             <a href="/login">로그인</a>
           </div>
-        )}
-        {notice && (
-          <p role="status" className="report-success">
-            {notice}
-          </p>
         )}
         {initialLimit && !report && !accessChecking && (
           <section className="report-options-body" aria-label="리포트 처리 한도 복구">
@@ -453,300 +425,68 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 PDF·ZIP은 계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
               </p>
             )}
-            <section className="report-editor" aria-labelledby="report-editor-heading">
-              <div className="report-editor-heading">
-                <div>
-                  <h2 id="report-editor-heading">리포트 내용</h2>
-                  <p className="report-meta">
-                    버전 {report.revision} ·{" "}
-                    <time dateTime={report.updatedAt}>
-                      {new Date(report.updatedAt).toLocaleDateString("ko-KR")}
-                    </time>
-                  </p>
-                  {report.basis && (
-                    <details className="report-basis">
-                      <summary>생성 기준 보기</summary>
-                      <p className="report-meta">
-                        생성 기준: 요약 {report.basis.summaryRevision} · 사건{" "}
-                        {report.basis.workspaceRevision} ·{" "}
-                        {new Date(report.basis.generatedAt).toLocaleString("ko-KR")}
-                      </p>
-                    </details>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  disabled={Boolean(busy) || needsConsent}
-                  onClick={(event) => {
-                    event.currentTarget.focus();
-                    setRegenerate(true);
-                  }}
-                >
-                  <RefreshCw size={16} aria-hidden="true" /> 새 버전 만들기
-                </button>
-              </div>
-              {report.stale && (
-                <p className="report-callout report-stale" role="status">
-                  사건·자료 또는 공식 출처의 확인 상태가 바뀌었어요. 이 리포트는 위 생성 기준의
-                  내용이에요. 새 버전 만들기로 현재 내용을 확인해 주세요. 저장된 PDF는 기존 내용으로
-                  다운로드할 수 있어요.
-                </p>
-              )}
-              <section
-                className="report-read-content"
-                aria-label="리포트 검토 본문"
-                hidden={editing}
-              >
-                <ReportReading content={content} />
-              </section>
-              <div className="report-edit-panel">
+            <section className="report-read-content" aria-label="리포트 검토 본문">
+              <div className="report-content-tools">
                 <button
                   type="button"
                   className="report-edit-toggle"
+                  disabled={Boolean(busy) || needsConsent}
                   aria-expanded={editing}
                   aria-controls="report-edit-fields"
-                  onClick={() => setEditing((value) => !value)}
-                >
-                  {editing ? "수정 닫기" : "리포트 내용 수정하기"}
-                  <ChevronDown size={16} aria-hidden="true" />
-                </button>
-                <div id="report-edit-fields" hidden={!editing}>
-                  <div className="report-paper">
-                    <label htmlFor="report-content" className="sr-only">
-                      리포트 내용 편집
-                    </label>
-                    <textarea
-                      id="report-content"
-                      rows={12}
-                      maxLength={30000}
-                      value={content}
-                      disabled={Boolean(busy) || needsConsent}
-                      onChange={(e) => {
-                        setContent(e.target.value);
-                        setReviewed(false);
-                      }}
-                      aria-describedby="report-content-count"
-                    />
-                    <p className="report-editor-count" id="report-content-count">
-                      {content.length.toLocaleString()} / 30,000자
-                      {dirty ? " · 저장하지 않은 변경" : " · 저장됨"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="report-editor-tools">
-                <button
-                  type="button"
                   onClick={() => {
-                    if (preview) {
-                      setPreview(false);
-                      return;
-                    }
-                    if (dirty) {
-                      setSavedPreview("");
-                      setPreview(true);
-                      return;
-                    }
-                    void run("리포트 확인 중…", async () => {
-                      const blob = await ownedResult(api.reports.html(report.id));
-                      const html = await ownedResult(blob.text());
-                      const document = new DOMParser().parseFromString(html, "text/html");
-                      const main = document.querySelector("main");
-                      if (!main) throw new Error("미리보기를 확인하지 못했어요.");
-                      // The page loads the report stylesheet as an approved
-                      // static asset. Do not insert inline styles under CSP.
-                      setSavedPreview(main.innerHTML);
-                      setPreview(true);
-                    });
+                    if (editing && dirty && !report.stale)
+                      void run("수정 내용 저장 중…", async () => {
+                        await save();
+                        setEditing(false);
+                      });
+                    else setEditing((value) => !value);
                   }}
-                  aria-expanded={preview}
-                  aria-controls={preview ? "report-preview-section" : undefined}
                 >
-                  <Eye size={16} aria-hidden="true" />{" "}
-                  {preview ? "미리보기 닫기" : "전달 내용 미리보기"}
+                  <Pencil size={16} aria-hidden="true" />
+                  {editing ? "수정 마치기" : "리포트 내용 수정하기"}
                 </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
-                  onClick={() => void run("저장 중…", save)}
-                  className={dirty ? "report-save is-dirty" : "report-save"}
-                >
-                  <Save size={16} aria-hidden="true" />{" "}
-                  {splitSave ? "본문 편집 먼저 저장" : "검토 내용 저장"}
-                </button>
+              </div>
+              <div id="report-edit-fields">
+                <ReportReading
+                  content={content}
+                  editing={editing}
+                  disabled={Boolean(busy) || needsConsent}
+                  onChange={setContent}
+                />
               </div>
             </section>
-            <details className="report-options" id="report-options">
-              <summary>
-                <Settings2 size={19} aria-hidden="true" />
-                <span>
-                  <strong>개인정보·자료 설정</strong>
-                  <span className="report-options-status">
-                    {mask ? "자동 가림 켜짐" : "자동 가림 꺼짐"} · 근거 사진{" "}
-                    {mask ? 0 : includedPhotos.length}개
-                    {excluded.length > 0 ? ` · 자료 ${excluded.length}개 제외` : ""}
-                  </span>
-                </span>
-                <ChevronDown size={18} className="report-options-chevron" aria-hidden="true" />
-              </summary>
-              <div className="report-options-body">
-                <section aria-labelledby="report-mask-heading">
-                  <h2 id="report-mask-heading">식별정보 가리기</h2>
-                  <p>식별정보는 기본으로 남아요. 필요한 내용을 직접 확인한 뒤 가려 주세요.</p>
-                  <label className="report-check">
-                    <input
-                      type="checkbox"
-                      checked={mask}
-                      disabled={Boolean(busy) || needsConsent}
-                      onChange={(e) => {
-                        setMask(e.target.checked);
-                        setReviewed(false);
-                      }}
-                    />{" "}
-                    전화번호·이메일·주민등록번호 가리기
-                  </label>
-                  <p className="report-meta">
-                    이름·주소 등 다른 식별정보는 내용에서 직접 수정해 주세요. 자동 가림은 모든
-                    개인정보를 찾아내지 못해요.
-                  </p>
-                </section>
-                <section aria-labelledby="report-files-heading">
-                  <h2 id="report-files-heading">자료 제외와 근거 사진 선택</h2>
-                  <p>
-                    본문에서 제외할 자료와 PDF에 포함할 근거 사진을 선택하세요. 사진 속 식별정보는
-                    직접 확인해 주세요.
-                  </p>
-                  {!files.length && <p>등록한 자료가 없어요. PDF만 다운로드할 수 있어요.</p>}
-                  {files.map((file) => (
-                    <div key={file.id} className="report-material">
-                      <strong>{file.name}</strong>
-                      <p className="report-meta">
-                        {file.sizeBytes.toLocaleString()}바이트 · {file.coverage} ·{" "}
-                        {
-                          {
-                            ready: "확인 가능",
-                            failed: "처리 실패 · 원본을 확인하거나 자료 화면에서 재시도해 주세요.",
-                            processing: "처리 중",
-                            uploading: "업로드 중",
-                            waiting: "처리 대기",
-                          }[file.status]
-                        }
-                      </p>
-                      <div className="report-material-options">
-                        <label className="report-check">
-                          <input
-                            type="checkbox"
-                            checked={excluded.includes(file.id)}
-                            disabled={Boolean(busy) || needsConsent}
-                            onChange={() => {
-                              setExcluded(toggle(excluded, file.id));
-                              setIncludedPhotos(includedPhotos.filter((id) => id !== file.id));
-                              setReviewed(false);
-                            }}
-                          />{" "}
-                          리포트에서 제외
-                        </label>
-                        <label className="report-check">
-                          <input
-                            type="checkbox"
-                            checked={includedPhotos.includes(file.id)}
-                            disabled={
-                              Boolean(busy) ||
-                              needsConsent ||
-                              excluded.includes(file.id) ||
-                              mask ||
-                              file.status !== "ready" ||
-                              !report.photoCandidates?.some((photo) => photo.id === file.id) ||
-                              (!includedPhotos.includes(file.id) && includedPhotos.length >= 12)
-                            }
-                            onChange={() => {
-                              setIncludedPhotos(toggle(includedPhotos, file.id));
-                              setReviewed(false);
-                            }}
-                          />{" "}
-                          PDF에 근거 사진 포함
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                  {splitSave && (
-                    <p className="report-callout">
-                      본문과 제외 목록을 함께 바꿨어요. 본문을 먼저 저장한 뒤 제외를 적용해 주세요.
-                      입력한 편집은 이전 버전에 보관됩니다.
-                    </p>
-                  )}
-                  <p className="report-option-note">
-                    근거 사진은 JPEG·PNG·WebP, 한 장 5MB 이하·총 8MB 이하·최대 12장을 선택할 수
-                    있어요. 다른 형식은 JPG나 PNG 사본을 추가해 주세요. 사진 속 이름·번호 등은
-                    자동으로 가려지지 않아요. 식별정보 자동 가림을 켜면 선택한 사진도 모두 빠져요.
-                    사진을 넣으려면 직접 개인정보를 확인하고 자동 가림을 꺼 주세요. 제외 목록을
-                    바꾸면 자료를 기준으로 본문을 다시 구성해요. 기존 수동 편집은 이전 버전에
-                    보관돼요. 저장 후 내용을 다시 확인해 주세요.
-                  </p>
-                </section>
-              </div>
-            </details>
-            {preview && (
-              <section className="report-preview-section" id="report-preview-section">
-                <h2>전달 내용 미리보기</h2>
-                <p className="report-option-note">
-                  {dirty
-                    ? "저장 전 본문 미리보기예요. 자료 제외와 선택 사진은 저장한 뒤 미리보기를 다시 열어 확인하세요."
-                    : "저장된 생성 기준과 검토 내용을 담은 HTML 리포트예요."}
-                </p>
-                {/* Trusted template escapes every title/body string; no user HTML is interpreted. */}
-                <section
-                  className="report-html-preview"
-                  aria-label="디자인된 HTML 리포트 미리보기"
-                  // biome-ignore lint/a11y/noNoninteractiveTabindex: The bounded report region must support keyboard scrolling.
-                  tabIndex={0}
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: createReportMarkup escapes every user-derived string.
-                  dangerouslySetInnerHTML={{
-                    __html:
-                      !dirty && savedPreview
-                        ? savedPreview
-                        : createReportMarkup({
-                            ...report,
-                            content,
-                            maskIdentifiers: mask,
-                            excludedFileIds: excluded,
-                          }),
-                  }}
-                />
-                <p>
-                  리포트 제외 자료: {excluded.length}개 · 근거 사진:{" "}
-                  {mask ? 0 : includedPhotos.length}개
-                </p>
-              </section>
-            )}
-            <section className="report-export" aria-labelledby="report-export-heading">
-              <h2 id="report-export-heading">준비됐다면 다운로드하세요</h2>
-              <p>
-                {dirty
-                  ? "저장하지 않은 변경이 있어요. 검토 내용을 먼저 저장해 주세요."
-                  : "최신 저장 내용을 다운로드해요. 전달할 상대는 직접 선택해 주세요."}
-              </p>
+            <section className="report-mask" aria-label="식별정보 설정">
               <label className="report-check">
                 <input
                   type="checkbox"
-                  checked={reviewed}
-                  disabled={Boolean(busy) || dirty}
-                  onChange={(e) => setReviewed(e.target.checked)}
-                />{" "}
-                내용·식별정보·선택한 사진을 확인했어요
+                  checked={mask}
+                  disabled={Boolean(busy) || needsConsent}
+                  aria-describedby="report-mask-description"
+                  onChange={(event) => setMask(event.target.checked)}
+                />
+                식별정보 가리기
               </label>
+              <p id="report-mask-description" className="report-option-note">
+                전화번호·이메일·주민등록번호 가리기
+                <br />
+                이름·주소 등 다른 식별정보는 내용에서 직접 수정해 주세요. 자동 가림은 모든
+                개인정보를 찾아내지 못해요.
+              </p>
+            </section>
+            <section className="report-export" aria-label="리포트 다운로드">
               {exportExhausted && (
                 <div className="report-callout">
-                  <p>
-                    다운로드 재시도를 모두 사용했어요. 현재 검토 내용을 새 버전으로 저장하면 새
-                    다운로드를 준비할 수 있어요.
-                  </p>
+                  <p>다운로드 재시도를 모두 사용했어요. 새 버전으로 다시 준비해 주세요.</p>
                   <button
                     type="button"
                     disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
-                    onClick={() => void run("검토 버전 저장 중…", save)}
+                    onClick={() =>
+                      void run("다운로드 버전 준비 중…", async () => {
+                        await save();
+                      })
+                    }
                   >
-                    검토 내용을 보존하고 새 버전 저장
+                    새 버전으로 다시 준비
                   </button>
                 </div>
               )}
@@ -754,24 +494,29 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   className="primary"
+                  title={
+                    report.stale && (!report.pdfAvailable || dirty)
+                      ? "새 버전 만들기로 최신 사건을 반영한 뒤 다운로드하세요."
+                      : needsConsent && dirty
+                        ? "필수 동의를 확인한 뒤 수정 내용을 저장할 수 있어요."
+                        : undefined
+                  }
                   disabled={
                     Boolean(busy) ||
-                    ((report.stale || needsConsent) && !report.pdfAvailable) ||
-                    dirty ||
-                    !reviewed
+                    exportingPdf ||
+                    !content.trim() ||
+                    ((report.stale || needsConsent) && (!report.pdfAvailable || dirty))
                   }
                   onClick={async () => {
                     setExportingPdf(true);
                     try {
                       await run("PDF 준비 중…", async () => {
-                        downloadBlob(
-                          await ownedResult(api.reports.pdf(report.id)),
-                          `BARO-${report.id}.pdf`,
-                        );
+                        const value = dirty ? await save() : report;
+                        const blob = await ownedResult(api.reports.pdf(value.id));
+                        downloadBlob(blob, `BARO-${value.id}.pdf`);
                         setReport((current) =>
-                          current?.id === report.id ? { ...current, pdfAvailable: true } : current,
+                          current?.id === value.id ? { ...current, pdfAvailable: true } : current,
                         );
-                        setNotice("PDF 다운로드를 시작했어요.");
                       });
                     } finally {
                       setExportingPdf(false);
@@ -782,9 +527,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   {exportingPdf ? "PDF 만드는 중…" : "PDF 다운로드"}
                 </button>
               </div>
-              <p className="report-option-note">
-                리포트는 PDF로 저장해요. 선택 사진의 개인정보와 본문·출처를 확인한 뒤 전달해 주세요.
-              </p>
               <p className="report-export-notice">
                 AI가 정리한 상담 준비 자료예요. 법률 판단·원본의 진정성·법적 효력을 보장하지 않아요.
                 변호사에게 전달하는 것은 직접 결정하고 진행해 주세요.
@@ -814,11 +556,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
             <button
               type="button"
-              disabled={Boolean(busy) || needsConsent || (dirty && !report?.stale)}
+              disabled={Boolean(busy) || needsConsent}
               onClick={() =>
                 void run("새 버전 생성 중…", async () => {
+                  const current = dirty && !report.stale ? await save() : report;
                   const value = await ownedResult(
-                    api.reports.generate(caseId, undefined, report.revision),
+                    api.reports.generate(caseId, undefined, current.revision),
                   );
                   setBusy("자료 목록 확인 중…");
                   const materials = await ownedResult(api.files.list(caseId));
@@ -826,7 +569,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   setFiles(materials);
                   setIncludedPhotos([]);
                   setRegenerate(false);
-                  setNotice("새 초안을 만들었어요. 내용을 다시 확인해 주세요.");
                 })
               }
             >
@@ -857,13 +599,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </button>
           </ConfirmDialog>
         )}
-        <footer className="report-footer-links">
-          <a className="report-return-link" href={`/cases/${encodeURIComponent(caseId)}`}>
-            사건으로 돌아가기
-          </a>
-          <a href="/help#deletion">사건·리포트 삭제 안내</a>
-          <a href="/policies/privacy">개인정보 처리방침 초안</a>
-        </footer>
       </div>
     </div>
   );

@@ -52,6 +52,11 @@ const detail = {
     precedents.find((f) => f.id === "precedent_verified")?.response.body ?? "{}",
   ).판례정보,
 };
+// This suite exercises discovery of substantively relevant originals.
+// Keep list/detail identity exact while using a realistic synthetic topic title.
+list.PrecSearch.prec[0].사건명 = "대여금·계약금 반환";
+detail.PrecService.사건명 = "대여금·계약금 반환";
+detail.PrecService.판례내용 += " 대여금과 계약금 반환에 관한 합성 자료입니다.";
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const searchBody = async (response: Response) =>
@@ -68,7 +73,13 @@ async function fixture(confirmed = true) {
   });
   await runCustomerJob(f, "intake_summary");
   if (confirmed) await confirmCustomerSummary(f);
-  const calls: { path: string; query: string | null; corpus: string | null }[] = [];
+  const calls: {
+    path: string;
+    query: string | null;
+    corpus: string | null;
+    search: string | null;
+    display: string | null;
+  }[] = [];
   let upstream: Transport = async (url) =>
     json(new URL(url).pathname.endsWith("lawSearch.do") ? list : detail);
   let clock = f.now;
@@ -92,6 +103,8 @@ async function fixture(confirmed = true) {
               path: u.pathname,
               query: u.searchParams.get("query"),
               corpus: u.searchParams.get("datSrcNm"),
+              search: u.searchParams.get("search"),
+              display: u.searchParams.get("display"),
             });
             return upstream(url, init);
           },
@@ -156,6 +169,9 @@ test("confirmed case searches only public concepts, deduplicates verified origin
     ["대여금", "대법원"],
   ]);
   expect(f.calls.filter((c) => c.path.endsWith("lawService.do"))).toHaveLength(1);
+  expect(f.calls.filter((c) => c.query).every((c) => c.search === "1" && c.display === "40")).toBe(
+    true,
+  );
   const before = f.calls.length;
   const first = result.items[0];
   if (!first) throw new Error("Missing verified synthetic precedent");
@@ -174,6 +190,70 @@ test("confirmed case searches only public concepts, deduplicates verified origin
   expect((await f.service.find(f.owner.userId, f.workspace.id)).workspaceRevision).toBe(
     input.expectedRevision,
   );
+});
+
+test("empty title discovery falls back once to the same public topic in body search", async () => {
+  const f = await fixture(),
+    input = { ...(await f.searchInput()), topics: ["loan"] };
+  f.upstream(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("lawSearch.do"))
+      return json(
+        parsed.searchParams.get("search") === "1"
+          ? { PrecSearch: { totalCnt: "0", prec: [] } }
+          : list,
+      );
+    return json(detail);
+  });
+  const result = await searchBody(await f.request("/search", input));
+  expect(result.items).toHaveLength(1);
+  expect(f.calls.filter((c) => c.query).map((c) => [c.query, c.search, c.display])).toEqual([
+    ["대여금", "1", "40"],
+    ["대여금", "2", "40"],
+  ]);
+  expect(f.calls).toHaveLength(3);
+});
+
+test("research reranks a wider validated pool before detail reads and retains at most three relevant originals per topic", async () => {
+  const f = await fixture(),
+    input = { ...(await f.searchInput()), topics: ["loan"] };
+  const titles = [
+    "공사대금·건물철거",
+    "결정(조서)결정",
+    "대여금 반환 A",
+    "대여금 반환 B",
+    "대여금 반환 C",
+    "대여금 반환 D",
+  ];
+  const rows = titles.map((title, index) => ({
+    ...list.PrecSearch.prec[0],
+    판례일련번호: String(90000000300 + index),
+    사건명: title,
+    사건번호: `2026다${300 + index}`,
+    선고일자: `2026010${6 - index}`,
+  }));
+  f.upstream(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("lawSearch.do"))
+      return json({ PrecSearch: { totalCnt: "6", prec: rows } });
+    const row = rows.find((row) => row.판례일련번호 === parsed.searchParams.get("ID"));
+    if (!row) throw new Error("Unexpected synthetic detail");
+    return json({
+      PrecService: {
+        ...detail.PrecService,
+        판례정보일련번호: row.판례일련번호,
+        사건명: row.사건명,
+        사건번호: row.사건번호,
+        선고일자: row.선고일자,
+        판례내용: "대여금 반환에 관한 합성 전문.",
+      },
+    });
+  });
+  const result = await searchBody(await f.request("/search", input));
+  expect(result.items.map((item) => item.citation.title)).toEqual(titles.slice(2, 5));
+  expect(f.calls.filter((c) => c.path.endsWith("lawService.do"))).toHaveLength(4);
+  expect(f.calls).toHaveLength(5);
+  expect(result.searchTruncated).toBe(true);
 });
 
 test("origin, session, owner, revision, confirmed summary and strict inputs deny before official requests", async () => {

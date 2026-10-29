@@ -93,6 +93,7 @@ test("explicit provider defaults remain compatible with server parsing and legac
     facts: [],
     actions: [],
     parties: [],
+    unknowns: null,
     requestedSources: [
       {
         kind: "statute" as const,
@@ -106,7 +107,7 @@ test("explicit provider defaults remain compatible with server parsing and legac
     timeline: [],
   };
   expect(workspaceChatOutputSchema.parse(output)).toEqual(output);
-  const { sourceClaims: _, ...legacy } = output;
+  const { sourceClaims: _, unknowns: _gaps, ...legacy } = output;
   expect(
     workspaceChatOutputSchema.parse({
       ...legacy,

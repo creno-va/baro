@@ -6,6 +6,9 @@ import { createAccountMock } from "../../src/client/api/mock/account";
 import { createReportsMock, type ReportMockState } from "../../src/client/api/mock/reports";
 import { createReportsApi, domainRequest } from "../../src/client/api/reports";
 
+export { errorMessage } from "../../src/client/api/errors";
+export const apiMode = "mock";
+
 const key = "baro.reports.browser-test.v1";
 const realAccountKey = "baro.reports-test.real-account";
 if (location.search.includes("real-account")) sessionStorage.setItem(realAccountKey, "true");
@@ -90,3 +93,6 @@ export const api = {
     },
   },
 };
+
+// Explicit isolated browser harness only; never imported by a product build.
+Object.assign(window, { baroReportTestApi: api });

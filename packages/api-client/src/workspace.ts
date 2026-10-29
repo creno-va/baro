@@ -124,6 +124,10 @@ export const workspaceViewSchema = z.object({
       datePrecision: z.enum(["day", "month", "year", "unknown"]).default("day"),
       title: z.string(),
       detail: z.string(),
+      certainty: v2TimelineEntrySchema.shape.certainty.optional(),
+      references: z.array(v2FactReferenceSchema).optional(),
+      factIds: v2TimelineEntrySchema.shape.factIds.optional(),
+      userEdited: z.boolean().optional(),
     }),
   ),
   files: z.array(fileViewSchema),
@@ -614,6 +618,10 @@ export function createWorkspaceClient(dependencies: {
         datePrecision: item.datePrecision,
         title: title ?? item.event,
         detail: detail.join("\n"),
+        certainty: item.certainty,
+        references: item.references,
+        factIds: item.factIds,
+        userEdited: item.userEdited,
       } satisfies TimelineView;
     });
     const caseView: CaseView = {

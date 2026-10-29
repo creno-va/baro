@@ -34,6 +34,8 @@ export const workspaceChatOutputSchema = z.strictObject({
   facts: z.array(v2FactSchema).max(5).refine(hasUniqueIds, "Duplicate fact IDs"),
   actions: z.array(v2ActionSchema).max(5),
   parties: v2SummarySchema.shape.parties.max(5),
+  // Null preserves earlier gaps on read-only replies and older adapters.
+  unknowns: v2SummarySchema.shape.unknowns.nullable().default(null),
   requestedSources: z.array(workspaceSourceRequestSchema).max(2),
   requestedTools: z.array(v2LookupToolIdSchema).max(2).default([]),
   requestedMaterials: z.array(materialWindowRequestSchema).max(2).default([]),

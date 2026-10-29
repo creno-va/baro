@@ -61,13 +61,9 @@ async function progressFixture(
   });
   await page.goto("/cases/synthetic-progress-case/reports");
   await openReportEditor(page);
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveValue(
     progressReport.content,
   );
-  await page.locator("summary").filter({ hasText: "개인정보·자료 설정" }).click();
-  await page
-    .getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요", exact: true })
-    .check();
 }
 
 test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only save format", async ({
@@ -96,7 +92,7 @@ test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only sa
   response.release();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
   await openReportEditor(page);
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveValue(
     progressReport.content,
   );
   expect(calls).toBe(1);
@@ -123,7 +119,7 @@ test("same-owner access checks retain the report and draft while locking control
       });
     },
   });
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await editor.fill("확인 중에도 남아 있어야 하는 합성 편집");
   checking = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -181,7 +177,7 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
   expect(downloads).toBe(0);
   expect(pdfCalls).toBe(1);
   postflight.release();
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경");
   await expect(page.locator(".report-progress")).toHaveCount(0);
   expect(downloads).toBe(0);
@@ -217,7 +213,7 @@ test("report generation shows the actual elapsed request inside its confirmation
   await expect(page.getByRole("button", { name: "새 버전 생성", exact: true })).toBeDisabled();
   generation.release();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByText("새 초안을 만들었어요. 내용을 다시 확인해 주세요.")).toBeVisible();
+  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".report-progress")).toHaveCount(0);
   expect(generations).toBe(1);
 });
@@ -277,23 +273,21 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
   });
   await page.goto("/cases/synthetic-refresh/reports");
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toHaveValue("저장된 합성 본문 1");
   await editor.fill("저장하지 않은 독립 상담 질문");
   stale = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByText(/사건·자료 또는 공식 출처의 확인 상태가 바뀌었어요/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeDisabled();
   await expect(editor).toHaveValue("저장하지 않은 독립 상담 질문");
-  await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(0);
   peerFile = true;
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
+  await openReportEditor(page);
   await expect(editor).toHaveValue("저장된 합성 본문 2");
-  await page.locator("summary").filter({ hasText: "개인정보·자료 설정" }).click();
-  await expect(page.locator(".report-material")).toContainText("추가 합성 원본.txt");
-  await expect(
-    page.getByRole("checkbox", { name: "PDF에 근거 사진 포함", exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator(".report-material")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeVisible();
 });
 
 test("initial report limit allows exclusions before any report exists", async ({ page }) => {
@@ -363,7 +357,7 @@ test("initial report limit allows exclusions before any report exists", async ({
   await page.getByRole("checkbox", { name: /큰 합성 자료/ }).check();
   await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
   await openReportEditor(page);
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveValue(
     "제외 후 생성한 합성 리포트",
   );
   expect(exclusions).toEqual(["large-file"]);

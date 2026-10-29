@@ -3,14 +3,11 @@ import { expect, type Page } from "@playwright/test";
 export async function openReportEditor(page: Page) {
   const toggle = page.locator(".report-edit-toggle");
   await expect(toggle).toBeVisible();
+  await expect(toggle).toBeEnabled();
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
 
 export async function openReportOptions(page: Page) {
-  const options = page
-    .locator("details")
-    .filter({ has: page.locator("summary", { hasText: "개인정보·자료 설정" }) });
-  await expect(options).toBeVisible();
-  if (!(await options.evaluate((element) => element.hasAttribute("open"))))
-    await options.locator("summary").click();
+  // Privacy settings are always visible; the old accordion no longer exists.
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeVisible();
 }

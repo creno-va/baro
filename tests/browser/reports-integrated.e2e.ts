@@ -61,8 +61,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     "합성 사건입니다. 지인에게 빌려준 돈을 돌려받지 못했습니다. 연락처는 010-1234-5678입니다.",
   );
   await page.goto(`${casePath}/files`);
+  await page.locator('astro-island[component-export="Workspace"]:not([ssr])').waitFor();
   const originalText = "합성 원본 · PDF에서 가린 전화번호 010-1234-5678도 원본에는 남습니다.";
   for (const name of ["선택 원본.txt", "제외 원본.txt"]) {
+    await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
     await page
       .getByLabel("업로드할 파일 선택", { exact: true })
       .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(originalText) });
@@ -71,47 +73,21 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(
-    page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
-  ).toBeHidden();
   await captureCaseViewports(page, "reports", ".report-review");
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
   await openReportOptions(page);
-  await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
-  const excluded = page.locator(".report-material").filter({ hasText: "제외 원본.txt" });
-  await openReportOptions(page);
-  await excluded.getByRole("checkbox", { name: "리포트에서 제외" }).check();
-  await page.getByRole("button", { name: "본문 편집 먼저 저장" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "본문 편집을 먼저 저장했어요." }),
-  ).toBeVisible();
-  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
-  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
-  await page.getByRole("button", { name: "검토 내용 저장" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
-  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
+  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await openReportEditor(page);
-  await expect(editor).toHaveValue(/합성 API 예시/);
-  await expect(editor).not.toHaveValue(/제외 원본.txt/);
-  await expect(editor).not.toHaveValue(/사용자가 검토한 합성 사실/);
-  await openReportOptions(page);
-  await expect(
-    page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
-  ).toBeChecked();
-  await openReportOptions(page);
-  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
-  await openReportOptions(page);
-  await expect(excluded.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();
-  await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-  await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
-  await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
-  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
+  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeChecked();
+  await expect(page.locator(".report-options,.report-html-preview")).toHaveCount(0);
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdfPath = resolve(artifacts, "integrated-report.pdf");
@@ -125,9 +101,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.goto("/settings");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   const removeCase = page.locator(".ui-sheet .sidebar-story-delete");
+  await page.locator(".ui-sheet .sidebar-story-row").hover();
   await removeCase.click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(removeCase).toHaveCount(1);
+  await page.locator(".ui-sheet .sidebar-story-row").hover();
   await removeCase.click();
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
@@ -165,6 +143,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     "계정 삭제를 확인하기 위해 보관한 합성 사건입니다. 실제 개인정보가 아닙니다.",
   );
   await page.goto(`${accountCasePath}/files`);
+  await page.locator('astro-island[component-export="Workspace"]:not([ssr])').waitFor();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "계정 삭제 원본.txt",
     mimeType: "text/plain",
@@ -175,7 +155,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
   await openReportEditor(peer);
-  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
+  await expect(peer.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
   const deleteAccount = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
@@ -188,7 +168,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(deletedMarker).toMatch(/^[0-9a-f-]{36}$/);
   expect(deletedMarker).not.toBe(previousMarker);
   await peer.bringToFront();
-  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveCount(0);
+  await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
   await expect(peer.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
   await page.reload();
@@ -260,16 +240,16 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await expect(
     page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
   ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeHidden();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
   ).toEqual({});
   await page.getByRole("checkbox", { name: "긴 합성 자료.txt · 리포트에서 제외" }).check();
   await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(editor).toContainText("연락과 전달");
+  await expect(page.getByRole("heading", { name: "연락과 전달", exact: true })).toBeVisible();
   await page.reload();
   await openReportEditor(page);
   await expect(editor).toBeVisible();
@@ -312,7 +292,7 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
   });
   await page.goto("/cases/synthetic-generation-case/reports");
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
   const displayed = await editor.inputValue();
   const peer = await page.evaluate(() => {
@@ -326,9 +306,6 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     window.dispatchEvent(new Event("focus"));
     return { id: report.id, revision: report.revision, content: report.content };
   });
-  await expect(
-    page.getByRole("status").filter({ hasText: "다른 곳에서 새 버전을 만든 경우" }),
-  ).toBeVisible();
   await expect(editor).toHaveValue(displayed);
   await page.getByRole("button", { name: "새 버전 만들기" }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();

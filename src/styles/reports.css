@@ -1,5 +1,5 @@
 .report-review {
-  max-width: 1120px;
+  max-width: none;
   margin: 0 auto;
   color: var(--foreground, var(--foreground, #202838));
   overflow-wrap: anywhere;
@@ -255,15 +255,16 @@
 
 /* The report shares the case canvas; only the editable document has a surface. */
 .report-workspace {
-  max-width: 1040px;
+  max-width: none;
 }
 .report-canvas {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 0 8px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
 .report-workspace .report-heading {
-  display: block;
+  display: flex;
   text-align: center;
   margin: 48px 0 38px;
 }
@@ -481,7 +482,7 @@
 }
 .report-workspace .report-export .report-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .report-export .report-actions button {
@@ -957,8 +958,9 @@
 .report-workspace .report-heading {
   text-align: left;
   margin: 32px 0 24px;
-  padding-left: 16px;
-  border-left: 3px solid var(--primary);
+  padding: 0;
+  border: 0;
+  gap: 20px;
 }
 .report-workspace .report-heading-icon {
   display: none;
@@ -971,7 +973,7 @@
   font-size: 14px;
 }
 .report-canvas {
-  max-width: 860px;
+  max-width: none;
 }
 .report-review.report-workspace .report-read-content {
   white-space: normal;
@@ -1029,13 +1031,6 @@
   margin-top: -6px;
   line-height: 1.7;
 }
-.report-reading-section--uncertain {
-  background: #f6f8fb;
-  padding: 20px;
-  margin: 16px -20px;
-  border-radius: 8px;
-  border: 0;
-}
 @media (max-width: 640px) {
   .report-canvas {
     padding: 0;
@@ -1052,8 +1047,52 @@
   .report-reading-section h3 {
     font-size: 16px;
   }
-  .report-reading-section--uncertain {
-    margin-inline: -8px;
-    padding: 14px 8px;
+}
+
+/* Report review uses the complete case canvas, without an outer editor card. */
+.case-shell:has(.report-workspace) {
+  max-width: none;
+}
+.report-review.report-workspace {
+  width: 100%;
+  max-width: none;
+}
+.report-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.report-workspace .report-regenerate {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.report-content-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+.report-workspace .report-reading-section textarea {
+  min-height: 110px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, #fff);
+}
+.report-workspace .report-reading-section textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.report-mask > .report-option-note {
+  margin: 4px 0 0 30px;
+}
+.report-workspace .report-export {
+  margin-top: 0;
+}
+.report-workspace .report-export .report-actions > button {
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .report-heading > div {
+    flex-basis: 100%;
   }
 }

@@ -329,16 +329,15 @@
   font-size: 13px;
 }
 .app-frame.app-frame--product .lawyer-profile > .ui-card {
-  border: 0;
-  border-bottom: 1px solid var(--product-line);
-  border-radius: 0;
+  border: 1px solid var(--product-line);
+  border-radius: 20px;
   box-shadow: none;
 }
 .app-frame.app-frame--product
   .lawyer-profile
   > .ui-card
   > :where(.ui-card__header, .ui-card__content) {
-  padding-inline: 0;
+  padding-inline: clamp(20px, 3vw, 28px);
 }
 .app-frame.app-frame--product .lawyer-editor :where(.ui-card) {
   border-radius: var(--product-radius);
@@ -447,7 +446,7 @@
   box-shadow: none;
 }
 .app-frame.app-frame--product .report-canvas {
-  max-width: 840px;
+  max-width: none;
 }
 .app-frame.app-frame--product .report-heading {
   text-align: left;
@@ -523,9 +522,8 @@
 }
 .app-frame.app-frame--product .report-export {
   display: block;
-  padding: 28px;
-  border-radius: var(--product-radius);
-  background: var(--product-subtle);
+  padding: 0;
+  background: transparent;
 }
 
 @media (min-width: 901px) and (max-width: 1100px) {
@@ -709,7 +707,7 @@
   .app-frame.app-frame--product .lawyer-profile-hero h1 {
     font-size: 27px;
   }
-  .app-frame.app-frame--product .lawyer-profile-hero > a {
+  .app-frame.app-frame--product .lawyer-profile-hero > .ui-button {
     grid-column: 1 / -1;
   }
   .app-frame.app-frame--product .settings-heading {
@@ -745,7 +743,7 @@
     font-size: 14px;
   }
   .app-frame.app-frame--product .report-export {
-    padding: 20px;
+    padding: 0;
   }
   .app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
     padding-top: 0;

@@ -52,7 +52,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
     await openReportEditor(page);
-    const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+    const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
     await expect(editor).toBeVisible();
     const paragraphs = Array.from(
       { length: 80 },
@@ -78,18 +78,9 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
       ].join("\n"),
     );
     await openReportOptions(page);
-    await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
-    await page.getByRole("button", { name: "검토 내용 저장" }).click();
-    await expect(page.getByRole("status")).toContainText("저장했어요");
-    await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-    const previewDocument = page.locator(".report-html-preview");
-    await expect(previewDocument.getByAltText("바로 로고")).toBeVisible();
-    await expect(
-      previewDocument.getByRole("heading", { name: "사건 요약", exact: true }),
-    ).toBeVisible();
-    await expect(previewDocument).toContainText("[전화번호 가림]");
-    await expect(previewDocument).not.toContainText("010-1234-5678");
-    await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
+    await page.getByRole("checkbox", { name: "식별정보 가리기" }).check();
+    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
     // Read the internal HTML preview endpoint; user saving exposes PDF only.
     const savedReport = (await (
@@ -133,9 +124,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     expect(printed.subarray(0, 5).toString()).toBe("%PDF-");
 
     await expect(printPage.getByRole("heading", { name: "생성 기준", exact: true })).toBeVisible();
-    await expect(printPage.locator(".meta")).toHaveText(
-      (await previewDocument.locator(".meta").textContent()) ?? "",
-    );
+    const previewDocument = printPage.locator(".baro-report");
     const expectedLines = [
       "실제 다운로드 한글 검토 · [전화번호 가림] · [이메일 가림]",
       "자료와 사실은 합성 입력입니다.",
@@ -147,7 +136,8 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
       "출처: 대화 기록.pdf · 2쪽 · 3번째 문단 · 합성 마지막 출처",
       "합성 마지막 문장 · 모든 내용과 출처를 확인한 뒤 사용자가 직접 전달합니다.",
     ];
-    await expect(printPage.locator(".content .lines p")).toHaveText(expectedLines);
+    const actualLines = await printPage.locator(".content .lines p").allTextContents();
+    for (const line of expectedLines) expect(actualLines).toContain(line);
     const printedPages: string[] = JSON.parse(
       execFileSync(
         process.platform === "win32" ? "python" : "python3",

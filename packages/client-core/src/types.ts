@@ -6,6 +6,7 @@ import type {
   V2FailureCode,
   V2FileObservation,
   V2FileProcessing,
+  V2TimelineEntry,
 } from "@baro/contracts/v2";
 import type { V2Summary } from "@baro/contracts/v2/intake";
 import type { IntakeQuestionContext } from "./intake-questions";
@@ -63,6 +64,10 @@ export type TimelineView = {
   datePrecision?: "day" | "month" | "year" | "unknown";
   title: string;
   detail: string;
+  certainty?: V2TimelineEntry["certainty"] | undefined;
+  references?: V2FactReference[] | undefined;
+  factIds?: string[] | undefined;
+  userEdited?: boolean | undefined;
 };
 export type FileView = {
   id: string;
