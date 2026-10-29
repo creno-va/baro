@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   assertEmpty,
   assertFreshTarget,
+  existingSyntheticSeed,
   FRESH_CONFIRMATION,
   FRESH_DATABASES,
   verifyFreshState,
@@ -13,15 +14,16 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
 
-for (const fail of [false, true])
-  test(`binding transition preserves settings and ${fail ? "rolls back on failure" : "verifies all public profiles"}`, async () => {
+for (const mode of ["success", "failure", "already-connected"])
+  test(`binding transition preserves settings and ${mode}`, async () => {
+    const fail = mode === "failure";
     const target = FRESH_DATABASES.preview;
     let settings: {
       bindings: { name: string; type: string; id?: string; text?: string }[];
       compatibility_date: string;
     } = {
       bindings: [
-        { name: "DB", type: "d1", id: target.original },
+        { name: "DB", type: "d1", id: mode === "already-connected" ? target.id : target.original },
         { name: "CASE_DATA_KEY_V1", type: "secret_text" },
         { name: "RELEASE_SHA", type: "plain_text", text: "original-release" },
       ],
@@ -40,7 +42,12 @@ for (const fail of [false, true])
       const url = String(input);
       let result: unknown;
       if (url.endsWith("/settings") && init?.method === "PATCH") {
-        const payload = JSON.parse(String((init.body as FormData).get("settings"))) as typeof patch;
+        expect(((init.body as FormData).get("settings") as File).type.split(";")[0]).toBe(
+          "application/json",
+        );
+        const payload = JSON.parse(
+          await ((init.body as FormData).get("settings") as File).text(),
+        ) as typeof patch;
         const id = payload.bindings.find((b) => b.name === "DB")?.id;
         expect(typeof id).toBe("string");
         switches.push(String(id));
@@ -53,6 +60,17 @@ for (const fail of [false, true])
         version = `version-${switches.length}`;
         result = settings;
       } else if (url.endsWith("/settings")) result = settings;
+      else if (url.includes("/versions/"))
+        result = {
+          resources: {
+            script_runtime: {
+              exports: { FileProcessorContainer: { type: "durable-object", storage: "sqlite" } },
+              containers: [
+                { name: "baro-file-processor-preview", class_name: "FileProcessorContainer" },
+              ],
+            },
+          },
+        };
       else if (url.endsWith("/versions")) result = { items: [{ id: version }] };
       else if (url.endsWith("/deployments") && init?.method === "POST") {
         deployed = version;
@@ -87,7 +105,7 @@ for (const fail of [false, true])
       expect(
         (await transitionFreshBinding("preview", "synthetic-token", mock)).publicProfiles,
       ).toBe(10);
-      expect(switches).toEqual([target.id]);
+      expect(switches).toEqual(mode === "already-connected" ? [] : [target.id]);
     }
   });
 
@@ -117,6 +135,9 @@ test("fresh migrated database publishes exactly ten readable synthetic profiles 
     const seed = await prepareSyntheticLawyers(fixture.core.cipher, new Date().toISOString());
     db.sqlite.exec(seed.sql);
     expect((await verifyFreshState(db.binding)).users).toBe(10);
+    expect((await existingSyntheticSeed(db.binding))?.profiles).toHaveLength(10);
+    db.sqlite.exec("DELETE FROM app_metadata WHERE key LIKE 'synthetic-seed:%'");
+    await expect(existingSyntheticSeed(db.binding)).rejects.toThrow("FRESH_RESUME_NOT_SYNTHETIC");
     const service = createSelfProfileService(createV2Core(db.binding, fixture.core.cipher));
     for (const item of seed.profiles) {
       const actual = await service.get(item.id);

@@ -21,7 +21,9 @@ export function bindingPatch(settings: Settings, databaseId: string): Settings {
     bindings: settings.bindings.map((b) =>
       b.name === "DB"
         ? { name: "DB", type: "d1", id: databaseId }
-        : { name: b.name, type: "inherit" },
+        : b.type === "secret_text"
+          ? { name: b.name, type: "inherit" }
+          : b,
     ),
   };
 }
@@ -58,12 +60,25 @@ export async function transitionFreshBinding(
       },
       signal: AbortSignal.timeout(30000),
     });
-    const value = (await response.json()) as { success: boolean; result: T };
-    if (!response.ok || !value.success) throw new Error("FRESH_WORKER_API_FAILED");
+    const value = (await response.json()) as {
+      success: boolean;
+      result: T;
+      errors?: { code: number }[];
+    };
+    if (!response.ok || !value.success)
+      throw new Error(
+        `FRESH_WORKER_API_FAILED_${response.status}_${
+          value.errors
+            ?.map((e) => e.code)
+            .filter(Number.isSafeInteger)
+            .join("_") ?? "UNKNOWN"
+        }`,
+      );
     return value.result;
   }
   const before = await api<Settings>("/settings");
-  if (before.bindings.find((b) => b.name === "DB")?.id !== target.original)
+  const alreadyConnected = before.bindings.find((b) => b.name === "DB")?.id === target.id;
+  if (!alreadyConnected && before.bindings.find((b) => b.name === "DB")?.id !== target.original)
     throw new Error("FRESH_ORIGINAL_BINDING_REQUIRED");
   const previous = (await api<{ deployments: Deployment[] }>("/deployments")).deployments[0];
   const latest = (await api<{ items: { id: string }[] }>("/versions")).items[0]?.id;
@@ -74,10 +89,33 @@ export async function transitionFreshBinding(
     previous.versions[0]?.version_id !== latest
   )
     throw new Error("FRESH_ACTIVE_VERSION_REQUIRED");
+  const runtime = (
+    await api<{ resources: { script_runtime: { exports?: unknown; containers?: unknown } } }>(
+      `/versions/${latest}`,
+    )
+  ).resources.script_runtime;
   async function apply(id: string) {
     const current = await api<Settings>("/settings");
     const form = new FormData();
-    form.set("settings", JSON.stringify(bindingPatch(current, id)));
+    form.set(
+      "settings",
+      new Blob(
+        [
+          JSON.stringify(
+            bindingPatch(
+              {
+                ...current,
+                ...(runtime.exports ? { exports: runtime.exports } : {}),
+                ...(runtime.containers ? { containers: runtime.containers } : {}),
+              },
+              id,
+            ),
+          ),
+        ],
+        { type: "application/json" },
+      ),
+      "settings",
+    );
     await api("/settings", "PATCH", form);
     const version = (await api<{ items: { id: string }[] }>("/versions")).items[0]?.id;
     const deployment = (await api<{ deployments: Deployment[] }>("/deployments")).deployments[0];
@@ -100,7 +138,7 @@ export async function transitionFreshBinding(
   }
   const origin = environment === "preview" ? "https://preview.baro.site" : "https://baro.site";
   try {
-    await apply(target.id);
+    if (!alreadyConnected) await apply(target.id);
     const health = await fetcher(`${origin}/api/health/ready`, {
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
@@ -152,6 +190,7 @@ export async function transitionFreshBinding(
       at: new Date().toISOString(),
     };
   } catch (error) {
+    if (alreadyConnected) throw error;
     try {
       await apply(target.original);
     } catch {
