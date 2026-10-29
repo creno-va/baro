@@ -188,6 +188,9 @@
   gap: 28px;
   padding: 4px 0 22px;
 }
+.workspace-context-content--files {
+  grid-template-columns: minmax(0, 1fr);
+}
 .workspace-sidebar h2 {
   font-size: 0.9rem;
   margin: 12px 0;
@@ -685,17 +688,17 @@
 .workspace-material-upload {
   margin-bottom: 20px;
 }
-.workspace-upload-target {
+.workspace-material-upload .workspace-upload-target {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
   width: 100%;
-  min-height: 232px;
+  min-height: 280px;
   border: 1px dashed #cbd8eb;
   border-radius: 20px;
-  padding: 28px 20px;
+  padding: 48px 20px;
   background: var(--card);
   color: var(--foreground);
   cursor: pointer;
@@ -720,12 +723,8 @@
   font-weight: 650;
   color: var(--primary);
 }
-.workspace-upload-types,
 .workspace-upload-limit {
-  font-size: 0.8rem;
   color: var(--muted-foreground);
-}
-.workspace-upload-limit {
   font-size: 0.72rem;
 }
 .workspace-material-upload--compact .workspace-upload-target {
@@ -742,10 +741,6 @@
   width: 28px;
   height: 28px;
 }
-.workspace-material-upload--compact .workspace-upload-types {
-  margin-left: auto;
-  font-size: 0.72rem;
-}
 .workspace-material-upload--compact .workspace-upload-limit {
   display: none;
 }
@@ -754,11 +749,6 @@
   color: var(--muted-foreground);
   font-size: 0.8rem;
   overflow-wrap: anywhere;
-}
-@media (max-width: 400px) {
-  .workspace-material-upload--compact .workspace-upload-types {
-    display: none;
-  }
 }
 .workspace-file-list,
 .workspace-action-list {

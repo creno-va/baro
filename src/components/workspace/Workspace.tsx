@@ -1480,7 +1480,6 @@ export function Workspace({
                       <span className="workspace-upload-title">
                         {view.files.length ? "파일 추가" : "파일 선택"}
                       </span>
-                      <span className="workspace-upload-types">문서 · 이미지 · 음성 · 영상</span>
                       <span className="workspace-upload-limit">
                         문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
                         {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
@@ -1777,17 +1776,25 @@ export function Workspace({
               {...privateContent}
             >
               {tab === "files" ? (
-                <section className="workspace-context-content">
-                  <h2>사건 요약과 준비 현황</h2>
-                  <p>
-                    자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
-                    확인해 주세요.
-                  </p>
-                  <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
-                    요약 검토하기 <ArrowRight size={14} />
-                  </a>
-                  <CaseMaterials caseId={caseId} files={view.files} />
-                </section>
+                <details className="workspace-context">
+                  <summary>
+                    <FileText size={17} />
+                    <span>사건 요약과 준비 현황</span>
+                    <ChevronDown size={16} />
+                  </summary>
+                  <div className="workspace-context-content workspace-context-content--files">
+                    <section>
+                      <p>
+                        자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
+                        확인해 주세요.
+                      </p>
+                      <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
+                        요약 검토하기 <ArrowRight size={14} />
+                      </a>
+                      <CaseMaterials caseId={caseId} files={view.files} />
+                    </section>
+                  </div>
+                </details>
               ) : (
                 <details className="workspace-context">
                   <summary>

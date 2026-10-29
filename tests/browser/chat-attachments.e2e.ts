@@ -120,6 +120,13 @@ test("materials use one upload placeholder then a compact bar, aligned with the 
   await page.goto(`${base}/files`);
   const target = page.getByRole("button", { name: "파일 선택", exact: true });
   await expect(target).toBeEnabled();
+  await expect(page.locator(".workspace-upload-types")).toHaveCount(0);
+  await expect(target).toContainText("문서·이미지 100 MB");
+  const context = page.locator(".workspace-context");
+  const disclosure = context.locator(":scope > summary");
+  const summaryLink = context.getByRole("link", { name: "요약 검토하기" });
+  await expect(context).not.toHaveAttribute("open");
+  await expect(summaryLink).not.toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "전체 첨부 파일", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "근거로 활용한 자료", exact: true })).toHaveCount(0);
@@ -152,6 +159,15 @@ test("materials use one upload placeholder then a compact bar, aligned with the 
     expect(geometry.overflow).toBe(false);
     if (width === 390 || width === 1440)
       await page.screenshot({ path: `.wrangler/materials-empty-${width}.png`, fullPage: true });
+    await disclosure.focus();
+    await disclosure.press("Enter");
+    await expect(context).toHaveAttribute("open");
+    await expect(summaryLink).toBeVisible();
+    await expect(summaryLink).toHaveAttribute("href", `${base}/summary?from=files`);
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `.wrangler/materials-context-${width}.png`, fullPage: true });
+    await disclosure.press("Enter");
+    await expect(context).not.toHaveAttribute("open");
   }
   const chooser = page.waitForEvent("filechooser");
   await target.click();
