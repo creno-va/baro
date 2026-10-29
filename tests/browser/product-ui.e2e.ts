@@ -349,6 +349,16 @@ test("reports start in reading mode and retain editing through a focus check", a
   await seed(page);
   await page.goto(`${base}/reports`);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
+  const heading = page.locator(".report-heading");
+  await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
+  await expect(heading.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeVisible();
+  await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page
+      .locator(".report-canvas")
+      .screenshot({ path: `.wrangler/report-reading-${width}.png` });
+  }
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();

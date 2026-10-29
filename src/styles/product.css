@@ -481,28 +481,21 @@
   font-size: 12px;
 }
 .app-frame.app-frame--product .report-read-content {
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.95;
   font-size: 15px;
-  padding: 28px;
-  border: 1px solid var(--product-line);
-  border-radius: var(--product-radius);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
 }
-.app-frame.app-frame--product :where(.report-edit-toggle, .report-basis > summary) {
+.app-frame.app-frame--product .report-basis > summary {
   width: fit-content;
   cursor: pointer;
   min-height: 44px;
   padding-block: 12px;
   font-size: 13px;
   color: var(--muted-foreground);
-}
-.app-frame.app-frame--product .report-edit-toggle {
-  border: 0;
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 .app-frame.app-frame--product .report-basis p {
   max-width: 340px;
@@ -736,7 +729,6 @@
     font-size: 12px;
   }
   .app-frame.app-frame--product .report-read-content {
-    padding: 20px;
     font-size: 14px;
   }
   .app-frame.app-frame--product .report-export {

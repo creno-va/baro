@@ -214,13 +214,14 @@
   line-height: 1.6;
 }
 
-.report-controls {
+.report-review .report-controls {
   display: grid;
   gap: 24px;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
 }
 .report-modal {
   max-height: calc(100dvh - 2rem);
@@ -977,11 +978,11 @@
 }
 .report-review.report-workspace .report-read-content {
   white-space: normal;
-  padding: 36px 40px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #dce3ed;
-  box-shadow: 0 8px 28px rgb(25 45 75 / 3%);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 .report-reading-section {
   margin: 0;
@@ -998,13 +999,23 @@
 .report-reading-section > header {
   display: flex;
   gap: 12px;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 14px;
 }
 .report-reading-section > header > span {
-  color: #2364c0;
-  font-size: 11px;
-  font-weight: 600;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 .report-reading-section h3 {
@@ -1038,9 +1049,6 @@
   .report-workspace .report-heading {
     margin: 20px 0 24px;
   }
-  .report-review.report-workspace .report-read-content {
-    padding: 24px 20px;
-  }
   .report-reading-section {
     padding-block: 20px;
   }
@@ -1057,18 +1065,27 @@
   width: 100%;
   max-width: none;
 }
-.report-heading > div {
+.report-heading > .report-heading-copy {
   flex: 1;
   min-width: 0;
 }
-.report-workspace .report-regenerate {
-  flex-shrink: 0;
+.report-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   margin-left: auto;
 }
-.report-content-tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 24px;
+.report-workspace .report-heading-actions > button {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.report-heading-actions > button + button {
+  margin-left: 0;
 }
 .report-workspace .report-reading-section textarea {
   min-height: 110px;
@@ -1083,7 +1100,15 @@
   outline-offset: 2px;
 }
 .report-mask > .report-option-note {
-  margin: 4px 0 0 30px;
+  margin: 4px 0 0;
+}
+.report-workspace .report-mask > .report-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.report-workspace .report-mask > .report-check input {
+  margin: 0;
 }
 .report-workspace .report-export {
   margin-top: 0;
@@ -1092,7 +1117,10 @@
   width: 100%;
 }
 @media (max-width: 640px) {
-  .report-heading > div {
+  .report-heading > .report-heading-copy {
     flex-basis: 100%;
+  }
+  .report-heading-actions {
+    width: 100%;
   }
 }

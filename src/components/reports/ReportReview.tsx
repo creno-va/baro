@@ -1,4 +1,4 @@
-import { Download, Pencil, RefreshCw } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
@@ -342,19 +342,39 @@ export function ReportReview({ caseId }: { caseId: string }) {
       />
       <div className="report-canvas">
         <header className="report-heading">
-          <div>
+          <div className="report-heading-copy">
             <h2>전달할 리포트를 준비해요</h2>
             <p>내용을 확인하고, 필요한 부분을 고쳐 다운로드하세요.</p>
           </div>
           {report && (
-            <button
-              type="button"
-              className="report-regenerate"
-              disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
-              onClick={() => setRegenerate(true)}
-            >
-              <RefreshCw size={16} aria-hidden="true" />새 버전 만들기
-            </button>
+            <div className="report-heading-actions">
+              <button
+                type="button"
+                className="report-edit-toggle"
+                disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
+                aria-expanded={editing}
+                aria-controls="report-edit-fields"
+                onClick={() => {
+                  if (editing && dirty && !report.stale)
+                    void run("수정 내용 저장 중…", async () => {
+                      await save();
+                      setEditing(false);
+                    });
+                  else setEditing((value) => !value);
+                }}
+              >
+                <Pencil size={16} aria-hidden="true" />
+                {editing ? "수정 마치기" : "수정하기"}
+              </button>
+              <button
+                type="button"
+                className="report-regenerate primary"
+                disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
+                onClick={() => setRegenerate(true)}
+              >
+                새 버전 만들기
+              </button>
+            </div>
           )}
         </header>
         {(busy || accessChecking) && (
@@ -426,26 +446,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
               </p>
             )}
             <section className="report-read-content" aria-label="리포트 검토 본문">
-              <div className="report-content-tools">
-                <button
-                  type="button"
-                  className="report-edit-toggle"
-                  disabled={Boolean(busy) || needsConsent}
-                  aria-expanded={editing}
-                  aria-controls="report-edit-fields"
-                  onClick={() => {
-                    if (editing && dirty && !report.stale)
-                      void run("수정 내용 저장 중…", async () => {
-                        await save();
-                        setEditing(false);
-                      });
-                    else setEditing((value) => !value);
-                  }}
-                >
-                  <Pencil size={16} aria-hidden="true" />
-                  {editing ? "수정 마치기" : "리포트 내용 수정하기"}
-                </button>
-              </div>
               <div id="report-edit-fields">
                 <ReportReading
                   content={content}
@@ -464,7 +464,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   aria-describedby="report-mask-description"
                   onChange={(event) => setMask(event.target.checked)}
                 />
-                식별정보 가리기
+                <span>식별정보 가리기</span>
               </label>
               <p id="report-mask-description" className="report-option-note">
                 전화번호·이메일·주민등록번호 가리기
