@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type {
+  V2Action,
   V2Fact,
   V2FactReference,
   V2Intake,
@@ -8,6 +9,7 @@ import type {
   V2OfficialCitation,
   V2ReferenceContext,
   V2Summary,
+  V2TimelineEntry,
   V2ToolResult,
   V2UserMessage,
 } from "../../../contracts/v2";
@@ -51,6 +53,7 @@ import {
 import type { WorkspaceAuditFailure } from "./audit-diagnostics";
 import type { WorkspaceContentFailure } from "./content-diagnostics";
 import type { MaterialWindow, MaterialWindowRequest } from "./materials";
+import { newPreparationEntries } from "./preparation-additions";
 import { normalizeIntakeQuestion } from "./questions";
 import { normalizeTimelineDates } from "./timeline-dates";
 
@@ -68,6 +71,14 @@ export type WorkspaceContext = {
   messages: V2UserMessage[];
   latestMessage: V2UserMessage | null;
   facts: V2Fact[];
+  existingActions?: Pick<
+    V2Action,
+    "id" | "kind" | "title" | "instructions" | "caution" | "status"
+  >[];
+  existingTimeline?: Pick<
+    V2TimelineEntry,
+    "id" | "date" | "datePrecision" | "event" | "userEdited"
+  >[];
   references: V2ReferenceContext;
   citations: V2OfficialCitation[];
   sourceTexts?: { citationId: string; text: string }[];
@@ -88,6 +99,7 @@ export type WorkspaceContext = {
     messagesPartial: boolean;
     materialsPartial: boolean;
     sourcesPartial?: boolean;
+    preparationPartial?: boolean;
   };
   /** Exact bounded source text and coverage, populated by trusted file readers. */
   materials: {
@@ -770,6 +782,14 @@ export function createWorkspacePipeline(
             undefined,
             "unsupported_instrument_number",
           );
+        const additions = newPreparationEntries(
+          draft.actions,
+          draft.timeline,
+          context.existingActions,
+          context.existingTimeline,
+        );
+        draft.actions = additions.actions;
+        draft.timeline = additions.timeline;
         const checked = await audit("workspace_chat", context, draft, requestId);
         if (draft.sourceClaims.length) {
           const retrieval = context.sourceRetrieval;

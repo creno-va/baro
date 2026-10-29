@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   Paperclip,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Upload,
@@ -25,7 +26,6 @@ import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
-import { FactAnswer } from "../intake/FactAnswer";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -95,6 +95,11 @@ export function Workspace({
   lookupAvailable?: boolean;
 }) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
+  const [contextRequested, setContextRequested] = useState(false);
+  const preparationAttempt = useRef<{
+    target: "timeline" | "actions";
+    request: V2MessageRequest;
+  } | null>(null);
   const previousMessages = useRef<Map<string, string> | null>(null);
   const newestMessageAt = useRef("");
   const [progressiveIds, setProgressiveIds] = useState<Set<string>>(new Set());
@@ -168,6 +173,8 @@ export function Workspace({
     newestMessageAt.current = "";
     setProgressiveIds(new Set());
     setView(null);
+    setContextRequested(false);
+    preparationAttempt.current = null;
     draftComposing.current = false;
     setDraft("");
     setSelected([]);
@@ -249,8 +256,11 @@ export function Workspace({
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
   const readView = useCallback(
-    () => (tab === "files" ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
-    [caseId, tab],
+    () =>
+      tab === "files" && !contextRequested
+        ? api.workspace.getFiles(caseId)
+        : api.workspace.get(caseId),
+    [caseId, tab, contextRequested],
   );
   const load = useCallback(async () => {
     const serial = ++latest.current;
@@ -476,6 +486,11 @@ export function Workspace({
         }
       }
       const nextError = showError(cause, resource);
+      if (
+        key.startsWith("update-") &&
+        ["CONFLICT", "VALIDATION_ERROR", "FILE_REJECTED"].includes(nextError.code)
+      )
+        preparationAttempt.current = null;
       if (!readOrDelete && alive(epoch)) operationError.current = nextError;
       if (nextError.code === "CONFLICT") {
         sendAttempt.current = null;
@@ -488,6 +503,36 @@ export function Workspace({
         setBusy("");
       }
     }
+  }
+  async function refreshPreparation(target: "timeline" | "actions") {
+    if (readonly || lock.current || !view || view.case.schemaVersion !== "2") return;
+    await run(`update-${target}`, async (epoch) => {
+      const snapshot = await api.workspace.get(caseId);
+      if (!(await verify()) || !current(epoch)) return;
+      apply(snapshot);
+      if (
+        snapshot.case.stage !== "active" ||
+        snapshot.messages.some((message) => message.status === "pending")
+      )
+        return;
+      const label = target === "timeline" ? "타임라인" : "다음 행동";
+      if (preparationAttempt.current?.target !== target)
+        preparationAttempt.current = {
+          target,
+          request: {
+            expectedRevision: snapshot.case.revision,
+            text: `최근 대화와 처리된 자료를 반영해 ${label}을 업데이트해 주세요. 기존에 정리된 항목과 완료한 행동, 직접 수정한 내용은 유지하고, 중복 없이 새로 확인된 내용과 필요한 준비만 추가해 주세요. 근거가 부족한 날짜나 사실은 추측하지 마세요.`,
+            selectedFileIds: snapshot.files
+              .filter((file) => file.status === "ready")
+              .map((file) => file.id),
+          },
+        };
+      const next = await api.workspace.sendMessage(caseId, preparationAttempt.current.request);
+      if (!(await verify()) || !current(epoch)) return;
+      apply(next);
+      preparationAttempt.current = null;
+      setNotice(`${label}에 최신 내용을 반영하도록 요청했어요.`);
+    });
   }
   async function retryFile(fileId: string) {
     await run("file-retry", async (epoch) => {
@@ -1600,18 +1645,28 @@ export function Workspace({
                       <h2>사건의 흐름</h2>
                       <p>언제 어떤 일이 있었는지 차근차근 정리해요.</p>
                     </div>
-                    <Button
-                      variant="default"
-                      disabled={!!busy || readonly}
-                      aria-haspopup="dialog"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        void startEntry();
-                      }}
-                    >
-                      <Plus size={17} />
-                      일정 추가
-                    </Button>
+                    <div className="workspace-section-actions">
+                      <Button
+                        variant="outline"
+                        disabled={!!busy || readonly || !!pendingResponse}
+                        loading={busy === "update-timeline"}
+                        onClick={() => void refreshPreparation("timeline")}
+                      >
+                        <RefreshCw size={17} /> 새로고침
+                      </Button>
+                      <Button
+                        variant="default"
+                        disabled={!!busy || readonly}
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          void startEntry();
+                        }}
+                      >
+                        <Plus size={17} />
+                        일정 추가
+                      </Button>
+                    </div>
                   </div>
                   {!view.timeline.length && (
                     <div className="workspace-empty">
@@ -1661,10 +1716,20 @@ export function Workspace({
                       <h2>다음 행동</h2>
                       <p>하나씩 확인하면서 상담을 준비해요.</p>
                     </div>
-                    <span className="workspace-count">
-                      {view.actions.filter((action) => action.done).length} / {view.actions.length}{" "}
-                      완료
-                    </span>
+                    <div className="workspace-section-actions">
+                      <span className="workspace-count">
+                        {view.actions.filter((action) => action.done).length} /{" "}
+                        {view.actions.length} 완료
+                      </span>
+                      <Button
+                        variant="outline"
+                        disabled={!!busy || readonly || !!pendingResponse}
+                        loading={busy === "update-actions"}
+                        onClick={() => void refreshPreparation("actions")}
+                      >
+                        <RefreshCw size={17} /> 새로고침
+                      </Button>
+                    </div>
                   </div>
                   {!!view.actions.length && (
                     <progress
@@ -1753,111 +1818,94 @@ export function Workspace({
               aria-label="사건 요약 및 준비 현황"
               {...privateContent}
             >
-              {tab === "files" ? (
-                <details className="workspace-context">
-                  <summary>
-                    <FileText size={17} />
-                    <span>사건 요약과 준비 현황</span>
-                    <ChevronDown size={16} />
-                  </summary>
-                  <div className="workspace-context-content workspace-context-content--files">
-                    <section>
-                      <p>
-                        자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
-                        확인해 주세요.
-                      </p>
-                      <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
-                        요약 검토하기 <ArrowRight size={14} />
-                      </a>
-                      <CaseMaterials caseId={caseId} files={view.files} />
-                    </section>
-                  </div>
-                </details>
-              ) : (
-                <details className="workspace-context">
-                  <summary>
-                    <FileText size={17} />
-                    <span>사건 요약과 준비 현황</span>
-                    <ChevronDown size={16} />
-                  </summary>
-                  <div className="workspace-context-content">
-                    <section>
-                      <h2>현재까지 정리한 내용</h2>
-                      <p className="workspace-summary">
-                        {view.case.summary || "확인한 요약이 아직 없어요."}
-                      </p>
-                      <a className="workspace-summary-link" href={`${base}/summary?from=${tab}`}>
-                        요약 검토하기 <ArrowRight size={14} />
-                      </a>
-                      <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
-                    </section>
-                    {!!view.facts?.length && (
-                      <section>
-                        <h2>확인할 사실</h2>
-                        <ul className="workspace-facts">
-                          {view.facts.map((fact) => (
-                            <li key={fact.id}>
-                              <FactAnswer
-                                fact={fact}
-                                context={view.case.intakeQuestions}
-                                base={base}
-                                files={view.files}
-                              />
-                            </li>
-                          ))}
-                        </ul>
+              <details
+                className="workspace-context"
+                onToggle={(event) => {
+                  if (event.currentTarget.open && tab === "files") setContextRequested(true);
+                }}
+              >
+                <summary>
+                  <FileText size={17} />
+                  <span>사건 요약과 준비 현황</span>
+                  <ChevronDown size={16} />
+                </summary>
+                <div className="workspace-context-content">
+                  {tab === "files" && view.people === undefined ? (
+                    <p className="workspace-context-notices" role="status">
+                      사건 요약을 불러오고 있어요…
+                    </p>
+                  ) : (
+                    <>
+                      <section className="workspace-context-overview">
+                        <h2>현재까지 정리한 내용</h2>
+                        <p className="workspace-summary">
+                          {view.case.summary || "확인한 요약이 아직 없어요."}
+                        </p>
+                        <div className="workspace-summary-review">
+                          <ButtonLink href={`${base}/summary?from=${tab}`}>
+                            요약 검토하기 <ArrowRight size={16} />
+                          </ButtonLink>
+                        </div>
                       </section>
-                    )}
-                    {!!view.people?.length && (
-                      <section>
-                        <h2>관련 인물</h2>
-                        <ul className="workspace-facts">
-                          {view.people.map((person) => (
-                            <li key={person.id}>
-                              <strong>{person.label}</strong>
-                              <p>{person.role}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      </section>
-                    )}
-                    {!!view.unknowns?.length && (
                       <section>
                         <h2>아직 확인할 내용</h2>
-                        <ul className="workspace-facts">
-                          {view.unknowns.map((unknown) => (
-                            <li key={unknown}>{unknown}</li>
-                          ))}
-                        </ul>
+                        {view.unknowns?.length ? (
+                          <ul className="workspace-facts">
+                            {view.unknowns.map((unknown) => (
+                              <li key={unknown}>{unknown}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="workspace-muted">추가로 확인할 내용이 아직 없어요.</p>
+                        )}
                       </section>
-                    )}
-                    {view.notices?.map((notice) => (
-                      <p key={notice} className="workspace-muted">
-                        {notice}
-                      </p>
-                    ))}
-                    <section>
-                      <h2>준비 현황</h2>
-                      <p>
-                        {view.case.subjectContext === "company"
-                          ? "회사와 상대방의 계약 관계, 담당자의 역할, 업무 지시·승인 기록과 정산 자료를 확인해 보세요. 회사 내부 자료는 전달 범위를 먼저 확인해 주세요."
-                          : "상대방과 주고받은 약속, 날짜별 대화와 입금·피해 자료를 확인해 보세요. 개인 식별정보는 필요한 범위만 남겨 주세요."}
-                      </p>
-                      <a href={`${base}/files`}>
-                        자료 <span>{view.files.length}개</span>
-                      </a>
-                      <a href={`${base}/timeline`}>
-                        타임라인 <span>{view.timeline.length}개</span>
-                      </a>
-                      <a href={`${base}/actions`}>
-                        다음 행동{" "}
-                        <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
-                      </a>
-                      <p>리포트에서 내용을 검토하고 전달할 자료를 직접 선택할 수 있어요.</p>
-                    </section>
-                  </div>
-                </details>
-              )}
+                      <section>
+                        <h2>관련 인물</h2>
+                        {view.people?.length ? (
+                          <ul className="workspace-facts">
+                            {view.people.map((person) => (
+                              <li key={person.id}>
+                                <strong>{person.label}</strong>
+                                <p>{person.role}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="workspace-muted">정리된 관련 인물이 아직 없어요.</p>
+                        )}
+                      </section>
+                      <section>
+                        <h2>준비 현황</h2>
+                        <p>
+                          {view.case.subjectContext === "company"
+                            ? "회사와 상대방의 계약 관계, 담당자의 역할, 업무 지시·승인 기록과 정산 자료를 확인해 보세요. 회사 내부 자료는 전달 범위를 먼저 확인해 주세요."
+                            : "상대방과 주고받은 약속, 날짜별 대화와 입금·피해 자료를 확인해 보세요. 개인 식별정보는 필요한 범위만 남겨 주세요."}
+                        </p>
+                        <a href={`${base}/files`}>
+                          자료 <span>{view.files.length}개</span>
+                        </a>
+                        <a href={`${base}/timeline`}>
+                          타임라인 <span>{view.timeline.length}개</span>
+                        </a>
+                        <a href={`${base}/actions`}>
+                          다음 행동{" "}
+                          <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
+                        </a>
+                        <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
+                      </section>
+                      {!!view.notices?.length && (
+                        <div className="workspace-context-notices">
+                          {view.notices.map((notice) => (
+                            <p key={notice} className="workspace-muted">
+                              {notice}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </details>
               <div className="workspace-context-footer">
                 <p className="workspace-saved">
                   <CheckCheck size={14} />

@@ -205,6 +205,14 @@ export async function readWorkspaceContext(
   }
   const workspace = await repo.findWorkspace(actor, id);
   if (!workspace) throw new Error("Workspace unavailable");
+  // Existing entries are read-only context for incremental updates. Keep the
+  // same bounded read surface, and never overwrite completion or manual edits.
+  const [existingActions, existingTimeline] = latest
+    ? await Promise.all([
+        repo.actions(actor, id, undefined, 8),
+        repo.timeline(actor, id, undefined, 8),
+      ])
+    : ([[], []] as const);
   const normalized = (message: V2UserMessage) => ({
     ...publicStoredUserMessageSchema.parse(message),
     createdAt: "1970-01-01T00:00:00.000Z",
@@ -214,6 +222,21 @@ export async function readWorkspaceContext(
     intake,
     confirmedSummary: intake.status === "confirmed" ? summary : null,
     facts: factPage.facts,
+    existingActions: existingActions.map(({ id, kind, title, instructions, caution, status }) => ({
+      id,
+      kind,
+      title,
+      instructions,
+      caution,
+      status,
+    })),
+    existingTimeline: existingTimeline.map(({ id, date, datePrecision, event, userEdited }) => ({
+      id,
+      date,
+      datePrecision,
+      event,
+      userEdited,
+    })),
     messages: messages.map(normalized),
     latestMessage: latest ? normalized(latest) : null,
     history: history.map((message) => ({ ...message, createdAt: "1970-01-01T00:00:00.000Z" })),
@@ -227,6 +250,7 @@ export async function readWorkspaceContext(
       messagesPartial: history.length === 20,
       materialsPartial: fileReferences.length > 0,
       sourcesPartial: sources.sourceCoverage.sourcesPartial,
+      preparationPartial: existingActions.length === 8 || existingTimeline.length === 8,
     },
     references: {
       intakeRevision: metadata.revision,
