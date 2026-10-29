@@ -552,6 +552,9 @@ test("long chat has a roomy viewport and scrolls internally after scrolling past
   ]) {
     await page.setViewportSize(viewport);
     await expect
+      .poll(() => page.locator(".workspace-main").evaluate((node) => node.clientHeight))
+      .toBe(viewport.height);
+    await expect
       .poll(() => log.evaluate((node) => node.clientHeight))
       .toBeGreaterThan(viewport.height * 0.55);
     await page
