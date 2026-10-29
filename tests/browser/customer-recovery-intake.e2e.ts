@@ -359,7 +359,6 @@ for (const operation of ["save", "confirm"] as const) {
       await editor.fill(savedSummary);
       await page.getByRole("button", { name: "수정 내용 저장" }).click();
     } else {
-      await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
       await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
       await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     }

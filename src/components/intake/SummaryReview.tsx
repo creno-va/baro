@@ -4,7 +4,6 @@ import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { CaseView, FileView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
-import type { V2Fact } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -13,7 +12,6 @@ import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { CaseMaterials } from "../workspace/CaseMaterials";
 import { BackToCases, ErrorPanel } from "./common";
-import { FactQuestionContext } from "./FactQuestionContext";
 import { useCustomerAccess } from "./useCustomerAccess";
 
 type ConfirmationReturn = {
@@ -48,15 +46,10 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     );
   }, [base]);
   const [summary, setSummary] = useState("");
-  const [factEdits, setFactEdits] = useState<
-    Record<string, Pick<V2Fact, "text" | "certainty" | "conflictingFactIds">>
-  >({});
-  const [unknownsDraft, setUnknownsDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
-  const [checked, setChecked] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const acknowledged = useRef(false);
@@ -75,7 +68,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
   const draftDirty = useRef(false);
   const pending = useRef(false);
   const request = useRef(0);
-  const confirmation = useRef<HTMLInputElement>(null);
+  const confirmation = useRef<HTMLButtonElement>(null);
   const focusAfterSave = useRef(false);
   const savedItem = useRef(item);
   savedItem.current = item;
@@ -90,9 +83,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       setActiveEditor(false);
       setFiles([]);
       setSummary("");
-      setFactEdits({});
-      setUnknownsDraft(null);
-      setChecked(false);
       setConfirming(false);
       setBusy(false);
       setNotice("");
@@ -105,14 +95,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     true,
   );
   const { ticket, current, alive, verify, ready, canMutate, version, deny } = access;
-  const dirty =
-    !!item &&
-    (summary !== item.summary ||
-      Object.keys(factEdits).length > 0 ||
-      (unknownsDraft !== null &&
-        unknownsDraft !== (item.summaryDetails?.unknowns ?? []).join("\n")));
+  const dirty = !!item && summary !== item.summary;
   const summaryTooLong = [...summary.trim()].length > 5000;
-  const factTooLong = Object.values(factEdits).some((edit) => [...edit.text].length > 2000);
   draftDirty.current = dirty;
   const locked =
     busy || recovering || !canMutate || (error as { code?: string })?.code === "CONFLICT";
@@ -173,17 +157,12 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         if (next.stage === "active") setActiveEditor(true);
         setFiles(materials.files);
         setMaterialsError(materials.failed);
-        if (replace) {
-          setFactEdits({});
-          setUnknownsDraft(null);
-        }
         setSummary((draft) =>
           !replace && savedItem.current && draft !== savedItem.current.summary
             ? draft
             : next.summary,
         );
         if (changed) {
-          setChecked(false);
           setConfirming(false);
         }
       } catch (cause) {
@@ -214,7 +193,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
   async function save() {
-    if (!item || pending.current || !summary.trim() || summaryTooLong || factTooLong) return;
+    if (!item || pending.current || !summary.trim() || summaryTooLong) return;
     confirmationReturn.current = null;
     ++request.current;
     setLoading(false);
@@ -231,17 +210,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       let next = await api.cases.saveSummary(caseId, {
         expectedRevision: item.revision,
         summary: summary.trim(),
-        ...(Object.keys(factEdits).length
-          ? { factEdits: Object.entries(factEdits).map(([factId, edit]) => ({ factId, ...edit })) }
-          : {}),
-        ...(unknownsDraft !== null
-          ? {
-              unknowns: unknownsDraft
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean),
-            }
-          : {}),
       });
       // The API acknowledged the write. A failed session check must recover by
       // reading, rather than submitting this revision again.
@@ -254,9 +222,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
         // The explicit Save and apply action confirms this acknowledged revision.
         setItem(next);
         setSummary(next.summary);
-        setFactEdits({});
-        setUnknownsDraft(null);
-        setChecked(true);
         failedOperation.current = "confirm";
         next = await api.cases.confirmSummary(caseId, { expectedRevision: next.revision });
         acknowledged.current = true;
@@ -269,9 +234,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       focusAfterSave.current = true;
       setItem(next);
       setSummary(next.summary);
-      setFactEdits({});
-      setUnknownsDraft(null);
-      setChecked(false);
       setNotice("수정한 요약이 저장됐어요.");
     } catch (cause) {
       if (alive(epoch)) {
@@ -286,8 +248,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
       }
     }
   }
-  async function confirm(explicitActiveApply = false) {
-    if (!item || (!checked && !explicitActiveApply) || dirty || pending.current) return;
+  async function confirm() {
+    if (!item || dirty || pending.current) return;
     confirmationReturn.current = null;
     // Confirm's CAS commits exactly one workspace revision. Keep the explicit
     // return intent separate from ordinary saves and active-summary editing.
@@ -434,7 +396,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     value={summary}
                     onChange={(event) => {
                       setSummary(event.target.value);
-                      setChecked(false);
                       setConfirming(false);
                       setNotice("");
                     }}
@@ -451,140 +412,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   </p>
                   {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
                 </div>
-                {item.summaryDetails && (
-                  <details
-                    className="summary-facts"
-                    open={editingActive || item.summaryDetails.revision > 1 || undefined}
-                  >
-                    <summary>
-                      사실별로 검토·수정하기 <span>{item.summaryDetails.facts.length}개 사실</span>
-                    </summary>
-                    <section aria-label="구조화된 사실 편집">
-                      <h2>사실·모순·정보 공백 확인</h2>
-                      <p id="fact-certainty-help" className="intake-muted">
-                        내가 설명한 내용은 ‘사용자 진술’, 기억이나 근거를 더 확인해야 하면 ‘아직
-                        확인하지 못했어요’를 선택하세요.
-                      </p>
-                      {item.summaryDetails.facts.map((fact) => {
-                        const edit = factEdits[fact.id] ?? fact;
-                        const update = (change: Partial<typeof edit>) => {
-                          setFactEdits((old) => ({
-                            ...old,
-                            [fact.id]: {
-                              text: edit.text,
-                              certainty:
-                                change.text !== undefined && edit.certainty === "observed"
-                                  ? "uncertain"
-                                  : edit.certainty,
-                              conflictingFactIds: edit.conflictingFactIds,
-                              ...change,
-                            },
-                          }));
-                          setChecked(false);
-                          setConfirming(false);
-                        };
-                        return (
-                          <fieldset
-                            key={fact.id}
-                            disabled={locked || fact.attribution === "official_source"}
-                          >
-                            <legend>
-                              {fact.significance === "unfavorable" ? "불리한 사실 · " : ""}
-                              {fact.attribution === "official_source"
-                                ? "공식 출처 사실 (직접 변경할 수 없음)"
-                                : "사용자가 확인할 사실"}
-                            </legend>
-                            <FactQuestionContext
-                              references={fact.references}
-                              context={item.intakeQuestions}
-                              className="intake-muted"
-                            />
-                            <label htmlFor={`fact-${fact.id}`}>사실 내용</label>
-                            <Textarea
-                              id={`fact-${fact.id}`}
-                              rows={Math.min(8, Math.max(3, Math.ceil(edit.text.length / 40)))}
-                              value={edit.text}
-                              onChange={(e) => update({ text: e.target.value })}
-                            />
-                            {[...edit.text].length > 2000 && (
-                              <p role="alert">사실 내용은 2,000자까지 입력할 수 있어요.</p>
-                            )}
-                            <label>
-                              확인 상태
-                              <select
-                                aria-label="확인 상태"
-                                aria-describedby="fact-certainty-help"
-                                value={edit.certainty}
-                                onChange={(e) => {
-                                  const certainty = e.target.value as V2Fact["certainty"];
-                                  update({
-                                    certainty,
-                                    conflictingFactIds:
-                                      certainty === "conflicting" ? edit.conflictingFactIds : [],
-                                  });
-                                }}
-                              >
-                                {fact.attribution === "user_statement" && (
-                                  <option value="reported">사용자 진술</option>
-                                )}
-                                {edit.certainty === "observed" && (
-                                  <option value="observed">자료 내용 확인됨 (자동 확인)</option>
-                                )}
-                                <option value="uncertain">아직 확인하지 못했어요</option>
-                                <option value="conflicting">다른 사실과 모순</option>
-                              </select>
-                              {edit.certainty === "observed" && (
-                                <small>
-                                  자료에 적힌 내용과 연결됐어요. 사실 여부나 원본의 진정성을
-                                  보증하지 않아요.
-                                </small>
-                              )}
-                            </label>
-                            {edit.certainty === "conflicting" && (
-                              <fieldset className="summary-conflicts">
-                                <legend>
-                                  모순되는 사실 선택 · {edit.conflictingFactIds.length}개 선택
-                                </legend>
-                                {item.summaryDetails?.facts
-                                  .filter((v) => v.id !== fact.id)
-                                  .map((v) => (
-                                    <label
-                                      key={v.id}
-                                      data-selected={edit.conflictingFactIds.includes(v.id)}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={edit.conflictingFactIds.includes(v.id)}
-                                        onChange={(event) =>
-                                          update({
-                                            conflictingFactIds: event.target.checked
-                                              ? [...edit.conflictingFactIds, v.id]
-                                              : edit.conflictingFactIds.filter((id) => id !== v.id),
-                                          })
-                                        }
-                                      />
-                                      <span>{v.text}</span>
-                                    </label>
-                                  ))}
-                              </fieldset>
-                            )}
-                          </fieldset>
-                        );
-                      })}
-                      <label htmlFor="summary-unknowns">확인할 정보 공백 (한 줄에 하나)</label>
-                      <Textarea
-                        id="summary-unknowns"
-                        value={unknownsDraft ?? item.summaryDetails.unknowns.join("\n")}
-                        disabled={locked}
-                        onChange={(e) => {
-                          setUnknownsDraft(e.target.value);
-                          setChecked(false);
-                          setConfirming(false);
-                        }}
-                      />
-                    </section>
-                  </details>
-                )}
                 {dirty ? (
                   <div className="intake-scene-tools">
                     <Button
@@ -597,7 +424,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         recovering ||
                         !summary.trim() ||
                         summaryTooLong ||
-                        factTooLong ||
                         (error as { code?: string })?.code === "CONFLICT"
                       }
                     >
@@ -612,9 +438,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       variant="ghost"
                       onClick={() => {
                         setSummary(item.summary);
-                        setFactEdits({});
-                        setUnknownsDraft(null);
-                        setChecked(false);
                         setConfirming(false);
                         setNotice("");
                       }}
@@ -634,7 +457,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 {editingActive ? (
                   <div className="intake-actions">
                     {item.stage === "summary" && (
-                      <Button disabled={locked || dirty} onClick={() => void confirm(true)}>
+                      <Button disabled={locked || dirty} onClick={() => void confirm()}>
                         저장한 수정 내용 적용
                       </Button>
                     )}
@@ -644,20 +467,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   </div>
                 ) : (
                   <>
-                    <label className="intake-confirm-check">
-                      <input
-                        ref={confirmation}
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          setChecked(event.target.checked);
-                          setConfirming(false);
-                        }}
-                        disabled={locked || dirty}
-                      />
-                      <span>요약이 내가 이야기한 사실과 맞는지 확인했어요.</span>
-                    </label>
                     <Button
+                      ref={confirmation}
                       className="intake-scene-primary"
                       aria-haspopup="dialog"
                       onClick={(event) => {
@@ -669,8 +480,8 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         busy ||
                         recovering ||
                         dirty ||
-                        !checked ||
                         !summary.trim() ||
+                        summaryTooLong ||
                         (error as { code?: string })?.code === "CONFLICT"
                       }
                     >
@@ -696,14 +507,6 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                         </Button>
                       </div>
                     </Dialog>
-                    <div className="intake-scene-tools">
-                      <ButtonLink
-                        variant="ghost"
-                        href={`/cases/${encodeURIComponent(caseId)}/intake?question=0&edit=1`}
-                      >
-                        이전 답변 수정하기
-                      </ButtonLink>
-                    </div>
                   </>
                 )}
                 <p className="intake-scene-notice">AI가 정리한 내용이며, 법률 판단은 아니에요.</p>

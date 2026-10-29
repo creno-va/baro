@@ -61,7 +61,7 @@ async function seed(page: Page) {
   );
 }
 
-test("active summary shows materials, visible conflict choices, saves and returns to its workspace tab", async ({
+test("active summary edits its overview, keeps materials and returns to its workspace tab", async ({
   page,
 }) => {
   await seed(page);
@@ -72,9 +72,7 @@ test("active summary shows materials, visible conflict choices, saves and return
       .getByRole("region", { name: "추가한 자료" })
       .getByRole("link", { name: "추가한 합성 자료.txt" }),
   ).toBeVisible();
-  await page.getByLabel("확인 상태", { exact: true }).first().selectOption("conflicting");
-  await page.getByRole("checkbox", { name: "두 번째 합성 사실입니다." }).check();
-  await expect(page.getByText("모순되는 사실 선택 · 1개 선택")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/ui-human-summary-desktop.png", fullPage: true });
   await page.getByLabel("요약 편집", { exact: true }).fill("수정하고 적용한 합성 요약입니다.");
   await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
@@ -85,7 +83,7 @@ test("active summary shows materials, visible conflict choices, saves and return
   await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
     "수정하고 적용한 합성 요약입니다.",
   );
-  await expect(page.getByRole("checkbox", { name: "두 번째 합성 사실입니다." })).toBeChecked();
+  await expect(page.locator(".summary-facts")).toHaveCount(0);
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     await expect
@@ -232,9 +230,15 @@ test("correction is saved before an explicit material reflection request", async
       .getByRole("region", { name: "추가한 자료" })
       .getByText("사실에 연결된 자료", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("사실 내용", { exact: true }).last()).toHaveValue(
-    "합성 인명과 금액을 확인해 교정한 내용입니다.",
-  );
+  await expect(page.getByLabel("사실 내용", { exact: true })).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[
+          "synthetic-human-review"
+        ].summaryDetails.facts.at(-1).text,
+    ),
+  ).toBe("합성 인명과 금액을 확인해 교정한 내용입니다.");
 });
 
 test("case deletion is reachable from the list and survives reload", async ({ page }) => {

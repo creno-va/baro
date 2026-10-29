@@ -254,33 +254,39 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(page.getByRole("status")).toContainText("저장");
 });
 
-test("initial summary reveals structured corrections on request and saves before confirmation", async ({
+test("initial summary uses a single editor without fact controls, checkbox or previous-answer action", async ({
   page,
 }) => {
   await seed(page, false, "summary");
   await page.goto(`${base}/summary`);
-  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
+  const editor = page.getByRole("textbox", { name: "요약 편집", exact: true });
+  const next = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
+  await expect(editor).toBeVisible();
+  await expect(page.locator(".summary-facts,.intake-confirm-check")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "이전 답변 수정하기", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
-  await page.locator(".summary-facts > summary").click();
-  await page
-    .getByRole("textbox", { name: "사실 내용", exact: true })
-    .fill("원본에서 다시 확인한 합성 사실입니다.");
-  const confirmation = page.getByRole("checkbox", {
-    name: "요약이 내가 이야기한 사실과 맞는지 확인했어요.",
-  });
-  await expect(confirmation).toBeDisabled();
+  await expect(next).toBeEnabled();
+  await editor.fill("원본에서 다시 확인한 합성 내용을 요약에 추가합니다.");
+  await expect(next).toBeDisabled();
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(confirmation).toBeEnabled();
-  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveValue(
-    "원본에서 다시 확인한 합성 사실입니다.",
-  );
+  await expect(next).toBeEnabled();
+  await expect(next).toBeFocused();
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toBeVisible();
-  await confirmation.check();
-  const continueButton = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
-  await continueButton.click();
+  await expect(editor).toHaveValue("원본에서 다시 확인한 합성 내용을 요약에 추가합니다.");
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 960 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
+    await page.screenshot({
+      path: `.wrangler/summary-simple-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
+  await next.click();
   await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
-  await expect(continueButton).toBeFocused();
+  await expect(next).toBeFocused();
 });
 
 test("product navigation and reading surfaces support keyboard access and enlarged text", async ({

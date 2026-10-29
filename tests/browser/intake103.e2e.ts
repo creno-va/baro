@@ -217,7 +217,6 @@ async function recoveryWorkspace(page: Page) {
     .fill("합성 사건 복구 검증입니다. 계약 날짜와 준비할 자료를 정리합니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
-  await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
   await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
   await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeVisible();
@@ -831,11 +830,10 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(
     page.getByRole("status").filter({ hasText: "수정한 요약이 저장됐어요" }),
   ).toBeVisible();
-  const confirmation = page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" });
+  const confirmation = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
   await expect(confirmation).toBeFocused();
   await page.reload();
   await expect(summary).toHaveValue(/합성 추가 사실입니다/);
-  await confirmation.check();
   const reviewSummary = page.getByRole("button", { name: "요약 확인하고 계속" });
   await reviewSummary.click();
   const confirmDialog = page.getByRole("dialog", { name: "이제 사건 정리를 시작할까요?" });
@@ -920,14 +918,15 @@ test("stale summary cannot overwrite newer content; keyboard and 200 percent lay
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }).focus();
+  await page.getByRole("button", { name: "요약 확인하고 계속", exact: true }).focus();
   await page.keyboard.press("Space");
   await expect(
-    page.getByRole("checkbox", { name: "요약이 내가 이야기한 사실과 맞는지" }),
-  ).toBeChecked();
+    page.getByRole("dialog", { name: "이제 사건 정리를 시작할까요?", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
-test("summary returns to editable questions and regenerates after a prior answer changes", async ({
+test("saved intake remains addressable after summary without a previous-answer action", async ({
   page,
 }) => {
   await page.goto("/cases/new");
@@ -937,7 +936,8 @@ test("summary returns to editable questions and regenerates after a prior answer
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
+  await expect(page.getByRole("link", { name: "이전 답변 수정하기" })).toHaveCount(0);
+  await page.goto(page.url().replace(/\/summary$/, "/intake?question=0&edit=1"));
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 7월로 수정");
   await page.getByRole("button", { name: "저장하고 다음 질문", exact: true }).click();
   for (let index = 1; index < 5; index++)
@@ -1028,7 +1028,7 @@ for (const editing of [false, true]) {
     if (editing) {
       await page.getByRole("button", { name: "모름", exact: true }).click();
       await expect(page).toHaveURL(/\/summary/);
-      await page.getByRole("link", { name: "이전 답변 수정하기" }).click();
+      await page.goto(page.url().replace(/\/summary$/, "/intake?question=0&edit=1"));
       await expect(page).toHaveURL(/edit=1/);
       for (let index = 0; index < 5; index++)
         await page.getByRole("button", { name: "다음 질문", exact: true }).click();
@@ -1274,10 +1274,10 @@ for (const action of ["refresh", "save"] as const) {
         });
       }
       await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
-      const confirmation = page.getByRole("checkbox", {
-        name: "요약이 내가 이야기한 사실과 맞는지",
+      const confirmation = page.getByRole("button", {
+        name: "요약 확인하고 계속",
       });
-      await confirmation.check();
+      await expect(confirmation).toBeEnabled();
       await page.evaluate(async () => {
         (
           window as unknown as { summaryReadRace: { release?: () => void } }
@@ -1288,7 +1288,7 @@ for (const action of ["refresh", "save"] as const) {
         );
       });
       await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
-      await expect(confirmation).toBeChecked();
+      await expect(confirmation).toBeEnabled();
       await expect(page.getByRole("alert")).toHaveCount(0);
     });
   }
@@ -1408,7 +1408,7 @@ for (const recovery of [
   });
 }
 
-test("choice fact shows its original question separately in summary on desktop and mobile", async ({
+test("summary retains choice fact provenance without exposing a separate fact editor", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -1463,12 +1463,10 @@ test("choice fact shows its original question separately in summary on desktop a
     );
   });
   await page.goto("/cases/synthetic-question-context/summary");
-  await page.locator("summary", { hasText: "사실별로 검토" }).click();
-  await expect(page.getByText("질문: 차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveValue(
-    "작성하지 않았다",
-  );
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
+  await expect(page.locator(".summary-facts")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.getByText("질문: 차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

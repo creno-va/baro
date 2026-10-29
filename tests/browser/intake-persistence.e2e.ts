@@ -533,19 +533,17 @@ async function summaryFixture(page: Page) {
   });
   await page.goto(`/cases/${id}/summary`);
   await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
-  await page.locator(".summary-facts > summary").click();
   return writes;
 }
 
-test("persisted emoji summary and facts remain editable and save full code points", async ({
+test("persisted emoji summary remains editable without separate fact controls", async ({
   page,
 }) => {
   const writes = await summaryFixture(page);
   const overview = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  const fact = page.getByRole("textbox", { name: "사실 내용", exact: true });
   await expect(overview).toHaveValue("😀".repeat(3000));
-  await expect(fact).toHaveValue("😀".repeat(1200));
-  for (const field of [overview, fact]) {
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
+  for (const field of [overview]) {
     // macOS End scrolls a multiline textarea without moving its caret.
     // Place only the caret explicitly; a real keypress must still edit the text.
     await field.evaluate((element) => {
@@ -555,29 +553,21 @@ test("persisted emoji summary and facts remain editable and save full code point
     await field.press("Backspace");
   }
   await expect(overview).toHaveValue("😀".repeat(2999));
-  await expect(fact).toHaveValue("😀".repeat(1199));
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]?.overview).toBe("😀".repeat(2999));
-  expect(writes[0]?.factEdits?.[0]?.text).toBe("😀".repeat(1199));
+  expect(writes[0]?.factEdits).toBeUndefined();
   await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
 });
 
-test("summary and fact limits block oversized code-point drafts without cutting input", async ({
-  page,
-}) => {
+test("summary limits block oversized code-point drafts without cutting input", async ({ page }) => {
   const writes = await summaryFixture(page);
   const overview = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  const fact = page.getByRole("textbox", { name: "사실 내용", exact: true });
   await overview.fill("😀".repeat(5001));
   await expect(overview).toHaveValue("😀".repeat(5001));
   await expect(page.getByRole("alert")).toContainText("5,000자");
   await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
-  await overview.fill("😀".repeat(5000));
-  await fact.fill("😀".repeat(2001));
-  await expect(page.getByRole("alert")).toContainText("2,000자");
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
   expect(writes).toHaveLength(0);
-  await fact.fill("😀".repeat(2000));
+  await overview.fill("😀".repeat(5000));
   await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeEnabled();
 });

@@ -96,33 +96,40 @@ async function seed(page: Page) {
   }, storage);
 }
 
-test("structured facts, contradictions and gaps save after confirmation and remain after reconnect", async ({
+test("summary overview saves and reconnects while its stored facts remain intact", async ({
   page,
 }) => {
   await seed(page);
   await page.goto(`${base}/summary`);
-  await expect(page.getByRole("heading", { name: "사실·모순·정보 공백 확인" })).toBeVisible();
-  await page.getByLabel("사실 내용", { exact: true }).first().fill("원본 확인 후 수정한 반환 연도");
-  await page.getByLabel("확인 상태", { exact: true }).first().selectOption("conflicting");
-  await page.getByRole("checkbox", { name: "반환 약속은 2026년이라는 진술" }).check();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toBeVisible();
+  const factsBefore = await page.evaluate(() =>
+    JSON.stringify(
+      JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")["completion-case"]
+        .summaryDetails.facts,
+    ),
+  );
+  await expect(page.getByLabel("사실 내용", { exact: true })).toHaveCount(0);
   await page
-    .getByLabel("확인할 정보 공백 (한 줄에 하나)")
-    .fill("합성 증인의 설명 확인\n정확한 월과 일 확인");
+    .getByLabel("요약 편집", { exact: true })
+    .fill("원본 확인 후 반환 연도를 정리한 합성 요약입니다.");
   await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
   await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel("사실 내용", { exact: true }).first()).toHaveValue(
-    "원본 확인 후 수정한 반환 연도",
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
+    "원본 확인 후 반환 연도를 정리한 합성 요약입니다.",
   );
-  await expect(page.getByLabel("확인 상태", { exact: true }).first()).toHaveValue("conflicting");
-  await expect(page.getByRole("checkbox", { name: "반환 약속은 2026년이라는 진술" })).toBeChecked();
-  await expect(page.getByLabel("확인할 정보 공백 (한 줄에 하나)")).toHaveValue(
-    "합성 증인의 설명 확인\n정확한 월과 일 확인",
-  );
+  expect(
+    await page.evaluate(() =>
+      JSON.stringify(
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")["completion-case"]
+          .summaryDetails.facts,
+      ),
+    ),
+  ).toBe(factsBefore);
   await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
   await expect(page).toHaveURL(base);
   await page.goto(`${base}/summary`);
-  await expect(page.getByLabel("사실 내용", { exact: true }).first()).toBeEditable();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toBeEditable();
   await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
   await expect(page).toHaveURL(base);
 });
@@ -231,7 +238,7 @@ test("structured drafts and file corrections retain their base revision across a
 }) => {
   await seed(page);
   await page.goto(`${base}/summary`);
-  await page.getByLabel("사실 내용", { exact: true }).first().fill("아직 저장하지 않은 사실 초안");
+  await page.getByLabel("요약 편집", { exact: true }).fill("아직 저장하지 않은 사실 초안");
   await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
     const { api } = await import(path);
@@ -243,7 +250,7 @@ test("structured drafts and file corrections retain their base revision across a
     window.dispatchEvent(new Event("focus"));
   });
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("사실 내용", { exact: true }).first()).toHaveValue(
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
     "아직 저장하지 않은 사실 초안",
   );
   await expect(
