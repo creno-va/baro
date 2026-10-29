@@ -27,10 +27,90 @@ const escapeHtml = (value: string) =>
       })[character] ?? character,
   );
 const documentCss = `
-.baro-report{color-scheme:light;font-family:"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",sans-serif;color:#253348;background:#f4f6f9;font-size:14px;line-height:1.85;padding:32px 24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.baro-report *{box-sizing:border-box}.baro-report .sheet{max-width:860px;margin:0 auto;background:#fff;border:1px solid #dce3ed;border-radius:8px;overflow:hidden}.baro-report .masthead{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 44px;padding:28px 0 20px;border-bottom:2px solid #2463b9}.baro-report .brand{display:flex;gap:10px;align-items:center;font-size:20px;font-weight:750;letter-spacing:.04em;color:#1d3556}.baro-report .brand img{width:25px;height:29px}.baro-report .masthead-note{color:#59687c;font-size:11px}.baro-report .hero{padding:32px 44px 28px}.baro-report .eyebrow{color:#2463b9;font-size:11px;font-weight:650;margin:0 0 12px}.baro-report .hero h1{font-size:32px;line-height:1.4;letter-spacing:-.04em;font-weight:750;margin:0;overflow-wrap:anywhere}.baro-report .hero-subtitle{font-size:13px;color:#59687c;margin:12px 0 20px}.baro-report .tags{display:flex;gap:8px;flex-wrap:wrap}.baro-report .tag{font-size:10px;border:1px solid #e2e7ef;color:#526178;padding:4px 8px;border-radius:4px}.baro-report .tag.dark{border-color:#bfd3f1;color:#2463b9}.baro-report .tag.warm{background:#fff6e7;color:#854d0e}.baro-report .layout{display:block;padding:0 44px 32px}.baro-report .content{min-width:0}.baro-report .section{padding:24px 0;border-top:1px solid #dce3ed;break-inside:auto}.baro-report .section-head{display:flex;gap:12px;align-items:baseline;margin-bottom:14px;break-after:avoid}.baro-report .number{color:#2463b9;font-size:11px;font-weight:650;min-width:20px}.baro-report h2{font-size:17px;line-height:1.6;margin:0;color:#1e304a;font-weight:700}.baro-report .lines p{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere;orphans:3;widows:3}.baro-report .lines p:last-child{margin-bottom:0}.baro-report .lines .detail{font-size:11px;line-height:1.7;color:#59687c}.baro-report .section.caution .lines{background:#f5f7fa;border-left:2px solid #bac7d9;padding:14px 16px}.baro-report .section.timeline .lines{border-left:1px solid #bfd3f1;padding-left:16px}.baro-report .sidebar{padding-top:24px;border-top:1px solid #dce3ed}.baro-report .sidebar h2{font-size:13px;margin-bottom:16px}.baro-report .meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 20px}.baro-report .meta dt{font-size:10px;color:#59687c;margin-bottom:4px}.baro-report .meta dd{margin:0;font-size:11px;overflow-wrap:anywhere}.baro-report .aside-note{font-size:11px;color:#59687c;margin:8px 0}.baro-report .aside-note strong{color:#30445f;margin-right:8px}.baro-report .stale{margin:0 44px 24px;padding:12px 16px;background:#fff6e7;color:#854d0e;font-size:12px;border-left:2px solid #c99536}.baro-report .footer{border-top:1px solid #dce3ed;padding:20px 44px;display:flex;gap:24px;justify-content:space-between;color:#59687c;font-size:10px}.baro-report .footer p{margin:0;line-height:1.8}.baro-report .footer strong{color:#30445f}.baro-report .photo-section{padding:0 44px 28px}.baro-report .photo-section>p{font-size:12px;color:#59687c}.baro-report .evidence-photo{margin:20px 0;padding:12px;border:1px solid #dce3ed;break-inside:avoid}.baro-report .evidence-photo img{display:block;max-width:100%;max-height:180mm;object-fit:contain;margin:auto}.baro-report .evidence-photo figcaption{font-size:11px;color:#59687c;margin-top:12px}
-@media(max-width:640px){.baro-report{padding:0;background:#fff}.baro-report .sheet{border:0;border-radius:0}.baro-report .masthead{margin-inline:24px;padding-top:24px}.baro-report .hero{padding:24px}.baro-report .hero h1{font-size:26px}.baro-report .layout{padding:0 24px 24px}.baro-report .meta{grid-template-columns:repeat(2,minmax(0,1fr))}.baro-report .footer{padding:20px 24px;display:block}.baro-report .footer p+p{margin-top:12px}.baro-report .stale{margin-inline:24px}.baro-report .photo-section{padding-inline:24px}}
-@media print{.baro-report{width:100%;max-width:178mm;padding:0;background:#fff;font-size:10pt}.baro-report .sheet{border:0;max-width:none;overflow:visible}.baro-report .masthead{margin:0;padding:0 0 14px}.baro-report .hero{padding:24px 0}.baro-report .hero h1{font-size:24pt}.baro-report .hero-subtitle{font-size:10pt}.baro-report .layout{padding:0}.baro-report .section{padding:18px 0}.baro-report h2{font-size:13pt}.baro-report .content,.baro-report .section,.baro-report .lines{max-width:178mm}.baro-report .sidebar{display:block;break-inside:avoid;padding-top:16px}.baro-report .meta{grid-template-columns:repeat(2,minmax(0,1fr))}.baro-report .footer{padding:14px 0;font-size:8pt}.baro-report .stale{margin:0 0 20px}.baro-report .photo-section{padding:0}.baro-report .tag{font-size:8pt}}
+.baro-report {
+  color-scheme: light;
+  font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+  color: #253348;
+  background: #f4f6f9;
+  font-size: 14px;
+  line-height: 1.85;
+  padding: 32px 24px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.baro-report * { box-sizing: border-box; }
+.baro-report .sheet { max-width: 860px; margin: 0 auto; padding: 0 44px; background: #fff; }
+.baro-report .masthead { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 0 20px; border-bottom: 1px solid #dce3ed; }
+.baro-report .brand { font-size: 18px; font-weight: 750; letter-spacing: .03em; color: #1d3556; white-space: nowrap; }
+.baro-report .brand img { display: inline-block; vertical-align: middle; width: 22px; height: 25px; margin-right: 8px; }
+.baro-report .masthead-note { color: #59687c; font-size: 11px; }
+.baro-report .hero { padding: 28px 0; }
+.baro-report .eyebrow { color: #2463b9; font-size: 11px; font-weight: 650; margin: 0 0 10px; }
+.baro-report .hero h1 { font-size: 30px; line-height: 1.45; letter-spacing: -.035em; font-weight: 750; margin: 0; overflow-wrap: anywhere; }
+.baro-report .hero-subtitle { font-size: 13px; color: #59687c; margin: 12px 0 18px; }
+.baro-report .tags { line-height: 1.8; }
+.baro-report .tag { display: inline-block; margin-right: 16px; font-size: 10px; color: #59687c; }
+.baro-report .tag.dark { color: #2463b9; }
+.baro-report .layout { padding-bottom: 24px; }
+.baro-report .content { min-width: 0; }
+.baro-report .section { padding: 22px 0; border-top: 1px solid #dce3ed; }
+.baro-report .section-head { display: flex; align-items: center; margin-bottom: 14px; break-after: avoid; }
+.baro-report .number { display: inline-block; flex: none; min-width: 28px; margin-right: 10px; padding: 2px 7px; border-radius: 6px; background: #edf3fe; color: #2463b9; font-size: 14px; font-weight: 650; text-align: center; line-height: 24px; }
+.baro-report h2 { font-size: 17px; line-height: 1.65; margin: 0; color: #1e304a; font-weight: 700; }
+.baro-report .lines p { margin: 0 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; orphans: 3; widows: 3; }
+.baro-report .lines p:last-child { margin-bottom: 0; }
+.baro-report .lines .detail { font-size: 11px; line-height: 1.75; color: #59687c; }
+.baro-report .sidebar { padding-top: 20px; border-top: 1px solid #dce3ed; }
+.baro-report .sidebar h2 { font-size: 13px; margin-bottom: 14px; }
+.baro-report .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0 0 16px; }
+.baro-report .meta dt { font-size: 10px; color: #59687c; margin-bottom: 4px; }
+.baro-report .meta dd { margin: 0; font-size: 11px; overflow-wrap: anywhere; }
+.baro-report .aside-note { font-size: 11px; color: #59687c; margin: 6px 0; }
+.baro-report .aside-note strong { color: #30445f; margin-right: 8px; }
+.baro-report .stale { margin: 0 0 24px; padding: 12px 0; border-block: 1px solid #dce3ed; color: #59687c; font-size: 12px; }
+.baro-report .footer { border-top: 1px solid #dce3ed; padding: 18px 0; display: flex; gap: 24px; justify-content: space-between; color: #59687c; font-size: 10px; }
+.baro-report .footer p { margin: 0; line-height: 1.8; }
+.baro-report .footer strong { color: #30445f; }
+.baro-report .photo-section { padding-top: 24px; border-top: 1px solid #dce3ed; }
+.baro-report .photo-section > p { margin: 8px 0 24px; font-size: 12px; color: #59687c; }
+.baro-report .evidence-photo { margin: 0 0 32px; }
+.baro-report .photo-heading { display: flex; align-items: baseline; margin-bottom: 14px; break-after: avoid; }
+.baro-report .photo-heading span { flex: none; margin-right: 12px; color: #2463b9; font-size: 11px; font-weight: 650; }
+.baro-report .photo-heading h3 { flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 1.7; overflow-wrap: break-word; }
+.baro-report .photo-frame { padding: 16px; background: #f5f7fa; border: 1px solid #e3e8f0; border-radius: 8px; break-inside: avoid; }
+.baro-report .evidence-photo img { display: block; width: auto; height: auto; max-width: 100%; max-height: 150mm; object-fit: contain; margin: 0 auto; }
+.baro-report .evidence-photo figcaption { margin-top: 14px; font-size: 11px; line-height: 1.8; color: #526178; overflow-wrap: anywhere; orphans: 2; widows: 2; }
+.baro-report .evidence-photo figcaption p { margin: 0 0 6px; }
+.baro-report .photo-copy-note { color: #6a7688; font-size: 10px; }
+@media (max-width: 640px) {
+  .baro-report { padding: 0; background: #fff; }
+  .baro-report .sheet { padding-inline: 24px; }
+  .baro-report .hero h1 { font-size: 26px; }
+  .baro-report .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .baro-report .footer { display: block; }
+  .baro-report .footer p + p { margin-top: 10px; }
+}
+@media print {
+  .baro-report { width: 100%; padding: 0; background: #fff; font-size: 10.5pt; }
+  .baro-report .sheet { max-width: none; padding: 0; }
+  .baro-report .masthead { padding: 0 0 14px; }
+  .baro-report .hero { padding: 24px 0; }
+  .baro-report .hero h1 { font-size: 23pt; }
+  .baro-report .hero-subtitle { font-size: 10pt; }
+  .baro-report .section { padding: 18px 0; }
+  .baro-report .number { font-size: 11pt; line-height: 20px; min-width: 24px; }
+  .baro-report h2 { font-size: 13pt; }
+  .baro-report .sidebar { padding-top: 16px; }
+  .baro-report .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .baro-report .footer { font-size: 8pt; }
+  .baro-report .photo-section { break-before: page; padding-top: 0; border-top: 0; }
+  .baro-report .photo-section > h2 { break-after: avoid; }
+  .baro-report .photo-section > p { break-after: avoid; margin-bottom: 20px; }
+  .baro-report .evidence-photo + .evidence-photo { break-before: page; }
+  .baro-report .photo-heading { break-after: avoid; }
+  .baro-report .photo-frame { padding: 12px; }
+  .baro-report .evidence-photo img { max-height: 145mm; }
+}
 `;
 
 const embeddedLogo =
@@ -58,7 +138,7 @@ export function createReportMarkup(report: ReportDocument, embedded = false) {
             `<p${/^\[|^(출처|주의|작성 시각|검증 시각):/.test(line) ? ' class="detail"' : ""}>${escapeHtml(line)}</p>`,
         )
         .join("");
-      return `<section class="section${kind}"><div class="section-head"><span class="number">${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(section.title)}</h2></div><div class="lines">${lines}</div></section>`;
+      return `<section class="section${kind}"><div class="section-head"><span class="number">${index + 1}</span><h2>${escapeHtml(section.title)}</h2></div><div class="lines">${lines}</div></section>`;
     })
     .join("");
   const photos = report.maskIdentifiers
@@ -67,7 +147,7 @@ export function createReportMarkup(report: ReportDocument, embedded = false) {
   const photoMarkup = photos
     .map((photo, index) => {
       if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(photo.dataUrl)) return "";
-      return `<figure class="evidence-photo" data-file-revision="${escapeHtml(String(photo.revision))}"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/><figcaption><strong>근거 사진 ${index + 1} · ${escapeHtml(photo.name)}</strong><br>${(photo.notes ?? []).map((note) => escapeHtml(note)).join("<br>")}<br>리포트용 사진 사본 · 사실 여부는 원본과 대조해 주세요.</figcaption></figure>`;
+      return `<figure class="evidence-photo" data-file-revision="${escapeHtml(String(photo.revision))}"><header class="photo-heading"><span>근거 사진 ${index + 1}</span><h3>${escapeHtml(photo.name)}</h3></header><div class="photo-frame"><img src="${photo.dataUrl}" alt="선택 근거 사진 ${index + 1}"/></div><figcaption>${(photo.notes ?? []).map((note) => `<p>${escapeHtml(note)}</p>`).join("")}<p class="photo-copy-note">리포트용 사진 사본 · 사실 여부는 원본과 대조해 주세요.</p></figcaption></figure>`;
     })
     .join("");
   const photoSection = photoMarkup
@@ -79,5 +159,5 @@ export function createReportMarkup(report: ReportDocument, embedded = false) {
 export function createReportHtml(report: ReportDocument, fontDataUrl?: string) {
   const title = report.maskIdentifiers ? maskReportText(report.title) : report.title;
   return `<!doctype html>
-<html lang="ko" data-baro-report="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><title>${escapeHtml(title)} · BARO</title><style>${fontDataUrl && /^data:font\/ttf;base64,[A-Za-z0-9+/=]+$/.test(fontDataUrl) ? `@font-face{font-family:BaroReport;src:url("${fontDataUrl}")} .baro-report{font-family:BaroReport,sans-serif!important}` : ""} body{margin:0} @page{size:A4;margin:16mm}${documentCss}</style></head><body><main>${createReportMarkup(report, true)}</main></body></html>`;
+<html lang="ko" data-baro-report="1"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><meta name="referrer" content="no-referrer"><title>${escapeHtml(title)} · BARO</title><style>${fontDataUrl && /^data:font\/ttf;base64,[A-Za-z0-9+/=]+$/.test(fontDataUrl) ? `@font-face{font-family:BaroReport;src:url("${fontDataUrl}")} .baro-report{font-family:BaroReport,sans-serif!important}` : ""} body{margin:0} @page{size:A4;margin:18mm 16mm 20mm;@bottom-left{content:"BARO · 사건 상담 준비 리포트";font-family:BaroReport,sans-serif;font-size:8pt;color:#6a7688}@bottom-right{content:counter(page) " / " counter(pages);font-family:BaroReport,sans-serif;font-size:8pt;color:#6a7688}}${documentCss}</style></head><body><main>${createReportMarkup(report, true)}</main></body></html>`;
 }

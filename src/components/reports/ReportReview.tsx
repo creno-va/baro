@@ -1,4 +1,4 @@
-import { Download, Pencil } from "lucide-react";
+import { Download, Image as ImageIcon, Pencil } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
@@ -256,6 +256,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
         JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
         JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)),
   );
+  const photoCandidates = (report?.photoCandidates ?? []).filter(
+    (photo) => !excluded.includes(photo.id),
+  );
+  const selectedPhotoBytes = files
+    .filter((file) => includedPhotos.includes(file.id))
+    .reduce((sum, file) => sum + file.sizeBytes, 0);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -320,7 +326,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         {
           content,
           maskIdentifiers: mask,
-          includedPhotoIds: mask ? [] : includedPhotos,
+          includedPhotoIds: includedPhotos,
           excludedFileIds: excluded,
         },
         report.revision,
@@ -454,6 +460,57 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   onChange={setContent}
                 />
               </div>
+            </section>
+            <section className="report-photo-selection" aria-labelledby="report-photos-heading">
+              <header>
+                <div>
+                  <h3 id="report-photos-heading">PDF에 넣을 사진</h3>
+                  <p>선택한 사진은 본문 뒤에 첨부해요.</p>
+                </div>
+                <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료에서 사진 추가</a>
+              </header>
+              {report.stale ? (
+                <p className="report-option-note">
+                  새 버전을 만들면 최신 자료에서 사진을 선택할 수 있어요.
+                </p>
+              ) : photoCandidates.length ? (
+                <>
+                  <ul className="report-photo-list" aria-label="첨부할 사진 선택">
+                    {photoCandidates.map((photo) => {
+                      const checked = includedPhotos.includes(photo.id);
+                      const size = files.find((file) => file.id === photo.id)?.sizeBytes ?? 0;
+                      return (
+                        <li key={photo.id}>
+                          <label className="report-photo-choice">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={
+                                Boolean(busy) ||
+                                needsConsent ||
+                                mask ||
+                                (!checked &&
+                                  (includedPhotos.length >= 12 ||
+                                    selectedPhotoBytes + size > 8_000_000))
+                              }
+                              onChange={() => setIncludedPhotos(toggle(includedPhotos, photo.id))}
+                            />
+                            <ImageIcon size={20} aria-hidden="true" />
+                            <span>{photo.name}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="report-option-note">
+                    {mask
+                      ? "식별정보 가리기가 켜져 있어 사진은 PDF에 포함되지 않아요."
+                      : `${includedPhotos.length}장 선택 · 최대 12장, 합계 8 MB`}
+                  </p>
+                </>
+              ) : (
+                <p className="report-option-note">자료에 사진을 올린 뒤 새 버전을 만들어 주세요.</p>
+              )}
             </section>
             <section className="report-mask" aria-label="식별정보 설정">
               <label className="report-check">
