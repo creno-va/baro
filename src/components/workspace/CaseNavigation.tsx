@@ -1,4 +1,3 @@
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 const menus = [
@@ -58,9 +57,6 @@ export function CaseNavigation({
   }, []);
   return (
     <div className="case-navigation">
-      <a className="workspace-back" href="/app">
-        <ArrowLeft size={16} aria-hidden="true" /> 새 사건 입력
-      </a>
       {subjectContext && (
         <p className="case-subject-context">
           {subjectContext === "company" ? "기업 사건" : "개인 사건"}

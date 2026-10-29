@@ -155,10 +155,6 @@
 .app-frame.app-frame--product .case-navigation {
   margin-bottom: 28px;
 }
-.app-frame.app-frame--product .workspace-back {
-  font-size: 13px;
-  margin: -12px 0 8px;
-}
 .app-frame.app-frame--product .workspace-header {
   display: flex;
   align-items: flex-start;
@@ -190,7 +186,7 @@
   padding-right: 4px;
 }
 .app-frame.app-frame--product .workspace-tabs a {
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   min-width: 44px;
   min-height: 48px;
   font-size: 14px;
@@ -612,9 +608,6 @@
   .app-frame.app-frame--product .intake-case-grid .case-list-delete {
     justify-self: end;
     margin: 0;
-  }
-  .app-frame.app-frame--product .workspace-back {
-    margin-top: -8px;
   }
   .app-frame.app-frame--product .workspace-header {
     gap: 8px;
