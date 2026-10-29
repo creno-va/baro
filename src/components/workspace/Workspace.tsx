@@ -347,10 +347,9 @@ export function Workspace({
     let animation = 0;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      const top = panel.getBoundingClientRect().top + window.scrollY;
       panel.style.setProperty(
         "--chat-panel-height",
-        `${Math.max(160, ((window.visualViewport?.height ?? window.innerHeight) - top - 12) / zoom)}px`,
+        `${Math.max(160, (window.visualViewport?.height ?? window.innerHeight) / zoom)}px`,
       );
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(followReply);
@@ -1757,19 +1756,6 @@ export function Workspace({
                 </>
               )}
             </section>
-            {tab === "chat" && (
-              <details className="workspace-chat-guide">
-                <summary>대화·자료 안내</summary>
-                <p className="workspace-chat-notice" id="workspace-chat-notice">
-                  사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료 탭에서
-                  확인해요.
-                  <br />
-                  BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
-                  <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게 확인해
-                  주세요.
-                </p>
-              </details>
-            )}
             <aside
               className="workspace-sidebar"
               aria-label="사건 요약 및 준비 현황"

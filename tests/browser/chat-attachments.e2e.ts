@@ -504,6 +504,7 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
     element.scrollTop = 0;
     element.dispatchEvent(new Event("scroll"));
   });
+  const documentScroll = await page.evaluate(() => scrollY);
   const text = "한 문장씩 편하게 읽으실 수 있어요. 합성 검증입니다.\n".repeat(60);
   await publishSyntheticReply(page, text);
   const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
@@ -512,20 +513,20 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   await expect
     .poll(async () => (await reply.textContent())?.length ?? 0)
     .toBeGreaterThan(start + 20);
-  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
   ).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reply).toHaveCount(0);
   await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
-  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
   ).toBe(0);
 });
 
-test("long chat scrolls internally while tabs and composer stay in place across screen sizes", async ({
+test("long chat has a roomy viewport and scrolls internally after scrolling past the header", async ({
   page,
 }) => {
   await seed(page);
@@ -543,6 +544,7 @@ test("long chat scrolls internally while tabs and composer stay in place across 
   await page.reload();
   const log = page.getByRole("log", { name: "사건 대화" });
   await expect(log.locator("article")).toHaveCount(24);
+  await expect(page.getByText("대화·자료 안내", { exact: true })).toHaveCount(0);
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
@@ -551,7 +553,10 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     await page.setViewportSize(viewport);
     await expect
       .poll(() => log.evaluate((node) => node.clientHeight))
-      .toBeGreaterThan(Math.min(220, viewport.height / 4));
+      .toBeGreaterThan(viewport.height * 0.55);
+    await page
+      .locator(".workspace-main")
+      .evaluate((node) => node.scrollIntoView({ block: "start" }));
     await expect
       .poll(async () => {
         const composer = await page.locator(".workspace-composer").boundingBox();
@@ -566,13 +571,15 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     const before = await tabs.boundingBox();
     const composer = await page.locator(".workspace-composer").boundingBox();
     const bounds = await log.boundingBox();
+    const documentScroll = await page.evaluate(() => scrollY);
+    expect(documentScroll).toBeGreaterThan(0);
     if (!before || !composer || !bounds) throw new Error("Synthetic chat layout missing");
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.wheel(0, 600);
     await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
     expect((await tabs.boundingBox())?.y).toBeCloseTo(before.y, 1);
     expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
-    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
     expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
     const preparation = await page.locator(".workspace-sidebar").boundingBox();
     expect(preparation?.y).toBeGreaterThan(composer.y + composer.height);
@@ -587,7 +594,7 @@ test("long chat scrolls internally while tabs and composer stay in place across 
       node.scrollTop = node.scrollHeight;
     });
     await page.mouse.wheel(0, 3000);
-    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
   }

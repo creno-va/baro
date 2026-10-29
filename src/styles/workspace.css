@@ -430,32 +430,6 @@
 .workspace .workspace-message-length[role="alert"] {
   color: var(--destructive);
 }
-.workspace-chat-guide > summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  width: fit-content;
-  cursor: pointer;
-  color: #526176;
-  font-size: 0.75rem;
-  list-style: none;
-}
-.workspace-chat-guide > summary::-webkit-details-marker {
-  display: none;
-}
-.workspace-chat-guide > summary::before {
-  content: "+";
-  font-size: 1rem;
-}
-.workspace-chat-guide[open] > summary::before {
-  content: "−";
-}
-.workspace-chat-guide > summary:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
 .workspace-attach {
   display: inline-flex;
   gap: 5px;
@@ -528,16 +502,6 @@
   color: #5c6b80;
   border-color: transparent;
   opacity: 1;
-}
-.workspace .workspace-chat-notice {
-  color: #526176;
-  font-size: 0.72rem;
-  text-align: left;
-  line-height: 1.65;
-  margin: 11px 0 0;
-}
-.workspace-mobile-break {
-  display: none;
 }
 .workspace-evidence {
   margin: 0 2px 7px;
@@ -1150,13 +1114,6 @@
   .workspace-composer textarea {
     font-size: 0.88rem;
   }
-  .workspace-mobile-break {
-    display: block;
-  }
-  .workspace .workspace-chat-notice {
-    font-size: 0.7rem;
-    margin-top: 8px;
-  }
   .workspace-section-heading {
     margin-bottom: 24px;
     flex-wrap: wrap;
@@ -1525,8 +1482,8 @@
   margin: 6px 0;
 }
 
-/* Reserve viewport space only for the conversation, ending at its composer.
-   Case preparation, saved status and utilities continue below the panel. */
+/* Give the conversation and composer a full viewport of their own.
+   The document can scroll past the header; messages keep their internal scroll. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
   margin-bottom: 8px;
 }
@@ -1535,7 +1492,7 @@
 }
 .app-frame.app-frame--product .workspace--chat .workspace-main {
   flex: none;
-  height: var(--chat-panel-height, max(160px, calc(100svh - 300px)));
+  height: var(--chat-panel-height, 100svh);
   min-height: 0;
 }
 .app-frame.app-frame--product .workspace--chat .workspace-messages {

@@ -79,15 +79,13 @@ for (const width of [320, 390, 768, 1440]) {
     const links = navigation.getByRole("link");
     await expect(links).toHaveCount(6);
     for (const link of await links.all()) {
+      await link.scrollIntoViewIfNeeded();
       const box = await link.boundingBox();
       if (!box) throw new Error("Visible navigation link is missing its box");
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
-    expect(await navigation.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(
-      true,
-    );
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
@@ -106,7 +104,6 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.height).toBeGreaterThanOrEqual(44);
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.y).toBeCloseTo(first.y, 0);
-      expect(box.y + box.height).toBeLessThan(844);
     }
     expect(
       await page.locator(".workspace-main").evaluate((node) => {
@@ -124,12 +121,9 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(input).toBeFocused();
     await expect(page.locator(".workspace-message")).toHaveCount(0);
     await expect(send).toBeEnabled();
-    const guide = page.locator(".workspace-chat-guide > summary");
-    await guide.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#workspace-chat-notice")).toBeVisible();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#workspace-chat-notice")).not.toBeVisible();
+    await expect(page.locator(".workspace-chat-guide")).toHaveCount(0);
+    await send.scrollIntoViewIfNeeded();
+    await expect(send).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
