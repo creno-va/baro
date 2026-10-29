@@ -132,10 +132,12 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(
     page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "이메일", exact: true })).toHaveAttribute(
-    "href",
-    "mailto:demo%40example.invalid",
-  );
+  await page.getByRole("button", { name: "연락처 보기", exact: true }).click();
+  const contact = page.getByRole("dialog", { name: "연락처", exact: true });
+  await expect(
+    contact.getByRole("link", { name: "demo@example.invalid", exact: true }),
+  ).toHaveAttribute("href", "mailto:demo%40example.invalid");
+  await page.keyboard.press("Escape");
   await expect(page.getByText("본인·자격·사무실 수동 확인", { exact: false })).toHaveCount(0);
   await expect(page.getByText("본인 작성 정보입니다.", { exact: false })).toBeVisible();
   await expect(page.getByRole("img", { name: "E 통합 시연 변호사 프로필 사진" })).toBeVisible();

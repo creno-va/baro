@@ -215,7 +215,7 @@ test("chat attachment chooser keeps the unsent message in the conversation", asy
   );
 });
 
-test("fact sources identify the referenced material and page", async ({ page }) => {
+test("answer sources identify the referenced material and page", async ({ page }) => {
   const ref = {
     kind: "user_material",
     fileId: files[1].id,
@@ -256,9 +256,7 @@ test("fact sources identify the referenced material and page", async ({ page }) 
     return route.fulfill({ json: value });
   });
   await page.goto(base);
-  await page.getByText("사건 요약과 준비 현황", { exact: true }).click();
-  await page.locator(".fact-answer__sources > summary").click();
-  const link = page.locator(".fact-answer__sources").getByRole("link");
+  const link = page.getByRole("list", { name: "답변에 사용한 자료" }).getByRole("link");
   await expect(link).toHaveAttribute("href", `${base}/files?file=${files[1].id}`);
   await expect(link).toContainText("7쪽");
 });

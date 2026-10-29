@@ -374,9 +374,9 @@ test("generation recovery has two actions with outline resume and space above th
     const recovery = await panel.boundingBox();
     if (!action || !recovery) throw new Error("Missing synthetic recovery layout");
     expect(recovery.y - action.y - action.height).toBeGreaterThanOrEqual(24);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true,
-    );
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
     await page.screenshot({
       path: `.wrangler/intake-recovery-${width}.png`,
       fullPage: true,

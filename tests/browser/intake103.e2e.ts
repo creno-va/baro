@@ -16,12 +16,12 @@ async function prepareIntakePostflightRegression(
   page: Page,
   mode: "outage" | "superseded" | "peer" | "peer-read",
 ) {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/cases/new");
   await page
     .getByLabel("지금까지 있었던 일")
     .fill("합성 저장 복구 테스트입니다. 답변을 저장한 뒤 세션 확인만 잠깐 실패합니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  await page.getByRole("textbox", { name: "답변", exact: true }).fill("현재 화면의 합성 답변");
   await page.evaluate(async (mode) => {
     const casesPath = "/src/client/api/cases.ts";
     const apiPath = "/src/client/api/index.ts";
@@ -98,6 +98,7 @@ async function prepareIntakePostflightRegression(
       throw new ApiError("UNAVAILABLE", "합성 저장 후 세션 조회 실패", true);
     };
   }, mode);
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("현재 화면의 합성 답변");
 }
 
 async function intakePostflightRegressionState(page: Page) {
