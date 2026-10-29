@@ -55,6 +55,78 @@ async function attach(page: Page) {
   await (await chooser).setFiles(file);
 }
 
+test("materials use one upload placeholder then a compact bar, aligned with the case header", async ({
+  page,
+}) => {
+  await seed(page, { "files.uploadPart": ["UNAVAILABLE"] });
+  await page.goto(`${base}/files`);
+  const target = page.getByRole("button", { name: "파일 선택", exact: true });
+  await expect(target).toBeEnabled();
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "전체 첨부 파일", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "근거로 활용한 자료", exact: true })).toHaveCount(0);
+  await expect(page.getByText("확인된 근거 자료가 아직 없어요.", { exact: false })).toHaveCount(0);
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
+    const geometry = await page.locator(".workspace").evaluate((workspace) => {
+      const box = (selector: string) => {
+        const node = workspace.querySelector(selector);
+        if (!node) throw new Error(`Missing ${selector}`);
+        const { left, width, height } = node.getBoundingClientRect();
+        return { left, width, height };
+      };
+      return {
+        header: box(".workspace-header"),
+        tabs: box(".workspace-tabs"),
+        content: box(".workspace-grid"),
+        upload: box(".workspace-upload-target"),
+        overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      };
+    });
+    for (const box of [geometry.tabs, geometry.content]) {
+      expect(Math.abs(box.left - geometry.header.left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.width - geometry.header.width)).toBeLessThanOrEqual(1);
+    }
+    expect(geometry.upload.height).toBeGreaterThanOrEqual(180);
+    expect(geometry.overflow).toBe(false);
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `.wrangler/materials-empty-${width}.png`, fullPage: true });
+  }
+  const chooser = page.waitForEvent("filechooser");
+  await target.click();
+  await (await chooser).setFiles(file);
+  const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(page.getByRole("heading", { name: file.name, exact: true })).toBeVisible();
+  const add = page.getByRole("button", { name: "파일 추가", exact: true });
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect
+      .poll(async () => (await add.boundingBox())?.height ?? Infinity)
+      .toBeLessThanOrEqual(80);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `.wrangler/materials-list-${width}.png`, fullPage: true });
+  }
+  await add.evaluate((button) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["추가한 합성 내용"], "두 번째.txt", { type: "text/plain" }));
+    button.dispatchEvent(
+      new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }),
+    );
+  });
+  await expect(page.getByRole("heading", { name: "두 번째.txt", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await expect(add).toBeEnabled();
+});
+
 test("local photo preview, removal and draft survive focus at phone and desktop widths", async ({
   page,
 }) => {
@@ -175,7 +247,7 @@ test("owner change purges local attachment and text without uploading", async ({
   expect(await messages(page)).toEqual([]);
 });
 
-test("only actual assistant references appear in evidence materials; selected unused files remain attachments", async ({
+test("materials retain every attachment and mark actual evidence without filter controls", async ({
   page,
 }) => {
   await seed(page);
@@ -227,11 +299,11 @@ test("only actual assistant references appear in evidence materials; selected un
   }, id);
   await page.reload();
   await page.getByRole("link", { name: "자료 탭에서 확인하기" }).click();
-  await expect(page).toHaveURL(/files\?evidence=1$/);
+  await expect(page).toHaveURL(/\/files$/);
   await expect(page.locator(".workspace-file-list")).toContainText("used.txt");
-  await expect(page.locator(".workspace-file-list")).not.toContainText("unused.txt");
+  await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
   await expect(page.getByText("근거로 활용됨", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "전체 첨부 파일", exact: true }).click();
+  await page.goto(`${base}/files?evidence=1`);
   await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
 });
 

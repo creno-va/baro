@@ -64,7 +64,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.goto(`${casePath}/files`);
   const originalText = "합성 원본 · PDF에서 가린 전화번호 010-1234-5678도 원본에는 남습니다.";
   for (const name of ["선택 원본.txt", "제외 원본.txt"]) {
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     await page
       .getByLabel("업로드할 파일 선택", { exact: true })
       .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(originalText) });
@@ -168,7 +167,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     "계정 삭제를 확인하기 위해 보관한 합성 사건입니다. 실제 개인정보가 아닙니다.",
   );
   await page.goto(`${accountCasePath}/files`);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "계정 삭제 원본.txt",
     mimeType: "text/plain",

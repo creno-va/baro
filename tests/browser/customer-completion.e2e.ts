@@ -208,7 +208,7 @@ test("reconsent keeps existing case and source visible, restricts writes and ret
   await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(`${base}/files`);
-  await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
 });
 
 test("login preserves a permitted path and rejects an external return destination", async ({

@@ -34,7 +34,6 @@ test("a batch of attachments refreshes the workspace once after both accepted up
       return upload(...args);
     };
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles([
     { name: "batch-first.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic first") },
     { name: "batch-second.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic second") },
@@ -633,7 +632,7 @@ for (const scenario of [
       ).toBeVisible();
       await expect(page.getByText("private synthetic preview coverage").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeVisible();
-      await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeVisible();
+      await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeVisible();
       await expect(
         page.getByRole("complementary", { name: "사건 요약 및 준비 현황" }),
       ).toBeVisible();
@@ -846,7 +845,6 @@ for (const remainder of [false, true])
         return upload(...args);
       };
     });
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     const names = remainder ? ["accepted.txt", "protected.xls", "later.txt"] : ["protected.xls"];
     await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles(
       names.map((name) => ({
@@ -977,7 +975,6 @@ test("non-format upload validation preserves the unchanged file for explicit rec
       return upload(...args);
     };
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "same-original.txt",
     mimeType: "text/plain",
@@ -1184,7 +1181,6 @@ test("upload progress shows distinct stages and elapsed time, then retains failu
           reject(Object.assign(new Error("합성 업로드 연결 오류"), { code: "UNAVAILABLE" }));
       });
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "progress.txt",
     mimeType: "text/plain",
@@ -1234,7 +1230,6 @@ test("accepted upload keeps refresh recovery after files-page readback fails", a
       return result;
     };
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "accepted-once.txt",
     mimeType: "text/plain",
@@ -1282,7 +1277,6 @@ test("partial upload readback failure retries only the unaccepted remainder", as
       return result;
     };
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles([
     { name: "accepted-first.txt", mimeType: "text/plain", buffer: Buffer.from("synthetic first") },
     {
@@ -1306,9 +1300,6 @@ test("partial upload readback failure retries only the unaccepted remainder", as
   const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
   await expect(retry).toBeVisible();
   await captureCaseViewports(page, "upload-retry-after-reading");
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").uncheck();
-  await expect(retry).toBeDisabled();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
@@ -1353,7 +1344,6 @@ for (const changed of ["other-owner", "lawyer", "signed-out"] as const)
         return result;
       };
     }, key);
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
       name: "accepted-private.txt",
       mimeType: "text/plain",
@@ -1422,7 +1412,6 @@ test("accepted upload recovery stays read-only after consent withdrawal", async 
       return result;
     };
   }, key);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "accepted-before-consent.txt",
     mimeType: "text/plain",
@@ -1432,12 +1421,12 @@ test("accepted upload recovery stays read-only after consent withdrawal", async 
     "이미 접수된 자료는 다시 업로드하지 않아도 돼요",
   );
   await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeDisabled();
   await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "accepted-before-consent.txt", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeDisabled();
   expect(
     await page.evaluate(() => (window as unknown as { uploadCount: number }).uploadCount),
   ).toBe(1);
@@ -1459,7 +1448,6 @@ test("an old owner upload cannot clear the next owner's progress", async ({ page
         );
       });
   });
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "first.txt",
     mimeType: "text/plain",
@@ -1472,8 +1460,7 @@ test("an old owner upload cannot clear the next owner's progress", async ({ page
     localStorage.setItem(key, JSON.stringify(state));
     window.dispatchEvent(new Event("focus"));
   }, key);
-  await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).not.toBeChecked();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "second.txt",
     mimeType: "text/plain",
@@ -1770,7 +1757,6 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     page,
   }) => {
     await page.goto(`${base}/files`);
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
       name: "private-session-original.txt",
       mimeType: "text/plain",
@@ -1870,7 +1856,6 @@ for (const order of ["foreground-first", "background-first"] as const)
       page,
     }) => {
       await page.goto(`${base}/files`);
-      await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
       await page.evaluate(async () => {
         const path = "/tests/helpers/workspace-client-fixture.ts";
         const { api } = (await import(
@@ -1962,7 +1947,7 @@ for (const order of ["foreground-first", "background-first"] as const)
         await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
         await expect(page.getByRole("button", { name: "업로드 다시 시도" })).toHaveCount(0);
       } else if (result === "signout" || result === "revoked" || result === "other-owner") {
-        await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "업로드 다시 시도" })).toHaveCount(0);
       } else {
         await expect(page.getByRole("alert")).toBeVisible();
@@ -1977,9 +1962,8 @@ for (const order of ["foreground-first", "background-first"] as const)
 for (const result of ["same-owner", "other-owner", "unavailable"] as const)
   test(`native file selection survives focus verification: ${result}`, async ({ page }) => {
     await page.goto(`${base}/files`);
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     const chooserPromise = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "파일 선택", exact: true }).click();
+    await page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ }).click();
     const chooser = await chooserPromise;
 
     // Safari resumes focus verification before the native chooser delivers change.
@@ -2025,7 +2009,7 @@ for (const result of ["same-owner", "other-owner", "unavailable"] as const)
     await expect(
       page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
     ).toBeVisible();
-    await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeChecked();
+    await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
     const original = Buffer.from("파일 선택창 복귀 중에도 보존할 합성 원본");
     await chooser.setFiles({ name: "선택 복귀.txt", mimeType: "text/plain", buffer: original });
     expect(
@@ -2137,7 +2121,6 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
     };
     localStorage.setItem(storageKey, JSON.stringify(state));
   }, key);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   const text = "브라우저 검증용 합성 자료입니다. 실제 사건 정보가 아닙니다.";
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
@@ -2146,7 +2129,6 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await expect(page.getByRole("alert")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "synthetic.txt" })).toBeVisible();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "synthetic.txt",
     mimeType: "text/plain",
@@ -2200,7 +2182,6 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
     true,
   );
   await page.getByRole("link", { name: "자료 0", exact: true }).click();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   const bytes = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
     "base64",
@@ -2268,9 +2249,8 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
   await captureCaseViewports(page, "chat");
   await page.getByRole("link", { name: "자료 0", exact: true }).click();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "파일 선택", exact: true }).click();
+  await page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ }).click();
   await (await chooser).setFiles({
     name: "반환 약속 메시지.txt",
     mimeType: "text/plain",
