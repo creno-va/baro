@@ -1,3 +1,4 @@
+import { CircleAlert } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentComparisonApi } from "../../client/api/precedent-comparison";
@@ -212,6 +213,8 @@ export function PrecedentComparisonPanel({
   if (!access.ready) return null;
   const comparison =
     state?.comparison && state.comparison.source.citation.id === sourceId ? state.comparison : null;
+  const refreshRequired = sourceExpired || sourceNeedsRefresh;
+  const incomplete = !!state && !pending && state.job.status !== "completed";
   return (
     <section className="precedent-comparison" aria-label="유사 판례 비교">
       <h3 className="sr-only">사건과 판례 비교</h3>
@@ -232,35 +235,54 @@ export function PrecedentComparisonPanel({
           </Button>
         </div>
       </div>
-      {(sourceExpired || sourceNeedsRefresh) && !pending && (
-        <div role={sourceExpired ? "alert" : undefined}>
+      {((refreshRequired && !pending) || !!error || incomplete) && (
+        <div className="precedent-state-card" role={sourceExpired || error ? "alert" : "status"}>
+          <span className="precedent-state-icon">
+            <CircleAlert size={28} aria-hidden="true" />
+          </span>
+          <h4>
+            {refreshRequired
+              ? "판례를 다시 확인해 주세요"
+              : incomplete
+                ? "비교를 완료하지 못했어요"
+                : "비교 상태를 확인하지 못했어요"}
+          </h4>
           <p>
             {sourceExpired
               ? "판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요."
-              : "새 비교를 시작하려면 최신 사건으로 판례를 다시 검색해 주세요."}
+              : sourceNeedsRefresh
+                ? "새 비교를 시작하려면 최신 사건으로 판례를 다시 검색해 주세요."
+                : error
+                  ? errorMessage(error)
+                  : "최신 요약과 판례를 다시 확인한 뒤 비교해 주세요."}
           </p>
-          <Button
-            disabled={pending}
-            onClick={() => {
-              setError(null);
-              onRefreshSources();
-            }}
-          >
-            판례 다시 검색
-          </Button>
+          {!!error && refreshRequired && !sourceExpired && <p>{errorMessage(error)}</p>}
+          <p className="precedent-state-note">처리 중인 작업과 저장한 내용은 유지돼요.</p>
+          {!pending &&
+            (refreshRequired ? (
+              <Button
+                className="precedent-primary"
+                onClick={() => {
+                  setError(null);
+                  onRefreshSources();
+                }}
+              >
+                판례 다시 검색
+              </Button>
+            ) : (
+              <Button
+                className="precedent-primary"
+                disabled={!selected || !access.canMutate}
+                onClick={() => void start()}
+              >
+                다시 비교
+              </Button>
+            ))}
         </div>
-      )}
-      {!!error && !sourceExpired && (
-        <p role="alert">{errorMessage(error)} 처리 중인 작업과 저장한 내용은 유지돼요.</p>
       )}
       {pending && (
         <p role="status" className="precedent-comparison-status">
           {state ? workspaceProgressText(state.job) : "비교를 준비하고 있어요."}
-        </p>
-      )}
-      {state && !pending && state.job.status !== "completed" && (
-        <p role="status">
-          비교를 완료하지 못했어요. 최신 요약과 판례를 다시 확인한 뒤 비교해 주세요.
         </p>
       )}
       {comparison && state && (

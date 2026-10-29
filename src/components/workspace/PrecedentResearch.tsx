@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
@@ -325,13 +325,15 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
             {result && (
               <>
                 <div className="precedent-result-heading" role="status">
-                  <h3>
-                    검색 결과 <span>{result.items.length}건</span>
-                  </h3>
-                  <p>
-                    {result.topics.map((topic) => PRECEDENT_TOPIC_LABELS[topic]).join(" · ")} ·{" "}
+                  <div>
+                    <h3>
+                      검색 결과 <span>{result.items.length}건</span>
+                    </h3>
+                    <p>{result.topics.map((topic) => PRECEDENT_TOPIC_LABELS[topic]).join(" · ")}</p>
+                  </div>
+                  <time dateTime={result.checkedAt}>
                     {new Date(result.checkedAt).toLocaleString("ko-KR")}
-                  </p>
+                  </time>
                 </div>
                 {result.status === "partial" && !result.availabilityIssues?.length && (
                   <p className="precedent-notice" role="status">
@@ -360,12 +362,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                     ))}
                   </ul>
                 )}
-                {result.searchTruncated && (
-                  <p className="precedent-scope">
-                    관련성을 기준으로 주제별 최대 3건을 표시해요. 전체 판례를 조사한 결과는
-                    아니에요.
-                  </p>
-                )}
                 {!sourceCurrent && (
                   <div className="precedent-notice" role="status">
                     <p>사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요.</p>
@@ -385,7 +381,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                               <span>{item.citation.court}</span>
                               <span>{item.citation.decisionDate}</span>
                               <span>{item.citation.caseNumber}</span>
-                              <span>
+                              <span className="precedent-card-topics">
                                 관련 주제 ·{" "}
                                 {item.matchedTopics
                                   .map((topic) => PRECEDENT_TOPIC_LABELS[topic])
@@ -401,6 +397,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                               }}
                             >
                               판례 내용 보기
+                              <ArrowRight size={16} aria-hidden="true" />
                               <span className="sr-only"> · {item.citation.caseNumber}</span>
                             </button>
                           </div>
@@ -408,6 +405,12 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                       </li>
                     ))}
                   </ul>
+                )}
+                {result.searchTruncated && (
+                  <p className="precedent-result-note">
+                    관련성을 기준으로 주제별 최대 3건을 표시해요. 전체 판례를 조사한 결과는
+                    아니에요.
+                  </p>
                 )}
               </>
             )}

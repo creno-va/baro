@@ -7,6 +7,15 @@
 .precedent-workspace .workspace-section-heading {
   align-items: flex-start;
 }
+.precedent-workspace .workspace-section-heading h2 {
+  font-size: clamp(24px, 2.4vw, 28px);
+  font-weight: 650;
+}
+.precedent-workspace .workspace-section-heading p {
+  max-width: 720px;
+  font-size: 14px;
+  line-height: 1.8;
+}
 .precedent-search {
   padding: 24px;
   border: 1px solid var(--border);
@@ -150,30 +159,50 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: baseline;
-  margin-top: 32px;
+  align-items: center;
+  margin: 36px 0 20px;
 }
 .precedent-result-heading h3 {
   margin: 0;
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.5;
 }
 .precedent-result-heading h3 span {
   color: var(--primary);
-  margin-left: 6px;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  font-size: 13px;
+  font-weight: 600;
 }
 .precedent-result-heading p {
   color: var(--muted-foreground);
-  font-size: 0.75rem;
+  font-size: 13px;
+  margin: 6px 0 0;
+  line-height: 1.7;
+}
+.precedent-result-heading time,
+.precedent-result-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.precedent-result-note {
+  margin: 16px 0 0;
 }
 .precedent-list {
   list-style: none;
   padding: 0;
-  margin: 16px 0 0;
+  margin: 0;
   display: grid;
   grid-template-rows: repeat(3, auto);
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 .precedent-list > li {
@@ -191,14 +220,15 @@
   background: var(--card, #fff);
 }
 .precedent-card h4 {
-  margin: 0 0 20px;
-  font-size: 1.03rem;
-  line-height: 1.55;
+  margin: 0 0 16px;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.6;
 }
 .precedent-card-footer {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
 }
 .precedent-card-footer .precedent-metadata {
   display: flex;
@@ -209,6 +239,17 @@
 }
 .precedent-card-footer > button {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.precedent-card-footer .precedent-card-topics {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: #2463b9;
+  font-size: 12px;
 }
 .precedent-metadata {
   color: var(--muted-foreground);
@@ -319,6 +360,47 @@
   font-size: 14px;
   line-height: 1.7;
 }
+.precedent-state-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 28px 0;
+  padding: clamp(28px, 4vw, 44px) 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.precedent-state-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 4px;
+  border-radius: 16px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.precedent-state-card h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+.precedent-state-card p {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
+.precedent-state-card .precedent-state-note {
+  font-size: 12px;
+}
+.precedent-state-card > button {
+  margin-top: 12px;
+}
 .precedent-comparison-meta {
   margin: 24px 0 0;
   color: var(--muted-foreground);
@@ -414,6 +496,18 @@
   }
   .precedent-card {
     padding: 20px;
+  }
+  .precedent-card h4 {
+    font-size: 17px;
+  }
+  .precedent-card-footer {
+    flex-wrap: wrap;
+  }
+  .precedent-card-footer .precedent-metadata {
+    flex-basis: 100%;
+  }
+  .precedent-card-footer > button {
+    margin-left: auto;
   }
   .precedent-detail-heading {
     grid-template-columns: minmax(0, 1fr);

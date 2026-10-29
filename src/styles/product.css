@@ -448,14 +448,14 @@
 }
 .app-frame.app-frame--product .report-heading {
   text-align: left;
-  padding: 0;
-  margin: 0 0 24px;
+  padding: 0 0 28px;
+  margin: 0 0 28px;
 }
 .app-frame.app-frame--product .report-heading-icon {
   display: none;
 }
 .app-frame.app-frame--product .report-heading h2 {
-  font-size: clamp(25px, 3vw, 32px);
+  font-size: clamp(24px, 2.4vw, 28px);
 }
 .app-frame.app-frame--product .report-steps {
   padding: 0 0 24px;

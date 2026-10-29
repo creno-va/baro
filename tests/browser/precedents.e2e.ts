@@ -59,6 +59,14 @@ test("desktop and mobile complete topic, result and original flow without overfl
   await expect(page.getByText("공식 원문 확인", { exact: true })).toHaveCount(0);
   await expect(page.locator(".precedent-card .precedent-snippet")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await page.screenshot({ path: `.wrangler/precedent-results-${width}.png`, fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await list
     .getByRole("button", { name: /판례 내용 보기/ })
     .first()
@@ -247,7 +255,7 @@ async function comparisonTransport(page: Page) {
       phase: status === "completed" ? "finished" : "validating",
       progressPercent: status === "completed" ? 100 : 80,
       attempts: 1,
-      failure: null,
+      failure: status === "failed" ? "MODEL_UNAVAILABLE" : null,
       retryable: false,
       updatedAt: new Date().toISOString(),
     });
@@ -319,9 +327,10 @@ async function comparisonTransport(page: Page) {
         if (sessionStorage.getItem(`${storage}-read-failure`) === "true")
           throw new ApiError("UNAVAILABLE", "합성 상태 조회 실패");
         const done = sessionStorage.getItem(`${storage}-done`) === "true";
+        const failed = sessionStorage.getItem(`${storage}-failed`) === "true";
         return Response.json({
           schemaVersion: "2",
-          job: job(done ? "completed" : "running"),
+          job: job(failed ? "failed" : done ? "completed" : "running"),
           comparison: done ? JSON.parse(sessionStorage.getItem(storage) ?? "null") : null,
           stale: sessionStorage.getItem(`${storage}-stale`) === "true",
         });
@@ -342,6 +351,47 @@ async function selectComparison(page: Page) {
     .click();
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
 }
+
+test("failed comparison uses one recovery card and keeps the original readable", async ({
+  page,
+}) => {
+  await selectComparison(page);
+  await page.evaluate(() => sessionStorage.setItem("synthetic-comparison-failed", "true"));
+  await page.getByRole("button", { name: "내 사건과 유사도 비교" }).click();
+  const region = page.getByRole("region", { name: "유사 판례 비교" });
+  const card = region.locator(".precedent-state-card");
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole("heading", { name: "비교를 완료하지 못했어요" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "다시 비교", exact: true })).toBeEnabled();
+  await expect(region.locator(".precedent-body")).toHaveCount(1);
+  await expect(region.locator(":scope > p[role=status]")).toHaveCount(0);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `.wrangler/precedent-failed-${width}.png`, fullPage: true });
+  }
+  expect(
+    await page.evaluate(
+      () => JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]").length,
+    ),
+  ).toBe(1);
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[id].revision++;
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    window.dispatchEvent(new Event("focus"));
+  }, id);
+  await expect(card.getByRole("heading", { name: "판례를 다시 확인해 주세요" })).toBeVisible();
+  await expect(region.locator(".precedent-state-card")).toHaveCount(1);
+  await expect(region.getByText("비교를 완료하지 못했어요", { exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "판례 다시 검색", exact: true })).toBeEnabled();
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.screenshot({ path: ".wrangler/precedent-refresh-failed-390.png", fullPage: true });
+});
 
 test("comparison survives foreground during admission, renders fixed indicators and reloads without another POST", async ({
   page,
