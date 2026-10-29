@@ -26,33 +26,31 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
-### 승인된 계정·사건 초기화와 합성 변호사 시딩
+### 승인된 실제 D1 전체 데이터 초기화와 합성 변호사 시딩
 
-`reset-application-data.yml`은 사용자에게 양쪽 환경 초기화와 운영 환경 합성 시딩까지
-명시적으로 승인받은 경우에만 수동 실행한다. 현재 main의 정확한 SHA와 성공한 main CI,
-지정 운영자 및 각 GitHub Environment 보호를 검사한다. 앱을 배포하거나 키를 변경하지 않는다.
+`reset-application-data.yml`은 사용자가 preview·production 실제 D1의 기존 데이터 전부
+삭제와 합성 변호사10개씩 시딩을 명시적으로 승인한 경우에만 수동 실행한다. 현재 main의
+정확한 SHA·성공한 main CI·지정 운영자·명시적 확인문·각 Environment 보호를 검사한다.
+preview 성공 후 production을 수행하며 앱을 배포하거나 암호화 키를 교체하지 않는다.
 
-각 환경의 기존 암호화 키는 해당 Environment 안에서만 사용한다. 신규 합성 프로필의
-실제 공개 조회를 먼저 확인한 뒤, 모든 계정·세션·OAuth 연결·사건·자료/리포트·프로필
-데이터를 원자적으로 초기화하고 김예시·박합성2개만 시딩한다. 합성 계정은 SSO 연결이나
-로그인 세션·자격 검증을 갖지 않으며 프로필은 합성 소개와 `self_declared`를 사용한다.
-기존 고객 payload는 읽거나 복호화하지 않는다. 실행 중 작업은 초기화를 중단하며,
-대기 작업을 포함한 앱 데이터와 기존 폴더/검색 캐시는 초기화한다.
+D1 복구 bookmark를 기록하고 신규 합성 프로필만 실제 공개 조회로 먼저 검증한다.
+이후 원자적 SQL import에서 기존 업무/원장 테이블을 재구성하고 승인된 migration을
+다시 적용한다. 계정·OAuth 연결·세션·사건·자료/리포트·기존 프로필·비용/실행 원장 등
+기존 행은 모두 제거한다. 원장의 미정산을 성공/정산으로 바꾸지 않으며 원래 DB 상태는
+기록한 Time Travel 복구 지점으로 구분한다. migration 이력과 관리형 D1 내부 테이블,
+스키마 및 필수 기술용량 설정만 유지·재구성한다. R2 bucket 자체 삭제는 포함하지 않는다.
 
-스키마/migration·기술용량 설정·비용/실행 원장·물리 저장 및 삭제 처리 기록은 보존한다.
-비용의 unknown/stale·미정산 상태를 성공/정산으로 바꾸지 않는다. R2 물리 삭제는 이 DB
-작업에 포함하지 않으며 기존 정리 기록을 보존한다. 성공 receipt에는 합계와 새 합성 ID만
-저장하며 원문·암호문·키·토큰·원래 사용자 ID를 artifact에 업로드하지 않는다.
+환경 키는 GitHub Environment 안에서만 사용한다. 기존 고객 payload는 읽거나 복호화하지
+않으며, 시딩된 합성 계정은 로그인 세션·SSO 연결·자격 검증을 갖지 않는다. 프로필에는 합성
+소개와 self_declared를 사용한다. artifact에는 복구 bookmark·합계·새 합성 ID만 기록한다.
+실행 중 작업이 있으면 초기화를 중단한다. probe 실패 시 신규 합성 행만 정리하고,
+원자적 초기화 응답이 불명확하면 추가 삭제/재실행 대신 실제 상태부터 확인한다.
 
 ```bash
 gh workflow run reset-application-data.yml --ref main \
   -f target_sha=<현재_main_40자_SHA> \
-  -f confirmation=reset-both-databases-and-seed-two-synthetic-lawyers
+  -f confirmation=reset-both-databases-and-seed-ten-synthetic-lawyers
 ```
-
-preview를 먼저 검증하고 production을 수행한다. 암호화 probe가 실패하면 신규 합성 행만
-정리하며 기존 데이터는 초기화하지 않는다. 원자적 초기화 응답이 불명확하면 추가 삭제나
-자동 재실행을 하지 않고 receipt 단계와 실제 합계부터 확인한다.
 
 - pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행
 - preview: 명령으로 선택한 현재 main SHA를 수동 배포; CI 성공이나 merge가 배포를 시작하지 않음

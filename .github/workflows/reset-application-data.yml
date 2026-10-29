@@ -1,4 +1,4 @@
-name: Reset application data and seed synthetic lawyers (manual)
+name: Reset full D1 data and seed ten synthetic lawyers (manual)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: Type reset-both-databases-and-seed-two-synthetic-lawyers
+        description: Type reset-both-databases-and-seed-ten-synthetic-lawyers
         required: true
         type: string
 
@@ -22,8 +22,8 @@ concurrency:
 
 jobs:
   preview:
-    name: Reset preview application data
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-two-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
+    name: Reset preview D1 data
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -45,6 +45,8 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
+      - name: Verify offline full-reset contracts
+        run: bun test tests/reset-application-data.test.ts
       - name: Verify current main and its CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +57,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
           bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
-      - name: Reset application records and verify only synthetic profiles
+      - name: Reset full database data and verify ten synthetic profiles
         env:
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -74,8 +76,8 @@ jobs:
 
   production:
     needs: preview
-    name: Reset production application data
-    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-two-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
+    name: Reset production D1 data
+    if: github.ref == 'refs/heads/main' && github.sha == inputs.target_sha && inputs.confirmation == 'reset-both-databases-and-seed-ten-synthetic-lawyers' && (github.actor == 'hyunhomon' || github.actor == 'hwangeunchan') && (github.triggering_actor == 'hyunhomon' || github.triggering_actor == 'hwangeunchan')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
@@ -97,6 +99,8 @@ jobs:
           bun-version-file: .bun-version
       - name: Install frozen dependencies
         run: bun ci
+      - name: Verify offline full-reset contracts
+        run: bun test tests/reset-application-data.test.ts
       - name: Verify current main and its CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,7 +111,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TARGET_SHA"
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$TARGET_SHA"
           bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
-      - name: Reset application records and verify only synthetic profiles
+      - name: Reset full database data and verify ten synthetic profiles
         env:
           CLOUDFLARE_ACCOUNT_ID: 9e844969d0c44b2449f3951d1f301654
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

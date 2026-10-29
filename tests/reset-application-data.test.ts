@@ -1,103 +1,133 @@
 import { expect, test } from "bun:test";
+import { unlink } from "node:fs/promises";
 import {
   applicationResetSql,
   prepareSyntheticLawyers,
   RESET_CONFIRMATION,
+  resetMigrations,
 } from "../scripts/reset-application-data";
+import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
+import { createTestDatabase } from "./helpers/d1";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 
-const schemaFor = (db: Awaited<ReturnType<typeof reportFixture>>["db"]) => {
+const capacity = { environment: "preview" as const, bytes: 100000000000 };
+const schemaFor = (db: Awaited<ReturnType<typeof createTestDatabase>>) => {
   db.sqlite.exec(
     "CREATE TABLE IF NOT EXISTS d1_migrations(id INTEGER PRIMARY KEY,name TEXT,applied_at TEXT)",
   );
   return db.sqlite
-    .query("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    .query(
+      "SELECT name,sql,type FROM sqlite_master WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%'",
+    )
     .all() as { name: string; sql: string }[];
 };
-const executeReset = (db: Awaited<ReturnType<typeof reportFixture>>["db"], sql: string) =>
-  db.sqlite.transaction(() => {
-    // Each generated operator statement is terminated by a semicolon/newline.
-    // Use prepared execution so an early CHECK failure cannot be hidden by exec.
-    for (const statement of sql.split(/;\s*\n/).filter((s) => s.trim()))
-      db.sqlite.query(statement).run();
-  })();
-test("reset removes application data and old sessions, retains physical accounting, and publishes exactly two unverified synthetic profiles", async () => {
+// Use Node's sqlite3_exec semantics: stop on the first error and roll back all DDL.
+async function resetSnapshot(db: Awaited<ReturnType<typeof createTestDatabase>>, sql: string) {
+  const file = `.wrangler/reset-test-${crypto.randomUUID()}.sqlite`;
+  await Bun.write(file, db.sqlite.serialize());
+  const script = `import {DatabaseSync} from 'node:sqlite';import{readFileSync}from'node:fs';const input=JSON.parse(readFileSync(0,'utf8'));const db=new DatabaseSync(input.file);db.exec('PRAGMA foreign_keys=ON');let failed=false;let reason='';try{db.exec('BEGIN IMMEDIATE');db.exec(input.sql);db.exec('COMMIT')}catch(error){db.exec('ROLLBACK');failed=true;reason=error.message}db.close();process.stdout.write(JSON.stringify({failed,reason}));`;
+  try {
+    const child = Bun.spawnSync(["node", "--no-warnings", "--input-type=module", "-e", script], {
+      stdin: new TextEncoder().encode(JSON.stringify({ file, sql })),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(child.exitCode).toBe(0);
+    const { failed, reason } = JSON.parse(child.stdout.toString()) as {
+      failed: boolean;
+      reason: string;
+    };
+    return {
+      failed,
+      reason,
+      db: await createTestDatabase({
+        snapshot: new Uint8Array(await Bun.file(file).arrayBuffer()),
+      }),
+    };
+  } finally {
+    await unlink(file);
+  }
+}
+
+test("full D1 reset removes all old application/ledger/blob rows and publishes exactly ten synthetic profiles", async () => {
   const f = await reportFixture();
   await readyFile(f, "기존 합성 자료");
   const schema = schemaFor(f.db);
-  const before = f.db.sqlite.query("SELECT id,logical_bytes FROM v2_blobs ORDER BY id").all();
-  expect(before.length).toBeGreaterThan(0);
+  f.db.sqlite.exec("INSERT INTO d1_migrations VALUES(1,'historical-migration','2026-10-01')");
+  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_blobs").get()).not.toEqual({ n: 0 });
+  const migrations = await resetMigrations();
   const seed = await prepareSyntheticLawyers(f.core.cipher, new Date().toISOString());
-  const reset = applicationResetSql(schema, seed);
-  executeReset(f.db, reset);
-  for (const table of [
-    "account",
-    "session",
-    "cases",
-    "v2_workspaces",
-    "v2_files",
-    "v2_jobs",
-    "v2_reports",
-    "v2_messages",
-  ])
-    expect(f.db.sqlite.query(`SELECT count(*) AS n FROM "${table}"`).get()).toEqual({ n: 0 });
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM user").get()).toEqual({ n: 2 });
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_directory_entries").get()).toEqual({
-    n: 2,
-  });
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_private_snapshots").get()).toEqual({
-    n: 2,
-  });
-  expect(f.db.sqlite.query("SELECT id,logical_bytes FROM v2_blobs ORDER BY id").all()).toEqual(
-    before,
-  );
-  expect(f.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
-  for (const profile of seed.profiles) {
-    const actual = await createSelfProfileService(f.core).get(profile.id);
-    expect(actual.name).toBe(profile.name);
-    expect(actual.verificationStatus).toBe("self_declared");
-    expect(actual.introduction).toContain("합성 프로필");
-    expect(actual.published).toBe(true);
+  expect(seed.profiles).toHaveLength(10);
+  const result = await resetSnapshot(f.db, applicationResetSql(schema, seed, migrations, capacity));
+  try {
+    expect(result.failed, result.reason).toBe(false);
+    for (const table of [
+      "account",
+      "session",
+      "cases",
+      "v2_workspaces",
+      "v2_files",
+      "v2_jobs",
+      "v2_reports",
+      "v2_messages",
+      "v2_blobs",
+      "v2_cost_attempts",
+      "v2_paid_holds",
+      "legacy_ai_attempts",
+    ])
+      expect(result.db.sqlite.query(`SELECT count(*) AS n FROM "${table}"`).get()).toEqual({
+        n: 0,
+      });
+    for (const table of ["user", "v2_profiles", "v2_private_snapshots", "v2_directory_entries"])
+      expect(result.db.sqlite.query(`SELECT count(*) AS n FROM "${table}"`).get()).toEqual({
+        n: 10,
+      });
+    expect(result.db.sqlite.query("SELECT * FROM d1_migrations").all()).toEqual([
+      { id: 1, name: "historical-migration", applied_at: "2026-10-01" },
+    ]);
+    expect(result.db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    const core = createV2Core(result.db.binding, f.core.cipher);
+    for (const item of seed.profiles) {
+      const p = await createSelfProfileService(core).get(item.id);
+      expect(p.name).toBe(item.name);
+      expect(p.verificationStatus).toBe("self_declared");
+      expect(p.introduction).toContain("합성 프로필");
+    }
+  } finally {
+    result.db.close();
   }
-  const next = await prepareSyntheticLawyers(f.core.cipher, new Date().toISOString());
-  executeReset(f.db, applicationResetSql(schema, next));
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM user").get()).toEqual({ n: 2 });
-  expect(f.db.sqlite.query("SELECT id,logical_bytes FROM v2_blobs ORDER BY id").all()).toEqual(
-    before,
-  );
 });
 
-test("an executing job aborts the complete reset transaction before deleting data", async () => {
+test("a running job rolls back the entire schema/data reset before any table is dropped", async () => {
   const f = await reportFixture();
-  await readyFile(f, "실행 중 보호를 검증할 합성 자료");
+  await readyFile(f, "실행 중 보호 합성 자료");
   const schema = schemaFor(f.db);
   f.db.sqlite.exec(
     "INSERT INTO v2_jobs(id,operation_id,runtime_instance_id,workspace_id,target_kind,target_id,target_revision,kind,status,lease_token,lease_until,created_at,updated_at) SELECT 'synthetic-running',operation_id,'synthetic-running',workspace_id,'file',id,revision,'file_processing','running','synthetic-lease','2099-01-01T00:00:00.000Z',created_at,created_at FROM v2_files LIMIT 1",
   );
-  expect(
-    f.db.sqlite.query("SELECT count(*) AS n FROM v2_jobs WHERE status='running'").get(),
-  ).toEqual({ n: 1 });
-  const original = f.db.sqlite.query("SELECT count(*) AS n FROM user").get();
   const seed = await prepareSyntheticLawyers(f.core.cipher, new Date().toISOString());
-  expect(
-    f.db.sqlite
-      .query(
-        "SELECT EXISTS(SELECT 1 FROM v2_jobs WHERE status IN ('running','validating')) AS active",
-      )
-      .get(),
-  ).toEqual({ active: 1 });
-  expect(f.db.sqlite.query("PRAGMA ignore_check_constraints").get()).toEqual({
-    ignore_check_constraints: 0,
-  });
-  expect(() => executeReset(f.db, applicationResetSql(schema, seed))).toThrow();
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM user").get()).toEqual(original);
-  expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_workspaces").get()).toEqual({ n: 1 });
+  const result = await resetSnapshot(
+    f.db,
+    applicationResetSql(schema, seed, await resetMigrations(), capacity),
+  );
+  try {
+    expect(result.failed).toBe(true);
+    expect(
+      result.db.sqlite.query("SELECT count(*) AS n FROM v2_jobs WHERE status='running'").get(),
+    ).toEqual({ n: 1 });
+    expect(result.db.sqlite.query("SELECT count(*) AS n FROM v2_workspaces").get()).toEqual({
+      n: 1,
+    });
+  } finally {
+    result.db.close();
+  }
 });
 
-test("unknown schema is rejected before any destructive statement is produced", async () => {
+test("schema drift is rejected before producing a destructive plan", async () => {
   const f = await reportFixture();
   const seed = await prepareSyntheticLawyers(f.core.cipher, new Date().toISOString());
+  const migrations = await resetMigrations();
   expect(() =>
     applicationResetSql(
       [
@@ -105,6 +135,8 @@ test("unknown schema is rejected before any destructive statement is produced", 
         { name: "future_private_records", sql: "CREATE TABLE future_private_records(id TEXT)" },
       ],
       seed,
+      migrations,
+      capacity,
     ),
   ).toThrow("RESET_SCHEMA_DRIFT");
 });

@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { emptySelfProfile, selfProfileSchema } from "../src/contracts/v2/self-profile";
 import { createCaseDataCipher, type EnvelopeCipher } from "../src/server/crypto";
@@ -9,10 +9,11 @@ import {
 } from "../src/server/db/v2-directory-projection";
 import knownTables from "./reset-schema-tables.json";
 
-export const RESET_CONFIRMATION = "reset-both-databases-and-seed-two-synthetic-lawyers";
+export const RESET_CONFIRMATION = "reset-both-databases-and-seed-ten-synthetic-lawyers";
+export const SYNTHETIC_PROFILE_COUNT = 10;
 export const RESET_SCHEMA = "0018_external_lookup_admission";
 export type ResetEnvironment = "preview" | "production";
-type Table = { name: string; sql: string };
+type Table = { name: string; sql: string; type?: string };
 export type Seed = { sql: string; profiles: { id: string; ownerId: string; name: string }[] };
 const quote = (v: unknown) =>
   v === null
@@ -24,25 +25,9 @@ const identifier = (name: string) => {
   if (!/^[a-z0-9_]+$/.test(name)) throw new Error("RESET_SCHEMA_INVALID");
   return `"${name}"`;
 };
-export function retainedResetTable(name: string) {
-  return (
-    /^(legacy_ai_|v2_(cost_|execution_|maintenance_|runtime_|storage_|physical_))/.test(name) ||
-    [
-      "d1_migrations",
-      "deletion_jobs",
-      "v2_billing_principals",
-      "v2_blobs",
-      "v2_monthly_budget",
-      "v2_budget_allocations",
-      "v2_allocation_acknowledgments",
-      "v2_paid_holds",
-      "v2_deletion_journals",
-      "v2_deletion_targets",
-      "v2_cleanup_receipts",
-      "v2_tombstones",
-      "v2_directory_epoch",
-    ].includes(name)
-  );
+export async function resetMigrations() {
+  const files = (await readdir("drizzle")).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
+  return (await Promise.all(files.map((name) => Bun.file(`drizzle/${name}`).text()))).join("\n");
 }
 
 /** Only new, explicitly synthetic records are encrypted; no customer row is read. */
@@ -88,6 +73,30 @@ export async function prepareSyntheticLawyers(cipher: EnvelopeCipher, now: strin
       website: "",
     },
   ];
+  const extra = [
+    ["daegu", "이합성", "대구광역시", "criminal"],
+    ["incheon", "최예시", "인천광역시", "family"],
+    ["gwangju", "정합성", "광주광역시", "administrative"],
+    ["daejeon", "강예시", "대전광역시", "tax"],
+    ["ulsan", "조합성", "울산광역시", "labor"],
+    ["sejong", "윤예시", "세종특별자치시", "company"],
+    ["gyeonggi", "장합성", "경기도", "intellectual_property"],
+    ["gangwon", "임예시", "강원특별자치도", "real_estate"],
+  ];
+  for (const [city, name, regionName, field] of extra) {
+    if (!city || !name || !regionName || !field) throw new Error("RESET_FIXTURE_INVALID");
+    fixtures.push({
+      city,
+      name,
+      introduction: `${regionName}의 사건 정리 화면을 확인하기 위한 API 시연용 합성 프로필입니다. 실제 변호사나 사무소 정보가 아닙니다.`,
+      officeName: `${name} 합성 법률사무소`,
+      address: `${regionName} 합성 주소 1`,
+      region: city,
+      practiceAreas: [field, "civil"],
+      email: `${city}@example.invalid`,
+      website: "",
+    });
+  }
   const sql: string[] = [];
   const profiles: Seed["profiles"] = [];
   for (const { city, ...fields } of fixtures) {
@@ -192,18 +201,34 @@ export async function prepareSyntheticLawyers(cipher: EnvelopeCipher, now: strin
   return { sql: sql.join("\n"), profiles };
 }
 
-/** Preserve fiscal/physical ledgers and cleanup work; clear every application table. */
-export function applicationResetSql(tables: Table[], seed: Seed) {
-  const actual = tables.filter((t) => t.name !== "_cf_KV" && !t.name.startsWith("sqlite_"));
-  if (actual.length !== knownTables.length || actual.some((t) => !knownTables.includes(t.name)))
+/** Explicit full-data reset: retain only D1 infrastructure/migration history. */
+export function applicationResetSql(
+  tables: Table[],
+  seed: Seed,
+  migrations: string,
+  capacity: { environment: ResetEnvironment; bytes: number },
+) {
+  const actual = tables.filter(
+    (t) =>
+      (t.type === "table" || t.sql.startsWith("CREATE TABLE")) &&
+      t.name !== "_cf_KV" &&
+      !t.name.startsWith("sqlite_"),
+  );
+  if (
+    actual.length !== knownTables.length ||
+    actual.some((t) => !knownTables.includes(t.name)) ||
+    !migrations.includes(RESET_SCHEMA)
+  )
     throw new Error("RESET_SCHEMA_DRIFT");
-  const remaining = actual.filter((t) => !retainedResetTable(t.name) && t.name !== "app_metadata");
-  const references = (t: Table) =>
+  if (!Number.isSafeInteger(capacity.bytes) || capacity.bytes < 1 || capacity.bytes > 100000000000)
+    throw new Error("RESET_CAPACITY_INVALID");
+  const remaining = actual.filter((t) => t.name !== "d1_migrations");
+  const refs = (t: Table) =>
     [...t.sql.matchAll(/REFERENCES\s+[`"[]?([a-z0-9_]+)/gi)].map((m) => m[1]);
   const ordered: string[] = [];
   while (remaining.length) {
     const index = remaining.findIndex(
-      (t) => !remaining.some((other) => other !== t && references(other).includes(t.name)),
+      (t) => !remaining.some((other) => other !== t && refs(other).includes(t.name)),
     );
     if (index < 0) throw new Error("RESET_FOREIGN_KEY_CYCLE");
     const table = remaining.splice(index, 1)[0];
@@ -212,13 +237,27 @@ export function applicationResetSql(tables: Table[], seed: Seed) {
   }
   const ids = seed.profiles.map((p) => quote(p.id)).join(",");
   return [
-    // A failing CHECK aborts the atomic import if a real job currently holds a lease.
     "INSERT INTO v2_directory_epoch(id,revision) SELECT 0,1 WHERE EXISTS(SELECT 1 FROM v2_jobs WHERE status IN ('running','validating'));",
-    ...ordered.map((name) => `DELETE FROM ${identifier(name)};`),
-    "DELETE FROM app_metadata WHERE key!='schema_version';",
-    "UPDATE v2_directory_epoch SET revision=revision+1 WHERE id=1;",
+    "PRAGMA defer_foreign_keys=ON;",
+    ...tables
+      .filter(
+        (t) =>
+          (t.type === "trigger" || t.sql.startsWith("CREATE TRIGGER")) &&
+          !t.name.startsWith("_cf_"),
+      )
+      .map((t) => `DROP TRIGGER ${identifier(t.name)};`),
+    ...tables
+      .filter(
+        (t) => (t.type === "view" || t.sql.startsWith("CREATE VIEW")) && !t.name.startsWith("_cf_"),
+      )
+      .map((t) => `DROP VIEW ${identifier(t.name)};`),
+    ...ordered.map((name) => `DROP TABLE ${identifier(name)};`),
+    migrations,
+    `INSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES(${quote(capacity.environment)},0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0;`,
+    `INSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES(${quote(capacity.environment)},${capacity.bytes}) ON CONFLICT(environment) DO UPDATE SET capacity_bytes=excluded.capacity_bytes;`,
+    `UPDATE v2_directory_epoch SET revision=${Date.now()} WHERE id=1;`,
     seed.sql,
-    `INSERT INTO v2_directory_epoch(id,revision) SELECT 0,1 WHERE (SELECT count(*) FROM user)!=2 OR (SELECT count(*) FROM v2_directory_entries WHERE profile_id IN (${ids}))!=2;`,
+    `INSERT INTO v2_directory_epoch(id,revision) SELECT 0,1 WHERE (SELECT count(*) FROM user)!=${SYNTHETIC_PROFILE_COUNT} OR (SELECT count(*) FROM v2_directory_entries WHERE profile_id IN (${ids}))!=${SYNTHETIC_PROFILE_COUNT};`,
   ].join("\n");
 }
 
@@ -276,7 +315,7 @@ async function verifySeed(environment: ResetEnvironment, seed: Seed, exact: bool
     const body = (await response.json()) as { items?: { id: string }[] };
     if (
       !response.ok ||
-      body.items?.length !== 2 ||
+      body.items?.length !== SYNTHETIC_PROFILE_COUNT ||
       body.items.some((p) => !seed.profiles.some((s) => s.id === p.id))
     )
       throw new Error("RESET_DIRECTORY_MISMATCH");
@@ -295,6 +334,7 @@ if (import.meta.main) {
   const environment = process.env.RESET_ENVIRONMENT;
   const directory = ".wrangler/reset";
   let seed: Seed | undefined;
+  let restoreBookmark: string | undefined;
   try {
     if (
       (environment !== "preview" && environment !== "production") ||
@@ -308,7 +348,7 @@ if (import.meta.main) {
     const query = (sql: string) =>
       wrangler(environment, ["execute", database, "--remote", "--command", sql]);
     const schema = (await query(
-      "SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+      "SELECT name,sql,type FROM sqlite_master WHERE type IN ('table','trigger','view') AND name NOT LIKE 'sqlite_%'",
     )) as Table[];
     const metadata = await query("SELECT value FROM app_metadata WHERE key='schema_version'");
     if (metadata[0]?.value !== RESET_SCHEMA) throw new Error("RESET_SCHEMA_DRIFT");
@@ -318,32 +358,41 @@ if (import.meta.main) {
     if (Number(active[0]?.n) !== 0) throw new Error("RESET_ACTIVE_EXECUTION");
     const cipher = await createCaseDataCipher({ CASE_DATA_KEY_V1: process.env.CASE_DATA_KEY_V1 });
     seed = await prepareSyntheticLawyers(cipher, new Date().toISOString());
-    const reset = applicationResetSql(schema, seed);
-    const protectedTables = schema.filter(
-      (t) => retainedResetTable(t.name) && !["v2_directory_epoch"].includes(t.name),
+    const capacityRows = await query(
+      `SELECT capacity_bytes FROM v2_physical_storage_capacity WHERE environment=${quote(environment)}`,
     );
-    const ledgerNames = [
-      "legacy_ai_attempts",
-      "legacy_ai_observations",
-      "legacy_ai_operations",
-      "v2_cost_attempts",
-      "v2_cost_quotes",
-      "v2_cost_receipts",
-      "v2_paid_holds",
-      "v2_execution_admissions",
-      "v2_execution_cost_observations",
-    ];
-    const counts = async () =>
-      Object.fromEntries(
-        Object.entries(
-          (
-            await query(
-              `SELECT ${ledgerNames.map((name) => `(SELECT count(*) FROM ${identifier(name)}) AS ${identifier(name)}`).join(",")}`,
-            )
-          )[0] ?? {},
-        ).map(([name, n]) => [name, Number(n)]),
-      );
-    const before = await counts();
+    const reset = applicationResetSql(schema, seed, await resetMigrations(), {
+      environment,
+      bytes: Number(capacityRows[0]?.capacity_bytes),
+    });
+    const bookmarkChild = Bun.spawn(
+      [
+        "node",
+        "node_modules/wrangler/bin/wrangler.js",
+        "d1",
+        "time-travel",
+        "info",
+        database,
+        "--env",
+        environment,
+        "--json",
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const [bookmarkText] = await Promise.all([
+      new Response(bookmarkChild.stdout).text(),
+      new Response(bookmarkChild.stderr).text(),
+    ]);
+    if (await bookmarkChild.exited) throw new Error("RESET_RESTORE_POINT_REQUIRED");
+    const bookmarkBody = JSON.parse(bookmarkText.slice(bookmarkText.indexOf("{"))) as {
+      bookmark?: string;
+    };
+    if (!bookmarkBody.bookmark) throw new Error("RESET_RESTORE_POINT_REQUIRED");
+    restoreBookmark = bookmarkBody.bookmark;
+    await Bun.write(
+      `${directory}/receipt-${environment}.json`,
+      JSON.stringify({ environment, phase: "restore_point_recorded", restoreBookmark }, null, 2),
+    );
     const seedFile = `${directory}/seed-${environment}.sql`,
       resetFile = `${directory}/reset-${environment}.sql`;
     await Bun.write(seedFile, seed.sql);
@@ -357,20 +406,17 @@ if (import.meta.main) {
     phase = "verification";
     await verifySeed(environment, seed, true);
     const state = await query(
-      "SELECT (SELECT count(*) FROM user) AS users,(SELECT count(*) FROM account) AS accounts,(SELECT count(*) FROM session) AS sessions,(SELECT count(*) FROM cases) AS legacyCases,(SELECT count(*) FROM v2_workspaces) AS workspaces,(SELECT count(*) FROM v2_files) AS files,(SELECT count(*) FROM v2_reports) AS reports,(SELECT count(*) FROM v2_profiles) AS profiles",
+      "SELECT (SELECT count(*) FROM user) AS users,(SELECT count(*) FROM account) AS accounts,(SELECT count(*) FROM session) AS sessions,(SELECT count(*) FROM cases) AS legacyCases,(SELECT count(*) FROM v2_workspaces) AS workspaces,(SELECT count(*) FROM v2_files) AS files,(SELECT count(*) FROM v2_reports) AS reports,(SELECT count(*) FROM v2_profiles) AS profiles,(SELECT count(*) FROM v2_cost_attempts) AS oldCostAttempts,(SELECT count(*) FROM v2_paid_holds) AS oldPaidHolds,(SELECT count(*) FROM legacy_ai_attempts) AS oldLegacyAttempts",
     );
     const actual = state[0];
     if (
-      actual?.users !== 2 ||
-      actual.profiles !== 2 ||
+      actual?.users !== SYNTHETIC_PROFILE_COUNT ||
+      actual.profiles !== SYNTHETIC_PROFILE_COUNT ||
       Object.entries(actual).some(([k, v]) => !["users", "profiles"].includes(k) && v !== 0)
     )
       throw new Error("RESET_APPLICATION_ROWS_REMAIN");
     if ((await query("PRAGMA foreign_key_check")).length)
       throw new Error("RESET_FOREIGN_KEY_FAILED");
-    const after = await counts();
-    if (Object.entries(before).some(([name, n]) => Number(after[name]) < Number(n)))
-      throw new Error("RESET_RETAINED_LEDGER_CHANGED");
     phase = "complete";
     const receipt = {
       environment,
@@ -380,7 +426,8 @@ if (import.meta.main) {
       at: new Date().toISOString(),
       state: actual,
       profiles: seed.profiles,
-      retainedTables: protectedTables.map((t) => t.name),
+      restoreBookmark,
+      fullDatabaseDataReset: true,
       existingCustomerPayloadsRead: 0,
     };
     await Bun.write(`${directory}/receipt-${environment}.json`, JSON.stringify(receipt, null, 2));
@@ -419,6 +466,7 @@ if (import.meta.main) {
           ? error.message
           : "RESET_FAILED",
       seedProfiles: seed?.profiles,
+      restoreBookmark,
     };
     await Bun.write(
       `${directory}/receipt-${environment ?? "unknown"}.json`,
