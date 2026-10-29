@@ -197,7 +197,6 @@ test("customer completes intake workspace original PDF report and cascading dele
     .getByRole("navigation", { name: "사건 메뉴" })
     .getByRole("link", { name: /^자료/ })
     .click();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
     mimeType: "text/plain",

@@ -174,11 +174,14 @@
   font-weight: 680;
 }
 .app-frame.app-frame--product .workspace-tabs {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   position: relative;
   display: flex;
   flex-wrap: nowrap;
   justify-content: flex-start;
-  gap: 24px;
+  gap: 8px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
@@ -187,7 +190,7 @@
   padding-right: 4px;
 }
 .app-frame.app-frame--product .workspace-tabs a {
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   min-width: 44px;
   min-height: 48px;
   font-size: 14px;
@@ -237,7 +240,8 @@
   color: var(--destructive);
 }
 .app-frame.app-frame--product .workspace-grid {
-  max-width: 840px;
+  width: 100%;
+  max-width: none;
   gap: 28px;
 }
 .app-frame.app-frame--product .workspace-section-heading {

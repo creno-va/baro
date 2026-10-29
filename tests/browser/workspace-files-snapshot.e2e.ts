@@ -261,7 +261,7 @@ for (const change of ["same-owner", "owner", "role", "consent", "expired"] as co
         await expect(
           page.getByText("저장한 사건·자료는 읽을 수 있어요.", { exact: false }),
         ).toBeVisible();
-        await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeDisabled();
+        await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeDisabled();
       }
     }
     expect(state.globalReads).toBe(0);

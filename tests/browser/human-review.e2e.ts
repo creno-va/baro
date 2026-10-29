@@ -257,7 +257,6 @@ test("an uploaded synthetic recording can be played while correcting and is remo
 }) => {
   await seed(page);
   await page.goto(`/cases/${id}/files`);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   const wav = Buffer.alloc(32044);
   wav.write("RIFF", 0);
   wav.writeUInt32LE(wav.length - 8, 4);

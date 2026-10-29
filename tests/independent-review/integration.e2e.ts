@@ -75,7 +75,6 @@ test("customer complete shared flow, reload, chat and upload retry, report files
   await page.getByRole("button", { name: "응답 다시 시도" }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
   await page.goto(`${path}/files`);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "independent-synthetic.txt",
     mimeType: "text/plain",
@@ -326,7 +325,6 @@ test("report download refuses deleted file from stale tab; reload removes stale 
   await login(page);
   const path = await createActiveCase(page);
   await page.goto(`${path}/files`);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "removed-synthetic.txt",
     mimeType: "text/plain",
@@ -370,7 +368,6 @@ test("account deletion clears own data and session while preserving peer lawyer 
   await login(page);
   const path = await createActiveCase(page);
   await page.goto(`${path}/files`);
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "account-deleted.txt",
     mimeType: "text/plain",

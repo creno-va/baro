@@ -127,9 +127,7 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
   const tabs = page.getByRole("navigation", { name: "사건 메뉴" });
   await tabs.getByRole("link", { name: /^자료/ }).click();
-  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeDisabled();
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
-  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
   await expect(page.getByLabel("업로드할 파일 선택", { exact: true })).toBeEnabled();
   await tabs.getByRole("link", { name: "타임라인", exact: true }).click();
   await expect(page.getByRole("button", { name: "일정 추가" })).toBeEnabled();

@@ -4,7 +4,6 @@ import {
   ChevronDown,
   Clock3,
   FileText,
-  FolderOpen,
   LoaderCircle,
   Paperclip,
   Plus,
@@ -91,12 +90,10 @@ function download(blob: Blob, name: string) {
 export function Workspace({
   caseId,
   tab = "chat",
-  evidenceOnly = false,
   lookupAvailable = false,
 }: {
   caseId: string;
   tab?: WorkspaceTab;
-  evidenceOnly?: boolean;
   lookupAvailable?: boolean;
 }) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
@@ -255,11 +252,8 @@ export function Workspace({
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
   const readView = useCallback(
-    () =>
-      tab === "files"
-        ? api.workspace.getFiles(caseId, { evidence: evidenceOnly })
-        : api.workspace.get(caseId),
-    [caseId, tab, evidenceOnly],
+    () => (tab === "files" ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
+    [caseId, tab],
   );
   const load = useCallback(async () => {
     const serial = ++latest.current;
@@ -686,7 +680,13 @@ export function Workspace({
     });
   }
   async function upload(files: FileList | File[] | null) {
-    if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
+    if (
+      (tab === "chat" && !uploadConsent) ||
+      view?.case.stage !== "active" ||
+      lock.current ||
+      !files?.length
+    )
+      return;
     const chosen = Array.from(files);
     let complete = false;
     const uploadEpoch = ticket();
@@ -878,11 +878,11 @@ export function Workspace({
       <input
         ref={uploadInput}
         id="workspace-upload"
-        aria-label={tab === "chat" ? "사진 또는 파일 첨부" : undefined}
+        aria-label={tab === "chat" ? "사진 또는 파일 첨부" : "업로드할 파일 선택"}
         type="file"
         hidden
         multiple
-        disabled={!!busy || (tab !== "chat" && !uploadConsent) || view?.case.stage !== "active"}
+        disabled={!!busy || view?.case.stage !== "active"}
         accept=".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,image/*,audio/*,video/*"
         onChange={(event) => {
           if (tab === "chat") {
@@ -976,7 +976,7 @@ export function Workspace({
           <div className="workspace-buttons">
             <Button
               variant="outline"
-              disabled={!!busy || readonly || !uploadConsent}
+              disabled={!!busy || readonly || (tab === "chat" && !uploadConsent)}
               onClick={() => void upload(retryUploads)}
             >
               업로드 다시 시도
@@ -1183,7 +1183,7 @@ export function Workspace({
                           message.references?.some((ref) => ref.kind === "user_material") && (
                             <p className="workspace-evidence-notice">
                               첨부 자료를 근거로 활용했어요.{" "}
-                              <a href={`${base}/files?evidence=1`}>자료 탭에서 확인하기</a>
+                              <a href={`${base}/files`}>자료 탭에서 확인하기</a>
                             </p>
                           )}
                         {!!message.warnings?.length && (
@@ -1479,66 +1479,40 @@ export function Workspace({
                 <>
                   <div className="workspace-section-heading" {...privateContent}>
                     <div>
-                      <h2>{evidenceOnly ? "근거로 활용한 자료" : "사건 자료"}</h2>
-                      <p>채팅에 첨부한 파일을 확인하고, AI가 근거로 활용한 자료를 살펴보세요.</p>
+                      <h2>사건 자료</h2>
                     </div>
                   </div>
-                  <div className="workspace-buttons" {...privateContent}>
-                    <ButtonLink
-                      href={`${base}/files`}
-                      variant={evidenceOnly ? "outline" : "secondary"}
+                  <div
+                    className={`workspace-material-upload${view.files.length ? " workspace-material-upload--compact" : ""}`}
+                    {...privateContent}
+                  >
+                    {!view.files.length && <h3 className="sr-only">아직 자료가 없어요</h3>}
+                    <button
+                      type="button"
+                      className="workspace-upload-target"
+                      aria-label={view.files.length ? "파일 추가" : "파일 선택"}
+                      disabled={!!busy || readonly}
+                      onClick={() => uploadInput.current?.click()}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (!busy && !readonly) void upload(event.dataTransfer.files);
+                      }}
                     >
-                      전체 첨부 파일
-                    </ButtonLink>
-                    <ButtonLink
-                      href={`${base}/files?evidence=1`}
-                      variant={evidenceOnly ? "secondary" : "outline"}
-                    >
-                      근거로 활용한 자료
-                    </ButtonLink>
-                  </div>
-                  {evidenceOnly && (
-                    <p className="workspace-muted" {...privateContent}>
-                      저장된 사실과 최근 대화에서 근거로 활용한 자료예요. 이전 대화의 근거는 해당
-                      답변에서도 확인할 수 있어요.
-                    </p>
-                  )}
-                  <div className="workspace-upload" {...privateContent}>
-                    <div className="workspace-upload-intro">
                       <span className="workspace-upload-icon">
-                        <Upload size={22} />
+                        {view.files.length ? <Plus size={20} /> : <Upload size={28} />}
                       </span>
-                      <div>
-                        <h3>자료를 추가하세요</h3>
-                        <p>문서 · 이미지 · 음성 · 영상</p>
-                      </div>
-                    </div>
-                    <div className="workspace-upload-controls">
-                      <label className="workspace-consent">
-                        <input
-                          type="checkbox"
-                          checked={uploadConsent}
-                          disabled={!!busy || readonly}
-                          onChange={(event) => setUploadConsent(event.target.checked)}
-                        />
-                        선택 자료의 자동 처리에 동의합니다.
-                      </label>
-                      <label className="workspace-upload-label" htmlFor="workspace-upload">
-                        업로드할 파일 선택
-                      </label>
-                      <Button
-                        disabled={!!busy || readonly || !uploadConsent}
-                        onClick={() => uploadInput.current?.click()}
-                      >
-                        <Plus size={17} aria-hidden="true" /> 파일 선택
-                      </Button>
-                      <p className="workspace-upload-limit">
+                      <span className="workspace-upload-title">
+                        {view.files.length ? "파일 추가" : "파일 선택"}
+                      </span>
+                      <span className="workspace-upload-types">문서 · 이미지 · 음성 · 영상</span>
+                      <span className="workspace-upload-limit">
                         문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
                         {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
-                      </p>
-                    </div>
+                      </span>
+                    </button>
                     {busy === "upload" && (
-                      <div role="status">
+                      <div className="workspace-upload-progress" role="status">
                         <p>
                           <LoaderCircle size={17} className="workspace-spin" />{" "}
                           {uploadProgress
@@ -1567,107 +1541,90 @@ export function Workspace({
                       </div>
                     )}
                   </div>
-                  {!view.files.length && (
-                    <div className="workspace-empty" {...privateContent}>
-                      <FolderOpen size={30} />
-                      <h3>아직 자료가 없어요</h3>
-                      <p>자료 없이도 대화를 이어갈 수 있어요. 준비되면 원본을 추가하세요.</p>
-                    </div>
-                  )}
-                  {evidenceOnly && !view.files.some((file) => evidenceIds.has(file.id)) && (
-                    <p {...privateContent}>
-                      확인된 근거 자료가 아직 없어요. 전체 첨부 파일에서 원본과 처리 상태를 확인할
-                      수 있어요.
-                    </p>
-                  )}
                   <ul className="workspace-file-list">
-                    {view.files
-                      .filter((file) => !evidenceOnly || evidenceIds.has(file.id))
-                      .map((file) => (
-                        <li key={file.id}>
-                          <div className="workspace-file-title" {...privateContent}>
-                            <FileText size={24} />
-                            <div>
-                              <h3>{file.name}</h3>
-                              {evidenceIds.has(file.id) && (
-                                <span className="workspace-evidence-notice">근거로 활용됨</span>
-                              )}
-                              <p>
-                                {size(file.sizeBytes)} ·{" "}
-                                <span
-                                  className={`workspace-status workspace-status--${file.status}`}
-                                >
-                                  {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
-                                </span>
-                              </p>
-                            </div>
-                          </div>
-                          <p className="workspace-coverage" {...privateContent}>
-                            {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
-                          </p>
-                          {file.processing && ["processing", "waiting"].includes(file.status) && (
-                            <div className="workspace-muted" {...privateContent}>
-                              <p>{fileProcessingLabel(file.processing)}</p>
-                              <p>
-                                <ElapsedTime
-                                  startedAt={file.processing.updatedAt}
-                                  label="마지막 상태 갱신 후"
-                                />
-                              </p>
-                            </div>
-                          )}
-                          {!file.processing &&
-                            !file.uploadRejection &&
-                            file.createdAt &&
-                            ["uploading", "processing", "waiting"].includes(file.status) && (
-                              <p className="workspace-muted" {...privateContent}>
-                                <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
-                              </p>
+                    {view.files.map((file) => (
+                      <li key={file.id}>
+                        <div className="workspace-file-title" {...privateContent}>
+                          <FileText size={24} />
+                          <div>
+                            <h3>{file.name}</h3>
+                            {evidenceIds.has(file.id) && (
+                              <span className="workspace-evidence-notice">근거로 활용됨</span>
                             )}
-                          {file.status === "failed" && (
-                            <p className="workspace-muted" {...privateContent}>
-                              {fileFailureLabel(file)}
+                            <p>
+                              {size(file.sizeBytes)} ·{" "}
+                              <span className={`workspace-status workspace-status--${file.status}`}>
+                                {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
+                              </span>
                             </p>
-                          )}
-                          {file.status === "uploading" && (
-                            <p className="workspace-muted" {...privateContent}>
-                              {file.uploadRejection
-                                ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
-                                : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
-                            </p>
-                          )}
-                          <div className="workspace-buttons">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={!!busy}
-                              aria-haspopup="dialog"
-                              onClick={(event) => {
-                                event.currentTarget.focus();
-                                void run("file-preview", async () => {
-                                  setPreview(file);
-                                  setOriginal(null);
-                                });
-                              }}
-                            >
-                              자료 확인
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              {...privateContent}
-                              disabled={!!busy || !ready}
-                              aria-haspopup="dialog"
-                              onClick={(event) => {
-                                event.currentTarget.focus();
-                                setDeleteFile(file);
-                              }}
-                            >
-                              삭제
-                            </Button>
                           </div>
-                        </li>
-                      ))}
+                        </div>
+                        <p className="workspace-coverage" {...privateContent}>
+                          {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
+                        </p>
+                        {file.processing && ["processing", "waiting"].includes(file.status) && (
+                          <div className="workspace-muted" {...privateContent}>
+                            <p>{fileProcessingLabel(file.processing)}</p>
+                            <p>
+                              <ElapsedTime
+                                startedAt={file.processing.updatedAt}
+                                label="마지막 상태 갱신 후"
+                              />
+                            </p>
+                          </div>
+                        )}
+                        {!file.processing &&
+                          !file.uploadRejection &&
+                          file.createdAt &&
+                          ["uploading", "processing", "waiting"].includes(file.status) && (
+                            <p className="workspace-muted" {...privateContent}>
+                              <ElapsedTime startedAt={file.createdAt} label="자료 등록 후" />
+                            </p>
+                          )}
+                        {file.status === "failed" && (
+                          <p className="workspace-muted" {...privateContent}>
+                            {fileFailureLabel(file)}
+                          </p>
+                        )}
+                        {file.status === "uploading" && (
+                          <p className="workspace-muted" {...privateContent}>
+                            {file.uploadRejection
+                              ? "파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해 주세요."
+                              : "등록이 아직 완료되지 않았어요. 전송이 중단된 경우 같은 원본을 다시 선택해 이어서 저장할 수 있어요. 파일 거절 안내를 받았다면 수정한 파일을 새로 선택해 주세요. 만료된 업로드는 삭제한 뒤 다시 추가할 수 있어요."}
+                          </p>
+                        )}
+                        <div className="workspace-buttons">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!!busy}
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              event.currentTarget.focus();
+                              void run("file-preview", async () => {
+                                setPreview(file);
+                                setOriginal(null);
+                              });
+                            }}
+                          >
+                            자료 확인
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            {...privateContent}
+                            disabled={!!busy || !ready}
+                            aria-haspopup="dialog"
+                            onClick={(event) => {
+                              event.currentTarget.focus();
+                              setDeleteFile(file);
+                            }}
+                          >
+                            삭제
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
                   </ul>
                 </>
               )}

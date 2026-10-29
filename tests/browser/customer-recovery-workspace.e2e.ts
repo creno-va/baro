@@ -128,7 +128,6 @@ for (const closeBeforeRecovery of [false, true])
 for (const retryImmediately of [true, false])
   test(`partial bulk upload failure; retry immediately=${retryImmediately}`, async ({ page }) => {
     await page.goto("/cases/synthetic-case/files");
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     await page.evaluate(async () => {
       const path = "/tests/helpers/workspace-client-fixture.ts",
         { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
@@ -196,7 +195,6 @@ for (const interrupted of [false, true])
     page,
   }) => {
     await page.goto("/cases/synthetic-case/files");
-    await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
     if (interrupted)
       await page.evaluate(() => {
         const key = "baro-c-contract-test-state",
@@ -280,7 +278,7 @@ test("deferred upload can start processing; queued file cannot start a duplicate
   page,
 }) => {
   await page.goto("/cases/synthetic-case/files");
-  await expect(page.getByLabel("선택 자료의 자동 처리에 동의합니다.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeVisible();
   await page.evaluate(() => {
     const key = "baro-c-contract-test-state",
       state = JSON.parse(localStorage.getItem(key)!);
@@ -314,7 +312,6 @@ test("deferred upload can start processing; queued file cannot start a duplicate
 });
 test("missing original keeps an authorized workspace and its editor", async ({ page }) => {
   await page.goto("/cases/synthetic-case/files");
-  await page.getByLabel("선택 자료의 자동 처리에 동의합니다.").check();
   await page.getByLabel("업로드할 파일 선택").setInputFiles({
     name: "missing-original.txt",
     mimeType: "text/plain",
