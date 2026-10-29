@@ -73,11 +73,14 @@ test("compact composer keeps attachment, fixed input and send on one row at phon
         const send = row.querySelector(".workspace-send");
         const surface = row.parentElement;
         if (!input || !attach || !send || !surface) throw new Error("Composer controls missing");
-        const boxes = [attach, input, send].map((node) => node.getBoundingClientRect());
+        const attachBox = attach.getBoundingClientRect();
+        const inputBox = input.getBoundingClientRect();
+        const sendBox = send.getBoundingClientRect();
+        const boxes = [attachBox, inputBox, sendBox];
         const centers = boxes.map((box) => box.y + box.height / 2);
         return {
           aligned: Math.max(...centers) - Math.min(...centers) <= 1,
-          ordered: boxes[0].right <= boxes[1].left && boxes[1].right <= boxes[2].left,
+          ordered: attachBox.right <= inputBox.left && inputBox.right <= sendBox.left,
           height: input.getBoundingClientRect().height,
           resize: getComputedStyle(input).resize,
           surfaceHeight: surface.getBoundingClientRect().height,
