@@ -111,11 +111,6 @@
   opacity: 0.55;
   cursor: default;
 }
-.precedent-workspace button:focus-visible,
-.precedent-topic:has(:focus-visible) {
-  outline: 2px solid var(--primary);
-  outline-offset: 3px;
-}
 .precedent-workspace .precedent-primary {
   display: inline-flex;
   align-items: center;

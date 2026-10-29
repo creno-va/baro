@@ -15,11 +15,6 @@
 .lawyer-profile-back:hover {
   color: var(--foreground);
 }
-.lawyer-profile-back:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 4px;
-  border-radius: 4px;
-}
 .lawyer-profile > dialog.ui-dialog {
   margin: auto;
 }
@@ -176,14 +171,6 @@
 .lawyer-directory form select {
   width: 100%;
   min-width: 0;
-}
-.lawyer-editor input:focus-visible,
-.lawyer-editor select:focus-visible,
-.lawyer-editor textarea:focus-visible,
-.lawyer-directory input:focus-visible,
-.lawyer-directory select:focus-visible {
-  outline: 3px solid var(--color-ring);
-  outline-offset: 3px;
 }
 .lawyer-editor input:disabled,
 .lawyer-directory input:disabled,
@@ -379,9 +366,7 @@
   background: #eef1f5;
 }
 .lawyer-directory .directory-search :is(input, select):focus-visible {
-  border-color: var(--primary);
-  outline: 3px solid var(--ring);
-  outline-offset: 3px;
+  border-color: var(--input);
   background: var(--card);
 }
 .lawyer-directory .directory-search__button {

@@ -531,10 +531,6 @@
   flex: none;
   margin-top: 5px;
 }
-.workspace-lookup :focus-visible {
-  outline: 3px solid #2563eb;
-  outline-offset: 3px;
-}
 .workspace-attach:hover {
   background: #f3f6fa;
 }
@@ -719,10 +715,6 @@
 .workspace-upload-target:hover:not(:disabled) {
   border-color: var(--primary);
   background: #f2f7ff;
-}
-.workspace-upload-target:focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 3px;
 }
 .workspace-upload-target:disabled {
   cursor: default;
@@ -1591,10 +1583,6 @@
   overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
   padding: 16px 8px;
-}
-.workspace--chat .workspace-messages:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
 }
 .workspace--chat .workspace-composer {
   position: static;
