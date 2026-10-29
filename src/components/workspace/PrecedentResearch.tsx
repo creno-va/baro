@@ -446,56 +446,70 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
               access={access}
               onSettled={() => setReload((n) => n + 1)}
               onRefreshSources={() => void search()}
-            />
-            <article className="precedent-document">
-              <h3 ref={documentHeading} tabIndex={-1}>
-                {document?.citation.title ?? chosen?.citation.title ?? "판례 내용"}
-              </h3>
-              {reading && <p role="status">선택한 판례를 불러오고 있어요.</p>}
-              {!!readError && (
-                <div role="alert">
-                  <p>판례를 다시 확인하지 못했어요. 잠시 후 다시 확인하거나 검색해 주세요.</p>
-                  {chosen && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void (readError instanceof ApiError && readError.code === "NOT_FOUND"
-                          ? search()
-                          : read(chosen))
-                      }
-                    >
-                      {readError instanceof ApiError && readError.code === "NOT_FOUND"
-                        ? "다시 검색"
-                        : "다시 확인"}
-                    </button>
+              heading={
+                <header className="precedent-document-heading">
+                  <h3 ref={documentHeading} tabIndex={-1}>
+                    {document?.citation.title ?? chosen?.citation.title ?? "판례 내용"}
+                  </h3>
+                  {document && (
+                    <div className="precedent-metadata">
+                      <span>{document.citation.court}</span>
+                      <span>{document.citation.decisionDate}</span>
+                      <span>{document.citation.caseNumber}</span>
+                    </div>
                   )}
-                </div>
-              )}
-              {document && (
-                <>
-                  <p className="precedent-metadata">
-                    {document.citation.court} · {document.citation.decisionDate} ·{" "}
-                    {document.citation.caseNumber}
-                  </p>
+                  {reading && <p role="status">선택한 판례를 불러오고 있어요.</p>}
+                  {!!readError && (
+                    <div role="alert">
+                      <p>판례를 다시 확인하지 못했어요. 잠시 후 다시 확인하거나 검색해 주세요.</p>
+                      {chosen && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void (readError instanceof ApiError && readError.code === "NOT_FOUND"
+                              ? search()
+                              : read(chosen))
+                          }
+                        >
+                          {readError instanceof ApiError && readError.code === "NOT_FOUND"
+                            ? "다시 검색"
+                            : "다시 확인"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </header>
+              }
+              originalLink={
+                document && (
                   <a
                     className="precedent-original"
                     href={document.citation.url}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label="국가법령정보센터에서 전체 원문 보기 (새 창)"
                   >
-                    국가법령정보센터에서 전체 원문 보기{" "}
+                    공식 원문 보기
                     <ExternalLink size={15} aria-hidden="true" />
-                    <span className="sr-only"> (새 창)</span>
                   </a>
+                )
+              }
+            >
+              {document && (
+                <article className="precedent-document" aria-label="판례 본문">
+                  <header className="precedent-reading-heading">
+                    <h4>판결문</h4>
+                    {document.excerpt.truncated && <span>원문 일부</span>}
+                  </header>
                   <p className="precedent-body">{document.excerpt.text}</p>
                   {document.excerpt.truncated && (
                     <p className="precedent-scope">
                       긴 원문 중 일부를 표시했어요. 전체 내용은 공식 원문에서 확인해 주세요.
                     </p>
                   )}
-                </>
+                </article>
               )}
-            </article>
+            </PrecedentComparisonPanel>
           </section>
         </>
       )}
