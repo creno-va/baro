@@ -11,6 +11,8 @@ import { deletionJournalSchema } from "../src/server/modules/deletion/service";
 // Resource identity must come from trusted operator configuration, not from the journal itself.
 const isolatedName = z.string().regex(/^baro-drill-[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/);
 const protectedDatabases = new Set([
+  "c1612b14-6ab1-4d2e-82dc-33e596b31337", // Fresh preview.
+  "fa914862-848d-4eb1-bc69-e82a020df11a", // Fresh production.
   "e8cdcf75-5bd8-469e-848e-f31816df4327", // General preview, never an isolated restore target.
   "d315e93f-2fac-4cc2-bf99-e9d6eb31523f", // Production.
 ]);

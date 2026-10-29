@@ -8,8 +8,8 @@ import { safeWorkspacePublicationFailure } from "../src/server/workspace-publica
 
 const account = "9e844969d0c44b2449f3951d1f301654";
 const databases = {
-  production: "d315e93f-2fac-4cc2-bf99-e9d6eb31523f",
-  preview: "e8cdcf75-5bd8-469e-848e-f31816df4327",
+  production: "fa914862-848d-4eb1-bc69-e82a020df11a",
+  preview: "c1612b14-6ab1-4d2e-82dc-33e596b31337",
 } as const;
 const inputSchema = z.object({
   token: z.string().min(1),
