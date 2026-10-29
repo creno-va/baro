@@ -40,6 +40,10 @@ test("native context/search/signed read traverses real Hono/SQL with fixed owner
         precedents.find((item) => item.id === "precedent_verified")?.response.body ?? "{}",
       ).판례정보,
     };
+    // Discovery now rejects originals unrelated to the selected public topic.
+    list.PrecSearch.prec[0].사건명 = "대여금·계약금 반환";
+    detail.PrecService.사건명 = "대여금·계약금 반환";
+    detail.PrecService.판례내용 += " 대여금과 계약금 반환에 관한 합성 자료입니다.";
     const env = {
       ...f.owner.env,
       APPLICATION_COST_LIMITS_ENABLED: "false",

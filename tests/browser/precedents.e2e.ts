@@ -203,7 +203,7 @@ test("peer sign-out removes case and rejects delayed search while focus preserve
   );
 });
 
-test("changed case revision clears old results on focus and exposes fresh search", async ({
+test("changed case revision invalidates old result actions and exposes fresh search", async ({
   page,
 }) => {
   await seed(page);
@@ -215,7 +215,10 @@ test("changed case revision clears old results on focus and exposes fresh search
     localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
     window.dispatchEvent(new Event("focus"));
   }, id);
-  await expect(page.getByRole("list", { name: "관련 판례 목록" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /판례 내용 보기/ }).first()).toBeDisabled();
+  await expect(
+    page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   await expect(page.getByRole("list", { name: "관련 판례 목록" })).toBeVisible();
 });

@@ -71,47 +71,21 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(
-    page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
-  ).toBeHidden();
   await captureCaseViewports(page, "reports", ".report-review");
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
   await openReportOptions(page);
-  await page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }).check();
-  const excluded = page.locator(".report-material").filter({ hasText: "제외 원본.txt" });
-  await openReportOptions(page);
-  await excluded.getByRole("checkbox", { name: "리포트에서 제외" }).check();
-  await page.getByRole("button", { name: "본문 편집 먼저 저장" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "본문 편집을 먼저 저장했어요." }),
-  ).toBeVisible();
-  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
-  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
-  await page.getByRole("button", { name: "검토 내용 저장" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "검토 내용을 저장했어요." }),
-  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
+  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await openReportEditor(page);
-  await expect(editor).toHaveValue(/합성 API 예시/);
-  await expect(editor).not.toHaveValue(/제외 원본.txt/);
-  await expect(editor).not.toHaveValue(/사용자가 검토한 합성 사실/);
-  await openReportOptions(page);
-  await expect(
-    page.getByRole("checkbox", { name: "전화번호·이메일·주민등록번호 가리기" }),
-  ).toBeChecked();
-  await openReportOptions(page);
-  await expect(excluded.getByRole("checkbox", { name: "리포트에서 제외" })).toBeChecked();
-  await openReportOptions(page);
-  await expect(excluded.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();
-  await page.getByRole("button", { name: "전달 내용 미리보기" }).click();
-  await expect(page.locator(".report-html-preview")).toContainText("[전화번호 가림]");
-  await expect(page.locator(".report-html-preview")).not.toContainText("010-1234-5678");
-  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
+  await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeChecked();
+  await expect(page.locator(".report-options,.report-html-preview")).toHaveCount(0);
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdfPath = resolve(artifacts, "integrated-report.pdf");
@@ -260,14 +234,14 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await expect(
     page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
   ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toBeHidden();
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeHidden();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")),
   ).toEqual({});
   await page.getByRole("checkbox", { name: "긴 합성 자료.txt · 리포트에서 제외" }).check();
   await page.getByRole("button", { name: "선택 자료를 제외하고 생성" }).click();
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
   await expect(editor).toContainText("연락과 전달");
   await page.reload();
@@ -312,7 +286,7 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
   });
   await page.goto("/cases/synthetic-generation-case/reports");
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
   const displayed = await editor.inputValue();
   const peer = await page.evaluate(() => {
