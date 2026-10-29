@@ -27,11 +27,20 @@ test("a customer starts directly on home and reaches adaptive questions without 
   await expect(narrative).toBeEnabled();
   const submit = page.getByRole("button", { name: "저장하고 계속" });
   await expect(submit).toBeEnabled();
-  await narrative.fill("짧음");
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator(".conversation-context-hint")).toHaveText("10자 이상 입력해주세요");
+    await expect(page.locator(".conversation-context-hint")).toBeVisible();
+    await expect(page.locator(".conversation-input-meta")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await narrative.fill("😀".repeat(9));
   await submit.click();
   await expect(page.getByRole("dialog", { name: "이야기를 조금만 더 적어주세요" })).toBeVisible();
   await expect(
-    page.getByText("어떤 일이 있었는지 5자 이상 적어주세요.", { exact: false }),
+    page.getByText("어떤 일이 있었는지 10자 이상 적어주세요.", { exact: false }),
   ).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
   await page.getByRole("button", { name: "계속 작성하기" }).click();
@@ -60,10 +69,11 @@ test("a short account is accepted and recent-story deletion requires explicit co
   await setSession(page, customer);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/app");
-  await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill("폭행을 당했어요.");
+  await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill("폭행을 당했습니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   await expect(page).toHaveURL(/\/intake/);
   const remove = page.locator(".sidebar-desktop .sidebar-story-delete").first();
+  await page.locator(".sidebar-desktop .sidebar-story-row").first().hover();
   await expect(remove).toBeVisible();
   await remove.click();
   const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });

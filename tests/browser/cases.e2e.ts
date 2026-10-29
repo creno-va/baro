@@ -160,10 +160,10 @@ test("intake validates code points, blocks duplicates, preserves replay key and 
   const submit = page.getByRole("button", { name: "저장하고 계속" });
   await input.fill("😀😀");
   await expect(submit).toBeEnabled();
-  await expect(page.getByText("3자만 더 적어주세요", { exact: true })).toBeVisible();
+  await expect(page.locator(".conversation-context-hint")).toHaveText("10자 이상 입력해주세요");
   await submit.click();
   const validation = page.getByRole("dialog", { name: "이야기를 조금만 더 적어주세요" });
-  await expect(validation).toContainText("어떤 일이 있었는지 5자 이상 적어주세요.");
+  await expect(validation).toContainText("어떤 일이 있었는지 10자 이상 적어주세요.");
   await expect(input).toHaveAttribute("aria-invalid", "true");
   expect(calls).toBe(0);
   expect(keys).toEqual([]);
