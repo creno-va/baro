@@ -127,7 +127,7 @@ test("workspace metadata is discarded and freshly read after a late file deletio
 });
 
 for (const change of ["role", "session", "owner", "workspace_delete", "account_delete"] as const)
-  test(`metadata-only workspace rejects ${change} at the existing final read boundary`, async () => {
+  test(`metadata-only workspace rechecks ${change} at the final boundary and allows its lawyer owner`, async () => {
     const f = await fixture(),
       other = await seedTestSession(f.db, { consent: true });
     await f.client.get(f.workspaceId);
@@ -152,9 +152,11 @@ for (const change of ["role", "session", "owner", "workspace_delete", "account_d
             f.actor.now,
           );
     });
-    await expect(f.client.get(f.workspaceId)).rejects.toMatchObject({
-      code: change === "session" ? "UNAUTHENTICATED" : "NOT_FOUND",
-    });
+    if (change === "role") expect((await f.client.get(f.workspaceId)).case.id).toBe(f.workspaceId);
+    else
+      await expect(f.client.get(f.workspaceId)).rejects.toMatchObject({
+        code: change === "session" ? "UNAUTHENTICATED" : "NOT_FOUND",
+      });
     expect(changed).toBe(true);
     expect(f.rows.filter((row) => row.metadata)).toHaveLength(1);
     expect(f.work().coverage).toBe(0);

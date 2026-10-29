@@ -11,7 +11,7 @@ afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
 
-test("same owner changing to lawyer cannot read or mutate customer cases; account services remain available", async () => {
+test("a lawyer retains their own cases and account services without gaining another owner's data or verified roles", async () => {
   const db = await createTestDatabase();
   databases.push(db);
   const owner = await seedTestSession(db, { consent: true });
@@ -41,25 +41,24 @@ test("same owner changing to lawyer cannot read or mutate customer cases; accoun
     ["/cases", "GET"],
     [`/cases/${caseId}`, "GET"],
     [`/cases/${caseId}/analysis`, "GET"],
-    [`/cases/${caseId}`, "DELETE"],
-    ["/v2/cases", "POST"],
-    [`/v2/cases/${caseId}/workspace`, "GET"],
-    [`/v2/cases/${caseId}/messages`, "POST"],
-    [`/v2/cases/${caseId}/files`, "GET"],
-    [`/v2/cases/${caseId}`, "DELETE"],
   ]) {
     const response = await request(path as string, method);
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      error: { code: "ROLE_REQUIRED", retryable: false },
-    });
+    expect(response.status).toBe(200);
   }
   expect((await request(`/cases/${caseId}`, "DELETE", "https://foreign.test")).status).toBe(403);
   expect((await request("/v2/me/usage")).status).toBe(200);
   expect((await request("/me/deletion")).status).toBe(200);
+  const other = await seedTestSession(db, { consent: true });
+  expect(
+    (await api.request(`/cases/${caseId}`, { headers: { cookie: other.cookie } }, owner.env))
+      .status,
+  ).toBe(404);
   await saveAccountType(db.binding, owner.userId, "customer");
   expect((await request(`/cases/${caseId}`)).status).toBe(200);
   expect(db.sqlite.query("SELECT count(*) AS count FROM v2_role_bindings").get()).toEqual({
     count: 0,
   });
+  await saveAccountType(db.binding, owner.userId, "lawyer");
+  expect((await request(`/cases/${caseId}`, "DELETE")).status).toBe(204);
+  expect((await request(`/cases/${caseId}`)).status).toBe(404);
 });
