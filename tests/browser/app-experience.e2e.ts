@@ -61,6 +61,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
       .locator(".app-frame")
       .evaluate((node, product) => node.classList.toggle("app-frame--product", product), product);
     await page.locator("main").focus();
+    await expect(page.locator("main")).toBeFocused();
     await page.mouse.move(800, 400);
     await expect(remove).toHaveCSS("opacity", "0");
     await expect(remove).toHaveCSS("pointer-events", "none");
@@ -112,7 +113,24 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     expect(geometry.remove).toBeLessThan(geometry.cancel);
     expect(Math.abs(geometry.right)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: `.wrangler/deletion-dialog-${product ? "product" : "app"}.png` });
+    // Native close is queued; wait for its focus restoration before the next
+    // iteration moves focus out of the sidebar again.
+    await dialog.evaluate((node) => {
+      node.dataset.closeSettled = "false";
+      node.addEventListener(
+        "close",
+        () => {
+          node.dataset.closeSettled = "true";
+        },
+        { once: true },
+      );
+    });
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(
+      page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true, includeHidden: true }),
+    ).toHaveAttribute("data-close-settled", "true");
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toBeFocused();
   }
 });
 
