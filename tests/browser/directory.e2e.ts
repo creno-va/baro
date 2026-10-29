@@ -57,6 +57,7 @@ test("profile round trip retains applied search filters after reload and ignores
       );
     expect(controls).toHaveLength(4);
     const button = controls[3];
+    if (!button) throw new Error("Search button is missing");
     for (const field of controls.slice(0, 3)) {
       expect(Math.abs(field.height - button.height)).toBeLessThanOrEqual(1);
     }
