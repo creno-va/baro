@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentComparisonApi } from "../../client/api/precedent-comparison";
 import { workspaceProgressText } from "../../client/api/workspace-progress";
@@ -23,6 +23,9 @@ export function PrecedentComparisonPanel({
   access,
   onSettled,
   onRefreshSources,
+  heading,
+  originalLink,
+  children,
 }: {
   caseId: string;
   context: V2PrecedentResearchContext;
@@ -33,6 +36,9 @@ export function PrecedentComparisonPanel({
   access: ReturnType<typeof useCustomerAccess>;
   onSettled: () => void;
   onRefreshSources: () => void;
+  heading: ReactNode;
+  originalLink: ReactNode;
+  children: ReactNode;
 }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [state, setState] = useState<V2PrecedentComparisonState | null>(null);
@@ -209,13 +215,23 @@ export function PrecedentComparisonPanel({
   return (
     <section className="precedent-comparison" aria-label="유사 판례 비교">
       <h3 className="sr-only">사건과 판례 비교</h3>
-      <Button
-        className="precedent-primary"
-        disabled={!selected || pending || sourceExpired || sourceNeedsRefresh || !access.canMutate}
-        onClick={() => void start()}
-      >
-        {pending ? "비교하고 있어요" : "내 사건과 유사도 비교"}
-      </Button>
+      <div className="precedent-detail-heading">
+        {heading}
+        <div className="precedent-detail-actions">
+          {originalLink}
+          <Button
+            className="precedent-primary"
+            aria-label="내 사건과 유사도 비교"
+            loading={pending}
+            disabled={
+              !selected || pending || sourceExpired || sourceNeedsRefresh || !access.canMutate
+            }
+            onClick={() => void start()}
+          >
+            {pending ? "비교하고 있어요" : comparison ? "다시 비교" : "유사도 비교"}
+          </Button>
+        </div>
+      </div>
       {(sourceExpired || sourceNeedsRefresh) && !pending && (
         <div role={sourceExpired ? "alert" : undefined}>
           <p>
@@ -238,9 +254,8 @@ export function PrecedentComparisonPanel({
         <p role="alert">{errorMessage(error)} 처리 중인 작업과 저장한 내용은 유지돼요.</p>
       )}
       {pending && (
-        <p role="status">
-          {state ? workspaceProgressText(state.job) : "비교를 준비하고 있어요."} 대화 탭에서도 처리
-          상태를 확인할 수 있어요.
+        <p role="status" className="precedent-comparison-status">
+          {state ? workspaceProgressText(state.job) : "비교를 준비하고 있어요."}
         </p>
       )}
       {state && !pending && state.job.status !== "completed" && (
@@ -263,17 +278,12 @@ export function PrecedentComparisonPanel({
           {comparison.factsPartial && (
             <p className="precedent-scope">저장된 사실 중 일부가 이번 비교에 포함되지 않았어요.</p>
           )}
-          <p>
-            비교한 판례:{" "}
-            <a href={comparison.source.citation.url} target="_blank" rel="noopener noreferrer">
-              {comparison.source.citation.title} · {comparison.source.citation.caseNumber}
-            </a>
-          </p>
-          <p className="precedent-metadata">
+          <p className="precedent-comparison-meta">
             {new Date(comparison.checkedAt).toLocaleString("ko-KR")}에 비교
           </p>
         </>
       )}
+      {!comparison && children}
     </section>
   );
 }

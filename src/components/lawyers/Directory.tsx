@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, Info, MapPin, Search } from "lucide-react";
+import { ChevronDown, Info, MapPin, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { DirectoryItem } from "../../contracts/v2";
@@ -208,7 +208,13 @@ export function Directory() {
       )}
       <div className="directory-results" aria-busy={busy}>
         {items.map((lawyer) => (
-          <Card key={lawyer.id} className="directory-profile">
+          <a
+            key={lawyer.id}
+            className="ui-card directory-profile"
+            data-slot="card"
+            href={lawyerProfileHref(lawyer.id, query.current)}
+            aria-label={lawyer.name}
+          >
             <CardHeader className="directory-profile__header">
               <div className="directory-profile__photo">
                 <AssetPhoto
@@ -221,7 +227,7 @@ export function Directory() {
               </div>
               <div className="directory-profile__identity">
                 <CardTitle>
-                  <a href={lawyerProfileHref(lawyer.id, query.current)}>{lawyer.name}</a>
+                  {lawyer.name}
                   <span>변호사</span>
                 </CardTitle>
                 <p>{lawyer.officeName}</p>
@@ -243,15 +249,8 @@ export function Directory() {
                   ? "자격 확인된 공개 프로필"
                   : "본인 작성 정보 · 자격 확인 표시 없음"}
               </p>
-              <a
-                className="directory-profile__link"
-                href={lawyerProfileHref(lawyer.id, query.current)}
-              >
-                프로필과 연락처 보기
-                <ArrowRight size={18} aria-hidden="true" />
-              </a>
             </CardContent>
-          </Card>
+          </a>
         ))}
       </div>
       {busy &&

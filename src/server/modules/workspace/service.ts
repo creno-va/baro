@@ -586,7 +586,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       limit = 20,
       before?: { createdAt: string; id: string },
     ) {
-      const items = await workspace.readMessages(actor(ownerId), id, limit, before);
+      const items = await workspace.readMessages(actor(ownerId), id, limit, before, true);
       if (!items) throw new WorkspaceError("NOT_FOUND");
       return items;
     },

@@ -771,8 +771,9 @@
   background: var(--secondary);
   border-color: var(--primary);
 }
-.intake-scene .intake-choice-custom-input {
+.intake-scene .intake-scene-composer .intake-choice-custom-input {
   margin-top: 12px;
+  background: var(--muted);
 }
 .intake-scene-options {
   display: flex;
@@ -811,13 +812,19 @@
 }
 .intake-scene-navigation {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
 }
 .intake-scene .intake-scene-back {
   flex: none;
-  font-size: 0.8rem;
-  min-height: 44px;
+  min-height: 56px;
+  border-radius: 16px;
+  padding: 14px 24px;
+  color: var(--muted-foreground);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 .intake-scene .intake-scene-navigation > .intake-scene-primary {
   flex: 1;
@@ -859,13 +866,6 @@
   font-size: 0.9rem;
   line-height: 1.7;
 }
-.intake-scene-saved {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  color: var(--success);
-  font-size: 0.75rem;
-}
 .intake-scene-dots {
   display: inline-flex;
   gap: 4px;
@@ -903,7 +903,10 @@
   justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+}
+.summary-confirm-actions > .ui-button + .ui-button {
+  margin-left: 0;
 }
 .conversation-effort {
   display: inline-flex;
@@ -1089,52 +1092,10 @@
   bottom: 12px;
   min-height: 44px;
 }
-.intake-active-summary {
-  max-width: 1040px;
-}
 .summary-edit-column,
 .summary-materials-column {
   min-width: 0;
 }
 .summary-materials-column:empty {
   display: none;
-}
-.intake-active-summary .intake-scene {
-  max-width: none;
-  padding-top: 16px;
-}
-.intake-active-summary .intake-scene-emblem {
-  display: none;
-}
-.intake-active-summary .summary-edit-column textarea:not(#case-summary) {
-  min-height: 110px;
-}
-.intake-active-summary #case-summary {
-  min-height: 200px;
-}
-@media (min-width: 1200px) {
-  .intake-active-summary .summary-editor-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 28px;
-    align-items: start;
-  }
-  .intake-active-summary .summary-materials-column {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .intake-active-summary .summary-edit-column {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .intake-active-summary .case-materials {
-    margin-top: 0;
-  }
-  .intake-active-summary .summary-edit-column > section > fieldset {
-    padding: 16px;
-    margin: 16px 0;
-  }
-}
-.intake-active-summary .intake-scene-heading {
-  padding-block: 24px;
 }

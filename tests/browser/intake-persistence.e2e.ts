@@ -133,7 +133,7 @@ test("answers autosave without advancing, survive reload and keep only an inline
   const f = await fixture(page);
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("입력 중인 합성 답변을 자동으로 보관합니다.");
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   expect(f.writes).toHaveLength(1);
   expect(f.requests.some((request) => request.includes("/intake/advance"))).toBe(false);
   await page.reload();
@@ -178,7 +178,7 @@ test("autosave keeps typing enabled and a late acknowledgement cannot overwrite 
   await answer.fill("응답을 기다리며 새로 쓴 합성 답변 ");
   release();
   await expect(answer).toHaveValue("응답을 기다리며 새로 쓴 합성 답변 ");
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   expect(f.writes.map((write) => write.value)).toEqual([
     "먼저 보내는 합성 답변",
     "응답을 기다리며 새로 쓴 합성 답변",
@@ -193,11 +193,11 @@ test("failed autosave replays its original answer before saving newer edits", as
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.fill("전송에 실패한 합성 답변");
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.locator(".intake-scene-notice")).not.toContainText("저장됐어요");
+  await expect(page.getByText("자동 저장됐어요.", { exact: true })).toHaveCount(0);
   await answer.fill("실패 이후 수정한 합성 답변");
   f.allowSave();
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   expect(f.writes.map((write) => write.value)).toEqual([
     "전송에 실패한 합성 답변",
     "전송에 실패한 합성 답변",
@@ -214,7 +214,7 @@ test("autosave detects a peer answer instead of claiming that the draft was save
   await answer.fill("이 화면에서 작성한 합성 답변");
   await expect(page.getByRole("button", { name: "최신 내용 불러오기", exact: true })).toBeVisible();
   await expect(answer).toHaveValue("이 화면에서 작성한 합성 답변");
-  await expect(page.locator(".intake-scene-notice")).not.toContainText("저장됐어요");
+  await expect(page.getByText("자동 저장됐어요.", { exact: true })).toHaveCount(0);
   expect(f.writes).toHaveLength(1);
   await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
   await expect(answer).toHaveValue("다른 화면의 합성 답변");
@@ -241,11 +241,11 @@ test("IME composition finishes before autosave starts", async ({ page }) => {
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await answer.dispatchEvent("compositionstart");
   await answer.fill("조합 중인 합성 답변");
-  await page.clock.runFor(1200);
+  await page.clock.runFor(3200);
   expect(f.writes).toHaveLength(0);
   await answer.dispatchEvent("compositionend");
-  await page.clock.runFor(1000);
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await page.clock.runFor(3200);
+  await settleIntakeSave(page);
   expect(f.writes.map((write) => write.value)).toEqual(["조합 중인 합성 답변"]);
 });
 
@@ -285,9 +285,7 @@ test("postflight recovery keeps a reverted newer edit and does not advance the q
   await expect.poll(() => f.writes.length).toBe(1);
   await answer.fill("처음 저장한 합성 답변");
   release();
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.", {
-    timeout: 12000,
-  });
+  await settleIntakeSave(page);
   await expect(answer).toHaveValue("처음 저장한 합성 답변");
   expect(f.writes.map((write) => write.value)).toEqual([
     "응답 대기 중인 중간 합성 답변",
@@ -412,7 +410,7 @@ test("custom choice answers autosave, restore and switch back to suggested optio
   const answer = page.getByRole("textbox", { name: "직접 입력 답변", exact: true });
   await expect(answer).toBeFocused();
   await answer.fill("정확한 날짜는 모르지만 지난봄에 있었던 일입니다.");
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   expect(f.writes.map((write) => write.value)).toEqual([
     "정확한 날짜는 모르지만 지난봄에 있었던 일입니다.",
   ]);
@@ -430,7 +428,7 @@ test("custom choice answers autosave, restore and switch back to suggested optio
   await page.getByRole("radio", { name: "알고 있음", exact: true }).check();
   await expect(answer).toHaveCount(0);
   await expect.poll(() => f.writes.at(-1)?.value).toBe("알고 있음");
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   await page.reload();
   await expect(page.getByRole("radio", { name: "알고 있음", exact: true })).toBeChecked();
   await expect(answer).toHaveCount(0);
@@ -452,7 +450,7 @@ test("custom choice late acknowledgement preserves the newer suggested answer", 
   await expect.poll(() => f.writes.length).toBe(1);
   await page.getByRole("radio", { name: "알고 있음", exact: true }).check();
   release();
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await settleIntakeSave(page);
   expect(f.writes.map((write) => write.value)).toEqual([
     "시기를 직접 설명한 합성 답변",
     "알고 있음",
@@ -469,15 +467,15 @@ test("custom choice text keeps the existing blank and Unicode length guards", as
   await page.getByRole("radio", { name: "직접 입력", exact: true }).check();
   const answer = page.getByRole("textbox", { name: "직접 입력 답변", exact: true });
   await answer.fill(" ");
-  await page.clock.runFor(1200);
+  await page.clock.runFor(3200);
   expect(f.writes).toHaveLength(0);
   await answer.fill("😀".repeat(1001));
-  await page.clock.runFor(1200);
+  await page.clock.runFor(3200);
   await expect(page.getByRole("alert")).toContainText("1,000자");
   expect(f.writes).toHaveLength(0);
   await answer.fill("😀".repeat(1000));
-  await page.clock.runFor(1200);
-  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await page.clock.runFor(3200);
+  await settleIntakeSave(page);
   expect([...(f.writes[0]?.value ?? "")]).toHaveLength(1000);
 });
 

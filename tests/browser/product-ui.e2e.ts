@@ -230,6 +230,102 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(remove).toBeFocused();
 });
 
+test("chat height stays fixed when preparation expands and the page scrolls", async ({ page }) => {
+  await seed(page, true);
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(base);
+    await hydrated(page);
+    const panel = page.locator(".workspace-main");
+    const send = page.getByRole("button", { name: "보내기", exact: true });
+    await expect(panel).toHaveAttribute("style", /--chat-panel-height/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(send).toBeInViewport({ ratio: 1 });
+    const initialHeight = await panel.evaluate((element) => element.clientHeight);
+    const context = page.locator(".workspace-context");
+    await context.locator("summary").click();
+    await expect(context).toHaveAttribute("open", "");
+    await context.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(send).toBeInViewport({ ratio: 1 });
+    await context.locator("summary").evaluate((element) => {
+      if (element instanceof HTMLElement) element.click();
+    });
+    await expect(context).not.toHaveAttribute("open");
+    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await expect(send).toBeInViewport({ ratio: 1 });
+  }
+});
+
+test("chat replies separate source cards and wrap long titles and attachment names", async ({
+  page,
+}) => {
+  await seed(page, true);
+  await page.addInitScript((id) => {
+    const key = "baro-api-mock-v1:workspace";
+    const workspaces = JSON.parse(localStorage.getItem(key) ?? "{}");
+    workspaces[id].messages = [
+      {
+        id: "long-source-reply",
+        role: "assistant",
+        status: "complete",
+        text: "확인한 공식 출처를 함께 살펴보세요.",
+        createdAt: new Date().toISOString(),
+        citations: [
+          {
+            id: "source",
+            title: "긴판례사건제목".repeat(30),
+            url: "https://www.law.go.kr/precInfoP.do?precSeq=111",
+          },
+        ],
+        references: [{ kind: "official_source", citationId: "source" }],
+      },
+      {
+        id: "long-attachment-message",
+        role: "user",
+        status: "complete",
+        text: "첨부 자료를 확인해 주세요.",
+        createdAt: new Date().toISOString(),
+        selectedFileIds: ["review-file"],
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(workspaces));
+    const filesKey = "baro-api-mock-v1:files";
+    const files = JSON.parse(localStorage.getItem(filesKey) ?? "{}");
+    files[id][0].name = "long_attachment_name_".repeat(30) + ".txt";
+    localStorage.setItem(filesKey, JSON.stringify(files));
+  }, id);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(base);
+    await hydrated(page);
+    const reply = page.locator(".workspace-message--assistant");
+    await expect(reply.locator(".workspace-source-card")).toHaveCount(1);
+    await expect(page.getByText("검증한 공식 출처", { exact: true })).toHaveCount(0);
+    const gap = await reply.evaluate((element) => {
+      const paragraph = element.querySelector("p")?.getBoundingClientRect();
+      const source = element.querySelector(".workspace-source-cards")?.getBoundingClientRect();
+      if (!paragraph || !source) throw new Error("Missing synthetic reply source");
+      return source.top - paragraph.bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(12);
+    await expect
+      .poll(() =>
+        page
+          .locator(".workspace-message")
+          .evaluateAll((messages) =>
+            messages.every((message) => message.scrollWidth <= message.clientWidth + 1),
+          ),
+      )
+      .toBe(true);
+  }
+});
+
 test("mobile workspace dialogs return focus to their own opener", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -255,6 +351,16 @@ test("reports start in reading mode and retain editing through a focus check", a
   await seed(page);
   await page.goto(`${base}/reports`);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
+  const heading = page.locator(".report-heading");
+  await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
+  await expect(heading.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeVisible();
+  await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page
+      .locator(".report-canvas")
+      .screenshot({ path: `.wrangler/report-reading-${width}.png` });
+  }
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();

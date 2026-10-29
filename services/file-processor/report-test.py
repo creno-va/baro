@@ -23,6 +23,14 @@ for page in document.pages:
     for box in page._page_box.descendants():
         if isinstance(box, TextBox):
             assert box.position_x + box.width <= page.width - 55, (box.text, box.position_x, box.width, page.width)
+        # WeasyPrint 62 does not implement flex gap. Ensure the numbered heading
+        # remains separated in the actual print engine rather than only Chromium.
+        if box.element is not None and box.element.get("class") in ("section-head", "photo-heading") and len(getattr(box, "children", [])) == 2:
+            first, second = box.children
+            labels = [child for child in first.descendants() if isinstance(child, TextBox)]
+            titles = [child for child in second.descendants() if isinstance(child, TextBox)]
+            if labels and titles:
+                assert titles[0].position_x >= max(child.position_x + child.width for child in labels) + 8
 output.write_bytes(render(source))
 text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decode("utf-8")
 for phrase in ["사건 상담 준비", "촬영 날짜", "선택한 근거 사진", "사진설명표식", "문서설명표식", "원문 대조 필요", "합성 기록 25"]:

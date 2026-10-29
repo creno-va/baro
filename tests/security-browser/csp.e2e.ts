@@ -485,6 +485,7 @@ test("built Worker mobile menu, brand, local font and error state work without C
     );
   });
   await page.route("**/api/cases**", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/v2/cases/**", (route) => route.fulfill({ status: 503, json: {} }));
   await page.route("**/api/me/session", (route) =>
     route.fulfill({
       json: {
@@ -494,7 +495,8 @@ test("built Worker mobile menu, brand, local font and error state work without C
     }),
   );
   await page.setViewportSize({ width: 320, height: 760 });
-  const casesResponse = await page.goto("/cases");
+  const casesResponse = await page.goto("/cases/10000000-0000-4000-8000-000000000001");
+  expect(casesResponse?.status()).toBe(200);
   expect(casesResponse?.headers()["content-security-policy"]).toContain("media-src 'self' data:");
   expect(casesResponse?.headers()["content-security-policy"]).toContain(
     "img-src 'self' data: blob:",
@@ -526,7 +528,7 @@ test("built Worker mobile menu, brand, local font and error state work without C
   await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(dialog.getByRole("link", { name: "이용 유형 변경", exact: true })).toBeFocused();
+  await expect(dialog.getByRole("button", { name: "로그아웃", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");

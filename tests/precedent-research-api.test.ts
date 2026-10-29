@@ -27,6 +27,7 @@ import {
 } from "../src/server/modules/legal-retrieval/research/topics";
 import type { Transport } from "../src/server/modules/legal-retrieval/v2/transport";
 import type { WorkspaceParams } from "../src/server/modules/workspace/execution";
+import { publicStoredMessageSchema } from "../src/server/modules/workspace/stored-message";
 import { createWorkspaceDependencies, runWorkspaceRuntime } from "../src/server/runtime/workspace";
 import { summary } from "./fixtures/contracts/v2";
 import precedents from "./fixtures/legal/v2/precedents.json";
@@ -669,6 +670,21 @@ test("comparison uses normal paid chat admission, native generation plus audit, 
   const messages = await f.service.messages(f.owner.userId, f.workspace.id);
   expect(JSON.stringify(messages)).not.toContain("readToken");
   expect(JSON.stringify(messages)).not.toContain("precedentComparison");
+  const completion = messages.find((message) => message.role === "assistant");
+  const citation = value.comparison?.source.citation;
+  if (!completion || completion.role !== "assistant" || !citation)
+    throw new Error("Missing synthetic comparison completion");
+  expect(completion.citations).toEqual([]);
+  expect(completion.references).toEqual([]);
+  const ordinary = {
+    ...completion,
+    citations: [citation],
+    references: [{ kind: "official_source" as const, citationId: citation.id }],
+  };
+  expect(publicStoredMessageSchema([], true).parse(ordinary)).toEqual(ordinary);
+  const stored = { ...ordinary, precedentComparison: value.comparison };
+  expect(publicStoredMessageSchema().parse(stored)).toEqual(ordinary);
+  expect(publicStoredMessageSchema([], true).parse(stored)).toEqual(completion);
   const replay = await f.submit(key);
   expect(replay.status).toBe(202);
   expect(v2AcceptedOperationSchema.parse(await replay.json()).jobId).toBe(job.jobId);

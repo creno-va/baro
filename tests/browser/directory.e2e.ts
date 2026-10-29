@@ -43,7 +43,7 @@ test("profile round trip retains applied search filters after reload and ignores
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 760 });
     await page.goto(listPath);
-    const profile = page.getByRole("link", { name: "프로필과 연락처 보기" });
+    const profile = page.locator("a.directory-profile");
     await expect(profile).toBeVisible();
     await expect(page.getByText("Preview 환경 · 실제 API에 연결합니다.")).toHaveCount(0);
     const controls = await page
@@ -134,7 +134,7 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await page.goto("/lawyers");
   await expect(page.getByRole("heading", { name: "변호사 찾기", exact: true })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
+  await expect(page.locator("a.directory-profile")).toBeVisible();
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("jeju");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
@@ -144,7 +144,7 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("");
   await page.getByRole("button", { name: "검색", exact: true }).click();
-  await page.getByRole("link", { name: "프로필과 연락처 보기" }).click();
+  await page.locator("a.directory-profile").click({ position: { x: 12, y: 12 } });
   await expect(
     page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
   ).toBeVisible();

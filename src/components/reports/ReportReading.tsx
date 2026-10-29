@@ -16,7 +16,7 @@ export function ReportReading({
       {reportReviewSections(content).map((section, index) => (
         <section key={`${index}:${section.title}`} className="report-reading-section">
           <header>
-            <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+            <span aria-hidden="true">{index + 1}</span>
             <h3>{section.title}</h3>
           </header>
           <div>

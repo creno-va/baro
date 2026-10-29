@@ -107,9 +107,11 @@ test("desktop and mobile complete topic, result and original flow without overfl
     .getByRole("button", { name: /판례 내용 보기/ })
     .first()
     .click();
-  await expect(selected.locator(".precedent-document h3")).toBeFocused();
+  await expect(selected.locator(".precedent-document-heading h3")).toBeFocused();
   await expect
-    .poll(async () => (await selected.locator(".precedent-document h3").boundingBox())?.y ?? -1)
+    .poll(
+      async () => (await selected.locator(".precedent-document-heading h3").boundingBox())?.y ?? -1,
+    )
     .toBeGreaterThanOrEqual(80);
   const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
   expect(scan.violations).toEqual([]);
@@ -361,13 +363,15 @@ test("comparison survives foreground during admission, renders fixed indicators 
     (window as unknown as { finishComparisonStart: () => void }).finishComparisonStart(),
   );
   const region = page.getByRole("region", { name: "유사 판례 비교" });
-  await expect(region.getByRole("status")).toContainText("처리 상태");
+  await expect(region.getByRole("status")).toBeVisible();
+  await expect(region.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeDisabled();
   await page.evaluate(() => {
     sessionStorage.setItem("synthetic-comparison-done", "true");
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
   await expect(region.locator("progress")).toHaveAttribute("value", "25");
+  await expect(region.locator(".precedent-body")).toHaveCount(1);
   await expect(region.getByRole("button", { name: /유사 · \+12.5점/ })).toHaveCount(2);
   await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);
   await region.locator(".comparison-highlight").first().click();
@@ -375,6 +379,11 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
   await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
   await expect(reason.locator(".comparison-reason")).toHaveCount(2);
+  expect((await reason.boundingBox())?.width).toBeGreaterThan(700);
+  await page.screenshot({ path: ".wrangler/comparison-reason-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect((await reason.boundingBox())?.width).toBeLessThanOrEqual(358);
+  await page.screenshot({ path: ".wrangler/comparison-reason-mobile.png" });
   await page.keyboard.press("Escape");
   await expect(reason).not.toBeVisible();
   for (const width of [1440, 390, 320]) {
@@ -388,7 +397,10 @@ test("comparison survives foreground during admission, renders fixed indicators 
       )
       .toEqual({ viewport: width, width });
     await region.scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `.wrangler/comparison-${width}.png` });
+    await page.mouse.click(5, 85);
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `.wrangler/comparison-${width}.png`, fullPage: true });
   }
   const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
   expect(scan.violations).toEqual([]);
@@ -419,7 +431,7 @@ test("comparison recovers a lost receipt without another POST and preserves work
   await expect(region.getByRole("alert")).toContainText("합성 응답 수신 실패");
   await expect(start).toBeEnabled();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(region.getByRole("status")).toContainText("처리 상태");
+  await expect(region.getByRole("status")).toBeVisible();
   const keys = await page.evaluate(() =>
     JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]"),
   );
@@ -430,7 +442,7 @@ test("comparison recovers a lost receipt without another POST and preserves work
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("alert")).toContainText("합성 상태 조회 실패");
-  await expect(page.getByRole("button", { name: "비교하고 있어요" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeDisabled();
   await page.evaluate(() => {
     sessionStorage.removeItem("synthetic-comparison-read-failure");
     sessionStorage.setItem("synthetic-comparison-done", "true");

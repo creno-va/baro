@@ -214,13 +214,14 @@
   line-height: 1.6;
 }
 
-.report-controls {
+.report-review .report-controls {
   display: grid;
   gap: 24px;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
 }
 .report-modal {
   max-height: calc(100dvh - 2rem);
@@ -977,11 +978,11 @@
 }
 .report-review.report-workspace .report-read-content {
   white-space: normal;
-  padding: 36px 40px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #dce3ed;
-  box-shadow: 0 8px 28px rgb(25 45 75 / 3%);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 .report-reading-section {
   margin: 0;
@@ -998,13 +999,23 @@
 .report-reading-section > header {
   display: flex;
   gap: 12px;
-  align-items: baseline;
+  align-items: center;
   margin-bottom: 14px;
 }
 .report-reading-section > header > span {
-  color: #2364c0;
-  font-size: 11px;
-  font-weight: 600;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 .report-reading-section h3 {
@@ -1038,9 +1049,6 @@
   .report-workspace .report-heading {
     margin: 20px 0 24px;
   }
-  .report-review.report-workspace .report-read-content {
-    padding: 24px 20px;
-  }
   .report-reading-section {
     padding-block: 20px;
   }
@@ -1057,18 +1065,27 @@
   width: 100%;
   max-width: none;
 }
-.report-heading > div {
+.report-heading > .report-heading-copy {
   flex: 1;
   min-width: 0;
 }
-.report-workspace .report-regenerate {
-  flex-shrink: 0;
+.report-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   margin-left: auto;
 }
-.report-content-tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 24px;
+.report-workspace .report-heading-actions > button {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.report-heading-actions > button + button {
+  margin-left: 0;
 }
 .report-workspace .report-reading-section textarea {
   min-height: 110px;
@@ -1083,7 +1100,91 @@
   outline-offset: 2px;
 }
 .report-mask > .report-option-note {
-  margin: 4px 0 0 30px;
+  margin: 4px 0 0;
+}
+.report-photo-selection {
+  padding-block: 28px;
+  border-block: 1px solid var(--border);
+}
+.report-photo-selection > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+}
+.report-photo-selection h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.report-photo-selection header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.report-photo-selection header a {
+  color: var(--primary);
+  font-size: 13px;
+  text-underline-offset: 4px;
+}
+.report-photo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.report-photo-list li {
+  min-width: 0;
+}
+.report-workspace .report-photo-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+}
+.report-photo-choice:has(:checked) {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.report-photo-choice:has(:disabled) {
+  cursor: default;
+  color: var(--muted-foreground);
+}
+.report-workspace .report-photo-choice input {
+  flex: none;
+  margin: 0;
+  width: 18px;
+  height: 18px;
+}
+.report-photo-choice svg {
+  color: var(--primary);
+  flex: none;
+}
+.report-photo-choice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.report-photo-selection > .report-option-note {
+  margin: 12px 0 0;
+}
+.report-workspace .report-mask > .report-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.report-workspace .report-mask > .report-check input {
+  margin: 0;
 }
 .report-workspace .report-export {
   margin-top: 0;
@@ -1092,7 +1193,10 @@
   width: 100%;
 }
 @media (max-width: 640px) {
-  .report-heading > div {
+  .report-heading > .report-heading-copy {
     flex-basis: 100%;
+  }
+  .report-heading-actions {
+    width: 100%;
   }
 }

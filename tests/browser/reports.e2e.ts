@@ -40,7 +40,7 @@ test.afterAll(() => {
 });
 
 async function prepareSavedPdf(page: import("@playwright/test").Page) {
-  // Photo selection remains a saved server contract; its old UI was removed.
+  // Seed a saved selection directly for the account-boundary scenarios below.
   await page.evaluate(async () => {
     const api = (
       window as unknown as { baroReportTestApi: typeof import("../helpers/reports-ui-api").api }
@@ -75,6 +75,46 @@ async function savedHtml(page: import("@playwright/test").Page) {
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
+test("selected photos persist through download and masking without leaking image pixels", async ({
+  page,
+}) => {
+  await page.goto("/cases/case-demo/reports");
+  const photo = page.getByRole("checkbox", { name: "합성 자료.jpg", exact: true });
+  await expect(photo).toBeEnabled();
+  await photo.check();
+  await expect(page.getByText("1장 선택 · 최대 12장, 합계 8 MB", { exact: true })).toBeVisible();
+  let download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+  await download;
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
+  const html = await savedHtml(page);
+  expect(html).toContain('class="evidence-photo"');
+  expect(html).toContain('src="data:image/jpeg;base64,');
+  expect(html).toContain("합성 자료.jpg");
+  await page.reload();
+  await expect(photo).toBeChecked();
+  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
+  await expect(photo).toBeDisabled();
+  download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+  await download;
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
+  expect(await savedHtml(page)).not.toContain('class="evidence-photo"');
+  await page.reload();
+  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).uncheck();
+  await expect(photo).toBeChecked();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await page.screenshot({
+      path: `.wrangler/report-photo-selection-${width}.png`,
+      fullPage: true,
+    });
+  }
+});
+
 test("report review edits in place and saves before a full-width PDF download", async ({
   page,
 }) => {
@@ -100,7 +140,7 @@ test("report review edits in place and saves before a full-width PDF download", 
   await expect(
     report.getByRole("button", { name: /전달 내용 미리보기|검토 내용 저장/ }),
   ).toHaveCount(0);
-  await expect(report.getByRole("checkbox")).toHaveCount(1);
+  await expect(report.getByRole("checkbox", { name: "합성 자료.jpg", exact: true })).toBeVisible();
   await expect(
     report.getByRole("checkbox", { name: "식별정보 가리기", exact: true }),
   ).toBeVisible();

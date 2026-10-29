@@ -174,7 +174,7 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   await page.getByRole("link", { name: "변호사 디렉터리" }).click();
   await expect(page.getByRole("link", { name: "합성 변호사", exact: true })).toBeVisible();
   await expect(page.getByText("본인 작성 정보 · 자격 확인 표시 없음")).toBeVisible();
-  await page.getByRole("link", { name: "프로필과 연락처 보기" }).click();
+  await page.locator("a.directory-profile").click();
   await page.getByRole("button", { name: "연락처 보기", exact: true }).click();
   const contact = page.getByRole("dialog", { name: "연락처", exact: true });
   await expect(contact.getByRole("link", { name: "02-000-0000", exact: true })).toHaveAttribute(

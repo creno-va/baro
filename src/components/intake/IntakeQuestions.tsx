@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
@@ -33,7 +33,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [customQuestionId, setCustomQuestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -86,7 +85,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setRecovering(false);
       loaded.current = false;
       caseSnapshot.current = null;
-      setNotice("");
       setError(null);
       setBusy(false);
       setAutoSaving(false);
@@ -304,11 +302,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 }
               }
             }
-            if (
-              recoveredIndex >= 0 &&
-              !drafts.current.has(questions.questions[recoveredIndex]?.id ?? "")
-            )
-              setNotice("자동 저장됐어요.");
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
@@ -415,7 +408,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       return;
     const timer = window.setTimeout(
       () => void latestSave.current(moveAfterSave.current === question.id, undefined, true),
-      900,
+      3000,
     );
     return () => window.clearTimeout(timer);
   }, [
@@ -455,7 +448,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     }
     setValue(nextValue);
     setAnswerState(state);
-    setNotice("");
   }
   function prepareNext() {
     setPreparing(true);
@@ -534,7 +526,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     void transition(
       () => {
         setIndex(nextIndex);
-        setNotice("");
       },
       () => accessCurrent(epoch),
     );
@@ -566,7 +557,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       if (!(await verifyCompletion(epoch))) return;
       failedOperation.current = null;
       await showNext(next, epoch);
-      setNotice("");
     } catch (cause) {
       if (alive(epoch)) report(cause);
     } finally {
@@ -614,7 +604,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (automatic) setAutoSaving(true);
     else setBusy(true);
     setError(null);
-    setNotice("");
     try {
       failedOperation.current = { kind: "save", move, ...submitted };
       if (!(await verify(false, true)) || !accessCurrent(epoch)) return false;
@@ -660,14 +649,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       preserveQuestionOnRecovery.current = null;
       failedOperation.current = null;
       setResult(next);
-      setNotice(automatic ? "자동 저장됐어요." : "답변이 저장됐어요.");
       const shouldMove = move && !drafts.current.has(question.id);
       if (shouldMove) moveAfterSave.current = null;
       if (shouldMove && index < next.questions.length - 1) {
         await transition(
           () => {
             setIndex(index + 1);
-            setNotice("");
           },
           () => accessCurrent(epoch),
         );
@@ -932,7 +919,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     <Button
                       className="intake-scene-back"
                       variant="outline"
-                      size="sm"
                       disabled={
                         busy ||
                         autoSaving ||
@@ -944,11 +930,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       }
                       onClick={() => void navigateQuestion(index - 1)}
                     >
-                      <ArrowLeft size={15} aria-hidden="true" />
+                      <ArrowLeft size={18} aria-hidden="true" />
                       이전으로
                     </Button>
                     {waiting ? (
-                      <PreparationStatus title={statusTitle} saved />
+                      <PreparationStatus title={statusTitle} />
                     ) : !canMutate ? (
                       <Button
                         className="intake-scene-primary"
@@ -1004,9 +990,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                       action={recoveryActions}
                     />
                   ) : null}
-                  <p className="intake-scene-notice" role="status">
-                    {waiting ? "" : autoSaving ? "자동 저장 중이에요." : dirty ? "" : notice}
-                  </p>
                 </form>
               )}
             </div>
@@ -1017,16 +1000,10 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   );
 }
 
-function PreparationStatus({ title, saved = false }: { title: string; saved?: boolean }) {
+function PreparationStatus({ title }: { title: string }) {
   return (
     <div className="intake-scene-status" role="status" aria-live="polite" aria-atomic="true">
       <div>
-        {saved ? (
-          <span className="intake-scene-saved">
-            <Check size={13} aria-hidden="true" />
-            답변 저장 완료
-          </span>
-        ) : null}
         <p>
           {title}
           <span className="intake-scene-dots" aria-hidden="true">
