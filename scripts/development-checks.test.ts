@@ -1,5 +1,56 @@
 import { expect, test } from "bun:test";
-import { browserTargets, unitTargets, validationScope } from "./development-checks";
+import {
+  browserTargets,
+  runBrowserTargets,
+  unitTargets,
+  validationScope,
+} from "./development-checks";
+
+test("browser failures do not hide later adapter failures and still reject the complete run", async () => {
+  const calls: { command: string[]; env: Record<string, string | undefined> | undefined }[] = [];
+  const codes = [1, 0, 2];
+  let failure = "";
+  try {
+    await runBrowserTargets(
+      [
+        "tests/browser/auth.e2e.ts",
+        "tests/browser/precedents.e2e.ts",
+        "tests/browser/intake103.e2e.ts",
+      ],
+      async (command, env) => {
+        calls.push({ command, env });
+        return codes[calls.length - 1] ?? 0;
+      },
+    );
+  } catch (cause) {
+    failure = String(cause);
+  }
+  expect(calls.map(({ command }) => command.at(-1))).toEqual([
+    "tests/browser/auth.e2e.ts",
+    "tests/browser/precedents.e2e.ts",
+    "tests/browser/intake103.e2e.ts",
+  ]);
+  expect(failure).toContain("tests/browser/auth.e2e.ts (exit 1)");
+  expect(failure).toContain("tests/browser/intake103.e2e.ts (exit 2)");
+  expect(failure).not.toContain("tests/browser/precedents.e2e.ts");
+  expect(calls[0]?.env).toBeUndefined();
+  expect(calls[1]?.env).toBeUndefined();
+  expect(calls[2]?.env?.PUBLIC_API_MODE).toBe("mock");
+});
+
+test("browser validation succeeds only when every selected group succeeds", async () => {
+  let calls = 0;
+  await expect(
+    runBrowserTargets(
+      ["tests/browser/auth.e2e.ts", "tests/browser/precedents.e2e.ts"],
+      async () => {
+        calls++;
+        return 0;
+      },
+    ),
+  ).resolves.toBeUndefined();
+  expect(calls).toBe(2);
+});
 
 const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].map((path) =>
   path.replaceAll("\\", "/"),

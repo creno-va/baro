@@ -195,7 +195,19 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
 }
 
 /** Run wire tests and each mock adapter configuration sequentially in one checkout. */
-export async function runBrowserTargets(targets: string[]) {
+export async function runBrowserTargets(
+  targets: string[],
+  execute: (
+    command: string[],
+    env?: Record<string, string | undefined>,
+  ) => Promise<number> = async (command, env) =>
+    Bun.spawn(command, { stdout: "inherit", stderr: "inherit", ...(env ? { env } : {}) }).exited,
+) {
+  const failures: string[] = [];
+  const run = async (command: string[], env?: Record<string, string | undefined>) => {
+    const code = await execute(command, env);
+    if (code !== 0) failures.push(`${command.join(" ")} (exit ${code})`);
+  };
   targets = normalizedPaths(targets);
   const mockTargets = targets.filter((path) =>
     /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
@@ -227,64 +239,47 @@ export async function runBrowserTargets(targets: string[]) {
       !standaloneTargets.includes(path),
   );
   if (regularTargets.length) {
-    const child = Bun.spawn(["bunx", "playwright", "test", ...regularTargets], {
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (await child.exited) process.exit(1);
+    await run(["bunx", "playwright", "test", ...regularTargets]);
   }
   if (corpusTargets.length) {
-    const child = Bun.spawn(
-      ["bunx", "playwright", "test", "--config", "tests/browser/evals.config.ts", ...corpusTargets],
-      { stdout: "inherit", stderr: "inherit" },
-    );
-    if (await child.exited) process.exit(1);
+    await run([
+      "bunx",
+      "playwright",
+      "test",
+      "--config",
+      "tests/browser/evals.config.ts",
+      ...corpusTargets,
+    ]);
   }
   if (customerRealTargets.length) {
-    const child = Bun.spawn(
-      [
-        "bunx",
-        "playwright",
-        "test",
-        "--config",
-        "tests/browser/customer-real.config.ts",
-        ...customerRealTargets,
-      ],
-      { stdout: "inherit", stderr: "inherit" },
-    );
-    if (await child.exited) process.exit(1);
+    await run([
+      "bunx",
+      "playwright",
+      "test",
+      "--config",
+      "tests/browser/customer-real.config.ts",
+      ...customerRealTargets,
+    ]);
   }
   if (reportRealTargets.length) {
-    const child = Bun.spawn(
-      [
-        "bunx",
-        "playwright",
-        "test",
-        "--config",
-        "tests/browser/report-real-download.config.ts",
-        ...reportRealTargets,
-      ],
-      { stdout: "inherit", stderr: "inherit" },
-    );
-    if (await child.exited) process.exit(1);
+    await run([
+      "bunx",
+      "playwright",
+      "test",
+      "--config",
+      "tests/browser/report-real-download.config.ts",
+      ...reportRealTargets,
+    ]);
   }
   for (const target of recoveryTargets) {
     const config = target.replace(".e2e.ts", ".config.ts");
-    const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (await child.exited) process.exit(1);
+    await run(["bunx", "playwright", "test", "--config", config, target]);
   }
   // A new flow can declare its own server/fixture configuration without being
   // silently executed under the generic product server.
   for (const target of standaloneTargets) {
     const config = target.replace(".e2e.ts", ".config.ts");
-    const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, target], {
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (await child.exited) process.exit(1);
+    await run(["bunx", "playwright", "test", "--config", config, target]);
   }
   if (mockTargets.length) {
     for (const [config, selected] of [
@@ -323,20 +318,16 @@ export async function runBrowserTargets(targets: string[]) {
       ],
     ] as const) {
       if (!selected.length) continue;
-      const child = Bun.spawn(["bunx", "playwright", "test", "--config", config, ...selected], {
-        stdout: "inherit",
-        stderr: "inherit",
-        env: {
-          ...process.env,
-          PUBLIC_API_MODE: "mock",
-          BARO_WORKSPACE_SHARED_UI: "true",
-          BARO_C_TEST_API: "true",
-          BARO_D_SHARED_API: "true",
-        },
+      await run(["bunx", "playwright", "test", "--config", config, ...selected], {
+        ...process.env,
+        PUBLIC_API_MODE: "mock",
+        BARO_WORKSPACE_SHARED_UI: "true",
+        BARO_C_TEST_API: "true",
+        BARO_D_SHARED_API: "true",
       });
-      if (await child.exited) process.exit(1);
     }
   }
+  if (failures.length) throw new Error(`Browser validation failed:\n${failures.join("\n")}`);
 }
 
 /** Local selection includes staged, unstaged and untracked edits. Explicit candidates stay immutable. */
