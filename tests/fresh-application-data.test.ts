@@ -7,7 +7,11 @@ import {
   FRESH_DATABASES,
   verifyFreshState,
 } from "../scripts/fresh-application-data";
-import { bindingPatch, transitionFreshBinding } from "../scripts/fresh-database-binding";
+import {
+  bindingPatch,
+  freshTargetIsConnected,
+  transitionFreshBinding,
+} from "../scripts/fresh-database-binding";
 import { prepareSyntheticLawyers } from "../scripts/synthetic-lawyer-seed";
 import { emptySelfProfile } from "../src/contracts/v2/self-profile";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -83,7 +87,10 @@ for (const mode of ["success", "failure", "already-connected"])
           : Response.json({ status: "ready", schemaVersion: "0018_external_lookup_admission" });
       else if (url.endsWith("/api/v2/lawyers/self-service"))
         return Response.json({
-          items: Array.from({ length: 10 }, (_, i) => ({ id: `synthetic-lawyer-${i}` })),
+          items: [
+            ...Array.from({ length: 10 }, (_, i) => ({ id: `synthetic-lawyer-${i}` })),
+            ...(mode === "already-connected" ? [{ id: "new-real-public-profile" }] : []),
+          ],
         });
       else if (url.includes("/api/v2/lawyers/self-service/")) {
         const id = url.split("/").at(-1) ?? "";
@@ -136,8 +143,16 @@ test("fresh migrated database publishes exactly ten readable synthetic profiles 
     db.sqlite.exec(seed.sql);
     expect((await verifyFreshState(db.binding)).users).toBe(10);
     expect((await existingSyntheticSeed(db.binding))?.profiles).toHaveLength(10);
+    db.sqlite.exec(
+      "INSERT INTO user(id,name,email,email_verified,created_at,updated_at) VALUES('new-live-user','합성 신규 사용자','live@example.invalid',0,0,0)",
+    );
+    await expect(existingSyntheticSeed(db.binding)).rejects.toThrow("FRESH_STATE_INVALID");
+    expect((await existingSyntheticSeed(db.binding, true))?.profiles).toHaveLength(10);
+    expect(db.sqlite.query("SELECT count(*) AS n FROM user").get()).toEqual({ n: 11 });
     db.sqlite.exec("DELETE FROM app_metadata WHERE key LIKE 'synthetic-seed:%'");
-    await expect(existingSyntheticSeed(db.binding)).rejects.toThrow("FRESH_RESUME_NOT_SYNTHETIC");
+    await expect(existingSyntheticSeed(db.binding, true)).rejects.toThrow(
+      "FRESH_RESUME_NOT_SYNTHETIC",
+    );
     const service = createSelfProfileService(createV2Core(db.binding, fixture.core.cipher));
     for (const item of seed.profiles) {
       const actual = await service.get(item.id);
@@ -163,4 +178,19 @@ test("fresh operator requires exact main, operator, environment secrets and sequ
   expect(workflow).toContain("secrets.CASE_DATA_KEY_V1");
   expect(workflow).not.toMatch(/wrangler deploy|reset-application-data|secret put|path:.*\.sql/);
   expect(await Bun.file(".github/workflows/reset-application-data.yml").exists()).toBe(false);
+});
+
+test("live-activity resume is derived from the actual allowlisted Worker binding", async () => {
+  for (const id of [FRESH_DATABASES.preview.id, FRESH_DATABASES.preview.original, "unexpected"]) {
+    const mock = (async (_input: RequestInfo | URL) =>
+      Response.json({ success: true, result: { bindings: [{ name: "DB", id }] } })) as typeof fetch;
+    if (id === "unexpected")
+      await expect(freshTargetIsConnected("preview", "synthetic", mock)).rejects.toThrow(
+        "FRESH_BINDING_STATE_INVALID",
+      );
+    else
+      expect(await freshTargetIsConnected("preview", "synthetic", mock)).toBe(
+        id === FRESH_DATABASES.preview.id,
+      );
+  }
 });

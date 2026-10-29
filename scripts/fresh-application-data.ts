@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
-import { transitionFreshBinding } from "./fresh-database-binding";
+import { freshTargetIsConnected, transitionFreshBinding } from "./fresh-database-binding";
 import { remoteBudgetD1 } from "./remote-budget-d1";
 import {
   prepareSyntheticLawyers,
@@ -43,7 +43,7 @@ async function wrangler(config: string, args: string[]) {
   await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   if (await child.exited) throw new Error("FRESH_DATABASE_OPERATION_FAILED");
 }
-export async function verifyFreshState(db: D1Database) {
+export async function verifyFreshState(db: D1Database, allowLiveActivity = false) {
   const state = await db
     .prepare(
       "SELECT (SELECT count(*) FROM user) AS users,(SELECT count(*) FROM v2_profiles) AS profiles,(SELECT count(*) FROM v2_directory_entries) AS directory,(SELECT count(*) FROM account) AS accounts,(SELECT count(*) FROM session) AS sessions,(SELECT count(*) FROM cases) AS legacyCases,(SELECT count(*) FROM v2_workspaces) AS workspaces,(SELECT count(*) FROM v2_files) AS files,(SELECT count(*) FROM v2_reports) AS reports,(SELECT count(*) FROM v2_jobs) AS jobs,(SELECT count(*) FROM v2_cost_attempts) AS attempts,(SELECT count(*) FROM v2_paid_holds) AS holds",
@@ -51,9 +51,12 @@ export async function verifyFreshState(db: D1Database) {
     .first<Record<string, number>>();
   if (
     !state ||
-    Object.entries(state).some(
-      ([key, value]) =>
-        value !== (["users", "profiles", "directory"].includes(key) ? SYNTHETIC_PROFILE_COUNT : 0),
+    Object.entries(state).some(([key, value]) =>
+      allowLiveActivity
+        ? !Number.isSafeInteger(value) ||
+          value < (["users", "profiles", "directory"].includes(key) ? SYNTHETIC_PROFILE_COUNT : 0)
+        : value !==
+          (["users", "profiles", "directory"].includes(key) ? SYNTHETIC_PROFILE_COUNT : 0),
     )
   )
     throw new Error("FRESH_STATE_INVALID");
@@ -69,12 +72,18 @@ export async function verifyFreshState(db: D1Database) {
 }
 
 /** Resume only the ten authorized synthetic records in an explicitly allowlisted fresh target. */
-export async function existingSyntheticSeed(db: D1Database): Promise<Seed | null> {
+export async function existingSyntheticSeed(
+  db: D1Database,
+  allowLiveActivity = false,
+): Promise<Seed | null> {
   const schema = await db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user'")
     .first();
-  if (!schema) return null;
-  await verifyFreshState(db);
+  if (!schema) {
+    if (allowLiveActivity) throw new Error("FRESH_LIVE_SCHEMA_REQUIRED");
+    return null;
+  }
+  await verifyFreshState(db, allowLiveActivity);
   const profiles = (
     await db
       .prepare(
@@ -100,9 +109,10 @@ if (import.meta.main) {
       throw new Error("FRESH_AUTHORIZATION_REQUIRED");
     const target = FRESH_DATABASES[environment];
     assertFreshTarget(environment, target.id);
+    const alreadyLive = await freshTargetIsConnected(environment, process.env.CLOUDFLARE_API_TOKEN);
     const db = remoteBudgetD1(process.env.CLOUDFLARE_API_TOKEN, account, target.id);
     const cipher = await createCaseDataCipher({ CASE_DATA_KEY_V1: process.env.CASE_DATA_KEY_V1 });
-    let seed = await existingSyntheticSeed(db);
+    let seed = await existingSyntheticSeed(db, alreadyLive);
     if (!seed) {
       await assertEmpty(db);
       // Read only the original technical capacity, never original customer rows or payloads.
@@ -142,7 +152,7 @@ if (import.meta.main) {
       await wrangler(config, ["execute", target.name, "--remote", "--file", file, "--yes"]);
     }
     phase = "verification";
-    const state = await verifyFreshState(db);
+    const state = await verifyFreshState(db, alreadyLive);
     const profiles = createSelfProfileService(createV2Core(db, cipher));
     for (const item of seed.profiles) {
       const actual = await profiles.get(item.id);
@@ -155,7 +165,12 @@ if (import.meta.main) {
         throw new Error("FRESH_SYNTHETIC_PROFILE_INVALID");
     }
     phase = "binding_transition";
-    const transition = await transitionFreshBinding(environment, process.env.CLOUDFLARE_API_TOKEN);
+    const transition = await transitionFreshBinding(
+      environment,
+      process.env.CLOUDFLARE_API_TOKEN,
+      fetch,
+      seed.profiles.map((p) => p.id),
+    );
     const receipt = {
       transition,
       environment,
