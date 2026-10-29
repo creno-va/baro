@@ -408,8 +408,6 @@ test("real signed session/API/SQL legacy admission → questions → validated o
     });
     await page.goto("/settings");
     await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-    await page.getByText("개인정보와 이용 설정", { exact: true }).click();
-    await page.getByRole("button", { name: "사용 지표 동의", exact: true }).click();
     const admission = await page.evaluate(async () => {
       const response = await fetch("/api/cases", {
         method: "POST",

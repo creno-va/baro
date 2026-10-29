@@ -193,20 +193,6 @@
     flex-direction: column;
   }
 }
-.case-utilities {
-  margin-top: 40px;
-}
-.case-utilities > .case-panel {
-  background: transparent;
-  padding: 20px;
-}
-.case-utilities h2 {
-  font-size: 1rem;
-}
-.case-utilities p {
-  font-size: 0.88rem;
-  color: var(--muted-foreground);
-}
 
 /* Service-only feedback controls. */
 .ui-dialog #case-delete-confirmation {
@@ -217,20 +203,6 @@
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-}
-.analytics-choice-status {
-  display: inline-flex;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #f1f5f9;
-  color: #475569;
-  font-weight: 650;
-}
-.analytics-choice-status[data-enabled="true"] {
-  color: #075439;
-  background: #e7f7ef;
-  border-color: #78b99c;
 }
 .case-materials {
   border: 1px solid var(--border);

@@ -56,7 +56,7 @@
 .app-frame.app-frame--product .ui-button--primary {
   background: var(--product-blue);
 }
-.app-frame.app-frame--product :where(.case-utilities, .case-notice) {
+.app-frame.app-frame--product .case-notice {
   font-size: 12px;
 }
 .app-frame.app-frame--product :where([id]) {

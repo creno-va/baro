@@ -7,6 +7,7 @@ import {
   sessionAnalyticsAdapter,
 } from "./sdk";
 
+// Retain existing tab histories without introducing cookies or persistent storage.
 const storageKey = "baro.optional-analytics.v1";
 const sessionSchema = z.strictObject({
   salt: z.uuid(),
@@ -60,7 +61,7 @@ function save() {
     try {
       sessionStorage.setItem(storageKey, JSON.stringify(session));
     } catch {
-      /* Optional storage must never block the case flow. */
+      /* Tab-local history must never block the case flow. */
     }
 }
 export function configureAnalytics(config: {
@@ -79,13 +80,15 @@ export function configureAnalytics(config: {
         sdk.optIn();
         for (const event of session.events) void sdk.track(event);
         window.dispatchEvent(new Event("baro-analytics-change"));
+        return;
       } else sessionStorage.removeItem(storageKey);
     }
   } catch {
-    /* Malformed/disabled optional storage stays declined. */
+    /* Blocked storage falls back to this page's memory without blocking product actions. */
   }
+  startTabHistory();
 }
-export function analyticsOptIn() {
+function startTabHistory() {
   if (typeof window === "undefined") return;
   if (!session) {
     session = {
@@ -103,12 +106,7 @@ export function analyticsOptIn() {
   }
   window.dispatchEvent(new Event("baro-analytics-change"));
 }
-export function analyticsOptOut() {
-  session = null;
-  sdk.optOut();
-  if (typeof window !== "undefined") window.dispatchEvent(new Event("baro-analytics-change"));
-}
-export function analyticsOptedIn() {
+function historyEnabled() {
   return sdk.isOptedIn();
 }
 export async function accountDeleted() {
@@ -245,7 +243,7 @@ export function observeResult(
     void trackCase("result_viewed", caseId, analysisId, { citationCount });
   });
   function tick() {
-    tracker.observe(ratio, !document.hidden && analyticsOptedIn(), performance.now());
+    tracker.observe(ratio, !document.hidden && historyEnabled(), performance.now());
   }
   const observer = new IntersectionObserver(
     (entries) => {

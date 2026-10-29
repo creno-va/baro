@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } }),
   );
 });
-test("decline leaves case flow usable with no optional storage/network; feedback independent", async ({
+test("default tab history removes choice UI, never transmits events and keeps feedback independent", async ({
   page,
 }) => {
   const requests: string[] = [];
@@ -47,11 +47,12 @@ test("decline leaves case flow usable with no optional storage/network; feedback
   });
   await page.goto(`/cases/${caseId}`);
   await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), storage)).toBeNull();
+  await expect
+    .poll(() => page.evaluate((key) => sessionStorage.getItem(key) !== null, storage))
+    .toBe(true);
   expect(await page.evaluate(() => document.cookie)).not.toContain("analytics");
-  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
-  await page.getByRole("button", { name: "사용 지표 거부" }).click();
-  await expect(page.getByText("선택 지표 수집 안 함")).toBeVisible();
+  await expect(page.getByText("개인정보와 이용 설정", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /사용 지표 동의|사용 지표 거부/ })).toHaveCount(0);
   const helpful = page.getByRole("button", { name: "도움이 됐어요", exact: true });
   await helpful.focus();
   await page.keyboard.press("Enter");
@@ -61,14 +62,15 @@ test("decline leaves case flow usable with no optional storage/network; feedback
   await helpful.click();
   await expect(page.getByText("도움 여부를 저장했어요", { exact: false })).toBeVisible();
   expect(puts).toBe(2);
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), storage)).toBeNull();
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), storage)).not.toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), storage)).toBeNull();
   expect(
     requests.filter(
       (url) => !url.includes("/_astro/") && !url.includes("/src/") && !url.includes("node_modules"),
     ),
   ).toEqual([]);
 });
-test("opt-in records only hashed allowlisted events, 50%/1s view once, reload and opt-out erase", async ({
+test("default history records only hashed allowlisted events, 50%/1s view once and reload dedup", async ({
   page,
 }) => {
   await page.route(`**/api/cases/${caseId}`, (route) =>
@@ -87,9 +89,6 @@ test("opt-in records only hashed allowlisted events, 50%/1s view once, reload an
   );
   await page.route(`**/api/cases/${caseId}/feedback`, (route) => route.fulfill({ status: 204 }));
   await page.goto(`/cases/${caseId}`);
-  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
-  await page.getByRole("button", { name: "사용 지표 동의", exact: true }).click();
-  await expect(page.getByText("선택 지표 동의됨")).toBeVisible();
   await page.getByRole("heading", { name: "상황 정리" }).scrollIntoViewIfNeeded();
   const events = () =>
     page.evaluate(
@@ -118,13 +117,62 @@ test("opt-in records only hashed allowlisted events, 50%/1s view once, reload an
   expect(persisted).not.toContain("합성 사용자");
   expect(persisted).not.toContain("반환 약정");
   expect(persisted).not.toContain("better-auth");
+  expect(persisted).not.toContain("synthetic-owner");
+  expect(persisted).not.toContain("합성 고객");
   await page.reload();
-  await page.getByText("개인정보와 이용 설정", { exact: true }).click();
   await page.getByRole("heading", { name: "상황 정리" }).scrollIntoViewIfNeeded();
   await expect
     .poll(async () => (await events()).filter((e) => e.name === "result_viewed").length)
     .toBe(1);
-  await page.getByRole("button", { name: "동의 철회 및 지표 삭제" }).click();
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), storage)).toBeNull();
-  await expect(page.getByText("선택 지표 수집 안 함")).toBeVisible();
+  await expect(page.locator(".case-utilities")).toHaveCount(0);
+});
+
+test("blocked history storage keeps case viewing and feedback usable without a consent UI", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    const set = Storage.prototype.setItem;
+    const remove = Storage.prototype.removeItem;
+    const check = (key: string) => {
+      if (key === "baro.optional-analytics.v1") throw new DOMException("Blocked", "SecurityError");
+    };
+    Storage.prototype.getItem = function (this: Storage, key: string) {
+      check(key);
+      return get.call(this, key);
+    };
+    Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+      check(key);
+      return set.call(this, key, value);
+    };
+    Storage.prototype.removeItem = function (this: Storage, key: string) {
+      check(key);
+      return remove.call(this, key);
+    };
+  });
+  await page.route(`**/api/cases/${caseId}`, (route) =>
+    route.fulfill({
+      json: {
+        caseId,
+        analysisId,
+        inputRevision: 1,
+        title: "금전 대여 사건",
+        status: "completed",
+        questions: [],
+        result: guidance,
+        error: null,
+      },
+    }),
+  );
+  let feedback = 0;
+  await page.route(`**/api/cases/${caseId}/feedback`, (route) => {
+    feedback++;
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto(`/cases/${caseId}`);
+  await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
+  await expect(page.locator(".case-utilities")).toHaveCount(0);
+  await page.getByRole("button", { name: "도움이 됐어요", exact: true }).click();
+  await expect(page.getByText("도움 여부를 저장했어요", { exact: false })).toBeVisible();
+  expect(feedback).toBe(1);
 });

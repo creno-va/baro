@@ -3,7 +3,7 @@ export interface AnalyticsAdapter {
   send(event: AnalyticsEvent): Promise<void>;
   clear(eventId?: string): void;
 }
-/** Bounded session collector for real opt-in events. No external provider/network. */
+/** Bounded session collector for allowlisted events. No external provider/network. */
 export function sessionAnalyticsAdapter() {
   const events = new Map<string, AnalyticsEvent>();
   return {
