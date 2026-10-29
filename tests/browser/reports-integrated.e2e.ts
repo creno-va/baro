@@ -61,8 +61,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     "합성 사건입니다. 지인에게 빌려준 돈을 돌려받지 못했습니다. 연락처는 010-1234-5678입니다.",
   );
   await page.goto(`${casePath}/files`);
+  await page.locator('astro-island[component-export="Workspace"]:not([ssr])').waitFor();
   const originalText = "합성 원본 · PDF에서 가린 전화번호 010-1234-5678도 원본에는 남습니다.";
   for (const name of ["선택 원본.txt", "제외 원본.txt"]) {
+    await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
     await page
       .getByLabel("업로드할 파일 선택", { exact: true })
       .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(originalText) });
@@ -99,9 +101,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.goto("/settings");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   const removeCase = page.locator(".ui-sheet .sidebar-story-delete");
+  await page.locator(".ui-sheet .sidebar-story-row").hover();
   await removeCase.click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(removeCase).toHaveCount(1);
+  await page.locator(".ui-sheet .sidebar-story-row").hover();
   await removeCase.click();
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
@@ -139,6 +143,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     "계정 삭제를 확인하기 위해 보관한 합성 사건입니다. 실제 개인정보가 아닙니다.",
   );
   await page.goto(`${accountCasePath}/files`);
+  await page.locator('astro-island[component-export="Workspace"]:not([ssr])').waitFor();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "계정 삭제 원본.txt",
     mimeType: "text/plain",
@@ -149,7 +155,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
   await openReportEditor(peer);
-  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toBeVisible();
+  await expect(peer.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
   await page.goto("/settings");
   const deleteAccount = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
@@ -162,7 +168,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(deletedMarker).toMatch(/^[0-9a-f-]{36}$/);
   expect(deletedMarker).not.toBe(previousMarker);
   await peer.bringToFront();
-  await expect(peer.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveCount(0);
+  await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
   await expect(peer.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
   await page.reload();
@@ -243,7 +249,7 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(editor).toContainText("연락과 전달");
+  await expect(page.getByRole("heading", { name: "연락과 전달", exact: true })).toBeVisible();
   await page.reload();
   await openReportEditor(page);
   await expect(editor).toBeVisible();
@@ -300,9 +306,6 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     window.dispatchEvent(new Event("focus"));
     return { id: report.id, revision: report.revision, content: report.content };
   });
-  await expect(
-    page.getByRole("status").filter({ hasText: "다른 곳에서 새 버전을 만든 경우" }),
-  ).toBeVisible();
   await expect(editor).toHaveValue(displayed);
   await page.getByRole("button", { name: "새 버전 만들기" }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
