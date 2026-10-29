@@ -512,9 +512,12 @@ export function createWorkspacePipeline(
     },
     async summary(context: WorkspaceContext, requestId: string) {
       return regenerateDraft(context, async (input) => {
-        const draft = workspaceSummaryOutputSchema.parse(
+        const { caseTitle, ...summary } = workspaceSummaryOutputSchema.parse(
           await call("workspace_summary", input, requestId),
         );
+        // Null is the strict wire representation of an absent title. Keep old
+        // audit inputs unchanged while still auditing every generated title.
+        const draft = { ...summary, ...(caseTitle ? { caseTitle } : {}) };
         normalizeNewFacts(context, draft.facts);
         assertWorkspaceFacts(context, draft.facts);
         if (
