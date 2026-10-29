@@ -1206,9 +1206,11 @@ export function Workspace({
                             {message.selectedFileIds.map((id) => (
                               <li key={id}>
                                 <a href={`${base}/files?file=${encodeURIComponent(id)}`}>
-                                  <Paperclip size={15} />{" "}
-                                  {view.files.find((file) => file.id === id)?.name ??
-                                    "삭제되었거나 확인할 수 없는 첨부 파일"}
+                                  <Paperclip size={15} />
+                                  <span>
+                                    {view.files.find((file) => file.id === id)?.name ??
+                                      "삭제되었거나 확인할 수 없는 첨부 파일"}
+                                  </span>
                                 </a>
                               </li>
                             ))}
@@ -1225,10 +1227,18 @@ export function Workspace({
                         {!!message.citations?.length && (
                           <SourceCards citations={message.citations} />
                         )}
-                        {message.references?.some((ref) => ref.kind !== "user_message") && (
-                          <ul aria-label="답변에 사용한 자료">
+                        {message.references?.some(
+                          (ref) => ref.kind !== "user_message" && ref.kind !== "official_source",
+                        ) && (
+                          <ul
+                            className="workspace-message-references"
+                            aria-label="답변에 사용한 자료"
+                          >
                             {message.references
-                              .filter((ref) => ref.kind !== "user_message")
+                              .filter(
+                                (ref) =>
+                                  ref.kind !== "user_message" && ref.kind !== "official_source",
+                              )
                               .map((ref) => (
                                 <li key={JSON.stringify(ref)}>
                                   {ref.kind === "user_material" ? (

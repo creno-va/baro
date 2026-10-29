@@ -1204,6 +1204,7 @@ export function createV2WorkspaceRepository(
       workspaceId: string,
       limit = 20,
       before?: { createdAt: string; id: string },
+      conversation = false,
     ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
@@ -1228,7 +1229,7 @@ export function createV2WorkspaceRepository(
               actor.ownerId,
               row.revision,
               row.encrypted_payload,
-              publicStoredMessageSchema(guideHosts),
+              publicStoredMessageSchema(guideHosts, conversation),
             ),
           ),
         );

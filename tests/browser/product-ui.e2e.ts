@@ -260,6 +260,70 @@ test("chat height stays fixed when preparation expands and the page scrolls", as
   }
 });
 
+test("chat replies separate source cards and wrap long titles and attachment names", async ({
+  page,
+}) => {
+  await seed(page, true);
+  await page.addInitScript((id) => {
+    const key = "baro-api-mock-v1:workspace";
+    const workspaces = JSON.parse(localStorage.getItem(key) ?? "{}");
+    workspaces[id].messages = [
+      {
+        id: "long-source-reply",
+        role: "assistant",
+        status: "complete",
+        text: "확인한 공식 출처를 함께 살펴보세요.",
+        createdAt: new Date().toISOString(),
+        citations: [
+          {
+            id: "source",
+            title: "긴판례사건제목".repeat(30),
+            url: "https://www.law.go.kr/precInfoP.do?precSeq=111",
+          },
+        ],
+        references: [{ kind: "official_source", citationId: "source" }],
+      },
+      {
+        id: "long-attachment-message",
+        role: "user",
+        status: "complete",
+        text: "첨부 자료를 확인해 주세요.",
+        createdAt: new Date().toISOString(),
+        selectedFileIds: ["review-file"],
+      },
+    ];
+    localStorage.setItem(key, JSON.stringify(workspaces));
+    const filesKey = "baro-api-mock-v1:files";
+    const files = JSON.parse(localStorage.getItem(filesKey) ?? "{}");
+    files[id][0].name = "long_attachment_name_".repeat(30) + ".txt";
+    localStorage.setItem(filesKey, JSON.stringify(files));
+  }, id);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(base);
+    await hydrated(page);
+    const reply = page.locator(".workspace-message--assistant");
+    await expect(reply.locator(".workspace-source-card")).toHaveCount(1);
+    await expect(page.getByText("검증한 공식 출처", { exact: true })).toHaveCount(0);
+    const gap = await reply.evaluate((element) => {
+      const paragraph = element.querySelector("p")?.getBoundingClientRect();
+      const source = element.querySelector(".workspace-source-cards")?.getBoundingClientRect();
+      if (!paragraph || !source) throw new Error("Missing synthetic reply source");
+      return source.top - paragraph.bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(12);
+    await expect
+      .poll(() =>
+        page
+          .locator(".workspace-message")
+          .evaluateAll((messages) =>
+            messages.every((message) => message.scrollWidth <= message.clientWidth + 1),
+          ),
+      )
+      .toBe(true);
+  }
+});
+
 test("mobile workspace dialogs return focus to their own opener", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });

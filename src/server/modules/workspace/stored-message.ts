@@ -31,10 +31,22 @@ export function storedMessageSchema(guideHosts: readonly string[] = []) {
     }),
   ]);
 }
-export function publicStoredMessageSchema(guideHosts: readonly string[] = []) {
+export function publicStoredMessageSchema(
+  guideHosts: readonly string[] = [],
+  omitComparisonSources = false,
+) {
   return storedMessageSchema(guideHosts).transform((stored) => {
     if (stored.role === "user") return publicStoredUserMessageSchema.parse(stored);
-    const { toolResults: _tools, precedentComparison: _comparison, ...message } = stored;
-    return v2MessageSchema(guideHosts).parse(message);
+    const { toolResults: _tools, precedentComparison: comparison, ...message } = stored;
+    const validated = v2MessageSchema(guideHosts).parse(message);
+    // The comparison tab owns this source card. Keep the stored result and
+    // model context intact; only the conversation projection omits its card.
+    if (omitComparisonSources && comparison && validated.role === "assistant")
+      return {
+        ...validated,
+        citations: [],
+        references: validated.references.filter((ref) => ref.kind !== "official_source"),
+      };
+    return validated;
   });
 }

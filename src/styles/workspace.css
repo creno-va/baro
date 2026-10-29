@@ -305,6 +305,26 @@
   background: #eff4fb;
   border-radius: 24px 24px 6px 24px;
 }
+.workspace .workspace-message--assistant {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 16px;
+}
+.workspace-message--assistant > :not(.workspace-message-label) {
+  margin-block: 0;
+}
+.workspace-message--assistant > .ui-button {
+  align-self: flex-start;
+}
+.workspace-message-references {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 20px;
+  list-style: disc;
+  line-height: 1.7;
+}
 .workspace-message-label {
   display: flex;
   align-items: center;
@@ -1416,14 +1436,25 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.workspace-message-attachments li {
+  min-width: 0;
+  max-width: 100%;
+}
 .workspace-message-attachments a {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
+  max-width: 100%;
   gap: 6px;
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 8px;
   overflow-wrap: anywhere;
+}
+.workspace-message-attachments a > span {
+  min-width: 0;
+}
+.workspace-message-attachments svg {
+  flex-shrink: 0;
 }
 .workspace-evidence-notice {
   color: var(--primary);
@@ -1472,17 +1503,24 @@
 }
 .workspace-source-cards {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  margin-block: 16px 0;
   padding: 0;
   list-style: none;
 }
 .workspace-source-card {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  min-width: 0;
   padding: 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   overflow-wrap: anywhere;
+}
+.workspace-source-card strong {
+  line-height: 1.7;
 }
 .workspace-source-cards a {
   justify-self: start;
