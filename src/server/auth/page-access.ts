@@ -7,12 +7,12 @@ import { hasCurrentConsent } from "../modules/consent/service";
 import { readAccountType } from "./account-type";
 import { getSession } from "./session";
 
-function isAppPage(path: string): boolean {
+function isPage(path: string, page: "/app" | "/login"): boolean {
   try {
     // Match aliases before Astro decodes/renders them, including encoded or repeated slashes.
     const decoded = decodeURIComponent(path).replaceAll("\\", "/").replace(/\/+/g, "/");
     const canonical = new URL(decoded, "https://baro.invalid").pathname;
-    return canonical === "/app" || canonical === "/app/";
+    return canonical === page || canonical === `${page}/`;
   } catch {
     return false;
   }
@@ -26,21 +26,35 @@ function unavailable(context: Context<ApiEnvironment>, betaClosed = false) {
   );
 }
 
+async function activeSession(context: Context<ApiEnvironment>) {
+  // Cookie presence is not authentication. Anonymous visitors need no configured provider.
+  if (!getSessionCookie(context.req.raw)) return null;
+  const session = await getSession(context);
+  if (!session) return null;
+  const deleted = await context.env.DB.prepare(
+    "SELECT target_id FROM v2_tombstones WHERE target_kind='account' AND target_id=?",
+  )
+    .bind(session.user.id)
+    .first();
+  return deleted ? null : session;
+}
+
+async function loginEntry(context: Context<ApiEnvironment>) {
+  try {
+    if (await activeSession(context)) return context.redirect("/app", 302);
+  } catch {
+    return unavailable(context);
+  }
+  return undefined;
+}
+
 async function appEntry(context: Context<ApiEnvironment>, syntheticFixture: boolean, path: string) {
   if (context.env.APP_ENV === "production" && context.env.PUBLIC_BETA_ENABLED !== "true")
     return unavailable(context, true);
   if (!(syntheticFixture && context.env.APP_ENV === "local")) {
     try {
-      // Cookie presence is not authentication. Anonymous visitors need no configured provider.
-      if (!getSessionCookie(context.req.raw)) return context.redirect("/login", 302);
-      const session = await getSession(context);
+      const session = await activeSession(context);
       if (!session) return context.redirect("/login", 302);
-      const deleted = await context.env.DB.prepare(
-        "SELECT target_id FROM v2_tombstones WHERE target_kind='account' AND target_id=?",
-      )
-        .bind(session.user.id)
-        .first();
-      if (deleted) return context.redirect("/login", 302);
       if (!(await hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id)))
         return context.redirect("/consent", 302);
       if ((await readAccountType(context.env.DB, session.user.id)) !== "customer")
@@ -62,7 +76,8 @@ export function createPageAccess({
 } = {}): MiddlewareHandler<ApiEnvironment> {
   return async (context, next) => {
     const path = new URL(context.req.url).pathname;
-    if (!isAppPage(path)) {
+    const loginPage = isPage(path, "/login");
+    if (!loginPage && !isPage(path, "/app")) {
       await next();
       return;
     }
@@ -72,7 +87,9 @@ export function createPageAccess({
         context.res = context.text("Method Not Allowed", 405);
         return;
       }
-      const response = await appEntry(context, syntheticFixture, path);
+      const response = loginPage
+        ? await loginEntry(context)
+        : await appEntry(context, syntheticFixture, path);
       if (response) {
         context.res = response;
         return;
