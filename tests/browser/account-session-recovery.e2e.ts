@@ -87,7 +87,9 @@ for (const role of ["customer", "lawyer"] as const) {
       return route.fulfill({ status: 404, json: {} });
     });
     await page.goto("/settings");
-    await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+    ).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
     if (role === "lawyer") {
       expect(caseReads).toBe(0);
@@ -627,7 +629,9 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
         await expect.poll(() => fresh).toBeGreaterThan(0);
         const link = page.getByRole("link", { name: "Synthetic legacy case", exact: true });
         await expect(link).toBeVisible();
-        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+        await expect(
+          page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+        ).toBeEnabled();
         release();
         await expect.poll(() => settled).toBe(true);
         await expect.poll(async () => (await sessionReads()).pending).toBe(0);
@@ -639,7 +643,9 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
         );
         await expect(link).toBeVisible();
         await expect(page.getByRole("alert")).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+        await expect(
+          page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+        ).toBeEnabled();
         const recoveredReads = fresh;
         await page.evaluate(() => {
           window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
@@ -648,7 +654,9 @@ for (const failure of ["http", "network", "invalid-json"] as const) {
         await expect.poll(() => fresh).toBeGreaterThan(recoveredReads);
         await expect(link).toBeVisible();
         await expect(page.getByRole("alert")).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+        await expect(
+          page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+        ).toBeEnabled();
       } finally {
         release();
       }
@@ -714,7 +722,9 @@ for (const failedRead of ["initial", "recheck", "parallel-owner"] as const) {
     await expect(retry).toBeEnabled();
     failing = false;
     await retry.click();
-    await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
+    ).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
   });
 }

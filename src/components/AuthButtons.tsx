@@ -12,7 +12,7 @@ const providers: Array<{ id: Provider; label: string; name: string }> = [
   { id: "google", label: "Google로 계속하기", name: "Google로 계속하기" },
 ];
 
-function ProviderIcon({ provider }: { provider: Provider }) {
+export function ProviderIcon({ provider }: { provider: Provider }) {
   if (provider === "kakao") {
     return (
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

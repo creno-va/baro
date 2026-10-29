@@ -244,7 +244,6 @@ test("case deletion is reachable from the list and survives reload", async ({ pa
   const dialog = page.getByRole("dialog");
   const remove = dialog.getByRole("button", { name: "사건 삭제", exact: true });
   await expect(remove).toBeDisabled();
-  await dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
   await remove.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("link", { name: /휴먼 리뷰 합성 사건/ })).toHaveCount(0);

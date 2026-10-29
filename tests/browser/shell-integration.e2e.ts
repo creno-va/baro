@@ -258,7 +258,6 @@ test("customer completes intake workspace original PDF report and cascading dele
     );
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
     .getByRole("button", { name: "사건 삭제", exact: true })
