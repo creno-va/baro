@@ -100,25 +100,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
       }
       if (!current()) throw superseded();
       const id = session.user?.id;
-      if (
-        !id ||
-        session.user?.accountType !== "customer" ||
-        (owner.current && owner.current !== id)
-      ) {
+      if (!id || (owner.current && owner.current !== id)) {
         clearOwnerState();
         throw Object.assign(
-          new Error(
-            session.user?.accountType !== "customer"
-              ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
-              : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
-          ),
+          new Error("계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요."),
           {
             ownerRevoked: true,
-            code: !id
-              ? "UNAUTHENTICATED"
-              : session.user?.accountType !== "customer"
-                ? "ROLE_REQUIRED"
-                : "NOT_FOUND",
+            code: !id ? "UNAUTHENTICATED" : "NOT_FOUND",
           },
         );
       }

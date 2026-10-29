@@ -227,7 +227,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
   await expect(page.getByText("이전 계정의 저장하지 않은 합성 편집")).toHaveCount(0);
 });
-test("same owner role change purges report edits and exports after peer-tab notification", async ({
+test("same owner selecting lawyer retains report editing and export access", async ({
   page,
   context,
 }) => {
@@ -247,11 +247,9 @@ test("same owner role change purges report edits and exports after peer-tab noti
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.bringToFront();
-  await expect(editor).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toHaveCount(0);
-  await expect(page.getByText("역할 변경 전에 남겨진 합성 편집")).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue("역할 변경 전에 남겨진 합성 편집");
+  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeVisible();
 });
 test("peer account switch clears settings usage and an account deletion confirmation", async ({
   page,

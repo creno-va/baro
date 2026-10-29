@@ -231,7 +231,7 @@ export function createCasesClient(
       .parse(await request("cases.owner", undefined, { path: "/api/me/session" }));
     if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
     if (session.needsConsent) throw new ApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
-    if (session.user.accountType !== "customer")
+    if (!["customer", "lawyer"].includes(session.user.accountType))
       throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
     const owner = session.user.id;
     const key = await mutationKey(`${operation}:${owner}:${id}`, input);
@@ -553,7 +553,7 @@ export function createCasesClient(
       if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
       if (session.needsConsent)
         throw new ApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
-      if (session.user.accountType !== "customer")
+      if (!["customer", "lawyer"].includes(session.user.accountType))
         throw new ApiError("NOT_FOUND", "사건을 찾을 수 없어요.");
       // A changed cookie can precede the app's session notification. Resolve the owner
       // before joining an in-flight creation so an old account cannot block a new one.

@@ -1,4 +1,4 @@
-import { Eye, Pencil, Plus, Save, X } from "lucide-react";
+import { ArrowUpFromLine, Eye, Pencil, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -343,7 +343,7 @@ export function Editor() {
     await mutate(
       () => api.lawyers.publishMine(published, saved),
       published
-        ? "프로필을 공개했어요. 디렉터리에서 확인할 수 있어요."
+        ? "프로필을 공개했어요. 변호사 찾기에서 확인할 수 있어요."
         : "프로필을 비공개로 전환했어요.",
       published ? "publish" : "hide",
     );
@@ -492,24 +492,32 @@ export function Editor() {
     }
   };
   return (
-    <div className="lawyer-editor space-y-6">
+    <div className="lawyer-editor">
       <PageHeader
         title="내 변호사 프로필"
         description="소개와 연락처를 작성하고, 공개할 정보를 직접 관리하세요."
         action={
-          <div className="flex flex-wrap gap-3">
-            <a className="ui-button ui-button--outline" href="/lawyers">
-              변호사 디렉터리
-            </a>
-            {saved?.published && canMutate && (
-              <a
-                className="ui-button ui-button--outline"
-                href={`/lawyers/${encodeURIComponent(saved.id)}`}
-              >
-                내 공개 프로필 보기
-              </a>
-            )}
-          </div>
+          draft && !accessUnknown && canMutate ? (
+            <div className="lawyer-editor-actions">
+              <Button variant="outline" disabled={busy} onClick={() => setPreview(!preview)}>
+                {preview ? (
+                  <Pencil size={18} aria-hidden="true" />
+                ) : (
+                  <Eye size={18} aria-hidden="true" />
+                )}
+                {preview ? "편집으로 돌아가기" : "미리보기"}
+              </Button>
+              {!preview && (
+                <Button
+                  type="submit"
+                  form="lawyer-profile-form"
+                  disabled={busy || !canMutate || !dirty}
+                >
+                  {busyAction === "save" ? "저장 중…" : "프로필 저장"}
+                </Button>
+              )}
+            </div>
+          ) : undefined
         }
       />
       {error && (
@@ -573,28 +581,27 @@ export function Editor() {
               }
             />
           )}
-          <div className="lawyer-toolbar">
+          <div className="lawyer-editor-status">
             <p>
-              <strong>
+              <strong
+                className={`lawyer-visibility${saved?.published && canMutate ? " lawyer-visibility--public" : ""}`}
+              >
                 {saved?.published
                   ? canMutate
                     ? "공개 중"
                     : "공개 일시 중지 · 재동의 필요"
                   : "비공개"}
-              </strong>{" "}
-              · {dirty ? "저장하지 않은 변경이 있어요" : "저장된 프로필"}
+              </strong>
+              <span>{dirty ? "저장하지 않은 변경이 있어요" : "저장된 프로필"}</span>
             </p>
             <div className="flex flex-wrap gap-2">
+              {saved?.published && canMutate && (
+                <a className="lawyer-public-link" href={`/lawyers/${encodeURIComponent(saved.id)}`}>
+                  내 공개 프로필 보기
+                </a>
+              )}
               <Button
-                variant="outline"
-                disabled={busy || !canMutate}
-                onClick={() => setPreview(!preview)}
-              >
-                {preview ? <Pencil size={16} /> : <Eye size={16} />}{" "}
-                {preview ? "편집으로 돌아가기" : "미리보기"}
-              </Button>
-              <Button
-                variant="outline"
+                variant="ghost"
                 disabled={busy || !canMutate || !dirty}
                 onClick={() => setConfirmDiscard(true)}
               >
@@ -674,15 +681,17 @@ export function Editor() {
             </>
           ) : (
             <form
+              id="lawyer-profile-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 void save();
               }}
             >
-              <fieldset disabled={busy || !canMutate} className="space-y-6">
-                <Card>
+              <fieldset disabled={busy || !canMutate} className="lawyer-editor-sections">
+                <Card className="profile-edit-section">
                   <CardHeader>
                     <CardTitle>사진과 기본 정보</CardTitle>
+                    <p>이름과 소개로 나를 알려주세요.</p>
                   </CardHeader>
                   <CardContent>
                     <div className="lawyer-photo-row">
@@ -695,9 +704,11 @@ export function Editor() {
                         privateRead
                       />
                       <div>
-                        <label className="lawyer-field">
-                          프로필 사진
+                        <label className="lawyer-photo-upload">
+                          <ArrowUpFromLine size={16} aria-hidden="true" />
+                          사진 업로드
                           <input
+                            aria-label="프로필 사진"
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
                             onChange={async (e) => {
@@ -711,16 +722,18 @@ export function Editor() {
                         <p className="text-sm text-muted-foreground">
                           10MB 이하 · 정사각형 사진으로 저장돼요.
                         </p>
-                        <Button
-                          variant="ghost"
-                          disabled={!draft.photoUrl || busy}
-                          onClick={() => {
-                            setDraft({ ...draft, photoUrl: null, photoAssetId: null });
-                            setPhotoPreview(null);
-                          }}
-                        >
-                          프로필에서 사진 제외
-                        </Button>
+                        {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
+                          <Button
+                            variant="ghost"
+                            disabled={!draft.photoUrl || busy}
+                            onClick={() => {
+                              setDraft({ ...draft, photoUrl: null, photoAssetId: null });
+                              setPhotoPreview(null);
+                            }}
+                          >
+                            프로필에서 사진 제외
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="lawyer-fields mt-4">
@@ -754,9 +767,10 @@ export function Editor() {
                     </label>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="profile-edit-section">
                   <CardHeader>
                     <CardTitle>분야와 사무실</CardTitle>
+                    <p>다루는 분야와 사무실 위치를 입력하세요.</p>
                   </CardHeader>
                   <CardContent>
                     <fieldset>
@@ -808,14 +822,12 @@ export function Editor() {
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="profile-edit-section">
                   <CardHeader>
                     <CardTitle>직접 연락처</CardTitle>
+                    <p>연락받을 수단을 하나 이상 입력하세요.</p>
                   </CardHeader>
                   <CardContent>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      공개할 연락처만 입력하세요. 연락 수단을 하나 이상 입력하면 공개할 수 있어요.
-                    </p>
                     <div className="lawyer-fields">
                       <label className="lawyer-field">
                         전화번호
@@ -850,15 +862,14 @@ export function Editor() {
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="profile-edit-section">
                   <CardHeader>
                     <CardTitle>포트폴리오</CardTitle>
+                    <p>활동과 경험을 소개하세요. 의뢰인 정보는 포함하지 마세요.</p>
                   </CardHeader>
                   <CardContent>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      공개 가능한 활동과 자료 링크를 등록하세요. 의뢰인 정보는 포함하지 마세요.
-                    </p>
-                    <label className="lawyer-field mb-4">
+                    <label className="lawyer-portfolio-upload">
+                      <ArrowUpFromLine size={22} aria-hidden="true" />
                       포트폴리오 파일 (이미지·PDF)
                       <input
                         type="file"
@@ -871,12 +882,19 @@ export function Editor() {
                         }}
                       />
                     </label>
-                    <Button variant="outline" disabled={busy} onClick={() => void refreshAssets()}>
+                    <Button
+                      variant="ghost"
+                      className="lawyer-assets-refresh"
+                      disabled={busy}
+                      onClick={() => void refreshAssets()}
+                    >
                       자료 상태 확인
                     </Button>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      연결된 자료는 프로필에서 제외하고 저장한 뒤 삭제할 수 있어요.
-                    </p>
+                    {assets.length > 0 && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        연결된 자료는 프로필에서 제외하고 저장한 뒤 삭제할 수 있어요.
+                      </p>
+                    )}
                     {assets.length > 0 && (
                       <ul className="lawyer-assets" aria-label="업로드 자료 상태">
                         {assets.map((asset) => (
@@ -1009,26 +1027,17 @@ export function Editor() {
                     </Button>
                   </CardContent>
                 </Card>
-                <div className="lawyer-toolbar">
-                  <p className="text-sm text-muted-foreground">
-                    등록은 자격 확인을 의미하지 않아요.
-                  </p>
-                  <Button type="submit" disabled={busy || !canMutate || !dirty}>
-                    <Save size={16} />
-                    {busyAction === "save" ? "저장 중…" : "프로필 저장"}
-                  </Button>
-                </div>
               </fieldset>
             </form>
           )}
-          <Card>
+          <Card className="profile-publication-section">
             <CardHeader>
               <CardTitle>공개 설정</CardTitle>
             </CardHeader>
             <CardContent>
               <p>
-                공개하면 사진·소개·분야·사무실·연락처·포트폴리오가 디렉터리에 표시돼요. 비공개로
-                전환하면 목록과 상세에서 보이지 않아요.
+                공개하면 작성한 프로필과 연락처가 변호사 찾기에 표시돼요. 비공개로 전환하면 목록과
+                상세에서 보이지 않아요.
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 공개 여부를 바꾸기 전에 변경 내용을 저장하세요.

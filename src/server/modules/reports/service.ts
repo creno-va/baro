@@ -90,7 +90,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const session = reportSessionFence(deps.sessionId);
     const result = await core
       .statement(
-        `SELECT r.*${includeReview ? ", (SELECT s.id FROM v2_private_snapshots s WHERE s.owner_id=w.owner_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision+1 AND s.state='published') AS review_snapshot_id" : ""} FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
+        `SELECT r.*${includeReview ? ", (SELECT s.id FROM v2_private_snapshots s WHERE s.owner_id=w.owner_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision+1 AND s.state='published') AS review_snapshot_id" : ""} FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
         [id, a.ownerId, ...session.values],
       )
       .first<Row>();
@@ -296,7 +296,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.claim(
         g,
         claimId,
-        `w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer' AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=? ${session.sql}`,
+        `w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=? ${session.sql}`,
         [
           CURRENT_POLICY_VERSIONS.termsVersion,
           CURRENT_POLICY_VERSIONS.privacyVersion,

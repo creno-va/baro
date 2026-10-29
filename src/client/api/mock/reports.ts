@@ -75,7 +75,7 @@ export function requireMockAccount(state: ReportMockState) {
 export function requireMockCase(state: ReportMockState, id: string, consent = true) {
   if (consent) requireMockAccount(state);
   else requireMockSession(state);
-  if (state.session.user?.accountType !== "customer")
+  if (!["customer", "lawyer"].includes(state.session.user?.accountType ?? ""))
     throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 사건을 확인해 주세요.");
   const item = state.cases[id];
   if (
@@ -201,7 +201,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
   const handler: DomainRequest = async <T>(path: string, init: DomainRequestInit = {}) => {
     const state = runtime.read();
     requireMockSession(state);
-    if (state.session.user?.accountType !== "customer")
+    if (!["customer", "lawyer"].includes(state.session.user?.accountType ?? ""))
       throw new ReportMockError("ROLE_REQUIRED", "고객 역할로 로그인한 뒤 리포트를 확인해 주세요.");
     const reportPath = path.match(/^\/api\/v2\/cases\/([^/]+)\/reports$/);
     const exportPath = path.match(/^\/api\/v2\/reports\/([^/]+)\/(html|pdf|zip)$/);

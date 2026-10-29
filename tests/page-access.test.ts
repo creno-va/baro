@@ -65,7 +65,7 @@ test("anonymous GET and HEAD app entries redirect on the server, including norma
       );
 });
 
-test("authenticated login redirects before HTML while app retains consent and role gates", async () => {
+test("authenticated login redirects before HTML and both account types retain consent gates", async () => {
   const fixture = await signedIn();
   const app = application();
   const read = (path: string, method = "GET") =>
@@ -81,7 +81,7 @@ test("authenticated login redirects before HTML while app retains consent and ro
   fixture.consent();
   await saveAccountType(fixture.env.DB, fixture.userId, "lawyer");
   await expectRedirect(await read("/login"), "/app");
-  await expectRedirect(await read("/app"), "/lawyer");
+  expect((await read("/app")).status).toBe(200);
   await saveAccountType(fixture.env.DB, fixture.userId, "customer");
   expect((await read("/app")).status).toBe(200);
 });
@@ -147,7 +147,7 @@ test("other methods cannot render the application or bypass its GET and HEAD gua
     }
 });
 
-test("only a consenting customer reaches app HTML; consent takes precedence over account type", async () => {
+test("a consenting customer or lawyer reaches app HTML; consent remains mandatory", async () => {
   const fixture = await signedIn();
   const app = application();
   const read = (path = "/app", method = "GET") =>
@@ -156,7 +156,7 @@ test("only a consenting customer reaches app HTML; consent takes precedence over
   await saveAccountType(fixture.env.DB, fixture.userId, "lawyer");
   await expectRedirect(await read(), "/consent");
   fixture.consent();
-  await expectRedirect(await read(), "/lawyer");
+  expect((await read()).status).toBe(200);
   await saveAccountType(fixture.env.DB, fixture.userId, "customer");
   for (const path of ["/app", "/app/"])
     for (const method of ["GET", "HEAD"]) {

@@ -45,8 +45,8 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
     { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
   ],
   lawyer: [
+    { href: "/app", label: "새 사건 입력", icon: "new" },
     { href: "/lawyer", label: "변호사 프로필", icon: "profile" },
-    { href: "/lawyers", label: "공개 디렉터리", icon: "lawyers" },
   ],
   moderator: [{ href: "/admin/reviews", label: "검토 대기", icon: "reviews" }],
 };
@@ -93,14 +93,14 @@ export function AppNavigation({
       try {
         const next = await api.session.get();
         if (!current()) return;
-        if (owner !== next.user?.id || next.needsConsent || next.user?.accountType !== "customer") {
+        if (owner !== next.user?.id || next.needsConsent || !next.user) {
           setRecent([]);
           setRecentState("loading");
           setDeletion(null);
         }
         owner = next.user?.id;
         setSession(next);
-        if (next.user?.accountType !== "customer" || next.needsConsent) return;
+        if (!next.user || next.needsConsent) return;
         try {
           const items = await api.cases.list();
           if (current()) {
@@ -193,7 +193,7 @@ export function AppNavigation({
     setError("");
     const sameOwner = async () => {
       const fresh = await api.session.get();
-      if (fresh.user?.id !== target.ownerId || fresh.user?.accountType !== "customer") {
+      if (fresh.user?.id !== target.ownerId) {
         setDeletion(null);
         setRecent([]);
         throw new Error("계정이 변경됐어요. 현재 계정의 사건을 다시 확인해 주세요.");
@@ -235,7 +235,7 @@ export function AppNavigation({
       );
     });
   const renderRecent = () =>
-    resolvedRole === "user" &&
+    (resolvedRole === "user" || resolvedRole === "lawyer") &&
     !session?.needsConsent && (
       <div className="sidebar-recent">
         <section

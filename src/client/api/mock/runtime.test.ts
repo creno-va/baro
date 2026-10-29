@@ -103,7 +103,7 @@ test("lawyer private replay rechecks role while public reads stay anonymous", as
   ).toBeInstanceOf(Blob);
 });
 
-test("same mock owner changing roles cannot replay private customer results", async () => {
+test("same mock owner can replay workspace results after choosing the lawyer account type", async () => {
   writeStore("session", {
     user: { id: "owner", name: "합성", accountType: "customer" },
     needsConsent: false,
@@ -116,8 +116,15 @@ test("same mock owner changing roles cannot replay private customer results", as
     user: { id: "owner", name: "합성", accountType: "lawyer" },
     needsConsent: false,
   });
-  await expect(mockRequest("reports.save", { id: "one" }, "role-request")).rejects.toMatchObject({
-    code: "NOT_FOUND",
+  expect(
+    await mockRequest<{ id: string; revision: number }>(
+      "reports.save",
+      { id: "one" },
+      "role-request",
+    ),
+  ).toEqual({
+    id: "one",
+    revision: 1,
   });
   expect(calls).toBe(1);
 });
@@ -161,10 +168,14 @@ test("reconsent permits private read dispatch but denies writes and cached mutat
       user: { id: "owner", name: "합성", accountType: role === "customer" ? "lawyer" : "customer" },
       needsConsent: true,
     });
-    for (const read of reads)
-      await expect(mockRequest(read, { privateRead: true }, "read")).rejects.toMatchObject({
-        code: "NOT_FOUND",
-      });
+    for (const read of reads) {
+      if (role === "customer")
+        expect(await mockRequest<string>(read, { privateRead: true }, "read")).toBe("private");
+      else
+        await expect(mockRequest(read, { privateRead: true }, "read")).rejects.toMatchObject({
+          code: "NOT_FOUND",
+        });
+    }
     writeStore("session", { user: null, needsConsent: false });
     for (const read of reads)
       await expect(mockRequest(read, { privateRead: true }, "read")).rejects.toMatchObject({

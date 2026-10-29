@@ -12,7 +12,6 @@ export function safeReturnPath(
     );
   const lawyer = value === "/lawyer" || value === "/lawyer/";
   const common = value === "/settings";
-  if (role === "lawyer" && customer) return null;
   if (role === "customer" && lawyer) return null;
   return customer || lawyer || common ? value : null;
 }
@@ -40,5 +39,5 @@ export function sessionDestination(
   const allowed = safeReturnPath(target, session.user?.accountType);
   if (!session.user) return accessHref("login", allowed ?? undefined);
   if (session.needsConsent) return accessHref("consent", allowed ?? undefined);
-  return allowed ?? (session.user.accountType === "lawyer" ? "/lawyer" : "/app");
+  return allowed ?? "/app";
 }

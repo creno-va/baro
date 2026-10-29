@@ -17,13 +17,17 @@ test("login and consent retain only allowed local case paths and the selected ro
   expect(sessionDestination({ user, needsConsent: false }, path)).toBe(path);
   const research = "/cases/synthetic-case/precedents";
   expect(safeReturnPath(research, "customer")).toBe(research);
-  expect(safeReturnPath(research, "lawyer")).toBeNull();
+  expect(safeReturnPath(research, "lawyer")).toBe(research);
   expect(sessionDestination({ user, needsConsent: true }, research)).toBe(
     "/consent?returnTo=%2Fcases%2Fsynthetic-case%2Fprecedents",
   );
   expect(
     sessionDestination({ user: { ...user, accountType: "lawyer" }, needsConsent: false }, path),
-  ).toBe("/lawyer");
+  ).toBe(path);
+  expect(
+    sessionDestination({ user: { ...user, accountType: "lawyer" }, needsConsent: false }, null),
+  ).toBe("/app");
+  expect(safeReturnPath("/lawyer", "customer")).toBeNull();
   for (const value of [
     "https://evil.test",
     "//evil.test",

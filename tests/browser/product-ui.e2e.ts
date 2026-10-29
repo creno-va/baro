@@ -6,6 +6,42 @@ import { openReportEditor } from "../helpers/report-controls";
 const id = "product-review-case";
 const base = `/cases/${id}`;
 
+test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
+  page,
+}) => {
+  await seed(page, false, "active", "lawyer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await hydrated(page);
+  const sidebar = page.locator(".sidebar-desktop");
+  await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
+  await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
+  await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
+  await page
+    .locator(".workspace-composer textarea")
+    .fill("변호사 계정으로 자료와 날짜를 함께 정리해 주세요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toBeVisible();
+  await page.screenshot({ path: ".wrangler/lawyer-workspace-1440.png" });
+  await page.goto(`${base}/reports`);
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole("button", { name: "저장하고 계속", exact: true })).toBeVisible();
+  await page
+    .locator("#narrative")
+    .fill("변호사 계정의 새 사건입니다. 계약서와 송금 자료를 정리하려고 합니다.");
+  await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+  await expect(page).toHaveURL(/\/cases\/[^/]+\/intake$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(menu.locator(".sidebar-story")).toHaveCount(2);
+});
+
 test("sidebar cancellation clears pointer hover without losing keyboard focus return", async ({
   page,
 }) => {
@@ -432,10 +468,15 @@ test("settings usage disclosure stacks content below its summary and toggles acc
     await expect(help).toBeHidden();
   }
 });
-async function seed(page: Page, messages = false, stage: "active" | "summary" = "active") {
+async function seed(
+  page: Page,
+  messages = false,
+  stage: "active" | "summary" = "active",
+  role: "customer" | "lawyer" = "customer",
+) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
-    ({ id, summary, messages, stage }) => {
+    ({ id, summary, messages, stage, role }) => {
       if (localStorage.getItem("product-ui-seeded")) return;
       localStorage.setItem("product-ui-seeded", "true");
       const now = new Date().toISOString();
@@ -453,7 +494,11 @@ async function seed(page: Page, messages = false, stage: "active" | "summary" = 
       };
       const values = {
         session: {
-          user: { id: "product-ui-owner", name: "예시 고객", accountType: "customer" },
+          user: {
+            id: "product-ui-owner",
+            name: role === "lawyer" ? "예시 변호사" : "예시 고객",
+            accountType: role,
+          },
           needsConsent: false,
         },
         cases: { [id]: item },
@@ -507,7 +552,7 @@ async function seed(page: Page, messages = false, stage: "active" | "summary" = 
       for (const [key, value] of Object.entries(values))
         localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
     },
-    { id, summary, messages, stage },
+    { id, summary, messages, stage, role },
   );
 }
 

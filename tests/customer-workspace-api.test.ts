@@ -417,7 +417,7 @@ test("real chat receipt replay and latest-job lookup recover a lost ACK after fa
   ).toBe(404);
 });
 
-test("same-owner role changes deny workspace reads and mutations without altering stored summary", async () => {
+test("a lawyer can read and confirm their own workspace while foreign accounts remain denied", async () => {
   const f = await fixture();
   expect(await hasCustomerWorkspaceAccess(f.core, f.owner.userId)).toBe(true);
   const metadata = await f.service.intake(f.owner.userId, f.workspace.id);
@@ -427,14 +427,11 @@ test("same-owner role changes deny workspace reads and mutations without alterin
     body: JSON.stringify({ accountType: "lawyer" }),
   });
   expect(changed.status).toBe(200);
-  expect(await hasCustomerWorkspaceAccess(f.core, f.owner.userId)).toBe(false);
-  const denied = await f.transport(`/api/v2/cases/${f.workspace.id}/workspace`);
-  expect(denied.status).toBe(403);
-  expect(await denied.json()).toMatchObject({ error: { code: "ROLE_REQUIRED" } });
-  await expect(createWorkspaceApi(f.transport, null).get(f.workspace.id)).rejects.toMatchObject({
-    code: "NOT_FOUND",
-    retryable: false,
-  });
+  expect(await hasCustomerWorkspaceAccess(f.core, f.owner.userId)).toBe(true);
+  expect((await f.transport(`/api/v2/cases/${f.workspace.id}/workspace`)).status).toBe(200);
+  expect((await createWorkspaceApi(f.transport, null).get(f.workspace.id)).case.id).toBe(
+    f.workspace.id,
+  );
   expect(
     (
       await f.transport(`/api/v2/cases/${f.workspace.id}/summary/confirm`, {
@@ -446,27 +443,21 @@ test("same-owner role changes deny workspace reads and mutations without alterin
         }),
       })
     ).status,
-  ).toBe(403);
-  expect((await f.service.intake(f.owner.userId, f.workspace.id))?.revision).toBe(
-    metadata?.revision,
-  );
+  ).toBe(200);
+  const foreign = await seedTestSession(f.db, { consent: true });
+  expect(
+    (await f.transport(`/api/v2/cases/${f.workspace.id}/workspace`, undefined, foreign.cookie))
+      .status,
+  ).toBe(404);
 });
 
-test("role change during an admitted workspace job prevents publishing its synthetic model result", async () => {
+test("consent revocation during an admitted workspace job still prevents publication", async () => {
   const f = await fixture();
   const before = await f.service.intake(f.owner.userId, f.workspace.id);
   let phases = 0;
   const execution = await runCustomerJob(f, "intake_questions", true, async () => {
     if (++phases !== 1) return;
-    expect(
-      (
-        await f.transport("/api/me/account-type", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ accountType: "lawyer" }),
-        })
-      ).status,
-    ).toBe(200);
+    f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
   });
   expect(execution.result.status).toBe("failed");
   const after = await f.service.intake(f.owner.userId, f.workspace.id);

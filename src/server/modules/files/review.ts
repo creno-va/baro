@@ -19,7 +19,7 @@ export class FileReviewError extends Error {
     super(code);
   }
 }
-const consentSql = `EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'`;
+const consentSql = `EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer')`;
 const consentValues = [
   CURRENT_POLICY_VERSIONS.termsVersion,
   CURRENT_POLICY_VERSIONS.privacyVersion,

@@ -3,6 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { FILE_TARGET_UPLOAD_CONSISTENCY, V2_LIMITS } from "../src/contracts/v2";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createV2Core } from "../src/server/db/v2-core";
@@ -364,25 +365,31 @@ async function uploaded(f: Fixture, bytes = new TextEncoder().encode("synthetic 
   });
   return { session, bytes, manifest, complete };
 }
-test("actual migrated SQL + AES upload completes trusted bytes and private streamed original download", async () => {
-  const f = await fixture();
-  const u = await uploaded(f);
-  expect(u.complete).toMatchObject({ status: "uploaded", processingQueued: false, revision: 2 });
-  const content = await f.service.content(f.actor.ownerId, f.workspaceId, u.session.fileId);
-  expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual(u.bytes);
-  const row = f.db.sqlite
-    .query(
-      "SELECT stored_count,reserved_count,stored_bytes FROM v2_case_original_usage WHERE workspace_id=?",
-    )
-    .get(f.workspaceId);
-  expect(row).toEqual({ stored_count: 1, reserved_count: 0, stored_bytes: u.bytes.byteLength });
-  expect([...f.bucket.objects.keys()].every((k) => /^private\/[A-Za-z0-9_-]+$/.test(k))).toBe(true);
-  expect(
-    [...f.bucket.objects.values()].every(
-      (b) => !new TextDecoder().decode(b).includes("synthetic original"),
-    ),
-  ).toBe(true);
-});
+test.each(["customer", "lawyer"] as const)(
+  "%s completes encrypted upload and owned original download with real SQL guards",
+  async (accountType) => {
+    const f = await fixture();
+    await saveAccountType(f.db.binding, f.actor.ownerId, accountType);
+    const u = await uploaded(f);
+    expect(u.complete).toMatchObject({ status: "uploaded", processingQueued: false, revision: 2 });
+    const content = await f.service.content(f.actor.ownerId, f.workspaceId, u.session.fileId);
+    expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual(u.bytes);
+    const row = f.db.sqlite
+      .query(
+        "SELECT stored_count,reserved_count,stored_bytes FROM v2_case_original_usage WHERE workspace_id=?",
+      )
+      .get(f.workspaceId);
+    expect(row).toEqual({ stored_count: 1, reserved_count: 0, stored_bytes: u.bytes.byteLength });
+    expect([...f.bucket.objects.keys()].every((k) => /^private\/[A-Za-z0-9_-]+$/.test(k))).toBe(
+      true,
+    );
+    expect(
+      [...f.bucket.objects.values()].every(
+        (b) => !new TextDecoder().decode(b).includes("synthetic original"),
+      ),
+    ).toBe(true);
+  },
+);
 test("missing funding/probe deny processing without inventing zero-cost readiness", async () => {
   const f = await fixture({}, { admission: true });
   await expect(reserved(f, 5)).rejects.toThrow("PROCESSING_UNAVAILABLE");

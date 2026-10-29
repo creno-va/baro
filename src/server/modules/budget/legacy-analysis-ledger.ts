@@ -45,7 +45,7 @@ const currentSource = `FROM analyses a JOIN cases c ON c.current_analysis_id=a.i
  AND EXISTS(SELECT 1 FROM user u WHERE u.id=c.user_id)
  AND EXISTS(SELECT 1 FROM user_consents s WHERE s.user_id=c.user_id AND s.terms_version=? AND s.privacy_version=? AND s.ai_notice_version=? AND s.over_14_confirmed=1)
  AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||c.user_id AND value IN ('customer','lawyer')),
- CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=c.user_id AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END)='customer'
+ CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=c.user_id AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END) IN ('customer','lawyer')
  AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=c.user_id)
  AND NOT EXISTS(SELECT 1 FROM deletion_jobs WHERE (target_type='case' AND target_id=c.id) OR (target_type='account' AND target_id=c.user_id))
  AND NOT EXISTS(SELECT 1 FROM v2_workspaces WHERE legacy_case_id=c.id)`;

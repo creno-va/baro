@@ -58,7 +58,7 @@ test("saved ZIP survives changed sources, expired replay keys and re-consent wit
   });
 });
 
-test("stored ZIP GET rejects anonymous, expired sessions, other owners, wrong roles and non-export report IDs", async () => {
+test("stored ZIP permits its lawyer owner and rejects anonymous, expired sessions, other owners and non-export report IDs", async () => {
   const f = await fixture(),
     path = `/api/v2/reports/${f.archiveId}/zip`;
   const peer = await seedTestSession(f.db, { consent: true });
@@ -68,7 +68,7 @@ test("stored ZIP GET rejects anonymous, expired sessions, other owners, wrong ro
   f.db.sqlite
     .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
     .run(`account-type:${f.actor.ownerId}`);
-  expect((await f.request(path)).status).toBe(403);
+  expect((await f.request(path)).status).toBe(200);
   f.db.sqlite
     .query("UPDATE app_metadata SET value='customer' WHERE key=?")
     .run(`account-type:${f.actor.ownerId}`);
@@ -76,14 +76,10 @@ test("stored ZIP GET rejects anonymous, expired sessions, other owners, wrong ro
   expect((await f.request(path)).status).toBe(401);
 });
 
-for (const change of ["role", "file", "report", "workspace", "account"] as const) {
+for (const change of ["file", "report", "workspace", "account"] as const) {
   test(`stored ZIP stream stops after ${change} changes before consumption`, async () => {
     const f = await fixture();
     const late = await f.reports.savedZip(f.actor.ownerId, f.archiveId);
-    if (change === "role")
-      f.db.sqlite
-        .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
-        .run(`account-type:${f.actor.ownerId}`);
     if (change === "file")
       f.db.sqlite.query("DELETE FROM v2_files WHERE id=?").run(f.selectedFileId);
     if (change === "report")

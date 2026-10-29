@@ -23,7 +23,8 @@ function scope(id: string, revision?: number) {
   const owner = requireSession().user;
   const item = readStore<Record<string, CaseView>>("cases", {})[id];
   if (
-    owner?.accountType !== "customer" ||
+    !owner ||
+    !["customer", "lawyer"].includes(owner.accountType) ||
     readStore<Record<string, string>>("caseOwners", {})[id] !== owner.id ||
     !item ||
     readStore<string[]>("deletedCaseIds", []).includes(id)

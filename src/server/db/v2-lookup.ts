@@ -12,7 +12,7 @@ export interface LookupPermit {
 }
 type Transport = "response" | "provider_error" | "unknown" | "not_sent";
 const customerConsent = `coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||o.owner_id AND value IN ('customer','lawyer')),
-  CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=o.owner_id AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END)='customer'
+  CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=o.owner_id AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END) IN ('customer','lawyer')
   AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1)`;
 const policies = () => [
   CURRENT_POLICY_VERSIONS.termsVersion,

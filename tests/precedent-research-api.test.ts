@@ -428,7 +428,7 @@ test("retries share the total twelve-request ceiling and preserve verified parti
   expect(result.unavailableTopics).toEqual(["loan"]);
 });
 
-for (const race of ["revision", "consent", "role", "deletion"] as const)
+for (const race of ["revision", "consent", "deletion"] as const)
   test(`in-flight ${race} changes suppress result and further external requests`, async () => {
     const f = await fixture();
     const input = await f.searchInput();
@@ -439,10 +439,6 @@ for (const race of ["revision", "consent", "role", "deletion"] as const)
           .run(f.workspace.id);
       if (race === "consent")
         f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
-      if (race === "role")
-        f.db.sqlite
-          .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?, 'lawyer',?)")
-          .run(`account-type:${f.owner.userId}`, f.now);
       if (race === "deletion")
         f.db.sqlite
           .query(
@@ -458,6 +454,16 @@ for (const race of ["revision", "consent", "role", "deletion"] as const)
     expect(body).not.toContain("合成");
     expect(body).not.toContain("readToken");
   });
+
+test("lawyer account can research its own case with current consent", async () => {
+  const f = await fixture();
+  f.db.sqlite
+    .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'lawyer',?)")
+    .run(`account-type:${f.owner.userId}`, f.now);
+  const result = await searchBody(await f.request("/search", await f.searchInput()));
+  expect(result.items.length).toBeGreaterThan(0);
+  expect(result.workspaceRevision).toBeGreaterThan(0);
+});
 
 test("research proofs have purpose-separated integrity, exact TTL and no future acceptance", async () => {
   const secret = "synthetic-research-secret-at-least-32-characters";

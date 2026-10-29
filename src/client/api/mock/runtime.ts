@@ -71,8 +71,8 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
         operation,
       ),
     });
-    if (session.user?.accountType !== "customer")
-      throw new ApiError("NOT_FOUND", "고객 이용 유형으로 로그인해 주세요.");
+    if (!["customer", "lawyer"].includes(session.user?.accountType ?? ""))
+      throw new ApiError("NOT_FOUND", "로그인 상태를 다시 확인해 주세요.");
   }
   if (
     /^lawyers\.(getMine|saveMine|publishMine|assets|uploadAsset|removeAsset)$/.test(operation) ||

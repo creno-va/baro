@@ -32,12 +32,13 @@ export async function caseAccess(
       : undefined;
   if (
     customer &&
-    (snapshot?.accountType ?? (await readAccountType(context.env.DB, session.user.id))) !==
-      "customer"
+    !["customer", "lawyer"].includes(
+      snapshot?.accountType ?? (await readAccountType(context.env.DB, session.user.id)),
+    )
   )
     return {
       response: context.json(
-        errorBody(context, "ROLE_REQUIRED", "고객 이용 유형으로 로그인해 주세요."),
+        errorBody(context, "ROLE_REQUIRED", "로그인 상태를 다시 확인해 주세요."),
         403,
       ),
     };

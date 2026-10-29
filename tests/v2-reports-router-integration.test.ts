@@ -89,7 +89,7 @@ test("global report router uses native composition with signed owner SQL and fai
   f.db.sqlite
     .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
     .run(`account-type:${f.actor.ownerId}`);
-  expect((await workerApi.request(paths[0] as string, { headers }, env)).status).toBe(403);
+  expect((await workerApi.request(paths[0] as string, { headers }, env)).status).toBe(200);
   expect(f.bucket.calls).toEqual(originalCalls);
   expect((await workerApi.request("/api/v2/lawyers", undefined, env)).status).toBe(200);
 });

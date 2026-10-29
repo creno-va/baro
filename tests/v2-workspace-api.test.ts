@@ -157,15 +157,14 @@ for (const savedPreference of [true, false]) {
     expect(allowed.headers.get("cache-control")).toBe("private, no-store");
 
     await saveAccountType(f.db.binding, f.owner.userId, "lawyer");
-    const denied = await read();
-    expect(denied.status).toBe(403);
-    expect(await denied.json()).toMatchObject({ error: { code: "ROLE_REQUIRED" } });
+    const lawyerRead = await read();
+    expect(lawyerRead.status).toBe(200);
     expect(roleQueries).toBe(savedPreference ? 2 : 3);
   });
 }
 
 for (const change of ["role", "consent"] as const)
-  test(`a ${change} change before the shared access snapshot blocks workspace creation`, async () => {
+  test(`workspace creation rechecks ${change} before admission and allows both account types`, async () => {
     const f = await fixture();
     await saveAccountType(f.db.binding, f.owner.userId, "customer");
     const prepare = f.db.binding.prepare.bind(f.db.binding);
@@ -191,10 +190,11 @@ for (const change of ["role", "consent"] as const)
       f.env,
     );
     expect(changed).toBe(true);
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      error: { code: change === "role" ? "ROLE_REQUIRED" : "CONSENT_REQUIRED" },
+    expect(response.status).toBe(change === "role" ? 201 : 403);
+    if (change === "consent")
+      expect(await response.json()).toMatchObject({ error: { code: "CONSENT_REQUIRED" } });
+    expect(f.verified()).toBe(change === "role" ? 1 : 0);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({
+      n: change === "role" ? 1 : 0,
     });
-    expect(f.verified()).toBe(0);
-    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_workspaces").get()).toEqual({ n: 0 });
   });

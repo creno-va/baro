@@ -632,7 +632,7 @@ for (const action of ["save", "publish", "assets"] as const) {
       page.getByText(
         {
           save: "프로필을 저장했어요.",
-          publish: "프로필을 공개했어요. 디렉터리에서 확인할 수 있어요.",
+          publish: "프로필을 공개했어요. 변호사 찾기에서 확인할 수 있어요.",
           assets: "업로드한 자료가 없어요.",
         }[action],
         { exact: true },

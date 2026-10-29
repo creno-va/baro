@@ -75,7 +75,8 @@ export function createPrecedentResearchService(
     opaqueIdSchema.parse(id);
     opaqueIdSchema.parse(ownerId);
     const access = await readCustomerConsentSnapshot(core.binding, ownerId);
-    if (access.accountType !== "customer") throw new PrecedentResearchError("NOT_FOUND");
+    if (!["customer", "lawyer"].includes(access.accountType))
+      throw new PrecedentResearchError("NOT_FOUND");
     if (!access.currentConsent) throw new PrecedentResearchError("CONSENT_REQUIRED");
     const row = await core
       .statement(
