@@ -3,6 +3,7 @@ import { createFilesApi } from "../src/client/api/files";
 import { createWorkspaceApi } from "../src/client/api/workspace";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { saveAccountType } from "../src/server/auth/account-type";
+import { SESSION_EXPIRES_SECONDS } from "../src/server/auth/policy";
 import { countD1Calls } from "./helpers/d1-call-count";
 import { readyFile } from "./helpers/report-fixture";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
@@ -11,6 +12,12 @@ import { seedTestSession } from "./helpers/session";
 /** Real Hono/client/AES/SQLite; provider and R2 remain explicit offline adapters. */
 async function fixture() {
   const f = await reportHttpFixture();
+  // Measure ordinary workspace reads separately from session sliding refresh.
+  // The report fixture's one-hour expiry would force concurrent refresh writes.
+  const sessionNow = Date.now();
+  f.db.sqlite
+    .query("UPDATE session SET expires_at=?,updated_at=? WHERE user_id=?")
+    .run(sessionNow + SESSION_EXPIRES_SECONDS * 1000, sessionNow, f.actor.ownerId);
   f.app.route("/api/v2/cases", createWorkspacesApi());
   for (let i = 0; i < 5; i++) await readyFile(f, `합성 자료 ${i}`);
   const rows: {
@@ -62,7 +69,7 @@ test("seven ready materials avoid coverage hydration in cold, warm and post-muta
   const f = await fixture();
   const first = await f.client.get(f.workspaceId);
   // Before this change: 16 HTTP / 138 D1 / 139 SQL, including seven coverage reads.
-  expect(f.work()).toEqual({ http: 9, calls: 64, statements: 65, coverage: 0 });
+  expect(f.work()).toEqual({ http: 9, calls: 63, statements: 64, coverage: 0 });
   expect(first.files).toHaveLength(7);
   expect(first.files.every((file) => file.status === "ready" && !!file.name)).toBe(true);
   expect(

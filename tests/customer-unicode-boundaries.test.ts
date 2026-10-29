@@ -74,21 +74,28 @@ for (const narrative of [`${"a".repeat(1999)}😀tail`, "😀".repeat(2001)]) {
   });
 }
 
-test("real workspace titles retain Unicode boundaries, ASCII limits and the empty narrative fallback", async () => {
-  for (const narrative of [`${"a".repeat(59)}😀tail`, "😀".repeat(61), "a".repeat(61), ""]) {
-    const client = createWorkspaceApi(async (path) => {
-      const route = new URL(path, "http://local").pathname;
-      if (route.endsWith("/workspace")) return Response.json({ ...workspace, currentJobId: null });
-      if (route.endsWith("/intake")) return Response.json({ ...intake, narrative });
-      if (route.endsWith("/summary")) return Response.json(summary);
-      if (route.endsWith("/files")) return Response.json([]);
-      if (route.endsWith("/messages") || route.endsWith("/actions") || route.endsWith("/timeline"))
-        return Response.json({ items: [], nextCursor: null });
-      return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
-    }, null);
-    const view = await client.get(workspace.id);
-    expect(view.case.title).toBe([...narrative].slice(0, 60).join("") || workspace.title);
-    expect(view.case.id).toBe(workspace.id);
-    expect(view.case.summary).toBe(summary.overview);
-  }
+test("real workspace titles retain generated Unicode labels and use neutral legacy fallbacks", async () => {
+  for (const narrative of [`${"a".repeat(59)}😀tail`, "😀".repeat(61), "a".repeat(61), ""])
+    for (const caseTitle of [undefined, `${"가".repeat(39)}😀`, "😀".repeat(40), "a".repeat(40)]) {
+      const client = createWorkspaceApi(async (path) => {
+        const route = new URL(path, "http://local").pathname;
+        if (route.endsWith("/workspace"))
+          return Response.json({ ...workspace, currentJobId: null });
+        if (route.endsWith("/intake"))
+          return Response.json({ ...intake, narrative, ...(caseTitle ? { caseTitle } : {}) });
+        if (route.endsWith("/summary")) return Response.json(summary);
+        if (route.endsWith("/files")) return Response.json([]);
+        if (
+          route.endsWith("/messages") ||
+          route.endsWith("/actions") ||
+          route.endsWith("/timeline")
+        )
+          return Response.json({ items: [], nextCursor: null });
+        return Response.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
+      }, null);
+      const view = await client.get(workspace.id);
+      expect(view.case.title).toBe(caseTitle ?? "사건 경위와 확인할 내용");
+      expect(view.case.id).toBe(workspace.id);
+      expect(view.case.summary).toBe(summary.overview);
+    }
 });

@@ -17,7 +17,7 @@ import {
   decodeSource,
   type SourceRow,
 } from "../../../db/v2-official-sources";
-import { createV2WorkspaceRepository } from "../../../db/v2-workspace";
+import { intakeContentSchema } from "../../../db/v2-workspace";
 import {
   reportLegalOutcome,
   reportLegalRejection,
@@ -54,6 +54,7 @@ type Scope = {
   intakeConfirmed: number | null;
   summaryRevision: number | null;
   snapshotId: string | null;
+  intakePayload: string | null;
 };
 // Respect a later limited observation already recorded by ordinary citations.
 // Alias s is the current public original, as in source-authority.ts.
@@ -78,7 +79,7 @@ export function createPrecedentResearchService(
     const row = await core
       .statement(
         `SELECT w.revision AS workspaceRevision,w.confirmed_summary_revision AS confirmedSummaryRevision,w.status,
-       i.status AS intakeStatus,i.confirmed_summary_revision AS intakeConfirmed,s.revision AS summaryRevision,s.snapshot_id AS snapshotId
+       i.status AS intakeStatus,i.confirmed_summary_revision AS intakeConfirmed,s.revision AS summaryRevision,s.snapshot_id AS snapshotId,i.encrypted_payload AS intakePayload
        FROM v2_workspaces w LEFT JOIN v2_intakes i ON i.id=w.id LEFT JOIN v2_summaries s ON s.id=i.summary_id AND s.workspace_id=w.id
        WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
         [id, ownerId],
@@ -180,10 +181,16 @@ export function createPrecedentResearchService(
         v2SummarySchema,
       );
       if (!summary) throw new PrecedentResearchError("REVIEW_REQUIRED");
-      const metadata = await createV2WorkspaceRepository(core.binding, core.cipher).metadata(
-        { ownerId, now: now() },
-        id,
-      );
+      const metadata = current.intakePayload
+        ? await core.decrypt(
+            "v2_intakes",
+            id,
+            ownerId,
+            1,
+            current.intakePayload,
+            intakeContentSchema,
+          )
+        : null;
       const value = v2PrecedentResearchContextSchema.parse({
         schemaVersion: "2",
         workspaceRevision: current.workspaceRevision,
@@ -191,7 +198,9 @@ export function createPrecedentResearchService(
         caseTitle: caseDisplayTitle(metadata?.narrative ?? summary.overview, metadata?.caseTitle),
         recommendedTopics: recommendPrecedentTopics(summary),
       });
-      await scope(ownerId, id, current.workspaceRevision, current.summaryRevision);
+      const latest = await scope(ownerId, id, current.workspaceRevision, current.summaryRevision);
+      if (latest.intakePayload !== current.intakePayload)
+        throw new PrecedentResearchError("CONFLICT");
       return value;
     },
     async search(ownerId: string, id: string, raw: unknown, signal?: AbortSignal) {
