@@ -40,6 +40,7 @@ import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./pr
 import { SourceCards } from "./SourceCards";
 import { referenceLabel, timelineDateLabel } from "./source-label";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
+import { TimelineEvidence } from "./TimelineEvidence";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
@@ -1687,7 +1688,12 @@ export function Workspace({
                           <div>
                             <h3>{item.title}</h3>
                             <p>{item.detail}</p>
-                            <span className="workspace-muted">사용자 확인 필요</span>
+                            <TimelineEvidence
+                              entry={item}
+                              files={view.files}
+                              facts={view.facts}
+                              base={base}
+                            />
                           </div>
                           <Button
                             variant="ghost"

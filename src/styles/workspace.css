@@ -824,6 +824,42 @@
 .workspace-timeline .workspace-muted {
   font-size: 0.72rem;
 }
+.timeline-evidence {
+  margin-top: 12px;
+}
+.timeline-evidence-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.timeline-evidence-sources {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 0.78rem;
+}
+.timeline-evidence-sources > summary {
+  width: fit-content;
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+.timeline-evidence-links {
+  display: grid;
+  gap: 6px;
+}
+.timeline-evidence-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-block: 6px;
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+.timeline-evidence-links small {
+  display: block;
+  line-height: 1.6;
+}
 .workspace-count {
   font-size: 0.8rem;
   color: var(--primary);
