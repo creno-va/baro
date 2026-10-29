@@ -25,7 +25,7 @@ export const workspaceSummaryOutputSchema = v2SummarySchema
     intakeRevision: true,
     createdAt: true,
   })
-  .extend({ caseTitle: caseTitleSchema.optional() });
+  .extend({ caseTitle: caseTitleSchema.nullable().default(null) });
 export const workspaceChatOutputSchema = z.strictObject({
   text: displayText(10000),
   references: z.array(v2FactReferenceSchema).max(100),
