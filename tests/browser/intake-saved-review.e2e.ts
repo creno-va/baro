@@ -19,6 +19,8 @@ async function savedIntake(
   const count = (options.rounds ?? 2) * 3;
   await page.addInitScript(
     ({ id, needsConsent, count, answerState, choice }) => {
+      if (localStorage.getItem("synthetic-review-seeded")) return;
+      localStorage.setItem("synthetic-review-seeded", "true");
       const owner = "synthetic-saved-review-owner";
       const questions = Array.from({ length: count }, (_, index) => ({
         id: `saved-${index}`,
@@ -117,8 +119,7 @@ casesApi.saveAnswers = async (...args) => {
 
 async function previousQuestion(page: Page, ordinal: number) {
   for (let current = 6; current > ordinal; --current) {
-    await page.getByText("답변 관리", { exact: true }).click();
-    await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+    await page.getByRole("button", { name: "이전으로", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: `합성 저장 질문 ${current - 1}`, exact: true }),
     ).toBeVisible();
@@ -329,7 +330,9 @@ for (const retryable of [true, false]) {
     page,
   }) => {
     const before = await savedIntake(page, { retryable });
-    await page.getByRole("button", { name: "저장한 답변 확인·수정", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "저장한 답변 확인·수정", exact: true }),
+    ).toHaveCount(0);
     await previousQuestion(page, 5);
     await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
       "합성 저장 답변 5",
@@ -350,10 +353,103 @@ for (const retryable of [true, false]) {
       await expect(
         page.getByRole("button", { name: "저장하고 요약 보기", exact: true }),
       ).toBeDisabled();
-      await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeDisabled();
     }
   });
 }
+
+test("generation recovery has two actions with outline resume and space above the panel", async ({
+  page,
+}) => {
+  await savedIntake(page);
+  const panel = page.locator(".intake-recovery");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(panel.getByRole("button")).toHaveText(["다시 시도", "나중에 이어하기"]);
+  await expect(panel.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveClass(
+    /ui-button--outline/,
+  );
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const action = await page.locator(".intake-scene-navigation").boundingBox();
+    const recovery = await panel.boundingBox();
+    if (!action || !recovery) throw new Error("Missing synthetic recovery layout");
+    expect(recovery.y - action.y - action.height).toBeGreaterThanOrEqual(24);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: `.wrangler/intake-recovery-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
+});
+
+test("resume later saves the current draft before leaving and never generates", async ({
+  page,
+}) => {
+  await savedIntake(page);
+  page.on("dialog", async (dialog) => {
+    await dialog.dismiss();
+    throw new Error("Acknowledged answers must not trigger a leave warning");
+  });
+  await page.route("**/app", (route) =>
+    route.fulfill({ contentType: "text/html", body: "<main>합성 사건 목록</main>" }),
+  );
+  await page.evaluate(async () => {
+    const mockPath = "/src/client/api/mock/cases.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesMockHandlers } = await import(mockPath);
+    const { registerMockHandlers } = await import(corePath);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    Object.assign(window, { releaseSyntheticResume: release, resumeSaveStarted: false });
+    registerMockHandlers({
+      "cases.saveAnswers": async (input: unknown, context: { key: string }) => {
+        Reflect.set(window, "resumeSaveStarted", true);
+        await gate;
+        return casesMockHandlers["cases.saveAnswers"](input, context);
+      },
+    });
+  });
+  await page.getByRole("textbox", { name: "답변", exact: true }).fill("나중에 이어갈 합성 답변");
+  await page.getByRole("button", { name: "나중에 이어하기", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, "resumeSaveStarted"))).toBe(true);
+  await expect(page).toHaveURL(/\/intake/);
+  await page.evaluate(() => Reflect.get(window, "releaseSyntheticResume")());
+  await expect(page).toHaveURL(/\/app$/);
+  expect(await calls(page)).toEqual({ advance: 0, save: 1 });
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:intake") ?? "{}")[
+          "synthetic-saved-review"
+        ].questions.at(-1).answer,
+    ),
+  ).toBe("나중에 이어갈 합성 답변");
+});
+
+test("resume later keeps the draft on screen when saving fails", async ({ page }) => {
+  await savedIntake(page);
+  await page.evaluate(async () => {
+    const casesPath = "/src/client/api/cases.ts";
+    const corePath = "/src/client/api/core.ts";
+    const { casesApi } = await import(casesPath);
+    const { ApiError } = await import(corePath);
+    casesApi.saveAnswers = async () => {
+      throw new ApiError("UNAVAILABLE", "합성 저장 연결 실패", true);
+    };
+  });
+  const answer = page.getByRole("textbox", { name: "답변", exact: true });
+  await answer.fill("아직 저장하지 못한 합성 답변");
+  await page.getByRole("button", { name: "나중에 이어하기", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "합성 저장 연결 실패" })).toBeVisible();
+  await expect(page).toHaveURL(/\/intake/);
+  await expect(answer).toHaveValue("아직 저장하지 못한 합성 답변");
+  expect(await calls(page)).toEqual({ advance: 0, save: 0 });
+});
 
 test("failed summary review crosses an already generated round without saving or advancing", async ({
   page,
@@ -395,7 +491,7 @@ for (const explicitRetry of [false, true]) {
     if (explicitRetry) await previousQuestion(page, 5);
     await page
       .getByRole("button", {
-        name: explicitRetry ? "다시 준비하기" : "저장하고 요약 보기",
+        name: explicitRetry ? "다시 시도" : "저장하고 요약 보기",
         exact: true,
       })
       .click();
@@ -406,9 +502,9 @@ for (const explicitRetry of [false, true]) {
 test("summary processing continues to lock saved-answer navigation and edits", async ({ page }) => {
   await savedIntake(page, { processing: true });
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeDisabled();
-  await page.getByText("답변 관리", { exact: true }).click();
-  await expect(page.getByRole("button", { name: "이전 질문", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toBeDisabled();
+
+  await expect(page.getByRole("button", { name: "이전으로", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "다음 질문", exact: true })).toHaveCount(0);
   expect(await calls(page)).toEqual({ advance: 0, save: 0 });
 });
@@ -421,7 +517,8 @@ test("failed summary remains read only after consent expires while saved answers
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "다음 질문", exact: true }).click();
   await expect(page.getByRole("heading", { name: "합성 저장 질문 6", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toBeEnabled();
   expect(await calls(page)).toEqual({ advance: 0, save: 0 });
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:intake"))).toBe(before);
 });

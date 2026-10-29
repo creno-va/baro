@@ -148,7 +148,6 @@ for (const { operation, loseSession, recovery } of scenarios) {
         expect(saveWrites).toBe(1);
         expect(confirmWrites).toBe(0);
       } else {
-        await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
         await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
         await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
         let accepted: Awaited<ReturnType<typeof summarySnapshot>> | undefined;
@@ -201,7 +200,7 @@ for (const { operation, loseSession, recovery } of scenarios) {
             await expect(page.getByLabel("요약 편집")).toHaveValue(peerSummary);
             await expect(
               page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요."),
-            ).not.toBeChecked();
+            ).toHaveCount(0);
             const changed = await summarySnapshot(page, info.id);
             expect(changed.confirmedSummaryRevision).toBeNull();
             expect(changed.summaryRevision).toBeGreaterThan(accepted.summaryRevision);
@@ -320,7 +319,6 @@ test("chat additions require the new summary confirmation in the real customer U
     await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
     await expect(page.getByText("새로운 자료를 찾았습니다.", { exact: true })).toBeVisible();
-    await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { settleIntakeSave } from "../helpers/intake-autosave";
 
 test("reconsent navigates every saved answer without saving or generating questions", async ({
   page,
@@ -61,8 +62,8 @@ test("reconsent navigates every saved answer without saving or generating questi
       localStorage.getItem(`baro-api-mock-v1:${key}`),
     );
   });
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+
+  await page.getByRole("button", { name: "이전으로", exact: true }).click();
   await expect(page.getByRole("heading", { name: "저장한 첫 번째 질문" })).toBeVisible();
   const answer = page.getByRole("textbox", { name: "답변", exact: true });
   await expect(answer).toHaveValue("이미 저장한 합성 답변입니다.");
@@ -155,8 +156,8 @@ test("previous question navigation preserves the unsaved current answer", async 
   await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible();
   const editor = page.getByRole("textbox", { name: "답변", exact: true });
   await editor.fill("아직 저장하지 않은 두 번째 질문의 합성 초안입니다.");
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+
+  await page.getByRole("button", { name: "이전으로", exact: true }).click();
   await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "모름", exact: true }).click();
@@ -187,26 +188,26 @@ test("previous question navigation forgets a draft restored to its saved answer"
   const saved = "이미 저장한 두 번째 합성 답변입니다.";
   const discarded = "나중에 버릴 두 번째 답변의 합성 초안입니다.";
   await editor.fill(saved);
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("답변이 저장됐어요.");
+
+  await settleIntakeSave(page);
+  await expect(page.getByRole("status")).toContainText("저장됐어요.");
 
   await editor.fill(discarded);
-  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+  await page.getByRole("button", { name: "이전으로", exact: true }).click();
   await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(editor).toHaveValue(discarded);
 
   await editor.fill(saved);
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+
+  await page.getByRole("button", { name: "이전으로", exact: true }).click();
   await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible();
   await expect(editor).toHaveValue(saved);
 });
 
-test("acknowledged answer recovery preserves a hidden question draft without another save", async ({
+test("acknowledged autosave recovery keeps the current question and earlier saved answers", async ({
   page,
 }) => {
   await page.addInitScript(() =>
@@ -229,8 +230,8 @@ test("acknowledged answer recovery preserves a hidden question draft without ano
   const hiddenDraft = "두 번째 질문에 남겨 둔 미저장 합성 초안입니다.";
   const savedAnswer = "세션 확인 전에 저장된 첫 번째 합성 답변입니다.";
   await editor.fill(hiddenDraft);
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+
+  await page.getByRole("button", { name: "이전으로", exact: true }).click();
   await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible();
   await editor.fill(savedAnswer);
   await page.evaluate(async () => {
@@ -260,13 +261,13 @@ test("acknowledged answer recovery preserves a hidden question draft without ano
       return session();
     };
   });
-  await page.getByText("답변 관리", { exact: true }).click();
-  await page.getByRole("button", { name: "답변 저장", exact: true }).click();
+
+  await settleIntakeSave(page);
   await expect(page.getByRole("alert")).toContainText("합성 저장 후 세션 확인 장애");
-  await expect(page.getByText("1차 질문 · 2 / 3", { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText("1차 질문 · 1 / 3", { exact: true })).toBeVisible({ timeout: 8000 });
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(editor).toBeEnabled();
-  await expect(editor).toHaveValue(hiddenDraft);
+  await expect(editor).toHaveValue(savedAnswer);
   const result = await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
     const { api } = await import(path);
@@ -279,8 +280,10 @@ test("acknowledged answer recovery preserves a hidden question draft without ano
   });
   expect(result.counters).toEqual({ saves: 1, sessionFailures: 1 });
   expect(result.questions[0].answer).toBe(savedAnswer);
-  expect(result.questions[1].answerState).toBeUndefined();
-  expect(result.questions[1].answer).toBeUndefined();
+  expect(result.questions[1].answerState).toBe("answered");
+  expect(result.questions[1].answer).toBe(hiddenDraft);
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await expect(editor).toHaveValue(hiddenDraft);
 });
 
 for (const operation of ["save", "confirm"] as const) {
@@ -356,7 +359,6 @@ for (const operation of ["save", "confirm"] as const) {
       await editor.fill(savedSummary);
       await page.getByRole("button", { name: "수정 내용 저장" }).click();
     } else {
-      await page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.").check();
       await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
       await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     }

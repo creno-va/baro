@@ -4,7 +4,10 @@ import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { lookupCatalog } from "../src/server/modules/external-tools/catalog";
 import { createExternalTools } from "../src/server/modules/external-tools/service";
 import { readWorkspaceContext } from "../src/server/modules/workspace/context";
-import { createWorkspacePipeline } from "../src/server/modules/workspace/pipeline";
+import {
+  createWorkspacePipeline,
+  type WorkspaceContext,
+} from "../src/server/modules/workspace/pipeline";
 import { createWorkspaceService } from "../src/server/modules/workspace/service";
 import {
   publicStoredMessageSchema,
@@ -13,7 +16,7 @@ import {
 import { reportHttpFixture } from "./helpers/report-http-fixture";
 
 const draft = {
-  text: "외부 조회는 아직 연결되지 않아 실제 결과를 확인하지 못했어요.",
+  text: "약속한 날짜와 받은 자료를 함께 정리해 보세요.",
   references: [],
   warnings: [],
   facts: [],
@@ -125,6 +128,94 @@ test("chat executes a bounded server tool round, audits actual statuses, rejects
     );
     await expect(repeated.chat(context, "synthetic_repeated_lookup")).rejects.toThrow(
       "POLICY_REJECTED",
+    );
+  } finally {
+    f.db.close();
+  }
+});
+
+test("one failed provider leaves the other result usable and audited, while chat failure still fails", async () => {
+  const f = await reportHttpFixture();
+  try {
+    const context = await readWorkspaceContext(f.core, f.actor, f.workspaceId, {
+      schemaVersion: "2",
+      id: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      workspaceRevision: f.rev(),
+      createdAt: f.actor.now,
+      role: "user",
+      text: "받은 자료와 약속한 날짜를 정리해 주세요.",
+      selectedFileIds: [],
+    });
+    const configuration = { hometaxKey: "synthetic-key", datahubToken: "synthetic-token" };
+    context.lookupTools = lookupCatalog(configuration);
+    const dispatched: string[] = [];
+    const tools = createExternalTools(configuration, {
+      fetch: async (url) => {
+        const host = new URL(String(url)).hostname;
+        dispatched.push(host);
+        return host === "api.odcloud.kr"
+          ? new Response("synthetic-provider-error", { status: 503 })
+          : Response.json({
+              result: "SUCCESS",
+              errCode: "0000",
+              data: {
+                RESULT: "SUCCESS",
+                DATALIST: [{ ESTATENUM: "1", GUBUN: "3", NOWSTATE: "T" }],
+              },
+            });
+      },
+    });
+    let failChat = false;
+    let audited: unknown;
+    const p = createWorkspacePipeline(
+      {
+        call: async (phase, input) => {
+          if (phase === "workspace_audit") {
+            audited = input;
+            return approved;
+          }
+          if (!(input as WorkspaceContext).toolLookupPerformed)
+            return { ...draft, requestedTools: ["hometax_status", "datahub_property"] };
+          if (failChat) throw new Error("synthetic-chat-failure");
+          expect((input as WorkspaceContext).toolResults?.map((result) => result.status)).toEqual([
+            "unavailable",
+            "retrieved",
+          ]);
+          return draft;
+        },
+      },
+      {
+        reserve: async () => true,
+        invocation: () => crypto.randomUUID(),
+        lookup: async (requested) => {
+          const results = [];
+          for (const tool of requested)
+            results.push(
+              await tools.execute(
+                tool,
+                tool === "hometax_status"
+                  ? { businessNumber: "0000000000" }
+                  : { address: "합성시 합성구 합성로 100" },
+                {
+                  ...access,
+                  reserve: async () => true,
+                },
+              ),
+            );
+          return results;
+        },
+      },
+    );
+    const output = await p.chat(context, "synthetic-partial-lookup");
+    expect(output.text).toBe(draft.text);
+    expect(output.toolResults[0]).toMatchObject({ status: "unavailable", rows: [] });
+    expect(output.toolResults[1]?.rows).toHaveLength(1);
+    expect(audited).toMatchObject({ context: { toolResults: output.toolResults } });
+    expect(dispatched).toEqual(["api.odcloud.kr", "api.mydatahub.co.kr"]);
+    failChat = true;
+    await expect(p.chat(context, "synthetic-chat-failure")).rejects.toThrow(
+      "synthetic-chat-failure",
     );
   } finally {
     f.db.close();

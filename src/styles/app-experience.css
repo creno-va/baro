@@ -40,9 +40,6 @@
   margin: 0;
   padding-top: 8px;
 }
-.sidebar-recent__heading {
-  flex: 0 0 auto;
-}
 .sidebar-recent__list {
   min-height: 0;
   overflow-y: auto;

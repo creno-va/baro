@@ -52,7 +52,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     for (let index = 0; index < 6; index++)
       await page.getByRole("button", { name: "모름", exact: true }).click();
     await expect(page).toHaveURL(/\/summary$/);
-    await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();

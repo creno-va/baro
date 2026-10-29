@@ -202,11 +202,7 @@ export const casesMockHandlers = {
         );
       for (const answer of input.answers) {
         const q = value.questions.find((q) => q.id === answer.questionId);
-        if (
-          !q ||
-          (answer.state === "answered" && q.kind === "choice" && !q.options?.includes(answer.value))
-        )
-          throw new ApiError("VALIDATION_ERROR", "질문에 맞는 답변을 선택해 주세요.");
+        if (!q) throw new ApiError("VALIDATION_ERROR", "질문에 맞는 답변을 입력해 주세요.");
       }
       value.questions = value.questions.map((q) => {
         const answer = input.answers.find((a) => a.questionId === q.id);

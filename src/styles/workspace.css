@@ -9,15 +9,6 @@
 .workspace a {
   text-decoration: none;
 }
-.workspace-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #526176;
-  font-size: 0.78rem;
-  margin-bottom: 6px;
-  min-height: 44px;
-}
 /* Case pages share one quiet header and persistent navigation. */
 .case-navigation {
   margin-bottom: 40px;
@@ -325,6 +316,7 @@
   gap: 8px;
 }
 .workspace-followups {
+  align-items: stretch;
   min-width: 0;
   margin: 0 0 12px;
   padding: 0;
@@ -363,7 +355,7 @@
   position: static;
 }
 .workspace-composer-surface {
-  padding: 13px 16px 12px;
+  padding: 8px;
   border: 1px solid #e3eaf5;
   border-radius: 20px;
   background: #fff;
@@ -381,61 +373,47 @@
     0 0 0 3px #3182f608;
 }
 .case-shell .workspace-composer textarea {
-  min-height: 5rem;
-  max-height: 13.75rem;
-  padding: 8px 5px;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 10px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
   font-size: max(1rem, 16px);
-  line-height: 1.8;
+  line-height: 24px;
   color: #202838;
   outline: 0;
   box-shadow: none;
-  resize: vertical;
+  resize: none;
 }
 .workspace-composer textarea::placeholder {
   color: #5c6b80;
 }
-.workspace-composer-footer {
-  flex-wrap: wrap;
+.workspace-composer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 9px;
+  gap: 8px;
 }
-.workspace-attach-short,
-.workspace-lookup-short {
-  display: none;
-}
-.workspace-composer-footer > .workspace-lookup-open {
+.workspace-composer-row > .workspace-lookup-open {
   min-width: 44px;
   min-height: 44px;
   color: #526176;
   font-size: 0.78rem;
   padding: 8px;
 }
-.workspace-composer-footer > .workspace-send {
-  margin-left: auto;
+.workspace-composer-row > .ui-button {
+  margin: 0;
   flex: none;
 }
-.workspace .workspace-message-length {
-  margin: 6px 2px 0;
-  text-align: right;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: #526176;
-}
-.workspace .workspace-message-length[role="alert"] {
-  color: var(--destructive);
-}
-.workspace-attach {
+.workspace-attach.ui-button {
   display: inline-flex;
   gap: 5px;
   align-items: center;
   min-height: 44px;
-  padding: 0 7px;
+  padding: 0;
   border-radius: 10px;
   color: #526176;
   font-size: 0.78rem;
@@ -497,7 +475,7 @@
   font-size: 0.8rem;
   gap: 7px;
 }
-.workspace-send.ui-button:disabled {
+.app-frame .workspace-send.ui-button:disabled {
   background: #eef2f7;
   color: #5c6b80;
   border-color: transparent;
@@ -1070,6 +1048,10 @@
     flex-direction: column;
     align-items: stretch;
   }
+  .workspace-followups {
+    display: grid;
+    grid-auto-rows: 1fr;
+  }
   .workspace-suggestions .ui-button {
     width: 100%;
   }
@@ -1093,19 +1075,10 @@
   }
   .workspace-composer-surface {
     border-radius: 22px;
-    padding: 10px 12px;
+    padding: 8px;
   }
-  .workspace-composer-footer {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-  .workspace-attach-label,
-  .workspace-lookup-label {
-    display: none;
-  }
-  .workspace-attach-short,
-  .workspace-lookup-short {
-    display: inline;
+  .workspace-composer-row {
+    gap: 4px;
   }
   .workspace-attach {
     min-width: 44px;
@@ -1482,8 +1455,8 @@
   margin: 6px 0;
 }
 
-/* Give the conversation and composer a full viewport of their own.
-   The document can scroll past the header; messages keep their internal scroll. */
+/* Empty chat fits below the header; existing conversations keep a full viewport.
+   Messages retain their internal scroll in either state. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
   margin-bottom: 8px;
 }
@@ -1497,9 +1470,10 @@
 }
 .app-frame.app-frame--product .workspace--chat .workspace-messages {
   flex: 1;
+  max-width: none;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
   padding: 16px 8px;
 }
@@ -1510,14 +1484,15 @@
 .app-frame.app-frame--product .workspace--chat .workspace-composer {
   position: static;
   flex: 0 1 auto;
+  max-width: none;
   max-height: 55%;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   margin-inline: auto;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-composer textarea {
-  min-height: 3rem;
-  max-height: min(8rem, 25dvh);
+.app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
+  flex: none;
+  max-height: none;
 }
 .workspace--chat > .workspace-feedback:empty {
   display: none;

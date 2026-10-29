@@ -155,10 +155,6 @@
 .app-frame.app-frame--product .case-navigation {
   margin-bottom: 28px;
 }
-.app-frame.app-frame--product .workspace-back {
-  font-size: 13px;
-  margin: -12px 0 8px;
-}
 .app-frame.app-frame--product .workspace-header {
   display: flex;
   align-items: flex-start;
@@ -190,7 +186,7 @@
   padding-right: 4px;
 }
 .app-frame.app-frame--product .workspace-tabs a {
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   min-width: 44px;
   min-height: 48px;
   font-size: 14px;
@@ -450,31 +446,6 @@
   border-color: var(--product-line);
   box-shadow: none;
 }
-.app-frame.app-frame--product .summary-facts {
-  margin: 20px 0;
-  padding: 0 20px;
-  border: 1px solid var(--product-line);
-  border-radius: 16px;
-}
-.app-frame.app-frame--product .summary-facts > summary {
-  padding: 18px 0;
-  min-height: 56px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-}
-.app-frame.app-frame--product .summary-facts > summary span {
-  margin-left: 8px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-  font-weight: 400;
-}
-.app-frame.app-frame--product .summary-facts > section {
-  padding-bottom: 20px;
-}
-.app-frame.app-frame--product .summary-facts h2 {
-  font-size: 18px;
-}
 .app-frame.app-frame--product .report-canvas {
   max-width: 840px;
 }
@@ -637,9 +608,6 @@
   .app-frame.app-frame--product .intake-case-grid .case-list-delete {
     justify-self: end;
     margin: 0;
-  }
-  .app-frame.app-frame--product .workspace-back {
-    margin-top: -8px;
   }
   .app-frame.app-frame--product .workspace-header {
     gap: 8px;

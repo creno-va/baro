@@ -238,9 +238,6 @@ export function AppNavigation({
     resolvedRole === "user" &&
     !session?.needsConsent && (
       <div className="sidebar-recent">
-        <div className="sidebar-recent__heading">
-          <p className="sidebar-caption">내 사건</p>
-        </div>
         <section
           className="sidebar-recent__list"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the bounded recent list.

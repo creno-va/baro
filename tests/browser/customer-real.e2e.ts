@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { settleIntakeSave } from "../helpers/intake-autosave";
 
 // No OAuth/AI success claim: real production APIs receive signed synthetic sessions.
 const modulePath = "/src/client/api/index.ts";
@@ -276,8 +277,7 @@ for (const viewport of [
       await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
       await expect(
         page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }),
-      ).not.toBeChecked();
-      await page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }).check();
+      ).toHaveCount(0);
       await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
       await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
       await expect(page.getByRole("alert")).toBeVisible();
@@ -489,9 +489,8 @@ for (const [action, outcome] of [
       const text = "늦은 조회 응답 이후에도 남아야 하는 합성 답변";
       await answer.fill(text);
       if (action === "save") {
-        await page.locator("details > summary", { hasText: "답변 관리" }).click();
-        await page.getByRole("button", { name: "답변 저장", exact: true }).click();
-        await expect(page.getByRole("status")).toContainText("답변이 저장됐어요.");
+        await settleIntakeSave(page);
+        await expect(page.getByRole("status")).toContainText("저장됐어요.");
         expect(writes).toBe(1);
       } else {
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));

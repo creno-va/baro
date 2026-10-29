@@ -103,7 +103,7 @@ describe("B persistent API mock", () => {
       "합성 사건의 수정한 요약입니다.",
     );
   });
-  test("stale revisions, invalid choices, missing answers, consent/ownership and deletion fail closed", () => {
+  test("stale revisions, unknown questions, missing answers, consent/ownership and deletion fail closed", () => {
     const item = handlers["cases.create"](
       { narrative, subjectContext: "company" },
       context(),
@@ -258,7 +258,7 @@ describe("B persistent API mock", () => {
     expect(q.complete).toBe(false);
     expect(handlers["cases.get"]({ id: item.id }).summary).toBe("");
   });
-  test("stored legacy questions remain editable and retain unknown, skipped and choice answers", () => {
+  test("historical v2 questions remain editable and retain custom, unknown, skipped and choice answers", () => {
     const item = handlers["cases.create"]({ narrative, subjectContext: "individual" }, context());
     const saved = readStore<
       Record<
@@ -280,16 +280,19 @@ describe("B persistent API mock", () => {
     writeStore("intake", saved);
     let result = handlers["cases.getQuestions"]({ id: item.id });
     expect(result.questions).toHaveLength(5);
-    expect(() =>
-      handlers["cases.saveAnswers"](
-        {
-          id: item.id,
-          expectedRevision: result.revision,
-          answers: [{ questionId: "legacy-choice", state: "answered", value: "없는 선택" }],
-        },
-        context(),
-      ),
-    ).toThrow(ApiError);
+    result = handlers["cases.saveAnswers"](
+      {
+        id: item.id,
+        expectedRevision: result.revision,
+        answers: [
+          { questionId: "legacy-choice", state: "answered", value: "직접 입력한 합성 자료 설명" },
+        ],
+      },
+      context(),
+    );
+    expect(result.questions.find((question) => question.id === "legacy-choice")?.answer).toBe(
+      "직접 입력한 합성 자료 설명",
+    );
     result = handlers["cases.saveAnswers"](
       {
         id: item.id,
