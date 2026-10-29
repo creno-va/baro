@@ -328,7 +328,7 @@ export function AccountSettings() {
       <section className="settings-card settings-usage" aria-labelledby="settings-usage-title">
         <div className="settings-section-heading">
           <span className="settings-section-icon">
-            <ChartNoAxesColumnIncreasing size={23} aria-hidden="true" />
+            <ChartNoAxesColumnIncreasing size={28} aria-hidden="true" />
           </span>
           <div>
             <h2 id="settings-usage-title">사용량과 한도</h2>
@@ -427,7 +427,7 @@ export function AccountSettings() {
         <section className="settings-card settings-help" aria-labelledby="settings-help-title">
           <div className="settings-section-heading">
             <span className="settings-section-icon settings-section-icon-neutral">
-              <HelpCircle size={23} aria-hidden="true" />
+              <HelpCircle size={28} aria-hidden="true" />
             </span>
             <div>
               <h2 id="settings-help-title">도움말과 정책</h2>
@@ -460,7 +460,7 @@ export function AccountSettings() {
       <section className="settings-card settings-danger" aria-labelledby="settings-danger-title">
         <div className="settings-section-heading">
           <span className="settings-section-icon settings-section-icon-danger">
-            <ShieldCheck size={22} aria-hidden="true" />
+            <ShieldCheck size={28} aria-hidden="true" />
           </span>
           <div>
             <h2 id="settings-danger-title">계정 삭제</h2>

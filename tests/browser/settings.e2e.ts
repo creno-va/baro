@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 const tag = "a".repeat(64),
   marker = "baro.account-reauth.v1";
 
-test("account deletion is vertical with one entry and shows only linked SSO options in its modal", async ({
+test("account deletion is inline with one entry and shows only linked SSO options in its modal", async ({
   page,
 }) => {
   let providers: string[] = ["google"];
@@ -76,14 +76,33 @@ test("account deletion is vertical with one entry and shows only linked SSO opti
     }
     await modal.getByRole("button", { name: "취소", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    const layout = await card.evaluate((node) => {
-      const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
-      const action = node.querySelector("button")?.getBoundingClientRect();
-      if (!heading || !action) throw new Error("Account deletion controls missing");
-      return { below: action.top >= heading.bottom, left: Math.abs(action.left - heading.left) };
-    });
-    expect(layout.below).toBe(true);
-    expect(layout.left).toBeLessThanOrEqual(1);
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+        .toBe(true);
+      if (width === 1440) {
+        const layout = await card.evaluate((node) => {
+          const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
+          const action = node.querySelector("button")?.getBoundingClientRect();
+          if (!heading || !action) throw new Error("Account deletion controls missing");
+          return {
+            inline: action.left >= heading.right,
+            center: Math.abs(action.top + action.height / 2 - heading.top - heading.height / 2),
+          };
+        });
+        expect(layout.inline).toBe(true);
+        expect(layout.center).toBeLessThanOrEqual(1);
+      }
+      if (linked.length === 2) {
+        await card.screenshot({ path: `.wrangler/settings-danger-inline-${width}.png` });
+        if (width === 1440)
+          for (const section of ["usage", "help"])
+            await page.locator(`.settings-${section} .settings-section-heading`).screenshot({
+              path: `.wrangler/settings-${section}-heading.png`,
+            });
+      }
+    }
   }
 });
 test("settings uses real signed session, OAuth state/callback, SQL account deletion and revoked cookie", async ({

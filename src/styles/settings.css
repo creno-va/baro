@@ -102,6 +102,11 @@
 }
 .settings-section-heading > div {
   min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.account-settings .settings-section-heading :is(h2, p) {
+  margin: 0;
 }
 .settings-section-icon {
   display: inline-flex;
@@ -408,13 +413,13 @@
 }
 .settings-danger {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
   margin-bottom: 0;
 }
 .settings-danger .settings-section-heading {
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 0;
 }
 .settings-danger-content > p {
@@ -620,10 +625,6 @@
   .settings-case-icon {
     display: none;
   }
-  .settings-danger {
-    grid-template-columns: 230px minmax(0, 1fr);
-    gap: 24px;
-  }
 }
 @container account-settings (max-width: 760px) {
   .settings-heading {
@@ -641,7 +642,6 @@
     display: flex;
   }
   .settings-danger {
-    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
   }
   .settings-reset-badge {

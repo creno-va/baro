@@ -373,10 +373,13 @@
 .app-frame.app-frame--product .settings-section-heading {
   margin-bottom: 20px;
 }
+.app-frame.app-frame--product .settings-danger .settings-section-heading {
+  margin-bottom: 0;
+}
 .app-frame.app-frame--product .settings-section-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
 }
 .app-frame.app-frame--product .settings-card h2 {
   font-size: 19px;
