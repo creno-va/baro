@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { openAccountDeletion } from "../helpers/account-deletion";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/me/session", (route) =>
@@ -14,6 +15,77 @@ test.beforeEach(async ({ page }) => {
 
 const tag = "a".repeat(64),
   marker = "baro.account-reauth.v1";
+
+test("account deletion is vertical with one entry and shows only linked SSO options in its modal", async ({
+  page,
+}) => {
+  let providers: string[] = ["google"];
+  await page.route("**/api/me/deletion", (route) =>
+    route.fulfill({
+      json: { ownerTag: tag, recentOAuth: false, authenticatedAt: null, providers },
+    }),
+  );
+  await page.route("**/api/v2/me/usage", (route) =>
+    route.fulfill({
+      json: {
+        newCases: { used: 0, limit: 3 },
+        aiResponses: { used: 0, limit: 200 },
+        mediaMinutes: { used: 0, limit: 60 },
+        storageBytes: { used: 0, limit: 10000000000 },
+      },
+    }),
+  );
+  for (const linked of [["google"], ["naver", "kakao"], []]) {
+    providers = linked;
+    await page.goto("/settings");
+    const card = page.getByRole("region", { name: "계정 삭제", exact: true });
+    await expect(card.getByRole("button")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /로 재인증$/ })).toHaveCount(0);
+    const modal = await openAccountDeletion(page);
+    await expect(modal).toHaveAccessibleName("계정 삭제 전 본인 확인");
+    await expect(modal.getByRole("button", { name: /로 재인증$/ })).toHaveCount(linked.length);
+    for (const provider of linked) {
+      const names: Record<string, string> = { google: "Google", naver: "네이버", kakao: "카카오" };
+      await expect(
+        modal.getByRole("button", { name: `${names[provider]}로 재인증`, exact: true }),
+      ).toBeEnabled();
+    }
+    const positions = await modal.locator(".settings-provider").evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const { left, width } = button.getBoundingClientRect();
+        return { left, width };
+      }),
+    );
+    const first = positions[0];
+    if (first)
+      for (const item of positions) {
+        expect(Math.abs(item.left - first.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(item.width - first.width)).toBeLessThanOrEqual(1);
+      }
+    await expect(modal.getByLabel("삭제 확인 — DELETE 입력")).toHaveCount(0);
+    await expect(modal.getByRole("button", { name: "삭제 요청 확인", exact: true })).toHaveCount(0);
+    if (!linked.length)
+      await expect(modal.getByRole("link", { name: /다시 로그인/ })).toBeVisible();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+        .toBe(true);
+      if (linked.length === 2)
+        await page.screenshot({ path: `.wrangler/account-reauth-${width}.png` });
+    }
+    await modal.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    const layout = await card.evaluate((node) => {
+      const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
+      const action = node.querySelector("button")?.getBoundingClientRect();
+      if (!heading || !action) throw new Error("Account deletion controls missing");
+      return { below: action.top >= heading.bottom, left: Math.abs(action.left - heading.left) };
+    });
+    expect(layout.below).toBe(true);
+    expect(layout.left).toBeLessThanOrEqual(1);
+  }
+});
 test("settings uses real signed session, OAuth state/callback, SQL account deletion and revoked cookie", async ({
   page,
   context,
@@ -73,10 +145,8 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
       });
     });
     await page.goto("/settings");
+    await openAccountDeletion(page);
     await page.getByRole("button", { name: "google로 재인증" }).click();
-    const openDeletion = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
-    await expect(openDeletion).toBeEnabled();
-    await openDeletion.click();
     const confirmation = page.getByLabel("삭제 확인 — DELETE 입력");
     await expect(confirmation).toBeEnabled();
     await confirmation.fill("DELETE");
@@ -126,7 +196,8 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   const confirm = page.getByLabel("삭제 확인 — DELETE 입력");
   const remove = page.getByRole("button", { name: "계정과 모든 사건 삭제" });
   await expect(confirm).toHaveCount(0);
-  await expect(remove).toBeDisabled();
+  await expect(remove).toBeEnabled();
+  await remove.click();
   const auth = page.getByRole("button", { name: "google로 재인증" });
   // The disabled delete action is also the initial loading state. Wait until
   // access/optional reads finish before issuing a real keyboard action.
@@ -134,8 +205,6 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await auth.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => stamp).not.toBeNull();
-  await expect(remove).toBeEnabled();
-  await remove.click();
   await expect(confirm).toBeEnabled();
   await expect(confirm).toBeFocused();
   await page.screenshot({ path: ".wrangler/settings-320.png", fullPage: true });
@@ -202,10 +271,9 @@ test("loading/error/cancel, expired callback and switched account never arm dele
     { key: marker, ownerTag: tag },
   );
   await page.reload();
+  await openAccountDeletion(page);
   await expect(page.getByRole("button", { name: "google로 재인증" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
-  ).toBeDisabled();
+  await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toHaveCount(0);
   // A visible button can still belong to the first, unfinished settings load.
   // Complete that callback check before injecting the next navigation marker.
   await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
@@ -221,9 +289,8 @@ test("loading/error/cancel, expired callback and switched account never arm dele
   await expect(page.getByRole("alert")).toContainText(
     "다른 계정으로 인증했어요. 삭제할 계정으로 다시 로그인해 주세요.",
   );
-  await expect(
-    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
-  ).toBeDisabled();
+  await openAccountDeletion(page);
+  await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toHaveCount(0);
   expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBeNull();
 });
 
@@ -301,6 +368,7 @@ test("late OAuth request failure after leaving preserves the next ticket; back n
   });
   await page.goto("/settings");
   await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
+  await openAccountDeletion(page);
   await page.getByRole("button", { name: "google로 재인증" }).click();
   await pending;
   const nextMarker = JSON.stringify({ ownerTag: tag, startedAt: Date.now() });
@@ -318,7 +386,6 @@ test("late OAuth request failure after leaving preserves the next ticket; back n
   );
   await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
   expect(await page.evaluate((key) => sessionStorage.getItem(key), marker)).toBe(nextMarker);
-  await expect(
-    page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
-  ).toBeDisabled();
+  await openAccountDeletion(page);
+  await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toHaveCount(0);
 });

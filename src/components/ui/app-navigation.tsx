@@ -78,7 +78,6 @@ export function AppNavigation({
   const [error, setError] = useState("");
   const [signingOut, setSigningOut] = useState(false);
   const [deletion, setDeletion] = useState<{ item: CaseView; ownerId: string } | null>(null);
-  const [confirmation, setConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const deleteLock = useRef(false);
   const sessionRequest = useRef(0);
@@ -98,7 +97,6 @@ export function AppNavigation({
           setRecent([]);
           setRecentState("loading");
           setDeletion(null);
-          setConfirmation("");
         }
         owner = next.user?.id;
         setSession(next);
@@ -188,7 +186,7 @@ export function AppNavigation({
     }
   }
   async function deleteRecent() {
-    if (!deletion || confirmation !== "DELETE" || deleteLock.current) return;
+    if (!deletion || deleteLock.current) return;
     const target = deletion;
     deleteLock.current = true;
     setDeleting(true);
@@ -203,7 +201,7 @@ export function AppNavigation({
     };
     try {
       await sameOwner();
-      await api.account.deleteCase(target.item.id, confirmation, target.item.schemaVersion ?? "2");
+      await api.account.deleteCase(target.item.id, "DELETE", target.item.schemaVersion ?? "2");
       await sameOwner();
       setRecent((items) => items.filter((item) => item.id !== target.item.id));
       setDeletion(null);
@@ -286,7 +284,6 @@ export function AppNavigation({
                     disabled={deleting || signingOut}
                     onClick={(event) => {
                       event.currentTarget.focus();
-                      setConfirmation("");
                       setError("");
                       if (session?.user) setDeletion({ item, ownerId: session.user.id });
                     }}
@@ -412,27 +409,20 @@ export function AppNavigation({
         title="이 사건을 삭제할까요?"
         description="삭제하면 이 사건과 연결된 자료·리포트에 접근할 수 없어요. 필요한 파일은 먼저 보관해 주세요."
       >
-        <p>{deletion?.item.title}</p>
-        <label htmlFor="recent-delete-confirmation">삭제하려면 DELETE를 입력해 주세요.</label>
-        <input
-          id="recent-delete-confirmation"
-          value={confirmation}
-          disabled={deleting}
-          autoComplete="off"
-          onChange={(event) => setConfirmation(event.target.value)}
-        />
         {error && <p role="alert">{error}</p>}
-        <Button variant="outline" disabled={deleting} onClick={() => setDeletion(null)}>
-          취소
-        </Button>
-        <Button
-          variant="destructive"
-          loading={deleting}
-          disabled={confirmation !== "DELETE" || deleting}
-          onClick={() => void deleteRecent()}
-        >
-          {deleting ? "삭제 접수 중…" : "사건 삭제"}
-        </Button>
+        <div className="deletion-dialog-actions">
+          <Button
+            variant="destructive"
+            loading={deleting}
+            disabled={!deletion || deleting}
+            onClick={() => void deleteRecent()}
+          >
+            {deleting ? "삭제 접수 중…" : "사건 삭제"}
+          </Button>
+          <Button variant="outline" autoFocus disabled={deleting} onClick={() => setDeletion(null)}>
+            취소
+          </Button>
+        </div>
       </Dialog>
     </>
   );

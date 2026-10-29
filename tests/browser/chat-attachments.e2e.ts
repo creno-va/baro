@@ -55,6 +55,38 @@ async function attach(page: Page) {
   await (await chooser).setFiles(file);
 }
 
+test("workspace deletion has no title or typed confirmation and aligns delete before cancel", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.getByLabel("사건 관리").click();
+  const opener = page.getByRole("button", { name: "사건 삭제", exact: true });
+  await opener.click();
+  const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(modal.getByRole("textbox")).toHaveCount(0);
+  await expect(modal.getByText("합성 첨부 사건", { exact: true })).toHaveCount(0);
+  await expect(modal.locator(".deletion-dialog-actions button")).toHaveText(["사건 삭제", "취소"]);
+  await expect(modal.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
+    if (width === 390) await page.screenshot({ path: ".wrangler/workspace-deletion-390.png" });
+  }
+  await modal.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(modal).toHaveCount(0);
+  await opener.click();
+  await modal.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  expect(
+    await page.evaluate(
+      (id) => Boolean(JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id]),
+      id,
+    ),
+  ).toBe(false);
+});
+
 test("materials use one upload placeholder then a compact bar, aligned with the case header", async ({
   page,
 }) => {

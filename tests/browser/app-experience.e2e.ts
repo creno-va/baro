@@ -93,7 +93,25 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
+    await expect(dialog.getByRole("textbox")).toHaveCount(0);
+    await expect(dialog.getByText(stories[0]?.title ?? "", { exact: true })).toHaveCount(0);
+    const actions = dialog.locator(".deletion-dialog-actions");
+    await expect(actions.getByRole("button")).toHaveText(["사건 삭제", "취소"]);
+    const geometry = await actions.evaluate((node) => {
+      const buttons = node.querySelectorAll("button");
+      const remove = buttons[0]?.getBoundingClientRect();
+      const cancel = buttons[1]?.getBoundingClientRect();
+      if (!remove || !cancel) throw new Error("Deletion actions missing");
+      return {
+        remove: remove.x,
+        cancel: cancel.x,
+        right: node.getBoundingClientRect().right - cancel.right,
+      };
+    });
+    expect(geometry.remove).toBeLessThan(geometry.cancel);
+    expect(Math.abs(geometry.right)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `.wrangler/deletion-dialog-${product ? "product" : "app"}.png` });
     await dialog.getByRole("button", { name: "취소", exact: true }).click();
   }
 });
@@ -219,7 +237,7 @@ test("dialogs center, contain long content and restore focus across viewport siz
     });
     await opener.click();
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-    await expect(dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.")).toBeVisible();
+    await expect(dialog.getByRole("textbox")).toHaveCount(0);
     const bounds = await dialog.boundingBox();
     expect(bounds).not.toBeNull();
     expect(Math.abs((bounds?.x ?? 0) + (bounds?.width ?? 0) / 2 - (width ?? 0) / 2)).toBeLessThan(
@@ -400,9 +418,9 @@ test("Escape cannot hide a deletion request that the dialog owner is still waiti
   await page.goto("/cases");
   await settled(page);
   const opener = page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
+  await opener.locator("..").hover();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await dialog.getByLabel("삭제하려면 DELETE를 입력해 주세요.").fill("DELETE");
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect.poll(() => writes).toBe(1);
   await expect(dialog.getByRole("button", { name: "삭제 접수 중…" })).toHaveAttribute(

@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   ArrowRight,
   ChartNoAxesColumnIncreasing,
   Check,
@@ -16,10 +15,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
 import { accountDeleted } from "../server/modules/analytics/browser";
+import { ProviderIcon } from "./AuthButtons";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
 import { LoadingContent, Spinner } from "./ui/loading";
 
 const markerKey = "baro.account-reauth.v1";
+const providerNames = { google: "Google", naver: "네이버", kakao: "카카오" };
 const superseded = () =>
   Object.assign(new Error("설정 확인 요청이 변경됐어요."), { code: "SETTINGS_READ_SUPERSEDED" });
 const isSuperseded = (error: unknown) =>
@@ -107,7 +108,7 @@ export function AccountSettings() {
         }
         setAccess(value);
         const raw = sessionStorage.getItem(markerKey);
-        let marker: { ownerTag?: string; startedAt?: number } | null = null;
+        let marker: { ownerTag?: string; startedAt?: number; purpose?: string } | null = null;
         try {
           marker = raw ? JSON.parse(raw) : null;
         } catch {
@@ -118,6 +119,13 @@ export function AccountSettings() {
         if (marker && marker.ownerTag !== value.ownerTag) {
           sessionStorage.removeItem(markerKey);
           problems.push("다른 계정으로 인증했어요. 삭제할 계정으로 다시 로그인해 주세요.");
+        } else if (confirmed && marker?.purpose === "account-delete") {
+          setTarget("account");
+          setConfirmation("");
+          sessionStorage.setItem(
+            markerKey,
+            JSON.stringify({ ownerTag: marker.ownerTag, startedAt: marker.startedAt }),
+          );
         }
       } else {
         setAccess(null);
@@ -187,12 +195,18 @@ export function AccountSettings() {
     setError("");
     setReady(false);
     try {
-      await verifyOwner();
+      const verified = await verifyOwner();
+      if (!verified.providers.includes(provider))
+        throw new Error("이 계정에 연결된 로그인 수단을 다시 확인해 주세요.");
       // Earlier load/focus reads cannot consume the new reauthentication marker.
       sequence = ++loadSequence.current;
       sessionStorage.setItem(
         markerKey,
-        JSON.stringify({ ownerTag: access.ownerTag, startedAt: Date.now() }),
+        JSON.stringify({
+          ownerTag: verified.ownerTag,
+          startedAt: Date.now(),
+          purpose: "account-delete",
+        }),
       );
       await api.account.reauthenticate(provider);
     } catch (e) {
@@ -450,54 +464,13 @@ export function AccountSettings() {
           </span>
           <div>
             <h2 id="settings-danger-title">계정 삭제</h2>
-            <p>중요한 정보는 미리 보관해 주세요.</p>
           </div>
         </div>
         <div className="settings-danger-content">
-          <p>
-            모든 사건·자료·리포트·프로필과 로그인 정보의 삭제를 요청해요. 이미 다운로드하거나 외부에
-            전달한 파일은 BARO에서 삭제할 수 없어요.
-          </p>
-          {!ready && (
-            <div className="settings-reauth">
-              <p>
-                <AlertTriangle size={16} aria-hidden="true" /> 계정 삭제 전에 같은 계정으로 다시
-                인증해 주세요.
-              </p>
-              <div className="settings-actions">
-                {access?.providers.map((provider) => (
-                  <button
-                    key={provider}
-                    type="button"
-                    disabled={Boolean(busy) || checking}
-                    onClick={() => void reauthenticate(provider)}
-                  >
-                    {provider}로 재인증
-                  </button>
-                ))}
-              </div>
-              {access && !access.providers.length && (
-                <a className="settings-text-link" href="/login">
-                  다시 로그인 <ChevronRight size={16} aria-hidden="true" />
-                </a>
-              )}
-              {!access && !busy && (
-                <a className="settings-text-link" href="/login">
-                  로그인 상태 확인 <ChevronRight size={16} aria-hidden="true" />
-                </a>
-              )}
-            </div>
-          )}
-          {ready && (
-            <p className="settings-reauth-complete">
-              <Check size={16} aria-hidden="true" /> 계정 확인을 마쳤어요. 삭제할 내용을 한 번 더
-              확인해 주세요.
-            </p>
-          )}
           <button
             type="button"
             className="danger-button"
-            disabled={Boolean(busy) || checking || !ready}
+            disabled={Boolean(busy) || checking || !access}
             onClick={(event) => {
               event.currentTarget.focus();
               open("account");
@@ -509,44 +482,75 @@ export function AccountSettings() {
       </section>
       {target && (
         <ConfirmDialog
-          title="계정과 모든 사건을 삭제할까요?"
+          title={ready ? "계정과 모든 사건을 삭제할까요?" : "계정 삭제 전 본인 확인"}
           busy={Boolean(busy)}
           onCancel={() => {
             if (!busy) setTarget(null);
           }}
         >
-          <p>
-            계정의 사건·자료·리포트·프로필 접근을 차단하고 세션을 종료해요. 삭제를 접수한 뒤 원격
-            자료 정리가 진행돼요.
-          </p>
-          <label htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</label>
-          <input
-            id="delete-confirmation"
-            autoComplete="off"
-            value={confirmation}
-            disabled={Boolean(busy) || checking}
-            onChange={(e) => setConfirmation(e.target.value)}
-          />
+          {!ready ? (
+            <div className="settings-reauth">
+              <p>안전한 삭제를 위해 이 계정에 연결된 로그인 수단으로 다시 인증해 주세요.</p>
+              <div className="settings-provider-list">
+                {access?.providers.map((provider) => (
+                  <button
+                    key={provider}
+                    type="button"
+                    className={`settings-provider settings-provider--${provider}`}
+                    disabled={Boolean(busy) || checking}
+                    onClick={() => void reauthenticate(provider)}
+                  >
+                    <ProviderIcon provider={provider} />
+                    <span>{providerNames[provider]}로 재인증</span>
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+              {access && !access.providers.length && (
+                <a className="settings-text-link" href="/login">
+                  다시 로그인 <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              )}
+            </div>
+          ) : (
+            <>
+              <p>
+                계정의 사건·자료·리포트·프로필 접근을 차단하고 세션을 종료해요. 삭제를 접수한 뒤
+                원격 자료 정리가 진행돼요. 이미 다운로드하거나 외부에 전달한 파일은 삭제할 수
+                없어요.
+              </p>
+              <label htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</label>
+              <input
+                id="delete-confirmation"
+                autoComplete="off"
+                value={confirmation}
+                disabled={Boolean(busy) || checking}
+                onChange={(e) => setConfirmation(e.target.value)}
+              />
+            </>
+          )}
           {error && (
             <p role="alert" className="settings-error">
               {error}
             </p>
           )}
-          <div className="settings-actions">
+          <div className="settings-actions deletion-dialog-actions">
+            {ready && (
+              <button
+                type="button"
+                className="danger-button"
+                disabled={Boolean(busy) || checking || !ready || confirmation !== "DELETE"}
+                onClick={() => void remove()}
+              >
+                {busy ? "삭제 요청 중…" : "삭제 요청 확인"}
+              </button>
+            )}
             <button
               type="button"
               disabled={Boolean(busy) || checking}
               onClick={() => setTarget(null)}
             >
               취소
-            </button>
-            <button
-              type="button"
-              className="danger-button"
-              disabled={Boolean(busy) || checking || confirmation !== "DELETE"}
-              onClick={() => void remove()}
-            >
-              {busy ? "삭제 요청 중…" : "삭제 요청 확인"}
             </button>
           </div>
         </ConfirmDialog>

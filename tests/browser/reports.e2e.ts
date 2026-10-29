@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { openAccountDeletion } from "../helpers/account-deletion";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
@@ -231,7 +232,6 @@ test("review, masking, exclusions, PDF-only downloads and persistent cascading d
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.goto("/cases/case-demo/delete");
-  await page.getByRole("textbox", { name: "삭제하려면 DELETE를 입력해 주세요." }).fill("DELETE");
   await page.getByRole("dialog").getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect(page).toHaveURL("/settings");
   await page.reload();
@@ -395,11 +395,8 @@ test("account deletion preserves signed session, OAuth callback and SQL revoke g
       });
     });
     await page.goto("/settings?real-account=true");
-    const open = page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true });
-    await expect(open).toBeDisabled();
+    await openAccountDeletion(page);
     await page.getByRole("button", { name: "google로 재인증" }).click();
-    await expect(open).toBeEnabled();
-    await open.click();
     await page.getByRole("textbox", { name: "삭제 확인 — DELETE 입력" }).fill("DELETE");
     await page.getByRole("button", { name: "삭제 요청 확인", exact: true }).click();
     await expect(page.getByRole("heading", { name: "계정 삭제를 접수했어요" })).toBeVisible();

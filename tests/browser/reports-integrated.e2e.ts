@@ -130,7 +130,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(removeCase).toHaveCount(1);
   await removeCase.click();
-  await page.getByRole("textbox", { name: "삭제하려면 DELETE를 입력해 주세요." }).fill("DELETE");
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
     .getByRole("button", { name: "사건 삭제", exact: true })
