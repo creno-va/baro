@@ -253,7 +253,9 @@ test("chat height stays fixed when preparation expands and the page scrolls", as
     await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(send).toBeInViewport({ ratio: 1 });
-    await context.locator("summary").evaluate((element) => element.click());
+    await context.locator("summary").evaluate((element) => {
+      if (element instanceof HTMLElement) element.click();
+    });
     await expect(context).not.toHaveAttribute("open");
     await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
     await expect(send).toBeInViewport({ ratio: 1 });
