@@ -1505,20 +1505,20 @@
   margin: 6px 0;
 }
 
-/* Empty chat fits below the header; existing conversations keep a full viewport.
-   Messages retain their internal scroll in either state. */
+/* Every conversation fits below the case header and tabs, including its composer.
+   Only the message history takes the remaining internal scroll area. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
   margin-bottom: 8px;
 }
 .workspace--chat .workspace-chat-heading {
   display: none;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-main {
+.workspace--chat .workspace-main {
   flex: none;
-  height: var(--chat-panel-height, 100svh);
+  height: var(--chat-panel-height, calc(100svh - 240px));
   min-height: 0;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-messages {
+.workspace--chat .workspace-messages {
   flex: 1;
   max-width: none;
   min-height: 0;
@@ -1531,18 +1531,14 @@
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
-.app-frame.app-frame--product .workspace--chat .workspace-composer {
+.workspace--chat .workspace-composer {
   position: static;
   flex: 0 1 auto;
   max-width: none;
-  max-height: 55%;
+  max-height: min(100%, max(88px, 55%));
   overflow-y: auto;
   overscroll-behavior-y: auto;
   margin-inline: auto;
-}
-.app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
-  flex: none;
-  max-height: none;
 }
 .workspace--chat > .workspace-feedback:empty {
   display: none;

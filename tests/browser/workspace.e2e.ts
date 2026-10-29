@@ -69,6 +69,15 @@ test("follow-up prompts and the official precedent entry remain available after 
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
+    // An existing conversation must reserve space for the input as well as messages.
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      window.dispatchEvent(new Event("resize"));
+    });
+    await expect(input).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeInViewport({
+      ratio: 1,
+    });
     const precedent = suggestions.getByRole("link", { name: "관련 판례 찾아보기" });
     await expect(precedent).toHaveClass(/ui-button--outline/);
     const heights = await suggestions

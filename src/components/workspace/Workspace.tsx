@@ -360,10 +360,13 @@ export function Workspace({
     let animation = 0;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const panelTop = panel.getBoundingClientRect().top + window.scrollY;
-      const height = view.messages.length ? viewportHeight : viewportHeight - panelTop - 16;
-      panel.style.setProperty("--chat-panel-height", `${Math.max(160, height / zoom)}px`);
+      const viewport = window.visualViewport;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const panelTop = Math.max(0, panel.getBoundingClientRect().top - (viewport?.offsetTop ?? 0));
+      // The entire chat, including its composer, uses the space BELOW the
+      // header/tabs in both empty and existing conversations.
+      const height = viewportHeight - panelTop - 16;
+      panel.style.setProperty("--chat-panel-height", `${Math.max(96, height / zoom)}px`);
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(() => {
         if (view.messages.length) followReply();
@@ -374,14 +377,18 @@ export function Workspace({
     const navigation = panel.closest(".workspace")?.querySelector(".case-navigation");
     const observer = new ResizeObserver(fit);
     if (navigation) observer.observe(navigation);
+    const workspace = panel.closest(".workspace");
+    if (workspace) observer.observe(workspace);
     window.addEventListener("resize", fit);
     window.visualViewport?.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("scroll", fit);
     return () => {
       cancelAnimationFrame(animation);
       observer.disconnect();
       panel.style.removeProperty("--chat-panel-height");
       window.removeEventListener("resize", fit);
       window.visualViewport?.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("scroll", fit);
     };
   }, [tab, view, followReply]);
   useEffect(() => {
