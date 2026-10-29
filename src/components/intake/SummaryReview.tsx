@@ -492,8 +492,9 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       open={confirming}
                       onOpenChange={setConfirming}
                       title="이제 사건 정리를 시작할까요?"
+                      description="확인한 요약을 바탕으로 대화와 자료 정리를 이어갈 수 있어요."
                     >
-                      <div className="intake-actions">
+                      <div className="summary-confirm-actions">
                         <Button onClick={() => void confirm()} disabled={locked} loading={busy}>
                           <Check size={18} aria-hidden="true" />
                           {busy ? "확인 중…" : "확인하고 사건 열기"}

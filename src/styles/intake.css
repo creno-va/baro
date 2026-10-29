@@ -898,6 +898,13 @@
 .intake-summary-scene .summary-edit-column > .intake-scene-primary {
   margin-top: 24px;
 }
+.summary-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .conversation-effort {
   display: inline-flex;
   align-items: center;
