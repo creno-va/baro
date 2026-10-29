@@ -4,7 +4,6 @@ import type { Context, MiddlewareHandler } from "hono";
 import type { ApiEnvironment } from "../api/errors";
 import * as schema from "../db/schema";
 import { hasCurrentConsent } from "../modules/consent/service";
-import { readAccountType } from "./account-type";
 import { getSession } from "./session";
 
 function isPage(path: string, page: "/app" | "/login"): boolean {
@@ -57,8 +56,6 @@ async function appEntry(context: Context<ApiEnvironment>, syntheticFixture: bool
       if (!session) return context.redirect("/login", 302);
       if (!(await hasCurrentConsent(drizzle(context.env.DB, { schema }), session.user.id)))
         return context.redirect("/consent", 302);
-      if ((await readAccountType(context.env.DB, session.user.id)) !== "customer")
-        return context.redirect("/lawyer", 302);
     } catch {
       // Dependency failures are not anonymous sessions: never start an OAuth redirect loop.
       return unavailable(context);

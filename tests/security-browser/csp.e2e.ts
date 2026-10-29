@@ -2,6 +2,37 @@ import { expect, type Locator, test } from "@playwright/test";
 import type { DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
 
+test("built service focus feedback works under hash CSP", async ({ page }) => {
+  const violations: string[] = [];
+  await page.exposeFunction("recordFocusCspViolation", (directive: string) =>
+    violations.push(directive),
+  );
+  await page.addInitScript(() =>
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void (
+        window as unknown as { recordFocusCspViolation: (value: string) => Promise<void> }
+      ).recordFocusCspViolation(event.violatedDirective);
+    }),
+  );
+  for (const path of ["/login", "/help"]) {
+    const response = await page.goto(path);
+    expect(response?.headers()["content-security-policy"]).toContain("sha256-");
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+    await page.keyboard.press("Tab");
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "keyboard");
+    if (path === "/help") {
+      const summary = page.locator(".help-document summary").first();
+      await summary.focus();
+      await expect(summary).toHaveCSS("outline-style", "none");
+      await expect(summary).toHaveCSS("text-decoration-line", "underline");
+      await summary.click();
+      await expect(summary).toHaveCSS("outline-style", "none");
+      await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+    }
+  }
+  expect(violations).toEqual([]);
+});
+
 async function scrollScene(scene: Locator, pinSelector: string, progress: number) {
   await scene.evaluate(
     (element, options) => {

@@ -5,6 +5,422 @@ import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
+
+test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
+  page,
+}) => {
+  await seed(page, false, "active", "lawyer");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await hydrated(page);
+  const sidebar = page.locator(".sidebar-desktop");
+  await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
+  await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
+  await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
+  await page
+    .locator(".workspace-composer textarea")
+    .fill("변호사 계정으로 자료와 날짜를 함께 정리해 주세요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(page.locator(".workspace-message--assistant")).toBeVisible();
+  await page.screenshot({ path: ".wrangler/lawyer-workspace-1440.png" });
+  await page.goto(`${base}/reports`);
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole("button", { name: "저장하고 계속", exact: true })).toBeVisible();
+  await page
+    .locator("#narrative")
+    .fill("변호사 계정의 새 사건입니다. 계약서와 송금 자료를 정리하려고 합니다.");
+  await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+  await expect(page).toHaveURL(/\/cases\/[^/]+\/intake$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(menu.locator(".sidebar-story")).toHaveCount(2);
+});
+
+test("sidebar cancellation clears pointer hover without losing keyboard focus return", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await hydrated(page);
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    const owners = JSON.parse(localStorage.getItem("baro-api-mock-v1:caseOwners") ?? "{}");
+    cases["sidebar-cancel-case"] = {
+      ...cases[id],
+      id: "sidebar-cancel-case",
+      title: "삭제 취소 확인용 사건",
+    };
+    owners["sidebar-cancel-case"] = owners[id];
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    localStorage.setItem("baro-api-mock-v1:caseOwners", JSON.stringify(owners));
+  }, id);
+  await page.reload();
+  await hydrated(page);
+  const row = page
+    .locator(".sidebar-desktop .sidebar-story-row")
+    .filter({ hasText: "삭제 취소 확인용 사건" });
+  const link = row.locator(".sidebar-story");
+  const remove = row.locator(".sidebar-story-delete");
+  await page.mouse.move(1000, 400);
+  await expect(remove).toHaveCSS("opacity", "0");
+  const rowColor = await row.evaluate((node) => getComputedStyle(node).backgroundColor);
+  const linkColor = await link.evaluate((node) => getComputedStyle(node).backgroundColor);
+  for (const action of ["취소", "닫기"]) {
+    await row.hover();
+    await remove.click();
+    const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+    await dialog.getByRole("button", { name: action, exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toBeFocused();
+    await expect(row).toHaveCSS("background-color", rowColor);
+    await expect(link).toHaveCSS("background-color", linkColor);
+    await expect(remove).toHaveCSS("opacity", "0");
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+  }
+  await page
+    .locator(".sidebar-desktop .sidebar-recent")
+    .screenshot({ path: ".wrangler/sidebar-cancel-pointer.png" });
+  await page.keyboard.press("Tab");
+  await remove.focus();
+  await expect(remove).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(remove).toBeFocused();
+  await expect(remove).toHaveCSS("opacity", "1");
+});
+
+test("active summary has a primary save action that persists and applies changes", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto(`${base}/summary?from=timeline`);
+  await hydrated(page);
+  const save = page.getByRole("button", { name: "수정 내용 저장", exact: true });
+  const editor = page.getByRole("textbox", { name: "요약 편집", exact: true });
+  await expect(save).toBeVisible();
+  await expect(save).toHaveClass(/ui-button--primary/);
+  await expect(save).toBeDisabled();
+  await expect(page.locator(".intake-actions a")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true })).toHaveCount(
+    1,
+  );
+  await editor.fill("수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
+  await expect(save).toBeDisabled();
+  expect(
+    await page.evaluate(
+      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].stage,
+      id,
+    ),
+  ).toBe("active");
+  await page.reload();
+  await expect(editor).toHaveValue(
+    "수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.",
+  );
+  await editor.fill("   ");
+  await expect(save).toBeDisabled();
+  await editor.fill("긴".repeat(5001));
+  await expect(save).toBeDisabled();
+  await expect(
+    page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }),
+  ).toHaveAttribute("href", `${base}/timeline`);
+});
+
+async function focusAudit(page: Page, keyboard: boolean) {
+  if (keyboard) await page.keyboard.press("Tab");
+  else await page.mouse.click(5, 85);
+  return page.evaluate(() => {
+    const scope = document.querySelector(".app-frame, .login-page, .consent-page");
+    if (!scope) throw new Error("Focus audit scope missing");
+    const failures: string[] = [];
+    let count = 0;
+    for (const node of scope.querySelectorAll(
+      "a[href],button,input,textarea,select,summary,[tabindex]",
+    )) {
+      if (
+        !(node instanceof HTMLElement) ||
+        node.matches(":disabled") ||
+        !node.getClientRects().length ||
+        node.closest("dialog:not([open]),[hidden]")
+      )
+        continue;
+      const style = getComputedStyle(node);
+      if (style.visibility === "hidden") continue;
+      const parents = [node, node.parentElement, node.parentElement?.parentElement].filter(
+        (value): value is HTMLElement => !!value,
+      );
+      const before = parents.map((parent) => getComputedStyle(parent).boxShadow);
+      node.focus({ preventScroll: true });
+      if (document.activeElement !== node) continue;
+      count++;
+      parents.forEach((parent, index) => {
+        const current = getComputedStyle(parent);
+        const label = `${parent.tagName}.${parent.className}`;
+        if (current.outlineStyle !== "none" && Number.parseFloat(current.outlineWidth) > 0)
+          failures.push(`${label}: ${current.outline}`);
+        if (
+          current.boxShadow !== before[index] &&
+          current.boxShadow !== "none" &&
+          !current.boxShadow.includes("inset")
+        )
+          failures.push(`${label}: outer focus shadow ${current.boxShadow}`);
+      });
+    }
+    return { count, failures: [...new Set(failures)] };
+  });
+}
+
+test("focus feedback covers login roles and consent without pointer outlines", async ({ page }) => {
+  await seed(page);
+  await page.goto(base);
+  await hydrated(page);
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({ user: null, needsConsent: false }),
+    ),
+  );
+  await page.goto("/login");
+  await hydrated(page);
+  const customer = page.getByRole("radio", { name: "고객", exact: true });
+  await expect(customer).toBeEnabled();
+  for (const keyboard of [false, true]) {
+    expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+  }
+  await page.keyboard.press("Tab");
+  await customer.focus();
+  await expect(customer.locator("..")).toHaveCSS("box-shadow", /inset/);
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: { id: "product-ui-owner", name: "예시 고객", accountType: "customer" },
+        needsConsent: true,
+      }),
+    ),
+  );
+  await page.goto("/consent");
+  await hydrated(page);
+  await expect(page.getByRole("checkbox").first()).toBeVisible();
+  for (const keyboard of [false, true]) {
+    expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+  }
+});
+
+test("focus feedback keeps accordion keyboard operation without a container outline", async ({
+  page,
+}) => {
+  await seed(page, true);
+  await page.goto(base);
+  await hydrated(page);
+  const disclosure = page.locator(".workspace-context");
+  const trigger = disclosure.locator("summary");
+  await page.keyboard.press("Tab");
+  await trigger.focus();
+  await expect(trigger).toHaveCSS("outline-style", "none");
+  await expect(trigger).toHaveCSS("text-decoration-line", "underline");
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toHaveAttribute("open", "");
+  await page.keyboard.press("Space");
+  await expect(disclosure).not.toHaveAttribute("open");
+  await trigger.click();
+  await expect(disclosure).toHaveAttribute("open", "");
+  await expect(trigger).toHaveCSS("outline-style", "none");
+  await page.screenshot({ path: ".wrangler/focus-accordion.png", fullPage: true });
+});
+
+for (const width of [1440, 390]) {
+  test(`focus feedback audits service controls and automatic focus at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await seed(page, true);
+    await page.setViewportSize({ width, height: 900 });
+    let count = 0;
+    for (const route of [
+      "/app",
+      base,
+      `${base}/files`,
+      `${base}/timeline`,
+      `${base}/actions`,
+      `${base}/precedents`,
+      `${base}/reports`,
+      `${base}/summary`,
+      "/settings",
+      "/lawyers",
+      "/help",
+      "/policies/terms",
+      "/policies/privacy",
+      "/policies/ai",
+    ]) {
+      await page.goto(route);
+      await hydrated(page);
+      if (route === `${base}/reports`) await openReportEditor(page);
+      if (route === `${base}/precedents`) {
+        await page.locator(".precedent-search details > summary").click();
+        for (const keyboard of [false, true]) {
+          const result = await focusAudit(page, keyboard);
+          expect
+            .soft(result.failures, `precedent search ${keyboard ? "keyboard" : "pointer"}`)
+            .toEqual([]);
+          count += result.count;
+        }
+        await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+        await page
+          .getByRole("button", { name: /판례 내용 보기/ })
+          .first()
+          .click();
+      }
+      for (const keyboard of [false, true]) {
+        const result = await focusAudit(page, keyboard);
+        expect.soft(result.failures, `${route} ${keyboard ? "keyboard" : "pointer"}`).toEqual([]);
+        count += result.count;
+      }
+    }
+    testInfo.annotations.push({ type: "focus-controls-checked", description: String(count) });
+    expect(count).toBeGreaterThan(100);
+    await page.goto("/lawyers");
+    await hydrated(page);
+    await page.locator("a.directory-profile").first().click();
+    await hydrated(page);
+    for (const keyboard of [false, true])
+      expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+    await page.getByRole("button", { name: "연락처 보기", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "연락처", exact: true })).toBeVisible();
+    for (const keyboard of [false, true])
+      expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => {
+      const key = "baro-api-mock-v1:session";
+      const session = JSON.parse(localStorage.getItem(key) ?? "{}");
+      session.user.accountType = "lawyer";
+      localStorage.setItem(key, JSON.stringify(session));
+    });
+    await page.goto("/lawyer");
+    await hydrated(page);
+    await expect(page.getByRole("textbox").first()).toBeVisible();
+    for (const keyboard of [false, true])
+      expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+  });
+}
+
+test("focus feedback covers custom intake answers without switching modality while typing", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto(base);
+  await hydrated(page);
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[id].stage = "intake";
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    localStorage.setItem(
+      "baro-api-mock-v1:intake",
+      JSON.stringify({
+        [id]: {
+          narrative: "합성 질문 검증",
+          questions: [
+            {
+              id: "focus-question",
+              text: "어떤 자료가 있나요?",
+              kind: "choice",
+              options: ["거래 내역이 있어요", "대화 기록이 있어요"],
+            },
+          ],
+        },
+      }),
+    );
+  }, id);
+  await page.goto(`${base}/intake`);
+  await hydrated(page);
+  await page.getByRole("radio", { name: "직접 입력", exact: true }).check();
+  const input = page.getByRole("textbox").first();
+  await expect(input).toBeVisible();
+  for (const keyboard of [false, true])
+    expect((await focusAudit(page, keyboard)).failures).toEqual([]);
+  await input.click();
+  await input.pressSequentially("focus check");
+  await input.press("ArrowLeft");
+  await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+  await expect(input).toHaveCSS("outline-style", "none");
+});
+
+test("focus feedback handles touch and automatic focus from the mobile menu", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  try {
+    const page = await context.newPage();
+    await seed(page, true);
+    await page.goto(base);
+    await hydrated(page);
+    const summary = page.locator(".workspace-context > summary");
+    await summary.tap();
+    await expect(summary).toHaveCSS("outline-style", "none");
+    const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
+    await opener.tap();
+    const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+    await expect(menu).toBeVisible();
+    const close = menu.getByRole("button", { name: "닫기", exact: true });
+    await expect(close).toHaveCSS("outline-style", "none");
+    await close.tap();
+    await expect(opener).toBeFocused();
+    await expect(opener).toHaveCSS("outline-style", "none");
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+  } finally {
+    await context.close();
+  }
+});
+
+test("focus feedback restores modal focus after pointer and keyboard dismissal", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await hydrated(page);
+  const opener = page.locator(".sidebar-desktop .sidebar-story-delete").first();
+  for (const keyboard of [false, true]) {
+    if (keyboard) {
+      await page.keyboard.press("Tab");
+      await opener.focus();
+      await page.keyboard.press("Enter");
+    } else {
+      await opener.locator("..").hover();
+      await opener.click();
+    }
+    const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?" });
+    await expect(modal).toBeVisible();
+    const cancel = modal.getByRole("button", { name: "취소", exact: true });
+    await expect(cancel).toBeFocused();
+    await expect(cancel).toHaveCSS("outline-style", "none");
+    const close = modal.getByRole("button", { name: "닫기", exact: true });
+    if (keyboard) await page.keyboard.press("Tab");
+    else await close.focus();
+    await expect(close).toBeFocused();
+    await expect(close).toHaveCSS("outline-style", "none");
+    if (keyboard) await expect(close).toHaveCSS("box-shadow", /inset/);
+    await page.keyboard.press("Escape");
+    await expect(modal).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    await expect(opener).toHaveCSS("outline-style", "none");
+  }
+});
 test("settings usage disclosure stacks content below its summary and toggles accessibly", async ({
   page,
 }) => {
@@ -52,10 +468,15 @@ test("settings usage disclosure stacks content below its summary and toggles acc
     await expect(help).toBeHidden();
   }
 });
-async function seed(page: Page, messages = false, stage: "active" | "summary" = "active") {
+async function seed(
+  page: Page,
+  messages = false,
+  stage: "active" | "summary" = "active",
+  role: "customer" | "lawyer" = "customer",
+) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
-    ({ id, summary, messages, stage }) => {
+    ({ id, summary, messages, stage, role }) => {
       if (localStorage.getItem("product-ui-seeded")) return;
       localStorage.setItem("product-ui-seeded", "true");
       const now = new Date().toISOString();
@@ -73,7 +494,11 @@ async function seed(page: Page, messages = false, stage: "active" | "summary" = 
       };
       const values = {
         session: {
-          user: { id: "product-ui-owner", name: "예시 고객", accountType: "customer" },
+          user: {
+            id: "product-ui-owner",
+            name: role === "lawyer" ? "예시 변호사" : "예시 고객",
+            accountType: role,
+          },
           needsConsent: false,
         },
         cases: { [id]: item },
@@ -127,7 +552,7 @@ async function seed(page: Page, messages = false, stage: "active" | "summary" = 
       for (const [key, value] of Object.entries(values))
         localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
     },
-    { id, summary, messages, stage },
+    { id, summary, messages, stage, role },
   );
 }
 

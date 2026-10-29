@@ -60,13 +60,6 @@
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
-.policy-document a:focus-visible,
-.help-document a:focus-visible,
-.help-document summary:focus-visible {
-  outline: 3px solid var(--color-ring);
-  outline-offset: 3px;
-  border-radius: 0.25rem;
-}
 .policy-card:target {
   scroll-margin-top: 2rem;
   border-color: #78a6e4;

@@ -598,11 +598,6 @@
 .account-settings .report-modal .settings-actions {
   justify-content: flex-end;
 }
-.account-settings :focus-visible,
-.settings-deleted :focus-visible {
-  outline: 3px solid var(--primary);
-  outline-offset: 4px;
-}
 .settings-primary-link {
   gap: 12px;
   padding: 12px 18px;

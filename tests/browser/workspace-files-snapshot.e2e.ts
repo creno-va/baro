@@ -250,7 +250,7 @@ for (const change of ["same-owner", "owner", "role", "consent", "expired"] as co
     if (change === "expired") state.expired = true;
     state.pauseSession = undefined;
     release();
-    if (change === "owner" || change === "role" || change === "expired") {
+    if (change === "owner" || change === "expired") {
       await expect(page.getByRole("alert")).toBeVisible();
       await expect(page.getByText("private-ready.pdf", { exact: true })).toHaveCount(0);
     } else {

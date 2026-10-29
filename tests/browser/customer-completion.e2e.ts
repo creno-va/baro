@@ -112,7 +112,7 @@ test("summary overview saves and reconnects while its stored facts remain intact
   await page
     .getByLabel("요약 편집", { exact: true })
     .fill("원본 확인 후 반환 연도를 정리한 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
@@ -253,9 +253,7 @@ test("structured drafts and file corrections retain their base revision across a
   await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
     "아직 저장하지 않은 사실 초안",
   );
-  await expect(
-    page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }),
-  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
   await expect(page.getByLabel("요약 편집")).toHaveValue("다른 탭에서 저장한 요약");
   await page.evaluate(async () => {

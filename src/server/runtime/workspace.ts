@@ -59,10 +59,10 @@ import { createWorkspacePipeline, workspaceModelInput } from "../modules/workspa
 import type { WorkspaceDependencies } from "../modules/workspace/service";
 import { readProcessingProofs } from "./processing-proofs";
 
-/** Role changes revoke future dispatch/publication without erasing paid receipts. */
+/** Both account types may use their own workspace; consent remains mandatory. */
 export async function hasCustomerWorkspaceAccess(core: V2Core, ownerId: string) {
   return (
-    (await readAccountType(core.binding, ownerId)) === "customer" &&
+    ["customer", "lawyer"].includes(await readAccountType(core.binding, ownerId)) &&
     (await hasCurrentConsent(drizzle(core.binding, { schema }), ownerId))
   );
 }
@@ -183,6 +183,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         input.caseId,
         latest,
         GUIDE_HOSTS,
+        input.chat?.precedentComparisonRequest ? "precedent_comparison" : "full",
       );
       const comparison = input.chat?.precedentComparisonRequest;
       if (comparison) {

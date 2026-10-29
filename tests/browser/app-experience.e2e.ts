@@ -87,6 +87,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     expect((await copy.boundingBox())?.width).toBeCloseTo(copyBounds.width, 1);
     if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-hover.png" });
     await page.mouse.move(800, 400);
+    await page.keyboard.press("Tab");
     await link.focus();
     await expect(remove).toHaveCSS("opacity", "1");
     await page.keyboard.press("Tab");

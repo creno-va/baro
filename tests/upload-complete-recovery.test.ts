@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { saveAccountType } from "../src/server/auth/account-type";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2FilesRepository } from "../src/server/db/v2-files";
 import { DefinitiveFileRejection } from "../src/server/modules/file-processing/protocol";
@@ -271,20 +272,24 @@ async function seal(f: Awaited<ReturnType<typeof setup>>, hash = f.target.manife
   ).encrypted_payload;
 }
 
-test("legacy digest-only open session resumes without replacing its receipt or source", async () => {
-  const f = await setup();
-  const payload = await seal(f);
-  const before = f.stored();
-  expect(await f.complete(f.target)).toMatchObject({ status: "uploaded" });
-  expect(f.calls).toEqual({ probe: 1, stop: 1 });
-  expect(f.stored().parts).toEqual(before.parts);
-  expect(f.stored().objects).toEqual(before.objects);
-  expect(
-    f.db.sqlite
-      .query("SELECT encrypted_payload FROM v2_upload_sessions WHERE id=?")
-      .get(f.target.session.uploadSession),
-  ).toEqual({ encrypted_payload: payload });
-});
+test.each(["customer", "lawyer"] as const)(
+  "%s digest-only upload resumes without replacing its receipt or source",
+  async (accountType) => {
+    const f = await setup();
+    await saveAccountType(f.db.binding, f.actor.ownerId, accountType);
+    const payload = await seal(f);
+    const before = f.stored();
+    expect(await f.complete(f.target)).toMatchObject({ status: "uploaded" });
+    expect(f.calls).toEqual({ probe: 1, stop: 1 });
+    expect(f.stored().parts).toEqual(before.parts);
+    expect(f.stored().objects).toEqual(before.objects);
+    expect(
+      f.db.sqlite
+        .query("SELECT encrypted_payload FROM v2_upload_sessions WHERE id=?")
+        .get(f.target.session.uploadSession),
+    ).toEqual({ encrypted_payload: payload });
+  },
+);
 
 for (const invalid of [
   "wrong-hash",
@@ -295,7 +300,6 @@ for (const invalid of [
   "consent",
   "file-consent",
   "owner",
-  "role",
 ] as const)
   test(`sealed-session recovery rejects ${invalid} before native dispatch`, async () => {
     const f = await setup();
@@ -326,10 +330,6 @@ for (const invalid of [
       f.db.sqlite
         .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
         .run(f.actor.ownerId, f.actor.now);
-    if (invalid === "role")
-      f.db.sqlite
-        .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-        .run(`account-type:${f.actor.ownerId}`);
     const before = f.stored();
     await expect(f.complete(f.target)).rejects.toThrow();
     expect(f.calls.probe).toBe(0);

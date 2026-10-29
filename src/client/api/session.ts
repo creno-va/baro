@@ -10,13 +10,7 @@ import type { AccountType, Provider, SessionView } from "./types";
 export { notifySessionChanged } from "../session-events";
 
 export const roleStart = (session: SessionView) =>
-  !session.user
-    ? "/login"
-    : session.needsConsent
-      ? "/consent"
-      : session.user.accountType === "lawyer"
-        ? "/lawyer"
-        : "/app";
+  !session.user ? "/login" : session.needsConsent ? "/consent" : "/app";
 let pendingSelection: { attempt: string; ownerId: string; promise: Promise<unknown> } | undefined;
 let pendingRead: Promise<SessionView> | undefined;
 const wireSession = createSessionClient((options) => request("session.http", undefined, options));

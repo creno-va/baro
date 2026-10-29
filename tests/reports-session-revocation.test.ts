@@ -28,7 +28,7 @@ async function prepared(kind: "pdf" | "zip") {
 }
 
 for (const kind of ["pdf", "zip"] as const) {
-  for (const change of ["revocation", "expiry", "retention", "role"] as const) {
+  for (const change of ["revocation", "expiry", "retention", "account"] as const) {
     test(`${kind} stream stops after requesting session ${change} between plaintext chunks`, async () => {
       const f = await prepared(kind);
       const response = await f.app.request(f.path, { headers: { cookie: f.cookie } }, f.env);
@@ -60,10 +60,12 @@ for (const kind of ["pdf", "zip"] as const) {
             "UPDATE session SET created_at=? WHERE user_id=? AND id!='synthetic-other-session'",
           )
           .run(Date.now() - AUTH_RETENTION_MS - 1000, f.actor.ownerId);
-      if (change === "role")
+      if (change === "account")
         f.db.sqlite
-          .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
-          .run(`account-type:${f.actor.ownerId}`);
+          .query(
+            "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)",
+          )
+          .run(f.actor.ownerId, new Date().toISOString());
       const remaining = async () => {
         while (!(await reader.read()).done) {
           /* Drain until revoked. */
@@ -78,7 +80,7 @@ for (const kind of ["pdf", "zip"] as const) {
   }
 }
 
-for (const change of ["revocation", "role"] as const) {
+for (const change of ["revocation", "account"] as const) {
   test(`HTML denies ${change} after initial signed access and before saved content is read`, async () => {
     const f = await reportHttpFixture();
     const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
@@ -91,8 +93,10 @@ for (const change of ["revocation", "role"] as const) {
             f.db.sqlite.query("DELETE FROM session WHERE user_id=?").run(f.actor.ownerId);
           else
             f.db.sqlite
-              .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
-              .run(`account-type:${f.actor.ownerId}`);
+              .query(
+                "INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)",
+              )
+              .run(f.actor.ownerId, new Date().toISOString());
           return f.deps;
         },
       }),

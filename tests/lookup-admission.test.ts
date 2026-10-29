@@ -276,12 +276,12 @@ test("missing consent input or a changed immutable request hash issues no claim"
   }
 });
 
-test("owner, role, consent, revision, tombstone, lease and operation state are fresh atomic claim predicates", async () => {
+test("owner, policy version, consent, revision, tombstone, lease and operation state are fresh atomic claim predicates", async () => {
   for (const change of [
     (f: Awaited<ReturnType<typeof lookupFixture>>) =>
       f.db.sqlite
-        .query("UPDATE app_metadata SET value='lawyer' WHERE key=?")
-        .run(`account-type:${f.actor.ownerId}`),
+        .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+        .run(f.actor.ownerId),
     (f: Awaited<ReturnType<typeof lookupFixture>>) =>
       f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId),
     (f: Awaited<ReturnType<typeof lookupFixture>>) =>

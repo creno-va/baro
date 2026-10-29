@@ -428,7 +428,7 @@ test("retries share the total twelve-request ceiling and preserve verified parti
   expect(result.unavailableTopics).toEqual(["loan"]);
 });
 
-for (const race of ["revision", "consent", "role", "deletion"] as const)
+for (const race of ["revision", "consent", "deletion"] as const)
   test(`in-flight ${race} changes suppress result and further external requests`, async () => {
     const f = await fixture();
     const input = await f.searchInput();
@@ -439,10 +439,6 @@ for (const race of ["revision", "consent", "role", "deletion"] as const)
           .run(f.workspace.id);
       if (race === "consent")
         f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
-      if (race === "role")
-        f.db.sqlite
-          .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?, 'lawyer',?)")
-          .run(`account-type:${f.owner.userId}`, f.now);
       if (race === "deletion")
         f.db.sqlite
           .query(
@@ -458,6 +454,16 @@ for (const race of ["revision", "consent", "role", "deletion"] as const)
     expect(body).not.toContain("合成");
     expect(body).not.toContain("readToken");
   });
+
+test("lawyer account can research its own case with current consent", async () => {
+  const f = await fixture();
+  f.db.sqlite
+    .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'lawyer',?)")
+    .run(`account-type:${f.owner.userId}`, f.now);
+  const result = await searchBody(await f.request("/search", await f.searchInput()));
+  expect(result.items.length).toBeGreaterThan(0);
+  expect(result.workspaceRevision).toBeGreaterThan(0);
+});
 
 test("research proofs have purpose-separated integrity, exact TTL and no future acceptance", async () => {
   const secret = "synthetic-research-secret-at-least-32-characters";
@@ -518,6 +524,11 @@ async function comparisonFixture(mislocatedQuote = false) {
   let dispatch: { id: string; params: WorkspaceParams } | null = null;
   const phases: string[] = [];
   let auditPass = true;
+  const unsupportedCriteria = new Set<string>();
+  let generatedVerdict: "yes" | "no" | "unknown" = "unknown";
+  let corruptFirstQuote = false;
+  let omitFirstEvidence = false;
+  let providerUnavailable = false;
   let beforeAudit: (() => void) | undefined;
   Object.assign(f.env, {
     AI_GATEWAY_ID: "baro-preview",
@@ -536,6 +547,7 @@ async function comparisonFixture(mislocatedQuote = false) {
         expect(model).toBe("google/gemini-3.8-flash");
         const wire = syntheticGatewayInput(input);
         phases.push(wire.phase);
+        if (providerUnavailable) throw new Error("Synthetic provider unavailable");
         expect(JSON.stringify(input)).not.toContain('"readToken"');
         expect(JSON.stringify(input)).not.toContain("synthetic_research_receipt");
         expect(input).toMatchObject({
@@ -556,16 +568,16 @@ async function comparisonFixture(mislocatedQuote = false) {
         const output =
           wire.phase === "workspace_audit"
             ? {
-                pass: auditPass,
-                findings: [],
-                unsupportedFactIds: [],
-                legalClaimsSupported: true,
-                strategyDetected: false,
+                safe: auditPass,
+                metrics: Object.keys(PRECEDENT_COMPARISON_CRITERIA).map((criterion) => ({
+                  criterion,
+                  supported: !unsupportedCriteria.has(criterion),
+                })),
               }
             : {
                 metrics: Object.keys(PRECEDENT_COMPARISON_CRITERIA).map((criterion) => ({
                   criterion,
-                  verdict: "unknown",
+                  verdict: generatedVerdict,
                   explanation: "현재 제공된 자료만으로는 이 항목의 일치 여부를 확인할 수 없어요.",
                   caseEvidence: [],
                   precedentEvidence: [],
@@ -573,22 +585,40 @@ async function comparisonFixture(mislocatedQuote = false) {
               };
         if (
           wire.phase === "workspace_precedent_compare" &&
-          mislocatedQuote &&
-          "metrics" in output
+          (mislocatedQuote || generatedVerdict !== "unknown")
         ) {
+          for (const metric of output.metrics) {
+            if (generatedVerdict === "unknown" || !("caseEvidence" in metric)) continue;
+            Object.assign(metric, {
+              caseEvidence: [{ factId: wire.data.facts[0].id, text: wire.data.facts[0].text }],
+              precedentEvidence: [
+                {
+                  text: wire.data.precedentComparison.source.excerpt.text,
+                  startUtf16: wire.data.precedentComparison.source.excerpt.startUtf16,
+                  endUtf16: wire.data.precedentComparison.source.excerpt.endUtf16,
+                },
+              ],
+            });
+          }
           const first = output.metrics[0];
           const fact = wire.data.facts[0];
           if (!first || !fact) throw new Error("Missing synthetic evidence");
-          Object.assign(first, {
-            caseEvidence: [{ factId: fact.id, text: fact.text }],
-            precedentEvidence: [
-              {
-                text: wire.data.precedentComparison.source.excerpt.text,
-                startUtf16: 1,
-                endUtf16: 2,
-              },
-            ],
-          });
+          if (mislocatedQuote)
+            Object.assign(first, {
+              caseEvidence: [{ factId: fact.id, text: fact.text }],
+              precedentEvidence: [
+                {
+                  text: wire.data.precedentComparison.source.excerpt.text,
+                  startUtf16: 1,
+                  endUtf16: 2,
+                },
+              ],
+            });
+          if (corruptFirstQuote)
+            Object.assign(first, {
+              precedentEvidence: [{ text: "원문에 없는 합성 인용", startUtf16: 0, endUtf16: 13 }],
+            });
+          if (omitFirstEvidence) Object.assign(first, { caseEvidence: [] });
         }
         return {
           choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ output }) } }],
@@ -625,6 +655,21 @@ async function comparisonFixture(mislocatedQuote = false) {
     body,
     submit,
     phases,
+    knownIndicators: (verdict: "yes" | "no") => {
+      generatedVerdict = verdict;
+    },
+    rejectIndicators: (...criteria: string[]) => {
+      for (const criterion of criteria) unsupportedCriteria.add(criterion);
+    },
+    corruptQuote: () => {
+      corruptFirstQuote = true;
+    },
+    omitEvidence: () => {
+      omitFirstEvidence = true;
+    },
+    providerUnavailable: () => {
+      providerUnavailable = true;
+    },
     rejectAudit: () => {
       auditPass = false;
     },
@@ -715,6 +760,98 @@ test("failed independent comparison audit never publishes a result or exposes a 
   expect(state.job.retryable).toBe(false);
   const messages = await f.service.messages(f.owner.userId, f.workspace.id);
   expect(messages.filter((m) => m.role === "assistant")).toHaveLength(0);
+});
+
+test.each(["yes", "no"] as const)(
+  "comparison publishes %s indicators in two calls without treating low similarity as failure",
+  async (verdict) => {
+    const f = await comparisonFixture();
+    f.knownIndicators(verdict);
+    const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+    expect((await f.execute()).status).toBe("completed");
+    const value = v2PrecedentComparisonStateSchema.parse(
+      await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+    );
+    expect(value.comparison).toMatchObject({
+      percentage: verdict === "yes" ? 100 : 0,
+      knownCount: 8,
+    });
+    expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
+  },
+);
+
+test("bad quote and independently rejected indicators become unknown without full regeneration", async () => {
+  const f = await comparisonFixture();
+  f.knownIndicators("yes");
+  f.corruptQuote();
+  f.rejectIndicators("activity", "formation");
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  const execution = await f.execute();
+  expect(execution.status).toBe("completed");
+  expect(execution).toMatchObject({
+    comparisonEvidence: [
+      expect.objectContaining({ reason: "accepted" }),
+      expect.objectContaining({ reason: "source_quote_missing" }),
+      expect.objectContaining({ reason: "audit_metric_rejected" }),
+    ],
+  });
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  expect(value.comparison).toMatchObject({ percentage: 63, matchedCount: 5, knownCount: 5 });
+  expect(
+    value.comparison?.metrics
+      .slice(0, 3)
+      .every(
+        (metric) =>
+          metric.verdict === "unknown" &&
+          !metric.caseEvidence.length &&
+          !metric.precedentEvidence.length,
+      ),
+  ).toBe(true);
+  expect(JSON.stringify(value.comparison)).not.toContain("원문에 없는 합성 인용");
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
+});
+
+test("a candidate with missing evidence completes without gateway schema correction or regeneration", async () => {
+  const f = await comparisonFixture();
+  f.knownIndicators("yes");
+  f.omitEvidence();
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("completed");
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  expect(value.comparison).toMatchObject({ matchedCount: 7, knownCount: 7, percentage: 88 });
+  expect(value.comparison?.metrics[0]?.verdict).toBe("unknown");
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
+});
+
+test("all indicators rejected for insufficient factual support complete as unknown, not different", async () => {
+  const f = await comparisonFixture();
+  f.knownIndicators("yes");
+  f.rejectIndicators(...Object.keys(PRECEDENT_COMPARISON_CRITERIA));
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("completed");
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  expect(value.comparison).toMatchObject({ matchedCount: 0, knownCount: 0, percentage: 0 });
+  expect(value.comparison?.metrics.every((metric) => metric.verdict === "unknown")).toBe(true);
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
+});
+
+test("a real provider failure is not converted into a successful zero similarity score", async () => {
+  const f = await comparisonFixture();
+  f.providerUnavailable();
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("failed");
+  const value = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  expect(value.comparison).toBeNull();
+  expect(value.job.failure).toBe("MODEL_UNAVAILABLE");
+  expect(f.phases).toEqual(["workspace_precedent_compare"]);
 });
 
 test("an official source revoked after audit cannot cross the existing atomic publication fence", async () => {

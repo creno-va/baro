@@ -8,6 +8,7 @@ import {
 } from "../src/contracts/v2/precedent-comparison";
 import {
   checkPrecedentComparison,
+  groundPrecedentComparison,
   inspectPrecedentComparison,
   precedentComparisonScore,
 } from "../src/server/modules/legal-retrieval/research/comparison";
@@ -80,6 +81,62 @@ test("every fixed indicator appears once and unsupported model score fields are 
     valid.metrics.map((m) => ({ ...m, criterion: "relationship" })),
   ])
     expect(checkPrecedentComparison({ metrics }, facts, source)).toBeNull();
+});
+
+test("an unverifiable indicator becomes unknown without losing other grounded matches", () => {
+  const value = draft(3, 2);
+  const invalid = value.metrics[1];
+  if (!invalid) throw new Error("Missing synthetic metric");
+  invalid.caseEvidence = [{ factId: "unrelated_fact", text: "untrusted explanation" }];
+  invalid.explanation = "이 인용은 출력되면 안 됩니다.";
+  const result = groundPrecedentComparison(value, facts, source);
+  expect(result.draft).not.toBeNull();
+  if (!result.draft) throw new Error("Missing grounded draft");
+  expect(checkPrecedentComparison(result.draft, facts, source)).toEqual(result.draft);
+  expect(precedentComparisonScore(result.draft)).toEqual({
+    matchedCount: 2,
+    knownCount: 4,
+    percentage: 25,
+  });
+  expect(result.draft.metrics[1]).toMatchObject({
+    verdict: "unknown",
+    caseEvidence: [],
+    precedentEvidence: [],
+  });
+  expect(JSON.stringify(result.draft)).not.toContain("출력되면");
+  expect(result.observations.some((value) => value.reason === "unknown_case_fact")).toBe(true);
+  expect(value.metrics[1]?.caseEvidence[0]?.factId).toBe("unrelated_fact");
+});
+
+test("all unverifiable indicators remain unknown, while malformed protocol is still rejected", () => {
+  const value = draft(8);
+  const result = groundPrecedentComparison(value, [], source);
+  if (!result.draft) throw new Error("Missing conservative draft");
+  expect(result.draft.metrics.every((metric) => metric.verdict === "unknown")).toBe(true);
+  expect(precedentComparisonScore(result.draft)).toEqual({
+    matchedCount: 0,
+    knownCount: 0,
+    percentage: 0,
+  });
+  expect(
+    groundPrecedentComparison({ metrics: value.metrics.slice(0, 7) }, facts, source).draft,
+  ).toBeNull();
+});
+
+test("a model match without two-sided proof is discarded per indicator instead of invalidating the whole candidate", () => {
+  const value = draft(3);
+  const first = value.metrics[0];
+  if (!first) throw new Error("Missing synthetic metric");
+  first.caseEvidence = [];
+  const result = groundPrecedentComparison(value, facts, source);
+  if (!result.draft) throw new Error("Missing conservative draft");
+  expect(result.draft.metrics[0]?.verdict).toBe("unknown");
+  expect(precedentComparisonScore(result.draft)).toEqual({
+    matchedCount: 2,
+    knownCount: 2,
+    percentage: 25,
+  });
+  expect(checkPrecedentComparison(result.draft, facts, source)).toEqual(result.draft);
 });
 test("no is not inferred from missing evidence and case quotes cannot come from an unrelated fact", () => {
   for (const change of [

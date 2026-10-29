@@ -75,7 +75,7 @@ export function CaseInput({
   const signedOut = useRef(false);
   const count = [...narrative.trim()].length;
   const valid = count >= APP_NARRATIVE_MIN_LENGTH && count <= 5000;
-  const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
+  const canCreate = !!session?.user && !session.needsConsent;
   const clearDraft = useCallback(() => {
     ++operation.current;
     pending.current = false;
@@ -105,7 +105,7 @@ export function CaseInput({
       }
       identity.current = nextIdentity;
       setSession(next);
-      if (requireSession && (next.user?.accountType !== "customer" || next.needsConsent)) {
+      if (requireSession && (!next.user || next.needsConsent)) {
         window.location.replace(sessionDestination(next, window.location.pathname));
       }
       return next;
@@ -186,7 +186,7 @@ export function CaseInput({
     setError(null);
     try {
       const fresh = await loadSession();
-      if (!current() || fresh?.user?.accountType !== "customer" || fresh.needsConsent) return;
+      if (!current() || !fresh?.user || fresh.needsConsent) return;
       const item = await api.cases.create({ narrative: narrative.trim(), subjectContext });
       // A completed request must not restore a prior owner's UI after an account switch.
       await loadSession();
@@ -309,20 +309,14 @@ export function CaseInput({
                     <ArrowRight size={18} aria-hidden="true" />
                   </Button>
                 ) : (
-                  <ButtonLink
-                    href={session?.needsConsent ? "/consent" : session?.user ? "/lawyer" : "/login"}
-                  >
-                    {session?.needsConsent
-                      ? "동의하고 시작하기"
-                      : session?.user
-                        ? "변호사 홈으로"
-                        : "로그인하고 시작하기"}
+                  <ButtonLink href={session?.needsConsent ? "/consent" : "/login"}>
+                    {session?.needsConsent ? "동의하고 시작하기" : "로그인하고 시작하기"}
                     <ArrowRight size={18} aria-hidden="true" />
                   </ButtonLink>
                 )}
               </div>
             </form>
-            {!narrative && !session?.needsConsent && session?.user?.accountType !== "lawyer" ? (
+            {!narrative && !session?.needsConsent ? (
               <div className="conversation-examples">
                 {(subjectContext === "company" ? companyExamples : individualExamples).map(
                   ({ label, text, Icon }) => (
@@ -352,9 +346,7 @@ export function CaseInput({
                       ? "로그인 상태를 다시 확인해 주세요."
                       : session?.needsConsent
                         ? "필수 동의를 확인하면 바로 시작할 수 있어요."
-                        : session?.user?.accountType === "lawyer"
-                          ? "변호사 홈에서 프로필과 활동 정보를 관리할 수 있어요."
-                          : "로그인하면 상황을 저장하고, 언제든 이어서 정리할 수 있어요."}
+                        : "로그인하면 상황을 저장하고, 언제든 이어서 정리할 수 있어요."}
               </p>
             )}
             {sessionError ? (

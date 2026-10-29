@@ -4,7 +4,7 @@ import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
 
-/** Customer screen boundary: revoke old responses without discarding drafts on outages. */
+/** Private workspace boundary for both account types; revoke old owner responses. */
 export function useCustomerAccess(
   purge: () => void,
   report: (error: unknown) => void,
@@ -77,11 +77,7 @@ export function useCustomerAccess(
           if (!hide) setVersion((value) => value + 1);
         }
         identity.current = next;
-        if (
-          !session.user ||
-          (session.needsConsent && !readAccess) ||
-          session.user.accountType !== "customer"
-        ) {
+        if (!session.user || (session.needsConsent && !readAccess)) {
           revoke();
           const error = new ApiError(
             !session.user
@@ -89,7 +85,7 @@ export function useCustomerAccess(
               : session.needsConsent
                 ? "CONSENT_REQUIRED"
                 : "NOT_FOUND",
-            "고객 계정으로 로그인하고 사건을 다시 열어 주세요.",
+            "로그인하고 사건을 다시 열어 주세요.",
           );
           callbacks.current.report(error);
           throw error;

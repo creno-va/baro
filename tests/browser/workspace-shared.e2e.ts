@@ -78,7 +78,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
   await page.getByRole("link", { name: "다음 행동", exact: true }).click();
   await page.getByRole("checkbox").first().check();
-  await expect(page.getByText("완료 표시를 저장했어요.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox").first()).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
   await page.getByRole("link", { name: "타임라인", exact: true }).click();

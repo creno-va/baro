@@ -35,12 +35,14 @@ import { claimReviewHash, type SourceClaim, validateV2Claims } from "../citation
 import type { lookupCatalog } from "../external-tools/catalog";
 import {
   type ComparisonEvidenceObservation,
-  inspectPrecedentComparison,
+  groundPrecedentComparison,
   precedentComparisonScore,
+  unverifiedComparisonMetric,
 } from "../legal-retrieval/research/comparison";
 import type { RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import type { WorkspaceSourceRequest } from "../legal-retrieval/v2/workspace-plans";
 import type { projectWorkspaceSources } from "../legal-retrieval/v2/workspace-sources";
+import { comparisonAuditOutputSchema } from "../llm-gateway/comparison-audit";
 import { type Phase, workspaceStrategyRefusal } from "../llm-gateway/prompts";
 import type { createLlmGateway } from "../llm-gateway/service";
 import { ModelError } from "../llm-gateway/service";
@@ -558,9 +560,21 @@ export function createWorkspacePipeline(
           throw new ModelError("POLICY_REJECTED");
         return regenerateDraft(context, async (input) => {
           const raw = await call("workspace_precedent_compare", input, requestId);
-          const checked = inspectPrecedentComparison(raw, context.facts, comparison.source);
+          const checked = groundPrecedentComparison(raw, context.facts, comparison.source);
           try {
-            deps.observeComparisonEvidence?.(checked.observation);
+            // Preserve a compact accepted observation, plus actual rejection
+            // reasons only. Never include private quote text in diagnostics.
+            const accepted = checked.observations.filter((value) => value.reason === "accepted");
+            if (checked.draft)
+              deps.observeComparisonEvidence?.({
+                reason: "accepted",
+                validSpans: accepted.reduce((sum, value) => sum + value.validSpans, 0),
+                uniqueExactSpans: accepted.reduce((sum, value) => sum + value.uniqueExactSpans, 0),
+              });
+            for (const observation of checked.observations.filter(
+              (value) => value.reason !== "accepted",
+            ))
+              deps.observeComparisonEvidence?.(observation);
           } catch {
             /* Diagnostics never change acceptance. */
           }
@@ -568,7 +582,34 @@ export function createWorkspacePipeline(
           if (!draft) throw new WorkspaceOutputPolicyError("unsupported_fact");
           if (draft.metrics.some((metric) => prohibited(JSON.stringify(metric))))
             throw new WorkspaceOutputPolicyError("prohibited_content");
-          await audit("workspace_precedent_compare", context, draft, requestId);
+          const review = comparisonAuditOutputSchema.parse(
+            await call(
+              "workspace_audit",
+              { phase: "workspace_precedent_compare", context, draft },
+              requestId,
+            ),
+          );
+          if (!review.safe) throw new WorkspaceOutputPolicyError("audit_rejected");
+          // Each retained indicator has its own independent approval. A rejected
+          // indicator becomes a source-free server message, not a model claim.
+          // No full regeneration or third model call is needed for missing evidence.
+          const supported = new Set(
+            review.metrics.filter((metric) => metric.supported).map((metric) => metric.criterion),
+          );
+          if (supported.size < 8) {
+            try {
+              deps.observeComparisonEvidence?.({
+                reason: "audit_metric_rejected",
+                validSpans: 0,
+                uniqueExactSpans: 0,
+              });
+            } catch {
+              /* Diagnostics never change acceptance. */
+            }
+          }
+          draft.metrics = draft.metrics.map((metric) =>
+            supported.has(metric.criterion) ? metric : unverifiedComparisonMetric(metric.criterion),
+          );
           const result: V2PrecedentComparison = v2PrecedentComparisonSchema.parse({
             schemaVersion: "2",
             criteriaVersion: "1",

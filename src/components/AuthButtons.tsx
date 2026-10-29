@@ -106,7 +106,7 @@ export function AuthButtons() {
       <p id="login-role-description" className="login-role-description" aria-live="polite">
         {accountType === "customer"
           ? "내 사건과 상담 준비 자료를 정리할게요."
-          : "내 프로필을 작성하고 공개 범위를 설정할게요."}
+          : "AI로 사건을 정리하고, 내 변호사 프로필도 관리할게요."}
       </p>
       <fieldset className="login-social">
         <legend>SNS 계정으로 간편하게 시작하기</legend>

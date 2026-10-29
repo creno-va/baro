@@ -730,7 +730,7 @@ test("definitive probe refusal survives a new metadata reader without completing
 
 for (const changed of [
   "owner",
-  "role",
+  "policy-version",
   "consent",
   "file-consent",
   "session",
@@ -762,10 +762,10 @@ for (const changed of [
         f.db.sqlite
           .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
           .run(otherOwner.userId, f.workspaceId);
-      if (changed === "role")
+      if (changed === "policy-version")
         f.db.sqlite
-          .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-          .run(`account-type:${f.actor.ownerId}`);
+          .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+          .run(f.actor.ownerId);
       if (changed === "consent")
         f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
       if (changed === "file-consent")

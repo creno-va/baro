@@ -75,7 +75,7 @@ test("active summary edits its overview, keeps materials and returns to its work
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/ui-human-summary-desktop.png", fullPage: true });
   await page.getByLabel("요약 편집", { exact: true }).fill("수정하고 적용한 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -180,7 +180,7 @@ test("a saved active-summary edit retries only its failed confirmation", async (
   const editor = page.getByLabel("요약 편집", { exact: true });
   await expect(editor).toBeVisible();
   await editor.fill("확인 요청 실패 후에도 저장된 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   const retry = page.getByRole("button", { name: "다시 시도", exact: true });
   await expect(retry).toBeEnabled();
   await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();

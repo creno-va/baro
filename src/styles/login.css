@@ -137,10 +137,6 @@
   font-weight: 750;
   box-shadow: 0 2px 4px #20283808;
 }
-.login-account-type label:has(input:focus-visible) {
-  outline: 3px solid var(--ring);
-  outline-offset: 2px;
-}
 .login-account-type:disabled label {
   cursor: not-allowed;
   opacity: 0.55;

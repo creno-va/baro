@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { PRECEDENT_COMPARISON_CRITERIA } from "../src/contracts/v2/precedent-comparison";
+import { comparisonAuditOutputSchema } from "../src/server/modules/llm-gateway/comparison-audit";
 import { providerWire } from "../src/server/modules/llm-gateway/provider-wire";
 import {
   createLlmGateway,
@@ -85,4 +87,51 @@ test("bounded plain-text provider errors can be classified without exposing the 
   expect(gatewayRequestIssue(error)).toBe("schema_constraint");
   expect(String(error)).toBe("Error: GATEWAY_HTTP_ERROR");
   expect(JSON.stringify(error)).not.toContain("sentinel");
+});
+
+test("comparison audit uses bounded per-indicator decisions without weakening independent reasoning", async () => {
+  const data = { phase: "workspace_precedent_compare", context: {}, draft: {} };
+  const output = {
+    safe: true,
+    metrics: Object.keys(PRECEDENT_COMPARISON_CRITERIA).map((criterion) => ({
+      criterion,
+      supported: true,
+    })),
+  };
+  const wire = prepareGatewayWireInput("workspace_audit", data);
+  const schemaText = JSON.stringify(wire.response_format.json_schema.schema);
+  expect(schemaText).toContain('"supported"');
+  expect(schemaText).not.toContain('"findings"');
+  expect(providerWire(wire)).toMatchObject({
+    generationConfig: { thinkingConfig: { thinkingLevel: "MEDIUM", includeThoughts: false } },
+  });
+  expect(
+    comparisonAuditOutputSchema.safeParse({ ...output, metrics: output.metrics.slice(1) }).success,
+  ).toBe(false);
+  expect(
+    comparisonAuditOutputSchema.safeParse({
+      ...output,
+      metrics: output.metrics.map(() => output.metrics[0]),
+    }).success,
+  ).toBe(false);
+  expect(comparisonAuditOutputSchema.safeParse({ ...output, safe: "true" }).success).toBe(false);
+  const gateway = createLlmGateway({
+    AI_GATEWAY_ID: "synthetic-comparison",
+    AI: {
+      run: async () =>
+        Response.json({
+          candidates: [
+            { content: { parts: [{ text: JSON.stringify({ output }) }] }, finishReason: "STOP" },
+          ],
+        }),
+    },
+  });
+  expect(
+    await gateway.call("workspace_audit", data, "synthetic-comparison", async () => true),
+  ).toEqual(output);
+  expect(
+    JSON.stringify(
+      prepareGatewayWireInput("workspace_audit", {}).response_format.json_schema.schema,
+    ),
+  ).toContain('"findings"');
 });

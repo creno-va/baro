@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import "../styles/shell.css";
+import "../styles/app-focus.css";
 
 interface Props {
   title: string;
@@ -41,3 +42,9 @@ Astro.csp?.insertScriptHash(
     <slot />
   </body>
 </html>
+
+<script>
+  import { installAppFocus } from "../client/app-focus";
+
+  installAppFocus(document);
+</script>

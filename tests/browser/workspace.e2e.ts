@@ -2069,7 +2069,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   const first = page.getByRole("checkbox").first();
   await first.check();
   await expect(first).toBeChecked();
-  await expect(page.getByText("완료 표시를 저장했어요.", { exact: true })).toBeVisible();
+  await expect(first).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
   await page.getByRole("link", { name: "타임라인", exact: true }).click();

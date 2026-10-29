@@ -166,7 +166,7 @@ test("wire mismatch, skipped ordinals and missing capability cannot create dispa
 
 for (const revoke of [
   "consent",
-  "role",
+  "policy",
   "revision",
   "current_analysis",
   "input",
@@ -181,10 +181,10 @@ for (const revoke of [
     if (!handle) throw new Error("NO_HANDLE");
     if (revoke === "consent")
       f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.session.userId);
-    if (revoke === "role")
+    if (revoke === "policy")
       f.db.sqlite
-        .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-        .run(`account-type:${f.session.userId}`);
+        .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+        .run(f.session.userId);
     if (revoke === "revision")
       f.db.sqlite
         .query("UPDATE cases SET input_revision=input_revision+1 WHERE id=?")
@@ -838,13 +838,13 @@ async function validatedDraft() {
   return { ...f, env, runtime };
 }
 
-for (const change of ["role", "input", "tombstone", "upgrade"] as const) {
+for (const change of ["policy", "input", "tombstone", "upgrade"] as const) {
   test(`a ${change} change after the last model response cannot publish a stale retained result`, async () => {
     const f = await validatedDraft();
-    if (change === "role")
+    if (change === "policy")
       f.db.sqlite
-        .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-        .run(`account-type:${f.session.userId}`);
+        .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+        .run(f.session.userId);
     if (change === "input") {
       const original = JSON.parse((await f.repo.readInput(f.session.userId, f.caseId)) ?? "null");
       original.narrative += " 이후 별도 조건이 추가되었다고 진술합니다.";
@@ -886,7 +886,7 @@ for (const change of ["role", "input", "tombstone", "upgrade"] as const) {
   });
 }
 
-for (const change of ["role", "rewrap"] as const) {
+for (const change of ["policy", "rewrap"] as const) {
   test(`publication rechecks a ${change} race inside the guarded DB write without repeating the model`, async () => {
     const f = await validatedDraft();
     const original = await f.repo.readInput(f.session.userId, f.caseId);
@@ -906,10 +906,10 @@ for (const change of ["role", "rewrap"] as const) {
         statement.bind = (...values) => {
           if (values[0] === "completed" && !changed) {
             changed = true;
-            if (change === "role")
+            if (change === "policy")
               f.db.sqlite
-                .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-                .run(`account-type:${f.session.userId}`);
+                .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+                .run(f.session.userId);
             else
               f.db.sqlite
                 .query("UPDATE cases SET encrypted_input=? WHERE id=?")
@@ -935,7 +935,7 @@ for (const change of ["role", "rewrap"] as const) {
   });
 }
 
-test("a role change during the last question call cannot publish a question batch", async () => {
+test("an policy-version change during the last question call cannot publish a question batch", async () => {
   const f = await analysisFixture("questions"),
     env = environment(f),
     background: Promise<void>[] = [];
@@ -944,8 +944,8 @@ test("a role change during the last question call cannot publish a question batc
       const response = await f.binding.run(...args);
       if (f.calls.at(-1) === "questions")
         f.db.sqlite
-          .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
-          .run(`account-type:${f.session.userId}`);
+          .query("UPDATE user_consents SET terms_version='outdated-policy' WHERE user_id=?")
+          .run(f.session.userId);
       return response;
     },
   } as unknown as Env["AI"];

@@ -100,25 +100,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
       }
       if (!current()) throw superseded();
       const id = session.user?.id;
-      if (
-        !id ||
-        session.user?.accountType !== "customer" ||
-        (owner.current && owner.current !== id)
-      ) {
+      if (!id || (owner.current && owner.current !== id)) {
         clearOwnerState();
         throw Object.assign(
-          new Error(
-            session.user?.accountType !== "customer"
-              ? "고객 역할로 로그인한 뒤 리포트를 다시 확인해 주세요."
-              : "계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요.",
-          ),
+          new Error("계정 또는 접근 상태가 변경됐어요. 로그인 후 리포트를 다시 확인해 주세요."),
           {
             ownerRevoked: true,
-            code: !id
-              ? "UNAUTHENTICATED"
-              : session.user?.accountType !== "customer"
-                ? "ROLE_REQUIRED"
-                : "NOT_FOUND",
+            code: !id ? "UNAUTHENTICATED" : "NOT_FOUND",
           },
         );
       }
@@ -461,75 +449,79 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 />
               </div>
             </section>
-            <section className="report-photo-selection" aria-labelledby="report-photos-heading">
-              <header>
-                <div>
-                  <h3 id="report-photos-heading">PDF에 넣을 사진</h3>
-                  <p>선택한 사진은 본문 뒤에 첨부해요.</p>
-                </div>
-                <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료에서 사진 추가</a>
-              </header>
-              {report.stale ? (
-                <p className="report-option-note">
-                  새 버전을 만들면 최신 자료에서 사진을 선택할 수 있어요.
-                </p>
-              ) : photoCandidates.length ? (
-                <>
-                  <ul className="report-photo-list" aria-label="첨부할 사진 선택">
-                    {photoCandidates.map((photo) => {
-                      const checked = includedPhotos.includes(photo.id);
-                      const size = files.find((file) => file.id === photo.id)?.sizeBytes ?? 0;
-                      return (
-                        <li key={photo.id}>
-                          <label className="report-photo-choice">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={
-                                Boolean(busy) ||
-                                needsConsent ||
-                                mask ||
-                                (!checked &&
-                                  (includedPhotos.length >= 12 ||
-                                    selectedPhotoBytes + size > 8_000_000))
-                              }
-                              onChange={() => setIncludedPhotos(toggle(includedPhotos, photo.id))}
-                            />
-                            <ImageIcon size={20} aria-hidden="true" />
-                            <span>{photo.name}</span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            <div className="report-output-options">
+              <section className="report-photo-selection" aria-labelledby="report-photos-heading">
+                <header>
+                  <div>
+                    <h3 id="report-photos-heading">PDF에 넣을 사진</h3>
+                    <p>선택한 사진은 본문 뒤에 첨부해요.</p>
+                  </div>
+                  <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료에서 사진 추가</a>
+                </header>
+                {report.stale ? (
                   <p className="report-option-note">
-                    {mask
-                      ? "식별정보 가리기가 켜져 있어 사진은 PDF에 포함되지 않아요."
-                      : `${includedPhotos.length}장 선택 · 최대 12장, 합계 8 MB`}
+                    새 버전을 만들면 최신 자료에서 사진을 선택할 수 있어요.
                   </p>
-                </>
-              ) : (
-                <p className="report-option-note">자료에 사진을 올린 뒤 새 버전을 만들어 주세요.</p>
-              )}
-            </section>
-            <section className="report-mask" aria-label="식별정보 설정">
-              <label className="report-check">
-                <input
-                  type="checkbox"
-                  checked={mask}
-                  disabled={Boolean(busy) || needsConsent}
-                  aria-describedby="report-mask-description"
-                  onChange={(event) => setMask(event.target.checked)}
-                />
-                <span>식별정보 가리기</span>
-              </label>
-              <p id="report-mask-description" className="report-option-note">
-                전화번호·이메일·주민등록번호 가리기
-                <br />
-                이름·주소 등 다른 식별정보는 내용에서 직접 수정해 주세요. 자동 가림은 모든
-                개인정보를 찾아내지 못해요.
-              </p>
-            </section>
+                ) : photoCandidates.length ? (
+                  <>
+                    <ul className="report-photo-list" aria-label="첨부할 사진 선택">
+                      {photoCandidates.map((photo) => {
+                        const checked = includedPhotos.includes(photo.id);
+                        const size = files.find((file) => file.id === photo.id)?.sizeBytes ?? 0;
+                        return (
+                          <li key={photo.id}>
+                            <label className="report-photo-choice">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={
+                                  Boolean(busy) ||
+                                  needsConsent ||
+                                  mask ||
+                                  (!checked &&
+                                    (includedPhotos.length >= 12 ||
+                                      selectedPhotoBytes + size > 8_000_000))
+                                }
+                                onChange={() => setIncludedPhotos(toggle(includedPhotos, photo.id))}
+                              />
+                              <ImageIcon size={20} aria-hidden="true" />
+                              <span>{photo.name}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="report-option-note">
+                      {mask
+                        ? "식별정보 가리기가 켜져 있어 사진은 PDF에 포함되지 않아요."
+                        : `${includedPhotos.length}장 선택 · 최대 12장, 합계 8 MB`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="report-option-note">
+                    자료에 사진을 올린 뒤 새 버전을 만들어 주세요.
+                  </p>
+                )}
+              </section>
+              <section className="report-mask" aria-label="식별정보 설정">
+                <label className="report-check">
+                  <input
+                    type="checkbox"
+                    checked={mask}
+                    disabled={Boolean(busy) || needsConsent}
+                    aria-describedby="report-mask-description"
+                    onChange={(event) => setMask(event.target.checked)}
+                  />
+                  <span>식별정보 가리기</span>
+                </label>
+                <p id="report-mask-description" className="report-option-note">
+                  전화번호·이메일·주민등록번호 가리기
+                  <br />
+                  이름·주소 등 다른 식별정보는 내용에서 직접 수정해 주세요. 자동 가림은 모든
+                  개인정보를 찾아내지 못해요.
+                </p>
+              </section>
+            </div>
             <section className="report-export" aria-label="리포트 다운로드">
               {exportExhausted && (
                 <div className="report-callout">

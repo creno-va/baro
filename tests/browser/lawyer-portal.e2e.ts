@@ -4,6 +4,10 @@ import { validateSelfPhoto } from "../../src/server/modules/lawyers/self-profile
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
 
 test.beforeEach(async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route(/\/api\/(v2\/)?cases\?/, (route) =>
+    route.fulfill({ json: { items: [], nextCursor: null } }),
+  );
   await page.route("**/api/me/session", (route) =>
     route.fulfill({
       json: {
@@ -118,6 +122,16 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   await page.getByLabel("이메일", { exact: true }).fill("lawyer@example.invalid");
   await page.getByLabel("전화번호").fill("02-000-0000");
   await page.getByLabel("웹사이트 / 외부 상담 URL").fill("https://example.com");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await page.screenshot({ path: ".wrangler/lawyer-editor-1440.png", fullPage: true });
+  await expect(
+    page.locator(".sidebar-desktop").getByRole("link", { name: "새 사건 입력", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "공개 디렉터리", exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   const png = await page.evaluate(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 32;
@@ -171,7 +185,7 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "";
   });
-  await page.getByRole("link", { name: "변호사 디렉터리" }).click();
+  await page.goto("/lawyers");
   await expect(page.getByRole("link", { name: "합성 변호사", exact: true })).toBeVisible();
   await expect(page.getByText("본인 작성 정보 · 자격 확인 표시 없음")).toBeVisible();
   await page.locator("a.directory-profile").click();

@@ -270,7 +270,7 @@ test("revision conflict and mutation-key replay prevent silent overwrites and du
     f.request("/api/v2/cases/case-demo/reports", { ...init, body: { expectedRevision: 99 } }),
   ).rejects.toMatchObject({ code: "CONFLICT" });
 });
-test("same owner customer to lawyer blocks direct report read, replay, exports and case deletion while preserving neutral account operations", async () => {
+test("a lawyer can read, replay, export and delete their own case without changing profile authority", async () => {
   const f = fixture(),
     first = await f.reports.get("case-demo"),
     key = crypto.randomUUID(),
@@ -292,11 +292,9 @@ test("same owner customer to lawyer blocks direct report read, replay, exports a
   for (const action of [
     () => f.reports.get("case-demo"),
     () => f.request(path, init),
-    () => f.reports.pdf(saved.id),
     () => f.reports.zip(saved.id, ["file-demo"]),
-    () => f.account.deleteCase("case-demo", "DELETE"),
   ])
-    await expect(action()).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
+    await action();
   expect((await f.account.usage()).newCases.used).toBe(1);
   expect((await f.account.deletionAccess()).canDelete).toBe(true);
   f.update((state) => {
@@ -306,10 +304,12 @@ test("same owner customer to lawyer blocks direct report read, replay, exports a
   f.update((state) => {
     if (state.session.user) state.session.user.accountType = "lawyer";
   });
+  await f.account.deleteCase("case-demo", "DELETE");
+  await expect(f.reports.get("case-demo")).rejects.toMatchObject({ code: "NOT_FOUND" });
   await f.account.deleteAccount("DELETE");
   expect(f.read().session.user).toBeNull();
 });
-test("a role switch while original bytes load refuses a late ZIP response", async () => {
+test("a different owner while original bytes load still refuses a late ZIP response", async () => {
   const f = fixture(),
     report = await f.reports.get("case-demo"),
     handler = createReportsMockHandler({
@@ -317,7 +317,7 @@ test("a role switch while original bytes load refuses a late ZIP response", asyn
       update: f.update,
       original: async () => {
         f.update((state) => {
-          if (state.session.user) state.session.user.accountType = "lawyer";
+          if (state.session.user) state.session.user.id = "different-owner";
         });
         return new Blob(["합성 원본"]);
       },
@@ -327,7 +327,7 @@ test("a role switch while original bytes load refuses a late ZIP response", asyn
       method: "POST",
       body: { selectedFileIds: ["file-demo"] },
     }),
-  ).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
 test("stale source revisions are shown, excluded or removed originals cannot enter ZIP", async () => {
   const f = fixture();
@@ -728,7 +728,9 @@ test("mock saved ZIP survives consent change and controller reload, then case de
   f.update((state) => {
     if (state.session.user) state.session.user.accountType = "lawyer";
   });
-  await expect(reloaded.savedZip(saved.id)).rejects.toMatchObject({ code: "ROLE_REQUIRED" });
+  expect(await (await reloaded.savedZip(saved.id)).arrayBuffer()).toEqual(
+    await first.arrayBuffer(),
+  );
   f.update((state) => {
     if (state.session.user) state.session.user.accountType = "customer";
   });

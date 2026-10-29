@@ -259,9 +259,9 @@ test("signed report writes retain legacy role fallback and fresh consent with co
         },
         f.env,
       );
-      // Valid customer preference reaches strict input validation; all legacy
-      // lawyer fallback paths must stop before processing the request body.
-      expect(response.status).toBe(preference === "customer" ? 400 : 403);
+      // Both explicit account types and the legacy lawyer fallback reach strict
+      // input validation; stale/missing consent still stops all writes below.
+      expect(response.status).toBe(400);
     }
   }
   f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);

@@ -124,7 +124,7 @@ test("report review edits in place and saves before a full-width PDF download", 
     const key = "baro.reports.browser-test.v1",
       state = JSON.parse(localStorage.getItem(key) ?? "{}");
     state.reports["case-demo"].content =
-      "사건 요약\n합성 송금 자료\n\n사실·주장·출처\n보존할 합성 근거\n\n미확인 사항\n반환 약속 날짜\n\n공식 출처\n\n준비할 행동\n원본 보관";
+      "사건 요약\n합성 송금 자료와 반환 약속을 중심으로 상담을 준비합니다.\n\n당사자\n의뢰인 · 돈을 빌려준 사람\n상대방 · 반환 여부를 확인할 사람\n\n사실·주장·출처\n보존할 합성 근거\n\n미확인 사항\n반환 약속 날짜와 일부 변제 여부를 확인해야 합니다.\n\n공식 출처\n\n타임라인\n2026.03.12 · 송금 자료에 적힌 거래일\n2026.06.30 · 대화에서 정한 반환 예정일\n\n준비할 행동\n원본 송금 자료와 전체 대화 기록을 날짜순으로 보관하세요.\n\n자료 처리 범위\n합성 자료.jpg · 사진에 표시된 날짜와 금액을 확인했습니다.\n\n연락과 전달\n변호사에게 확인할 내용을 정리한 뒤 직접 전달합니다.";
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.reload();
@@ -165,6 +165,10 @@ test("report review edits in place and saves before a full-width PDF download", 
         .getByRole("button", { name: "PDF 다운로드", exact: true })
         .boundingBox();
     expect(Math.abs((bounds?.width ?? 0) - (button?.width ?? 0))).toBeLessThan(2);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await page.screenshot({ path: `.wrangler/report-hierarchy-${width}.png`, fullPage: true });
   }
 });
 test("same-tab signout immediately clears report preview and saved ZIP", async ({ page }) => {
@@ -223,7 +227,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
   await expect(page.getByText("이전 계정의 저장하지 않은 합성 편집")).toHaveCount(0);
 });
-test("same owner role change purges report edits and exports after peer-tab notification", async ({
+test("same owner selecting lawyer retains report editing and export access", async ({
   page,
   context,
 }) => {
@@ -243,11 +247,9 @@ test("same owner role change purges report edits and exports after peer-tab noti
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.bringToFront();
-  await expect(editor).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toHaveCount(0);
-  await expect(page.getByText("역할 변경 전에 남겨진 합성 편집")).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(editor).toHaveValue("역할 변경 전에 남겨진 합성 편집");
+  await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeVisible();
 });
 test("peer account switch clears settings usage and an account deletion confirmation", async ({
   page,

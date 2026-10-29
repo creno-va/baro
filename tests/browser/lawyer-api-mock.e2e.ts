@@ -75,6 +75,9 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
   await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
+  await expect(page).toHaveURL(/\/app/);
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.getByRole("link", { name: "변호사 프로필", exact: true }).click();
   await expect(page).toHaveURL(/\/lawyer/);
   await page.getByLabel("이름", { exact: true }).fill("E 통합 시연 변호사");
   await page.getByLabel("사무실 이름").fill("합성 시연 사무실");
@@ -121,7 +124,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
   await page.getByRole("button", { name: "동의하고 공개" }).click();
   await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "변호사 디렉터리" }).click();
+  await page.goto("/lawyers");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByLabel("이름 또는 사무실", { exact: true }).fill("E 통합 시연 변호사");
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");

@@ -220,7 +220,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
         const refusalFence = rejected
           ? {
               sql: `AND f.encrypted_payload=?
-            AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer')='customer'
+            AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer')
             AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id
               AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
             AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id

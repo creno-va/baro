@@ -6,24 +6,6 @@
   --app-fast: 160ms;
   --app-enter: 240ms;
 }
-/* Pointer actions and their automatic focus moves do not need a keyboard ring. */
-:root[data-focus-input="pointer"] .app-frame :focus-visible {
-  outline: none;
-}
-/* Keep semantic focus and keyboard scrolling without outlining the whole page/region. */
-.app-frame
-:is(
-  main[tabindex="-1"],
-  h1[tabindex="-1"],
-  h2[tabindex="-1"],
-  h3[tabindex="-1"],
-  [role="tabpanel"],
-  .workspace-messages,
-  .sidebar-recent__list,
-  dialog
-):focus-visible {
-  outline: none;
-}
 .app-frame .app-surface {
   background: var(--app-canvas);
 }
@@ -575,11 +557,11 @@
   border-radius: 8px;
 }
 .app-frame .sidebar-story-row:hover,
-.app-frame .sidebar-story-row:focus-within {
+:root[data-focus-input="keyboard"] .app-frame .sidebar-story-row:focus-within {
   background: var(--muted);
 }
 .app-frame .sidebar-story-row:hover .sidebar-story,
-.app-frame .sidebar-story-row:focus-within .sidebar-story {
+:root[data-focus-input="keyboard"] .app-frame .sidebar-story-row:focus-within .sidebar-story {
   background: var(--muted);
 }
 .app-frame .sidebar-story-delete {
@@ -609,7 +591,10 @@
   pointer-events: none;
 }
 .app-frame .sidebar-story-row:hover .sidebar-story-delete,
-.app-frame .sidebar-story-row:focus-within .sidebar-story-delete {
+:root[data-focus-input="keyboard"]
+  .app-frame
+  .sidebar-story-row:focus-within
+  .sidebar-story-delete {
   opacity: 1;
   pointer-events: auto;
 }

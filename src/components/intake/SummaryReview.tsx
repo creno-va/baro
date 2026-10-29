@@ -413,7 +413,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                   </p>
                   {summaryTooLong && <p role="alert">요약은 5,000자까지 입력할 수 있어요.</p>}
                 </div>
-                {dirty ? (
+                {dirty && !editingActive ? (
                   <div className="intake-scene-tools">
                     <Button
                       variant="outline"
@@ -429,11 +429,7 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                       }
                     >
                       <Save size={16} aria-hidden="true" />
-                      {busy
-                        ? "저장 중…"
-                        : editingActive
-                          ? "수정 내용 저장하고 적용"
-                          : "수정 내용 저장"}
+                      {busy ? "저장 중…" : "수정 내용 저장"}
                     </Button>
                     <Button
                       variant="ghost"
@@ -457,14 +453,19 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                 </p>
                 {editingActive ? (
                   <div className="intake-actions">
-                    {item.stage === "summary" && (
-                      <Button disabled={locked || dirty} onClick={() => void confirm()}>
-                        저장한 수정 내용 적용
-                      </Button>
-                    )}
-                    <ButtonLink href={returnHref} variant="outline">
-                      {dirty ? "저장하지 않고 돌아가기" : "작업 공간으로 돌아가기"}
-                    </ButtonLink>
+                    <Button
+                      loading={busy}
+                      disabled={
+                        locked ||
+                        (!dirty && item.stage !== "summary") ||
+                        !summary.trim() ||
+                        summaryTooLong
+                      }
+                      onClick={() => void (dirty ? save() : confirm())}
+                    >
+                      <Save size={16} aria-hidden="true" />
+                      {busy ? "저장 중…" : "수정 내용 저장"}
+                    </Button>
                   </div>
                 ) : (
                   <>

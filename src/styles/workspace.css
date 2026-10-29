@@ -204,10 +204,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 8px;
 }
 .workspace-section-actions .ui-button {
   flex-shrink: 0;
+}
+.workspace-section-actions > .ui-button + .ui-button {
+  margin-left: 0;
 }
 .workspace-sidebar h2 {
   font-size: 0.9rem;
@@ -531,10 +534,6 @@
   flex: none;
   margin-top: 5px;
 }
-.workspace-lookup :focus-visible {
-  outline: 3px solid #2563eb;
-  outline-offset: 3px;
-}
 .workspace-attach:hover {
   background: #f3f6fa;
 }
@@ -665,6 +664,9 @@
   font-size: 0.85rem;
   line-height: 1.8;
 }
+.workspace-empty > p + .ui-button {
+  margin-top: 20px;
+}
 .workspace-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -719,10 +721,6 @@
 .workspace-upload-target:hover:not(:disabled) {
   border-color: var(--primary);
   background: #f2f7ff;
-}
-.workspace-upload-target:focus-visible {
-  outline: 3px solid var(--ring);
-  outline-offset: 3px;
 }
 .workspace-upload-target:disabled {
   cursor: default;
@@ -910,6 +908,11 @@
   color: var(--primary);
   flex-shrink: 0;
 }
+.workspace-action-status {
+  display: grid;
+  gap: 10px;
+  margin: -8px 0 16px;
+}
 .workspace-action-progress {
   display: block;
   width: 100%;
@@ -919,7 +922,7 @@
   overflow: hidden;
   appearance: none;
   background: var(--muted);
-  margin: -8px 0 16px;
+  margin: 0;
 }
 .workspace-action-progress::-webkit-progress-bar {
   background: var(--muted);
@@ -935,16 +938,19 @@
   border-bottom: 1px solid var(--border);
   transition: background 160ms;
 }
-.workspace-action-list label {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+.workspace-action-list > li > label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
   padding: 24px 4px;
   margin: 0;
   cursor: pointer;
 }
-.workspace-action-list input {
-  margin-top: 4px;
+.workspace-action-list > li > label > input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
 }
 .workspace-action-list label > span {
   min-width: 0;
@@ -970,7 +976,8 @@
   padding: 28px 0 0;
 }
 .workspace-next h3 {
-  font-size: 1rem;
+  font-size: 1.125rem;
+  font-weight: 650;
   margin: 0 0 10px;
 }
 .workspace-next p {
@@ -1591,10 +1598,6 @@
   overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
   padding: 16px 8px;
-}
-.workspace--chat .workspace-messages:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
 }
 .workspace--chat .workspace-composer {
   position: static;

@@ -232,7 +232,7 @@ for (const { operation, loseSession, recovery } of scenarios) {
           await page
             .getByLabel("요약 편집")
             .fill("작업 공간에서 직접 편집한 활성 사건의 합성 요약입니다.");
-          await page.getByRole("button", { name: "수정 내용 저장하고 적용", exact: true }).click();
+          await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
           await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
           await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
           const edited = await summarySnapshot(page, info.id);

@@ -1755,10 +1755,6 @@ export function Workspace({
                       <p>하나씩 확인하면서 상담을 준비해요.</p>
                     </div>
                     <div className="workspace-section-actions">
-                      <span className="workspace-count">
-                        {view.actions.filter((action) => action.done).length} /{" "}
-                        {view.actions.length} 완료
-                      </span>
                       <Button
                         variant="outline"
                         disabled={!!busy || readonly || !!pendingResponse}
@@ -1770,12 +1766,18 @@ export function Workspace({
                     </div>
                   </div>
                   {!!view.actions.length && (
-                    <progress
-                      className="workspace-action-progress"
-                      aria-label="다음 행동 완료 현황"
-                      max={view.actions.length}
-                      value={view.actions.filter((action) => action.done).length}
-                    />
+                    <div className="workspace-action-status">
+                      <span className="workspace-count" aria-live="polite">
+                        {view.actions.filter((action) => action.done).length} /{" "}
+                        {view.actions.length} 완료
+                      </span>
+                      <progress
+                        className="workspace-action-progress"
+                        aria-label="다음 행동 완료 현황"
+                        max={view.actions.length}
+                        value={view.actions.filter((action) => action.done).length}
+                      />
+                    </div>
                   )}
                   {!view.actions.length && (
                     <div className="workspace-empty">
@@ -1815,9 +1817,6 @@ export function Workspace({
                                   );
                                   if (!(await verify()) || !current(epoch)) return;
                                   apply(next);
-                                  setNotice(
-                                    done ? "완료 표시를 저장했어요." : "완료 표시를 해제했어요.",
-                                  );
                                 } catch (cause) {
                                   if (current(epoch)) apply(previous);
                                   throw cause;

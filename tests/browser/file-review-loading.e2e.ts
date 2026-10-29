@@ -198,7 +198,7 @@ for (const revoked of ["owner", "role", "signout"] as const)
     if (revoked === "role") state.role = "lawyer";
     if (revoked === "signout") state.owner = "";
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    if (revoked === "owner") {
+    if (revoked === "owner" || revoked === "role") {
       await expect.poll(() => state.reads.filter((r) => r.after < 0).length).toBe(2);
       await expect(page.getByLabel("확인·교정한 내용")).toHaveCount(1);
     } else if (revoked === "signout")
@@ -206,7 +206,9 @@ for (const revoked of ["owner", "role", "signout"] as const)
     else await expect(page.getByRole("alert")).toBeVisible();
     state.next.release();
     await expect(page.getByText("synthetic-file-a 합성 원본 1", { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("확인·교정한 내용")).toHaveCount(revoked === "owner" ? 1 : 0);
+    await expect(page.getByLabel("확인·교정한 내용")).toHaveCount(
+      revoked === "owner" || revoked === "role" ? 1 : 0,
+    );
     expect(state.writes).toBe(0);
   });
 

@@ -14,7 +14,10 @@ export function ReportReading({
   return (
     <div className="report-reading">
       {reportReviewSections(content).map((section, index) => (
-        <section key={`${index}:${section.title}`} className="report-reading-section">
+        <section
+          key={`${index}:${section.title}`}
+          className={`report-reading-section${["사건 요약", "사건의 사실과 주장"].includes(section.title) ? " report-reading-section--overview" : ""}${["검토한 내용", "타임라인", "준비할 행동"].includes(section.title) ? " report-reading-section--wide" : ""}`}
+        >
           <header>
             <span aria-hidden="true">{index + 1}</span>
             <h3>{section.title}</h3>

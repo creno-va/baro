@@ -85,7 +85,7 @@ test("actual D1 row receipts enforce the quoted envelope; missing row metadata d
   expect(f.db.queryCount - before).toBe(3);
 });
 
-test("single-query stream fence rechecks role, consent, same-revision source identity, immutable report and deletion", async () => {
+test("single-query stream fence permits its lawyer owner and rechecks consent, source identity, report and deletion", async () => {
   const { exportFence } = await import("../src/server/modules/reports/fence");
   const { sourceDigest } = await import("../src/server/modules/reports/source");
   const f = await reportFixture();
@@ -116,7 +116,9 @@ test("single-query stream fence rechecks role, consent, same-revision source ide
   f.db.sqlite
     .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?, 'lawyer',?)")
     .run(`account-type:${f.actor.ownerId}`, f.actor.now);
-  await deny();
+  before = f.db.queryCount;
+  await fence.check();
+  expect(f.db.queryCount - before).toBe(1);
   f.db.sqlite
     .query("UPDATE app_metadata SET value='customer' WHERE key=?")
     .run(`account-type:${f.actor.ownerId}`);

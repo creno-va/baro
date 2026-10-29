@@ -15,11 +15,6 @@
 .lawyer-profile-back:hover {
   color: var(--foreground);
 }
-.lawyer-profile-back:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 4px;
-  border-radius: 4px;
-}
 .lawyer-profile > dialog.ui-dialog {
   margin: auto;
 }
@@ -176,14 +171,6 @@
 .lawyer-directory form select {
   width: 100%;
   min-width: 0;
-}
-.lawyer-editor input:focus-visible,
-.lawyer-editor select:focus-visible,
-.lawyer-editor textarea:focus-visible,
-.lawyer-directory input:focus-visible,
-.lawyer-directory select:focus-visible {
-  outline: 3px solid var(--color-ring);
-  outline-offset: 3px;
 }
 .lawyer-editor input:disabled,
 .lawyer-directory input:disabled,
@@ -379,9 +366,7 @@
   background: #eef1f5;
 }
 .lawyer-directory .directory-search :is(input, select):focus-visible {
-  border-color: var(--primary);
-  outline: 3px solid var(--ring);
-  outline-offset: 3px;
+  border-color: var(--input);
   background: var(--card);
 }
 .lawyer-directory .directory-search__button {
@@ -656,5 +641,307 @@
   .directory-search input,
   .directory-search select {
     transition: none;
+  }
+}
+
+/* Private profile editor: one clear action row and quiet, separated sections. */
+.app-frame.app-frame--product .lawyer-editor .page-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--app-canvas);
+  align-items: flex-start;
+  gap: 24px;
+  margin: 0;
+  padding: 0 0 24px;
+}
+.lawyer-editor .page-header h1 {
+  font-size: clamp(26px, 2.7vw, 32px);
+  line-height: 1.4;
+  margin: 0 0 10px;
+}
+.lawyer-editor .page-header__description {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lawyer-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lawyer-editor-actions .ui-button {
+  min-height: 46px;
+  padding-inline: 18px;
+}
+.lawyer-editor-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 24px;
+  padding: 0 0 24px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.lawyer-editor-status > p,
+.lawyer-editor-status > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+}
+.lawyer-visibility {
+  display: inline-flex;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+}
+.lawyer-visibility--public {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: #1858b5;
+}
+.lawyer-public-link {
+  color: var(--muted-foreground);
+  text-underline-offset: 4px;
+}
+.lawyer-editor-sections {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.app-frame.app-frame--product .lawyer-editor .profile-edit-section {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: 32px;
+  padding: 32px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lawyer-editor .profile-edit-section > :where(.ui-card__header, .ui-card__content) {
+  padding: 0;
+  min-width: 0;
+}
+.lawyer-editor .profile-edit-section .ui-card__title,
+.lawyer-editor .profile-publication-section .ui-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+.profile-edit-section .ui-card__header > p {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.8;
+  word-break: keep-all;
+}
+.lawyer-editor .lawyer-field {
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.lawyer-editor .lawyer-field :where(input:not([type="checkbox"]), select, textarea) {
+  border-color: var(--border);
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: var(--card);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.lawyer-editor .lawyer-field textarea {
+  resize: vertical;
+  min-height: 160px;
+  background: #edf1f6;
+}
+.lawyer-editor > .lawyer-notice {
+  padding: 0;
+  margin: 0 0 20px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lawyer-editor .lawyer-fields {
+  gap: 20px;
+}
+.lawyer-editor .lawyer-photo-row {
+  gap: 22px;
+  margin-bottom: 24px;
+}
+.lawyer-editor .lawyer-photo-row .lawyer-field {
+  gap: 8px;
+}
+.lawyer-photo-upload {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 14px;
+  cursor: pointer;
+}
+.lawyer-photo-upload input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+:root[data-focus-input="keyboard"]
+  .lawyer-editor
+  :is(.lawyer-photo-upload, .lawyer-portfolio-upload):has(input:focus-visible) {
+  box-shadow: inset 0 0 0 2px #526178;
+}
+.lawyer-editor .lawyer-checkboxes {
+  gap: 8px;
+  margin-top: 12px;
+}
+.lawyer-editor .lawyer-checkboxes label {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 14px;
+  gap: 8px;
+  cursor: pointer;
+}
+.lawyer-editor .lawyer-checkboxes label:has(input:checked) {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.lawyer-editor input[type="checkbox"] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+.lawyer-portfolio-upload {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100px;
+  padding: 20px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.lawyer-portfolio-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.lawyer-portfolio-upload:has(input:disabled) {
+  opacity: 0.6;
+}
+.lawyer-assets-refresh {
+  margin-top: 12px;
+  color: var(--muted-foreground);
+}
+.lawyer-editor .lawyer-portfolio-row {
+  margin-block: 24px;
+  padding: 22px;
+  gap: 20px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+}
+.app-frame.app-frame--product .lawyer-editor .profile-publication-section {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(0, 1fr);
+  gap: 32px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 32px 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lawyer-editor .profile-publication-section > :where(.ui-card__header, .ui-card__content) {
+  padding: 0;
+  min-width: 0;
+}
+.profile-publication-section .ui-card__content > p {
+  margin: 0 0 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.lawyer-editor .lawyer-publication-confirm {
+  padding: 22px;
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.lawyer-publication-confirm > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.lawyer-publication-confirm > label input {
+  margin-top: 4px;
+}
+.lawyer-publication-confirm > div {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+@media (max-width: 1000px) {
+  .app-frame.app-frame--product
+    .lawyer-editor
+    :is(.profile-edit-section, .profile-publication-section) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+}
+@media (max-width: 1100px), (max-height: 560px) {
+  .app-frame.app-frame--product .lawyer-editor .page-header {
+    top: 72px;
+  }
+}
+@media (max-width: 600px) {
+  .lawyer-editor .page-header__action,
+  .lawyer-editor-actions {
+    width: 100%;
+  }
+  .lawyer-editor-actions > .ui-button {
+    flex: 1;
+  }
+  .app-frame.app-frame--product
+    .lawyer-editor
+    :is(.profile-edit-section, .profile-publication-section) {
+    padding-block: 26px;
+  }
+  .lawyer-editor .lawyer-photo-row {
+    align-items: flex-start;
+  }
+  .lawyer-editor .lawyer-portfolio-row {
+    padding: 18px;
   }
 }
