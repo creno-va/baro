@@ -10,6 +10,10 @@ test("settings usage disclosure stacks content below its summary and toggles acc
 }) => {
   await seed(page);
   await page.goto("/settings");
+  await expect(page.getByRole("navigation", { name: "설정 바로가기" })).toHaveCount(0);
+  await expect(page.locator("#settings-usage-title")).toBeVisible();
+  await expect(page.locator("#settings-help-title")).toBeVisible();
+  await expect(page.locator("#settings-danger-title")).toBeVisible();
   const disclosure = page.locator(".settings-usage-guide");
   const summary = disclosure.locator("summary");
   const content = disclosure.locator("p");
