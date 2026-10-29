@@ -1,5 +1,5 @@
 import { opaqueIdSchema } from "../../../../contracts";
-import { v2SummarySchema } from "../../../../contracts/v2";
+import { caseDisplayTitle, v2SummarySchema } from "../../../../contracts/v2";
 import { v2PrecedentComparisonRequestSchema } from "../../../../contracts/v2/precedent-comparison";
 import {
   type V2PrecedentSearchResponse,
@@ -17,6 +17,7 @@ import {
   decodeSource,
   type SourceRow,
 } from "../../../db/v2-official-sources";
+import { createV2WorkspaceRepository } from "../../../db/v2-workspace";
 import {
   reportLegalOutcome,
   reportLegalRejection,
@@ -179,11 +180,15 @@ export function createPrecedentResearchService(
         v2SummarySchema,
       );
       if (!summary) throw new PrecedentResearchError("REVIEW_REQUIRED");
+      const metadata = await createV2WorkspaceRepository(core.binding, core.cipher).metadata(
+        { ownerId, now: now() },
+        id,
+      );
       const value = v2PrecedentResearchContextSchema.parse({
         schemaVersion: "2",
         workspaceRevision: current.workspaceRevision,
         summaryRevision: current.summaryRevision,
-        caseTitle: summary.overview.slice(0, 80),
+        caseTitle: caseDisplayTitle(metadata?.narrative ?? summary.overview, metadata?.caseTitle),
         recommendedTopics: recommendPrecedentTopics(summary),
       });
       await scope(ownerId, id, current.workspaceRevision, current.summaryRevision);

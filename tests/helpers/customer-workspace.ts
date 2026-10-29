@@ -43,6 +43,7 @@ export async function runCustomerJob(
   auditPass = true,
   onPhase?: () => Promise<void>,
   questionsPerRound = 1,
+  caseTitle?: string,
 ) {
   const workspace = await f.service.find(f.owner.userId, f.workspace.id),
     id = crypto.randomUUID(),
@@ -78,7 +79,7 @@ export async function runCustomerJob(
     workspaceRevision: workspace.workspaceRevision + 1,
     jobId: id,
   };
-  return executeCustomerJob(f, params, auditPass, onPhase, questionsPerRound);
+  return executeCustomerJob(f, params, auditPass, onPhase, questionsPerRound, caseTitle);
 }
 export async function executeCustomerJob(
   f: Fixture,
@@ -86,6 +87,7 @@ export async function executeCustomerJob(
   auditPass = true,
   onPhase?: () => Promise<void>,
   questionsPerRound = 1,
+  caseTitle?: string,
 ) {
   const id = params.jobId;
   const result = await executeWorkspace(f.core, params, `${id}-1`, {
@@ -118,6 +120,7 @@ export async function executeCustomerJob(
             if (phase === "workspace_summary")
               return {
                 overview: "사용자의 거래 자료 확인 준비를 정리했습니다.",
+                ...(caseTitle ? { caseTitle } : {}),
                 facts: [
                   {
                     id: "initial_fact",

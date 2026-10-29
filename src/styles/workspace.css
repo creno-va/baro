@@ -1499,7 +1499,7 @@
 }
 
 .case-subject-context {
-  margin: -4px 0 12px;
+  margin: 6px 0 8px;
   color: var(--muted-foreground);
   font-size: 12px;
 }

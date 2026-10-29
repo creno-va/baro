@@ -49,6 +49,7 @@ function fixture(
     jobStorage?: CaseOperationStorage;
     request?: WorkspaceTransport;
     messages?: unknown[];
+    caseTitle?: string;
   } = {},
 ) {
   const scope = options.scope ?? createSessionScope();
@@ -62,7 +63,11 @@ function fixture(
         { status: 202 },
       );
     if (path.endsWith("/workspace")) return Response.json(workspace);
-    if (path.endsWith("/intake")) return Response.json(intake);
+    if (path.endsWith("/intake"))
+      return Response.json({
+        ...intake,
+        ...(options.caseTitle ? { caseTitle: options.caseTitle } : {}),
+      });
     if (path.endsWith("/summary")) return Response.json(summary);
     if (path.endsWith("/workspace-jobs/latest")) return Response.json(job);
     if (path.includes("/messages?"))
@@ -81,6 +86,13 @@ function fixture(
   });
   return { client, scope, requests };
 }
+
+test("workspace headers prefer the generated case title from encrypted metadata", async () => {
+  const title = "보증금 반환 약속과 계약 종료";
+  const view = await fixture({ caseTitle: title }).client.get(workspace.id);
+  expect(view.case.title).toBe(title);
+  expect(view.case.subjectContext).toBe(workspace.subjectContext);
+});
 
 test("displayed statute labels distinguish articles without changing source identities or HTTP data", async () => {
   const citations = [

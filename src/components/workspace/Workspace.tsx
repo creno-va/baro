@@ -25,7 +25,6 @@ import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
-import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
 import { FactAnswer } from "../intake/FactAnswer";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
@@ -117,7 +116,6 @@ export function Workspace({
     null,
   );
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
-  const [deletingCase, setDeletingCase] = useState(false);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
   const [acceptedFileRetries, setAcceptedFileRetries] = useState<string[]>([]);
@@ -160,7 +158,6 @@ export function Workspace({
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
-    setDeletingCase(false);
     ++latest.current;
     operationError.current = null;
     acknowledgedTimeline.current = false;
@@ -900,29 +897,7 @@ export function Workspace({
         subjectContext={ready ? view?.case.subjectContext : undefined}
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
-        action={
-          ready && view ? (
-            <Button
-              variant="ghost"
-              disabled={!!busy}
-              aria-haspopup="dialog"
-              onClick={(event) => {
-                event.currentTarget.focus();
-                setDeletingCase(true);
-              }}
-            >
-              사건 삭제
-            </Button>
-          ) : undefined
-        }
       />
-      {deletingCase && ready && view && (
-        <CaseDeleteDialog
-          item={view.case}
-          onClose={() => setDeletingCase(false)}
-          onDeleted={() => window.location.replace("/app")}
-        />
-      )}
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
       </div>

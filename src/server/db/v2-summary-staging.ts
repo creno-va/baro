@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
-import { type V2Fact, type V2Summary, v2FactSchema, v2SummarySchema } from "../../contracts/v2";
+import {
+  caseTitleSchema,
+  type V2Fact,
+  type V2Summary,
+  v2FactSchema,
+  v2SummarySchema,
+} from "../../contracts/v2";
 import {
   type Actor,
   actorSchema,
@@ -16,6 +22,7 @@ import {
 } from "./v2-core";
 import {
   completeLeaseStatements,
+  intakeContentSchema,
   type JobLease,
   leasePredicate,
   referencesAuthorized,
@@ -184,6 +191,7 @@ export function createV2SummaryStagingRepository(core: V2Core) {
         intakeRevision: number;
         factCount: number;
         partyCount: number;
+        caseTitle?: string;
       },
       lease: JobLease,
     ) {
@@ -192,6 +200,29 @@ export function createV2SummaryStagingRepository(core: V2Core) {
         parse(opaqueIdSchema, input.summaryId);
         parse(z.number().int().min(0).max(300), input.factCount);
         parse(z.number().int().min(0).max(30), input.partyCount);
+        let titlePayload: string | null = null;
+        if (input.caseTitle !== undefined) {
+          const caseTitle = parse(caseTitleSchema, input.caseTitle);
+          const row = await core
+            .statement(
+              `SELECT i.encrypted_payload FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+              [g.workspaceId, g.ownerId],
+            )
+            .first<{ encrypted_payload: string }>();
+          if (!row) return false;
+          const content = await core.decrypt(
+            "v2_intakes",
+            g.workspaceId,
+            g.ownerId,
+            1,
+            row.encrypted_payload,
+            intakeContentSchema,
+          );
+          titlePayload = await core.encrypt("v2_intakes", g.workspaceId, g.ownerId, 1, {
+            ...content,
+            caseTitle,
+          });
+        }
         const execution = leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now);
         const claimId = crypto.randomUUID();
         return core.changed([
@@ -225,8 +256,8 @@ export function createV2SummaryStagingRepository(core: V2Core) {
             [snapshotId, claimId],
           ),
           core.statement(
-            `UPDATE v2_intakes SET status='reviewing_summary',summary_id=?,current_job_id=NULL WHERE id=? AND ${sqlClaim}`,
-            [input.summaryId, g.workspaceId, claimId],
+            `UPDATE v2_intakes SET status='reviewing_summary',summary_id=?,current_job_id=NULL,encrypted_payload=coalesce(?,encrypted_payload) WHERE id=? AND ${sqlClaim}`,
+            [input.summaryId, titlePayload, g.workspaceId, claimId],
           ),
           core.statement(
             `UPDATE v2_workspaces SET current_job_id=NULL WHERE id=? AND ${sqlClaim}`,

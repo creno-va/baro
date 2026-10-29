@@ -519,6 +519,7 @@ export function createWorkspacePipeline(
         assertWorkspaceFacts(context, draft.facts);
         if (
           prohibited(draft.overview) ||
+          prohibited(draft.caseTitle ?? "") ||
           draft.parties.some((party) => prohibited(JSON.stringify(party)))
         )
           throw new WorkspaceOutputPolicyError("prohibited_content");

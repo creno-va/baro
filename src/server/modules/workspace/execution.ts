@@ -190,6 +190,7 @@ export async function executeWorkspace(
       );
     } else if (acquired.job.kind === "intake_summary") {
       const draft = await pipeline.summary(context, params.jobId);
+      const { caseTitle, ...summaryDraft } = draft;
       await fresh();
       await progress.enter("publication");
       const row = await core
@@ -199,7 +200,7 @@ export async function executeWorkspace(
         )
         .first<{ revision: number }>();
       const summary = v2SummarySchema.parse({
-        ...draft,
+        ...summaryDraft,
         schemaVersion: "2",
         revision: row?.revision ?? 1,
         intakeRevision: context.intake.revision,
@@ -265,6 +266,7 @@ export async function executeWorkspace(
           intakeRevision: summary.intakeRevision,
           factCount: summary.facts.length,
           partyCount: summary.parties.length,
+          ...(caseTitle ? { caseTitle } : {}),
         },
         lease,
       );

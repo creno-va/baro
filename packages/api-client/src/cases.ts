@@ -8,6 +8,8 @@ import {
   displayText,
 } from "@baro/contracts/v1";
 import {
+  caseDisplayTitle,
+  caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2FailureCode,
   v2FailureCodeSchema,
@@ -73,6 +75,7 @@ const metadataSchema = z.object({
   revision: z.number().int().min(1),
   status: z.enum(["collecting", "generating_questions", "reviewing_summary", "confirmed"]),
   narrative: z.string(),
+  caseTitle: caseTitleSchema.optional(),
   batches: z.array(v2QuestionBatchSchema),
   confirmedSummaryRevision: z.number().nullable(),
   currentJobId: z.string().nullable(),
@@ -308,7 +311,7 @@ export function createCasesClient(
   function view(w: Workspace, m?: Metadata, summary = ""): CaseView {
     return {
       id: w.id,
-      title: m?.narrative ? [...m.narrative].slice(0, 45).join("") : w.title,
+      title: m ? caseDisplayTitle(m.narrative, m.caseTitle) : w.title,
       subjectContext: w.subjectContext,
       stage: w.status === "intake" && m?.summary ? "summary" : w.status,
       revision: w.workspaceRevision,

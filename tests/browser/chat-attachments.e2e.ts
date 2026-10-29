@@ -55,28 +55,54 @@ async function attach(page: Page) {
   await (await chooser).setFiles(file);
 }
 
-test("workspace deletion has no title or typed confirmation and aligns delete before cancel", async ({
+test("case header shows a concise title below its small subject label and deletion stays in the sidebar", async ({
   page,
 }) => {
   await seed(page);
-  await page.getByLabel("사건 관리").click();
-  const opener = page.getByRole("button", { name: "사건 삭제", exact: true });
-  await opener.click();
-  const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await expect(modal.getByRole("textbox")).toHaveCount(0);
-  await expect(modal.getByText("합성 첨부 사건", { exact: true })).toHaveCount(0);
-  await expect(modal.locator(".deletion-dialog-actions button")).toHaveText(["사건 삭제", "취소"]);
-  await expect(modal.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
+  const title = "지인에게 빌려준 돈의 반환 문제";
+  await page.evaluate(
+    ({ id, title }) => {
+      const key = "baro-api-mock-v1:cases";
+      const cases = JSON.parse(localStorage.getItem(key) ?? "{}");
+      cases[id].title = title;
+      cases[id].subjectContext = "company";
+      localStorage.setItem(key, JSON.stringify(cases));
+    },
+    { id, title },
+  );
+  await page.reload();
+  const nav = page.locator(".case-navigation");
+  await expect(nav.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await expect(nav.getByLabel("사건 관리")).toHaveCount(0);
+  await expect(nav.getByRole("button", { name: "사건 삭제", exact: true })).toHaveCount(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
-    if (width === 390) await page.screenshot({ path: ".wrangler/workspace-deletion-390.png" });
+    const layout = await nav.evaluate((node) => {
+      const label = node.querySelector(".case-subject-context");
+      const heading = node.querySelector("h1");
+      if (!label || !heading) throw new Error("Case heading missing");
+      return {
+        above: label.getBoundingClientRect().bottom <= heading.getBoundingClientRect().top,
+        small:
+          parseFloat(getComputedStyle(label).fontSize) <
+          parseFloat(getComputedStyle(heading).fontSize),
+      };
+    });
+    expect(layout).toEqual({ above: true, small: true });
+    await expect(nav.locator(".case-subject-context")).toHaveText("기업 사건");
+    if (width !== 320) await page.screenshot({ path: `.wrangler/case-heading-${width}.png` });
   }
+  const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
+  await expect(row).toContainText(title);
+  await row.hover();
+  await row.getByRole("button", { name: `${title} 사건 삭제`, exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await modal.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(modal).toHaveCount(0);
-  await opener.click();
+  await row.hover();
+  await row.getByRole("button", { name: `${title} 사건 삭제`, exact: true }).click();
   await modal.getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect(page).toHaveURL(/\/app$/);
   expect(
@@ -566,11 +592,5 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     .getByRole("link", { name: "대화", exact: true })
     .click();
   await expect(log.locator("article")).toHaveCount(24);
-  await page.getByLabel("사건 관리").click();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  const deletion = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await expect(deletion).toBeVisible();
-  await expect(deletion.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
-  await deletion.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(deletion).toHaveCount(0);
+  await expect(page.locator(".case-options")).toHaveCount(0);
 });

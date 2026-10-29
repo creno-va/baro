@@ -1,5 +1,5 @@
-import { ArrowLeft, MoreHorizontal } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 const menus = [
   { id: "chat", label: "대화", path: "" },
@@ -28,14 +28,12 @@ export function CaseNavigation({
   active,
   fileCount,
   subjectContext,
-  action,
 }: {
   caseId: string;
   title: string;
   active: (typeof menus)[number]["id"];
   fileCount?: number | undefined;
   subjectContext?: "individual" | "company" | undefined;
-  action?: ReactNode;
 }) {
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const navigation = useRef<HTMLElement>(null);
@@ -63,32 +61,14 @@ export function CaseNavigation({
       <a className="workspace-back" href="/app">
         <ArrowLeft size={16} aria-hidden="true" /> 새 사건 입력
       </a>
-      <header className="workspace-header">
-        <h1 title={title}>{title}</h1>
-        {action && (
-          <details
-            className="case-options"
-            onKeyDown={(event) => {
-              if (event.key !== "Escape" || !event.currentTarget.open) return;
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector("summary")?.focus();
-              event.stopPropagation();
-            }}
-          >
-            <summary aria-label="사건 관리">
-              <MoreHorizontal size={22} aria-hidden="true" />
-            </summary>
-            <div>{action}</div>
-          </details>
-        )}
-      </header>
       {subjectContext && (
         <p className="case-subject-context">
-          {subjectContext === "company"
-            ? "기업 사건 · 사업 관계와 담당 역할을 중심으로 정리"
-            : "개인 사건 · 나와 상대방 사이의 일을 중심으로 정리"}
+          {subjectContext === "company" ? "기업 사건" : "개인 사건"}
         </p>
       )}
+      <header className="workspace-header">
+        <h1 title={title}>{title}</h1>
+      </header>
       <nav
         ref={navigation}
         className="workspace-tabs"

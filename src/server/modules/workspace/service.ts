@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import {
+  caseDisplayTitle,
   V2_INTAKE_POLICY,
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
@@ -321,7 +322,7 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
             return metadata
               ? {
                   id: item.id,
-                  title: [...metadata.narrative].slice(0, 45).join(""),
+                  title: caseDisplayTitle(metadata.narrative, metadata.caseTitle),
                   hasSummary: !!metadata.summary,
                 }
               : null;

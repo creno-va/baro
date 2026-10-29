@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { V2_INTAKE_POLICY, V2_LIMITS, v2SummarySchema } from "../../../contracts/v2";
+import {
+  caseDisplayTitle,
+  V2_INTAKE_POLICY,
+  V2_LIMITS,
+  v2SummarySchema,
+} from "../../../contracts/v2";
 import {
   answersInputSchema,
   createInputSchema,
@@ -160,7 +165,7 @@ export const casesMockHandlers = {
         );
       const item: CaseView = {
         id: crypto.randomUUID(),
-        title: [...input.narrative].slice(0, 45).join(""),
+        title: caseDisplayTitle(input.narrative),
         subjectContext: input.subjectContext,
         stage: "intake",
         revision: 1,

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
 import {
+  caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2Action,
   type V2CreateCaseRequest,
@@ -65,6 +66,10 @@ import {
 } from "./v2-workspace-create-guard";
 
 export const workspaceCreateDataSchema = v2CreateCaseRequestSchema.omit({ turnstileToken: true });
+export const intakeContentSchema = z.strictObject({
+  narrative: v2CreateCaseRequestSchema.shape.narrative,
+  caseTitle: caseTitleSchema.optional(),
+});
 export type WorkspaceCreateData = z.infer<typeof workspaceCreateDataSchema>;
 // Existing server callers may still supply the full validated HTTP input. The
 // business-only form lets internal data preparation avoid inventing a token.
@@ -311,7 +316,7 @@ export function createV2WorkspaceRepository(
       actor.ownerId,
       1,
       row.encrypted_payload,
-      z.strictObject({ narrative: v2CreateCaseRequestSchema.shape.narrative }),
+      intakeContentSchema,
     );
     // Both sets belong to this already authorized workspace. Keep the final
     // workspace/intake fence after all decryption, as in metadata().
@@ -692,7 +697,7 @@ export function createV2WorkspaceRepository(
           actor.ownerId,
           1,
           row.encrypted_payload,
-          z.strictObject({ narrative: v2CreateCaseRequestSchema.shape.narrative }),
+          intakeContentSchema,
         );
         // These independent reads share one snapshot/round trip. Keep the owner
         // check above and the final intake/revision fence after decryption.
