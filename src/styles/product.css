@@ -186,11 +186,8 @@
   padding-right: 4px;
 }
 .app-frame.app-frame--product .workspace-tabs a {
-  flex: 0 0 auto;
-  min-width: 44px;
   min-height: 48px;
   font-size: 14px;
-  padding: 12px 2px;
 }
 .app-frame.app-frame--product .workspace-tabs a[aria-current] {
   color: var(--product-blue);
