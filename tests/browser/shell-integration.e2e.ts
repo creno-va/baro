@@ -91,7 +91,7 @@ test("long service content fits narrow screens and the menu stays closable after
       if (path.endsWith("/reports")) {
         const regenerate = page.getByRole("button", { name: "새 버전 만들기", exact: true });
         await expect(regenerate).toBeEnabled();
-        expect((await regenerate.boundingBox())?.height).toBeLessThanOrEqual(44);
+        expect((await regenerate.boundingBox())?.height).toBeGreaterThanOrEqual(44);
       }
       expect(
         await page.evaluate(
