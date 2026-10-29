@@ -4,6 +4,22 @@ import { FRESH_DATABASES } from "./fresh-application-data";
 type Binding = { name: string; type: string; id?: string; text?: string; [key: string]: unknown };
 type Settings = { bindings: Binding[]; [key: string]: unknown };
 type Deployment = { versions: { version_id: string; percentage: number }[] };
+export async function freshTargetIsConnected(
+  environment: keyof typeof FRESH_DATABASES,
+  token: string,
+  fetcher = fetch,
+) {
+  const response = await fetcher(
+    `https://api.cloudflare.com/client/v4/accounts/9e844969d0c44b2449f3951d1f301654/workers/scripts/baro-${environment}/settings`,
+    { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30000) },
+  );
+  const body = (await response.json()) as { success: boolean; result?: Settings };
+  const id = body.result?.bindings.find((b) => b.name === "DB")?.id;
+  const target = FRESH_DATABASES[environment];
+  if (!response.ok || !body.success || (id !== target.id && id !== target.original))
+    throw new Error("FRESH_BINDING_STATE_INVALID");
+  return id === target.id;
+}
 export function bindingPatch(settings: Settings, databaseId: string): Settings {
   if (
     !Object.values(FRESH_DATABASES).some((db) => db.id === databaseId || db.original === databaseId)
@@ -47,6 +63,7 @@ export async function transitionFreshBinding(
   environment: keyof typeof FRESH_DATABASES,
   token: string,
   fetcher = fetch,
+  expectedProfileIds?: string[],
 ) {
   const target = FRESH_DATABASES[environment];
   const base = `https://api.cloudflare.com/client/v4/accounts/9e844969d0c44b2449f3951d1f301654/workers/scripts/baro-${environment}`;
@@ -159,13 +176,21 @@ export async function transitionFreshBinding(
       signal: AbortSignal.timeout(20000),
     });
     const body = (await directory.json()) as { items: { id: string }[] };
+    const synthetic =
+      expectedProfileIds?.map((id) => ({ id })) ??
+      body.items?.filter((p) => p.id.startsWith("synthetic-lawyer-"));
     if (
       !directory.ok ||
-      body.items?.length !== 10 ||
-      body.items.some((p) => !p.id.startsWith("synthetic-lawyer-"))
+      !synthetic ||
+      synthetic.length !== 10 ||
+      new Set(synthetic.map((p) => p.id)).size !== 10 ||
+      synthetic.some((p) => !p.id.startsWith("synthetic-lawyer-")) ||
+      (!alreadyConnected &&
+        (body.items?.length !== 10 ||
+          body.items.some((p) => !synthetic.some((s) => s.id === p.id))))
     )
       throw new Error("FRESH_DIRECTORY_FAILED");
-    for (const item of body.items) {
+    for (const item of synthetic) {
       const response = await fetcher(`${origin}/api/v2/lawyers/self-service/${item.id}`, {
         cache: "no-store",
         signal: AbortSignal.timeout(20000),
