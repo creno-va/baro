@@ -109,7 +109,9 @@ test("desktop and mobile complete topic, result and original flow without overfl
     .click();
   await expect(selected.locator(".precedent-document-heading h3")).toBeFocused();
   await expect
-    .poll(async () => (await selected.locator(".precedent-document-heading h3").boundingBox())?.y ?? -1)
+    .poll(
+      async () => (await selected.locator(".precedent-document-heading h3").boundingBox())?.y ?? -1,
+    )
     .toBeGreaterThanOrEqual(80);
   const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
   expect(scan.violations).toEqual([]);
