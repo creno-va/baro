@@ -1,4 +1,4 @@
-import { ArrowRight, Check, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
@@ -300,10 +300,11 @@ export function SummaryReview({ caseId }: { caseId: string }) {
     }
   }
   return (
-    <div className={`intake-flow${editingActive ? " intake-active-summary" : ""}`}>
+    <div className="intake-flow">
       <nav className="intake-scene-nav" aria-label="사건 정리 탐색">
         {editingActive ? (
           <ButtonLink variant="ghost" href={returnHref}>
+            <ArrowLeft size={16} aria-hidden="true" />
             작업 공간으로 돌아가기
           </ButtonLink>
         ) : (
