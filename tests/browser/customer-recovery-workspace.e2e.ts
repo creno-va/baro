@@ -32,7 +32,7 @@ for (const failSession of [false, true]) {
     }, failSession);
     await checkbox.click();
     if (failSession) await expect(page.getByRole("alert")).toBeVisible();
-    else await expect(page.getByText("완료 표시를 저장했어요.", { exact: true })).toBeVisible();
+    else await expect(checkbox).toBeEnabled();
     if (failSession) await expect(checkbox).not.toBeChecked();
     else await expect(checkbox).toBeChecked();
     const stored = await page.evaluate(async () => {

@@ -908,6 +908,11 @@
   color: var(--primary);
   flex-shrink: 0;
 }
+.workspace-action-status {
+  display: grid;
+  gap: 10px;
+  margin: -8px 0 16px;
+}
 .workspace-action-progress {
   display: block;
   width: 100%;
@@ -917,7 +922,7 @@
   overflow: hidden;
   appearance: none;
   background: var(--muted);
-  margin: -8px 0 16px;
+  margin: 0;
 }
 .workspace-action-progress::-webkit-progress-bar {
   background: var(--muted);
