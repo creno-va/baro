@@ -165,7 +165,7 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     });
     await page.goto("/settings");
     await openAccountDeletion(page);
-    await page.getByRole("button", { name: "google로 재인증" }).click();
+    await page.getByRole("button", { name: "Google로 재인증" }).click();
     const confirmation = page.getByLabel("삭제 확인 — DELETE 입력");
     await expect(confirmation).toBeEnabled();
     await confirmation.fill("DELETE");
@@ -217,7 +217,7 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await expect(confirm).toHaveCount(0);
   await expect(remove).toBeEnabled();
   await remove.click();
-  const auth = page.getByRole("button", { name: "google로 재인증" });
+  const auth = page.getByRole("button", { name: "Google로 재인증" });
   // The disabled delete action is also the initial loading state. Wait until
   // access/optional reads finish before issuing a real keyboard action.
   await expect(auth).toBeEnabled();
@@ -291,11 +291,11 @@ test("loading/error/cancel, expired callback and switched account never arm dele
   );
   await page.reload();
   await openAccountDeletion(page);
-  await expect(page.getByRole("button", { name: "google로 재인증" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 재인증" })).toBeVisible();
   await expect(page.getByLabel("삭제 확인 — DELETE 입력")).toHaveCount(0);
   // A visible button can still belong to the first, unfinished settings load.
   // Complete that callback check before injecting the next navigation marker.
-  await expect(page.getByRole("button", { name: "google로 재인증" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Google로 재인증" })).toBeEnabled();
   await page.evaluate(
     (key) =>
       sessionStorage.setItem(
@@ -388,7 +388,7 @@ test("late OAuth request failure after leaving preserves the next ticket; back n
   await page.goto("/settings");
   await expect(page.getByRole("button", { name: "다시 확인" })).toBeEnabled();
   await openAccountDeletion(page);
-  await page.getByRole("button", { name: "google로 재인증" }).click();
+  await page.getByRole("button", { name: "Google로 재인증" }).click();
   await pending;
   const nextMarker = JSON.stringify({ ownerTag: tag, startedAt: Date.now() });
   await page.evaluate(

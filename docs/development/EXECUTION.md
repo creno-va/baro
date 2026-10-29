@@ -4,6 +4,7 @@
 전체 검증의 제목 wire/Unicode 기대 및 세션 갱신에 흔들리던 조회 계수 검사는
 후속 릴리스 수정으로 보완한다. 엄격 wire는 제목을 필수 nullable로 표현하고,
 판례 제목은 기존 소유자 scope의 암호문을 재사용해 추가 metadata 조회를 없앤다.
+nullable 제목이 없을 때 감사 입력에서는 생략해 기존 요약 replay 형태를 보존한다.
 production은 변경하지 않으며 이후 별도 UI 수정은 다시 명시적 병합·배포 지시를 기다린다.
 
 2026-10-29 사용자 최신 지시는 후속 UI를 #600 / `codex/600-ui-feedback-followups`의
