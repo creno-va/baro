@@ -235,6 +235,7 @@ test("dialogs center, contain long content and restore focus across viewport siz
       name: `${lastStory.title} 사건 삭제`,
       exact: true,
     });
+    await opener.focus();
     await opener.click();
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
     await expect(dialog.getByRole("textbox")).toHaveCount(0);

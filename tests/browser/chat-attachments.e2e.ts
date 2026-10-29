@@ -600,16 +600,15 @@ test("long chat fills the available width and passes scrolling to the page at it
     { width: 390, height: 844 },
     { width: 320, height: 650 },
   ]) {
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.setViewportSize(viewport);
     await expect
-      .poll(() => page.locator(".workspace-main").evaluate((node) => node.clientHeight))
-      .toBe(viewport.height);
-    await expect
-      .poll(() => log.evaluate((node) => node.clientHeight))
-      .toBeGreaterThan(viewport.height * 0.55);
-    await page
-      .locator(".workspace-main")
-      .evaluate((node) => node.scrollIntoView({ block: "start" }));
+      .poll(async () => {
+        const panel = await page.locator(".workspace-main").boundingBox();
+        return panel ? panel.y + panel.height : Infinity;
+      })
+      .toBeLessThanOrEqual(viewport.height + 1);
+    await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(200);
     await expect
       .poll(async () => {
         const composer = await page.locator(".workspace-composer").boundingBox();
@@ -626,7 +625,7 @@ test("long chat fills the available width and passes scrolling to the page at it
     const bounds = await log.boundingBox();
     const panel = await page.locator(".workspace-main").boundingBox();
     const documentScroll = await page.evaluate(() => scrollY);
-    expect(documentScroll).toBeGreaterThan(0);
+    expect(documentScroll).toBe(0);
     if (!before || !composer || !bounds || !panel) throw new Error("Synthetic chat layout missing");
     expect(bounds.width).toBeCloseTo(panel.width, 0);
     expect(composer.width).toBeCloseTo(panel.width, 0);

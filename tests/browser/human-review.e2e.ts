@@ -214,9 +214,6 @@ test("correction is saved before an explicit material reflection request", async
   await page.screenshot({ path: ".wrangler/ui-human-review-desktop.png" });
   await reflect.click();
   await expect(page).toHaveURL(new RegExp(`/cases/${id}$`));
-  await expect(
-    page.getByText(/^선택한 자료의 포함된 교정 내용을 기존 사실과 대조해/),
-  ).toBeVisible();
   const stored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("baro-api-mock-v1:fileReviews") ?? "{}"),
   );
@@ -224,6 +221,13 @@ test("correction is saved before an explicit material reflection request", async
     "합성 인명과 금액을 확인해 교정한 내용입니다.",
   );
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
+  const messages = await page.evaluate(
+    (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:workspace") ?? "{}")[id].messages,
+    id,
+  );
+  expect(
+    messages.findLast((message: { role: string }) => message.role === "user").selectedFileIds,
+  ).toEqual(["human-file"]);
   await page.goto(`/cases/${id}/summary`);
   await expect(
     page
@@ -244,10 +248,12 @@ test("correction is saved before an explicit material reflection request", async
 test("case deletion is reachable from the list and survives reload", async ({ page }) => {
   await seed(page);
   await page.goto("/cases");
-  await page.getByRole("button", { name: "휴먼 리뷰 합성 사건 사건 삭제", exact: true }).click();
+  const opener = page.getByRole("button", { name: "휴먼 리뷰 합성 사건 사건 삭제", exact: true });
+  await opener.focus();
+  await opener.click();
   const dialog = page.getByRole("dialog");
   const remove = dialog.getByRole("button", { name: "사건 삭제", exact: true });
-  await expect(remove).toBeDisabled();
+  await expect(remove).toBeEnabled();
   await remove.click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("link", { name: /휴먼 리뷰 합성 사건/ })).toHaveCount(0);
@@ -260,6 +266,7 @@ test("an uploaded synthetic recording can be played while correcting and is remo
 }) => {
   await seed(page);
   await page.goto(`/cases/${id}/files`);
+  await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
   const wav = Buffer.alloc(32044);
   wav.write("RIFF", 0);
   wav.writeUInt32LE(wav.length - 8, 4);

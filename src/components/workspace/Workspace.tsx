@@ -99,6 +99,7 @@ export function Workspace({
 }) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
   const [contextRequested, setContextRequested] = useState(false);
+  const [contextLoaded, setContextLoaded] = useState(false);
   const preparationAttempt = useRef<{
     target: "timeline" | "actions";
     request: V2MessageRequest;
@@ -177,6 +178,7 @@ export function Workspace({
     setProgressiveIds(new Set());
     setView(null);
     setContextRequested(false);
+    setContextLoaded(false);
     preparationAttempt.current = null;
     draftComposing.current = false;
     setDraft("");
@@ -275,6 +277,7 @@ export function Workspace({
       if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
+        if (tab !== "files" || contextRequested) setContextLoaded(true);
         setUploadReadbackPending(false);
         // A fresh read resolves its own error, not an earlier failed mutation.
         // If a failed mutation's 404 check was interrupted, this read now
@@ -293,7 +296,7 @@ export function Workspace({
       if (alive(epoch) && serial === latest.current) showError(cause);
     }
     return false;
-  }, [readView, apply, verify, ticket, current, alive, showError]);
+  }, [readView, apply, verify, ticket, current, alive, showError, tab, contextRequested]);
   useEffect(() => {
     mounted.current = true;
     if (version && !lock.current) void load();
@@ -1844,7 +1847,7 @@ export function Workspace({
                   <ChevronDown size={16} />
                 </summary>
                 <div className="workspace-context-content">
-                  {tab === "files" && view.people === undefined ? (
+                  {tab === "files" && !contextLoaded ? (
                     <p className="workspace-context-notices" role="status">
                       사건 요약을 불러오고 있어요…
                     </p>

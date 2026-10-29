@@ -318,7 +318,21 @@ test("chat additions require the new summary confirmation in the real customer U
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeDisabled();
     await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-    await expect(page.getByText("새로운 자료를 찾았습니다.", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("요약 편집")).toHaveValue(originalSummary);
+    // Individual fact controls were removed from the review screen. The new
+    // fact must still be retained in the exact summary revision being confirmed.
+    const pending = await page.evaluate(
+      async (id) =>
+        (await (await fetch(`/api/v2/cases/${id}/summary`)).json()) as {
+          revision: number;
+          facts: { text: string }[];
+        },
+      info.id,
+    );
+    expect(pending.revision).toBe(2);
+    expect(pending.facts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ text: "새로운 자료를 찾았습니다." })]),
+    );
     await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
     await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
