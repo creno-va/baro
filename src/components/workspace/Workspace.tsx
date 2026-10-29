@@ -39,7 +39,6 @@ import { ProgressiveReply } from "./ProgressiveReply";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { SourceCards } from "./SourceCards";
 import { referenceLabel, timelineDateLabel } from "./source-label";
-import { ToolResults } from "./ToolResults";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
@@ -1136,9 +1135,6 @@ export function Workspace({
                         ) : (
                           <p>{message.text}</p>
                         )}
-                        {message.role === "assistant" && message.status === "complete" && (
-                          <ToolResults caseId={caseId} messageId={message.id} />
-                        )}
                         {!!message.selectedFileIds?.length && (
                           <ul
                             className="workspace-message-attachments"
@@ -1163,31 +1159,28 @@ export function Workspace({
                               <a href={`${base}/files`}>자료 탭에서 확인하기</a>
                             </p>
                           )}
-                        {!!message.warnings?.length && (
-                          <ul aria-label="응답 검증 경고" className="workspace-error">
-                            {message.warnings.map((warning) => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        )}
                         {!!message.citations?.length && (
                           <SourceCards citations={message.citations} />
                         )}
-                        {!!message.references?.length && (
+                        {message.references?.some((ref) => ref.kind !== "user_message") && (
                           <ul aria-label="답변에 사용한 자료">
-                            {message.references.map((ref) => (
-                              <li key={JSON.stringify(ref)}>
-                                {ref.kind === "user_material" ? (
-                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
-                                    {view.files.find((f) => f.id === ref.fileId)?.name ??
-                                      "참조 자료"}{" "}
-                                    · {referenceLabel(ref)}
-                                  </a>
-                                ) : (
-                                  referenceLabel(ref)
-                                )}
-                              </li>
-                            ))}
+                            {message.references
+                              .filter((ref) => ref.kind !== "user_message")
+                              .map((ref) => (
+                                <li key={JSON.stringify(ref)}>
+                                  {ref.kind === "user_material" ? (
+                                    <a
+                                      href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
+                                    >
+                                      {view.files.find((f) => f.id === ref.fileId)?.name ??
+                                        "참조 자료"}{" "}
+                                      · {referenceLabel(ref)}
+                                    </a>
+                                  ) : (
+                                    referenceLabel(ref)
+                                  )}
+                                </li>
+                              ))}
                           </ul>
                         )}
                         {message.status === "pending" && (
@@ -1238,7 +1231,9 @@ export function Workspace({
                             <ArrowRight size={15} aria-hidden="true" />
                           </Button>
                         ))}
-                        <a href={`${base}/precedents`}>관련 판례 찾아보기</a>
+                        <ButtonLink variant="outline" size="sm" href={`${base}/precedents`}>
+                          관련 판례 찾아보기 <ArrowRight size={15} aria-hidden="true" />
+                        </ButtonLink>
                       </fieldset>
                     )}
                   </div>

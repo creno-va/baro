@@ -64,6 +64,19 @@ test("follow-up prompts and the official precedent entry remain available after 
     "href",
     `${base}/precedents`,
   );
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const precedent = suggestions.getByRole("link", { name: "관련 판례 찾아보기" });
+    await expect(precedent).toHaveClass(/ui-button--outline/);
+    const heights = await suggestions
+      .locator(".ui-button")
+      .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
+    expect(heights).toHaveLength(3);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+  }
 });
 
 for (const width of [320, 390, 768, 1440]) {
@@ -238,7 +251,7 @@ test("lookup without configured tools displays availability without a target or 
   await expect(dialog).not.toBeVisible();
 });
 
-test("tool cards distinguish unconfigured and test responses on desktop and mobile", async ({
+test("successful chat hides lookup diagnostics and user statement labels while keeping evidence", async ({
   page,
 }) => {
   await page.goto(base);
@@ -249,7 +262,11 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
       {
         id: "synthetic-tool-message",
         role: "assistant",
-        text: "외부 조회의 연결 상태를 확인했어요.",
+        text: "받은 자료와 약속한 날짜를 함께 정리해 보세요.",
+        warnings: ["공식 자료를 확인하지 못해 법률 설명을 제공하지 않았어요."],
+        references: [
+          { kind: "user_message", messageId: "synthetic-user-message", workspaceRevision: 1 },
+        ],
         status: "complete",
         createdAt: "2026-10-24T00:00:00.000Z",
         citations: [
@@ -263,58 +280,23 @@ test("tool cards distinguish unconfigured and test responses on desktop and mobi
     ];
     localStorage.setItem(key, JSON.stringify(state));
   }, key);
+  let lookupRequests = 0;
   await page.route(
     "**/api/v2/cases/synthetic-case/messages/synthetic-tool-message/tool-results",
-    (route) =>
-      route.fulfill({
-        json: {
-          schemaVersion: "2",
-          results: [
-            {
-              id: "synthetic-tool-1",
-              tool: "hometax_status",
-              status: "not_configured",
-              title: "국세청 사업자 상태 조회",
-              sourceUrl: "https://www.data.go.kr/data/15081808/openapi.do",
-              observedAt: null,
-              rows: [],
-              notices: ["이 조회 서비스가 아직 연결되지 않아 실제 정보를 확인하지 못했어요."],
-            },
-            {
-              id: "synthetic-tool-2",
-              tool: "thecheat",
-              status: "test_data",
-              title: "더치트 피해 등록 조회",
-              sourceUrl: "https://apicenter.thecheat.co.kr/",
-              observedAt: "2026-10-24T00:00:00.000Z",
-              rows: [],
-              notices: ["실제 피해 등록 조회로 사용할 수 없어요."],
-            },
-          ],
-        },
-      }),
+    (route) => {
+      lookupRequests++;
+      return route.fulfill({ json: { schemaVersion: "2", results: [] } });
+    },
   );
   await page.reload();
-  await page.evaluate(async () => {
-    const path = "/src/client/api/core.ts";
-    const { apiMode, registerHttpMockHandler } = (await import(
-      path
-    )) as typeof import("../../src/client/api/core");
-    // Full validation uses PUBLIC_API_MODE=mock, whose HTTP adapter deliberately
-    // avoids fetch. Forward only this synthetic endpoint to the route above.
-    if (apiMode === "mock")
-      registerHttpMockHandler(async (request) =>
-        new URL(request.url).pathname ===
-        "/api/v2/cases/synthetic-case/messages/synthetic-tool-message/tool-results"
-          ? fetch(request)
-          : null,
-      );
-  });
-  await page.getByText("공공·외부 조회 내역", { exact: true }).click();
-  await expect(page.getByText("아직 연결되지 않음", { exact: true })).toBeVisible();
-  await expect(page.getByText("테스트 응답 · 실제 조회 아님", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "제공 기관 안내" })).toHaveCount(2);
-  await expect(page.locator(".workspace-tool-card").first().locator("time")).toHaveCount(0);
+  await expect(
+    page.getByText("받은 자료와 약속한 날짜를 함께 정리해 보세요.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("공공·외부 조회 내역", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "응답 검증 경고" })).toHaveCount(0);
+  await expect(page.getByText("추가 대화의 사용자 진술", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "답변에 사용한 자료" })).toHaveCount(0);
+  expect(lookupRequests).toBe(0);
   const source = page.getByRole("link", {
     name: "민법 제598조 · 출처 카드 합성 표시 검증 원문 보기",
   });

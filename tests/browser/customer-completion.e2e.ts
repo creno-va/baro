@@ -139,7 +139,7 @@ test("answer evidence opens source correction, exclusion and exact coverage pers
 }) => {
   await seed(page);
   await page.goto(base);
-  await expect(page.getByRole("list", { name: "응답 검증 경고" })).toContainText("검증에 실패");
+  await expect(page.getByRole("list", { name: "응답 검증 경고" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "합성 공식 안내" })).toHaveAttribute(
     "href",
     "https://www.law.go.kr/법령/민법",
