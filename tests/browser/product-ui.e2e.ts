@@ -5,6 +5,37 @@ import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
+test("settings usage disclosure stacks content below its summary and toggles accessibly", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.goto("/settings");
+  const disclosure = page.locator(".settings-usage-guide");
+  const summary = disclosure.locator("summary");
+  const content = disclosure.locator("p");
+  const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(content).toBeHidden();
+    await summary.click();
+    await expect(content).toBeVisible();
+    await expect(help).toBeVisible();
+    const heading = await summary.boundingBox();
+    const body = await content.boundingBox();
+    const link = await help.boundingBox();
+    if (!heading || !body || !link) throw new Error("Synthetic usage disclosure missing");
+    expect(body.y).toBeGreaterThanOrEqual(heading.y + heading.height - 1);
+    expect(link.y).toBeGreaterThanOrEqual(body.y + body.height - 1);
+    expect(Math.abs(body.x - heading.x)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(content).toBeHidden();
+    await expect(help).toBeHidden();
+  }
+});
 async function seed(page: Page, messages = false, stage: "active" | "summary" = "active") {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
