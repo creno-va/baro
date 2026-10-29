@@ -242,7 +242,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   });
   await page.goto("/cases/synthetic-report-outage/reports");
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
   outage = true;
@@ -300,7 +300,9 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
         reject(new Error("Synthetic startup failed"));
       });
     });
-    await context.addCookies([seed.cookie]);
+    // Start signed out: authenticated visits now redirect before the login form.
+    // The callback establishes the browser session; the seeded SQL session below
+    // independently verifies that the same account receives the selected role.
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
@@ -378,7 +380,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
   });
   await page.goto("/cases/synthetic-report-switch/reports");
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toHaveValue("Saved report");
   await editor.fill("Unsaved report correction");
   ownerId = "synthetic-next-owner";
@@ -453,7 +455,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     try {
       await page.goto("/cases/synthetic-report-late/reports");
       await openReportEditor(page);
-      const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+      const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
       await expect(editor).toHaveValue("Saved report");
       await editor.fill("Unsaved current report correction");
       const sessionReads = await trackSessionReads(page);
@@ -476,9 +478,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       // Explicit owner revocation below must still purge it completely.
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(editor).toBeDisabled();
-      await expect(
-        page.getByRole("button", { name: "검토 내용 저장", exact: true }),
-      ).toBeDisabled();
+      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeDisabled();
       phase = "current";
       // An explicit peer invalidation bypasses the old pending read. Focus alone
       // cannot create a newer authoritative response while that read is pending.
@@ -491,7 +491,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
         ),
       );
       await expect.poll(() => fresh).toBeGreaterThan(0);
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
       release();
       await expect.poll(() => settled).toBe(1);
       await expect.poll(async () => (await sessionReads()).pending).toBe(0);
@@ -503,22 +503,20 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       );
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(page.getByRole("alert")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
       const recoveredReads = fresh;
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect.poll(() => fresh).toBeGreaterThan(recoveredReads);
       await expect.poll(async () => (await sessionReads()).pending).toBe(0);
       await expect(editor).toHaveValue("Unsaved current report correction");
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
       // Sharing is limited to in-flight reads: a later real owner change still
       // revokes the editor rather than reusing the recovered owner's permission.
       ownerId = "synthetic-next-owner";
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).toHaveCount(0);
       await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
-      await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(
-        0,
-      );
+      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toHaveCount(0);
     } finally {
       release();
     }

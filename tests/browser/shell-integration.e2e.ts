@@ -91,7 +91,7 @@ test("long service content fits narrow screens and the menu stays closable after
       if (path.endsWith("/reports")) {
         const regenerate = page.getByRole("button", { name: "새 버전 만들기", exact: true });
         await expect(regenerate).toBeEnabled();
-        expect((await regenerate.boundingBox())?.height).toBeLessThanOrEqual(44);
+        expect((await regenerate.boundingBox())?.height).toBeGreaterThanOrEqual(44);
       }
       expect(
         await page.evaluate(
@@ -196,6 +196,7 @@ test("customer completes intake workspace original PDF report and cascading dele
     .getByRole("navigation", { name: "사건 메뉴" })
     .getByRole("link", { name: /^자료/ })
     .click();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
     mimeType: "text/plain",
@@ -228,10 +229,10 @@ test("customer completes intake workspace original PDF report and cascading dele
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.goto(`${casePath}/reports`);
   await openReportEditor(page);
-  await expect(page.getByLabel("리포트 내용 편집")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   await openReportOptions(page);
-  await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toBeDisabled();
-  await page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" }).check();
+  await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeEnabled();
   const pdfPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdf = await pdfPromise;
@@ -241,6 +242,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
+  await page.locator(".ui-sheet .sidebar-story-row").hover();
   await page.locator(".ui-sheet .sidebar-story-delete").click();
   for (const viewport of [
     { width: 320, height: 760 },
