@@ -393,6 +393,7 @@
 }
 .conversation-composer-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -467,21 +468,6 @@
   min-height: 44px;
   padding: 10px 15px;
   border-radius: 22px;
-}
-.conversation-input-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 16px;
-  padding: 0 16px;
-  margin-top: 10px;
-  color: #626d80;
-  font-size: 0.72rem;
-  line-height: 1.65;
-}
-.conversation-input-meta p {
-  margin: 0;
 }
 .conversation-examples {
   display: flex;
@@ -664,10 +650,6 @@
     gap: 5px;
     padding: 9px 11px;
     font-size: 0.72rem;
-  }
-  .conversation-input-meta {
-    padding: 0 8px;
-    font-size: 0.65rem;
   }
   .conversation-examples {
     gap: 8px;
@@ -979,6 +961,7 @@
   font-weight: 650;
 }
 .conversation-context-hint {
+  margin-left: auto;
   color: var(--muted-foreground);
   font-size: 0.75rem;
 }
@@ -1103,7 +1086,7 @@
     padding-right: 4px;
   }
   .conversation-context-hint {
-    display: none;
+    text-align: right;
   }
   .conversation-entry .conversation-field-label {
     margin: 12px 12px 8px;

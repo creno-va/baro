@@ -5,12 +5,14 @@ import { ApiError } from "../../client/api/core";
 import type { SessionView } from "../../client/api/types";
 import { sessionDestination } from "../../client/return-path";
 import { isExplicitSignOut } from "../../client/session-events";
-import { CASE_NARRATIVE_MIN_LENGTH } from "../../contracts/common";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { ErrorPanel } from "./common";
+
+// A web entry requirement; saved narratives and installed clients keep their read contracts.
+const APP_NARRATIVE_MIN_LENGTH = 10;
 
 const individualExamples = [
   {
@@ -72,7 +74,7 @@ export function CaseInput({
   const mounted = useRef(false);
   const signedOut = useRef(false);
   const count = [...narrative.trim()].length;
-  const valid = count >= CASE_NARRATIVE_MIN_LENGTH && count <= 5000;
+  const valid = count >= APP_NARRATIVE_MIN_LENGTH && count <= 5000;
   const canCreate = session?.user?.accountType === "customer" && !session.needsConsent;
   const clearDraft = useCallback(() => {
     ++operation.current;
@@ -171,8 +173,8 @@ export function CaseInput({
     if (!canCreate || loading || sessionError || pending.current || created) return;
     if (!valid) {
       setLengthError(
-        count < CASE_NARRATIVE_MIN_LENGTH
-          ? `어떤 일이 있었는지 ${CASE_NARRATIVE_MIN_LENGTH}자 이상 적어주세요. 짧게 시작하고 나중에 보완해도 괜찮아요.`
+        count < APP_NARRATIVE_MIN_LENGTH
+          ? `어떤 일이 있었는지 ${APP_NARRATIVE_MIN_LENGTH}자 이상 적어주세요. 짧게 시작하고 나중에 보완해도 괜찮아요.`
           : "이야기는 5,000자까지 적을 수 있어요. 내용을 조금 줄여주세요.",
       );
       return;
@@ -251,7 +253,7 @@ export function CaseInput({
                   value={loading || sessionError ? "" : narrative}
                   onChange={(event) => setNarrative(event.target.value)}
                   disabled={busy || loading || !!sessionError || !canCreate}
-                  aria-describedby="subject-context-help narrative-help narrative-count"
+                  aria-describedby="subject-context-help narrative-minimum"
                   aria-invalid={count > 5000 || Boolean(lengthError)}
                   placeholder={
                     subjectContext === "company"
@@ -283,7 +285,9 @@ export function CaseInput({
                       </label>
                     ))}
                   </fieldset>
-                  <span className="conversation-context-hint">누구의 사건인가요?</span>
+                  <span className="conversation-context-hint" id="narrative-minimum">
+                    {APP_NARRATIVE_MIN_LENGTH}자 이상 입력해주세요
+                  </span>
                 </div>
               </div>
               <p className="conversation-subject-help" id="subject-context-help" aria-live="polite">
@@ -291,16 +295,6 @@ export function CaseInput({
                   ? "기업 사건은 회사와 상대방의 관계, 담당 역할, 계약·승인·정산 기록을 중심으로 정리해요. 사건은 이 계정에서 관리해요."
                   : "개인 사건은 나와 상대방의 관계, 약속과 피해, 대화·입금 기록을 중심으로 정리해요."}
               </p>
-              <div className="conversation-input-meta">
-                <p id="narrative-help">주민등록번호·계좌번호 전체는 적지 마세요.</p>
-                <p id="narrative-count" aria-live="polite">
-                  {count < CASE_NARRATIVE_MIN_LENGTH
-                    ? count > 0
-                      ? `${CASE_NARRATIVE_MIN_LENGTH - count}자만 더 적어주세요`
-                      : `${CASE_NARRATIVE_MIN_LENGTH}자 이상이면 시작할 수 있어요`
-                    : `${count.toLocaleString()} / 5,000자`}
-                </p>
-              </div>
               {error ? (
                 <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
               ) : null}
