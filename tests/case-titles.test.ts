@@ -6,6 +6,10 @@ test("case labels summarize existing issues without copying names, amounts or da
   const narrative =
     "기능 연결용 합성 사건입니다. 2026년 9월 1일 지인에게 10만 원을 빌려줬고 9월 30일까지 돌려받기로 했어요.";
   expect(caseDisplayTitle(narrative)).toBe("빌려준 돈과 반환 약속");
+  expect(caseDisplayTitle("촬영용 카메라를 대여했는데 반납 관련 분쟁이 생겼어요.")).toBe(
+    "대여 물품과 이용 문제",
+  );
+  expect(caseDisplayTitle("상해보험 처리에 필요한 기록을 확인하고 싶어요.")).not.toContain("폭행");
   expect(caseDisplayTitle("임대차 계약이 끝났는데 보증금을 받지 못했습니다.")).toBe(
     "임대차 보증금과 반환 문제",
   );

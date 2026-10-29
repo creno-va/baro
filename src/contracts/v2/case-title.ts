@@ -7,7 +7,10 @@ export function caseDisplayTitle(narrative: string, generated?: string | null): 
   const title = caseTitleSchema.safeParse(generated);
   if (title.success) return title.data;
   const text = narrative.normalize("NFC");
-  if (/빌려|빌린|빌렸|대여금|차용|대여/.test(text))
+  if (
+    /돈|금전|대여금|차용금|[0-9만천백억]\s*원|상환|변제/.test(text) &&
+    /빌려|빌린|빌렸|대여|차용/.test(text)
+  )
     return /빌린|빌렸|차용했/.test(text) ? "빌린 돈과 상환 약속" : "빌려준 돈과 반환 약속";
   if (/보증금/.test(text)) return "임대차 보증금과 반환 문제";
   if (/임대|임차|전세|월세/.test(text)) return "임대차 계약과 이용 문제";
@@ -15,7 +18,9 @@ export function caseDisplayTitle(narrative: string, generated?: string | null): 
   if (/해고|권고사직/.test(text)) return "퇴사 경위와 근로관계";
   if (/임금|급여|월급/.test(text)) return "임금 지급과 근로관계";
   if (/교통사고|차량 사고|접촉사고/.test(text)) return "교통사고 경위와 피해 정리";
-  if (/폭행|상해/.test(text)) return "폭행 관련 사건 경위";
+  if (/폭행/.test(text)) return "폭행 관련 사건 경위";
+  if (/상해/.test(text)) return "상해 경위와 피해 확인";
+  if (/대여|렌트/.test(text)) return "대여 물품과 이용 문제";
   if (/명예훼손|모욕|악성.*게시글/.test(text)) return "게시글과 발언으로 인한 피해 문제";
   if (/사기|기망/.test(text)) return "거래 경위와 피해 확인";
   if (/상속|유산/.test(text)) return "상속 재산과 가족 간 협의";
