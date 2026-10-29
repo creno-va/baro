@@ -352,7 +352,10 @@ export function Workspace({
       const height = view.messages.length ? viewportHeight : viewportHeight - panelTop - 16;
       panel.style.setProperty("--chat-panel-height", `${Math.max(160, height / zoom)}px`);
       cancelAnimationFrame(animation);
-      animation = requestAnimationFrame(followReply);
+      animation = requestAnimationFrame(() => {
+        if (view.messages.length) followReply();
+        else if (chatMessages.current) chatMessages.current.scrollTop = 0;
+      });
     };
     fit();
     const navigation = panel.closest(".workspace")?.querySelector(".case-navigation");
