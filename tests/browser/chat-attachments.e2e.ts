@@ -582,7 +582,7 @@ test("long chat fills the available width and passes scrolling to the page at it
     expect(composer.width).toBeCloseTo(panel.width, 0);
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.wheel(0, 600);
-    await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+    await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBe(600);
     expect((await tabs.boundingBox())?.y).toBeCloseTo(before.y, 1);
     expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
     expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
@@ -597,8 +597,19 @@ test("long chat fills the available width and passes scrolling to the page at it
       true,
     );
     await log.evaluate((node) => {
-      node.scrollTop = node.scrollHeight;
+      node.dataset.scrollEndedAtBottom = "false";
+      const settled = () => {
+        if (node.scrollHeight - node.scrollTop - node.clientHeight > 1) return;
+        node.dataset.scrollEndedAtBottom = "true";
+        node.removeEventListener("scrollend", settled);
+      };
+      node.addEventListener("scrollend", settled);
     });
+    await page.mouse.wheel(0, 100000);
+    await expect(log).toHaveAttribute("data-scroll-ended-at-bottom", "true");
+    await expect
+      .poll(() => log.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight))
+      .toBeLessThanOrEqual(1);
     await page.mouse.wheel(0, 3000);
     await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(documentScroll);
     if (viewport.width === 390 || viewport.width === 1440)
