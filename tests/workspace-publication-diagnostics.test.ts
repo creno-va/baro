@@ -137,7 +137,12 @@ test("duplicate action IDs rejected after a passing audit produce only a finite 
     admitted = await admit(f);
   const output = spyOn(console, "error").mockImplementation(() => {});
   try {
-    const result = await execute(f, admitted, { ...draft(), actions: [a, a] });
+    // Distinct content must not let one reused ID survive publication. Exact
+    // semantic repeats are already collapsed by preparation refresh.
+    const result = await execute(f, admitted, {
+      ...draft(),
+      actions: [a, { ...a, title: "다른 준비 항목" }],
+    });
     expect(result).toMatchObject({
       status: "failed",
       publicationFailure: {

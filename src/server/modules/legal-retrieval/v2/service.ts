@@ -19,7 +19,7 @@ import {
   safePermit,
 } from "./contracts";
 import { parseGuide } from "./guides";
-import { parsePrecedent, type PrecedentCandidate, precedentCandidates } from "./precedents";
+import { type PrecedentCandidate, parsePrecedent, precedentCandidates } from "./precedents";
 import { assertCanonicalUrl, guideUrl, OFFICIAL_CATALOG } from "./registry";
 import { safeLegalSchemaDiagnostic } from "./schema-diagnostics";
 import { makeChunk } from "./source";

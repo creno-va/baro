@@ -153,6 +153,7 @@ function confirmedChatContext(): WorkspaceContext {
 
 const chatText = (text: string) => ({
   text,
+  unknowns: null,
   references: [],
   warnings: [],
   facts: [],
@@ -904,7 +905,9 @@ test.each(["user_message", "user_material"] as const)(
           reason: "unsupported_fact",
           factFailure: { category: "source_text_mismatch", referenceKind: kind },
         });
-        expect(calls.map((call) => call.phase)).toEqual(["workspace_chat"]);
+        expect(calls.map((call) => call.phase)).toEqual(
+          kind === "user_material" ? ["workspace_chat", "workspace_chat"] : ["workspace_chat"],
+        );
       }
     }
   },

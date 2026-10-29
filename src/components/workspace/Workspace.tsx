@@ -39,8 +39,8 @@ import { ProgressiveReply } from "./ProgressiveReply";
 import { fileFailureLabel, fileProcessingLabel, uploadProgressLabel } from "./processing-progress";
 import { SourceCards } from "./SourceCards";
 import { referenceLabel, timelineDateLabel } from "./source-label";
-import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 import { TimelineEvidence } from "./TimelineEvidence";
+import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
