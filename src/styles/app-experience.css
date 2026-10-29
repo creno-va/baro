@@ -557,11 +557,11 @@
   border-radius: 8px;
 }
 .app-frame .sidebar-story-row:hover,
-.app-frame .sidebar-story-row:focus-within {
+:root[data-focus-input="keyboard"] .app-frame .sidebar-story-row:focus-within {
   background: var(--muted);
 }
 .app-frame .sidebar-story-row:hover .sidebar-story,
-.app-frame .sidebar-story-row:focus-within .sidebar-story {
+:root[data-focus-input="keyboard"] .app-frame .sidebar-story-row:focus-within .sidebar-story {
   background: var(--muted);
 }
 .app-frame .sidebar-story-delete {
@@ -591,7 +591,10 @@
   pointer-events: none;
 }
 .app-frame .sidebar-story-row:hover .sidebar-story-delete,
-.app-frame .sidebar-story-row:focus-within .sidebar-story-delete {
+:root[data-focus-input="keyboard"]
+  .app-frame
+  .sidebar-story-row:focus-within
+  .sidebar-story-delete {
   opacity: 1;
   pointer-events: auto;
 }

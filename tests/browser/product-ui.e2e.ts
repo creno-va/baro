@@ -6,6 +6,63 @@ import { openReportEditor } from "../helpers/report-controls";
 const id = "product-review-case";
 const base = `/cases/${id}`;
 
+test("sidebar cancellation clears pointer hover without losing keyboard focus return", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(base);
+  await hydrated(page);
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    const owners = JSON.parse(localStorage.getItem("baro-api-mock-v1:caseOwners") ?? "{}");
+    cases["sidebar-cancel-case"] = {
+      ...cases[id],
+      id: "sidebar-cancel-case",
+      title: "삭제 취소 확인용 사건",
+    };
+    owners["sidebar-cancel-case"] = owners[id];
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    localStorage.setItem("baro-api-mock-v1:caseOwners", JSON.stringify(owners));
+  }, id);
+  await page.reload();
+  await hydrated(page);
+  const row = page
+    .locator(".sidebar-desktop .sidebar-story-row")
+    .filter({ hasText: "삭제 취소 확인용 사건" });
+  const link = row.locator(".sidebar-story");
+  const remove = row.locator(".sidebar-story-delete");
+  await page.mouse.move(1000, 400);
+  await expect(remove).toHaveCSS("opacity", "0");
+  const rowColor = await row.evaluate((node) => getComputedStyle(node).backgroundColor);
+  const linkColor = await link.evaluate((node) => getComputedStyle(node).backgroundColor);
+  for (const action of ["취소", "닫기"]) {
+    await row.hover();
+    await remove.click();
+    const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+    await dialog.getByRole("button", { name: action, exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toBeFocused();
+    await expect(row).toHaveCSS("background-color", rowColor);
+    await expect(link).toHaveCSS("background-color", linkColor);
+    await expect(remove).toHaveCSS("opacity", "0");
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+  }
+  await page
+    .locator(".sidebar-desktop .sidebar-recent")
+    .screenshot({ path: ".wrangler/sidebar-cancel-pointer.png" });
+  await page.keyboard.press("Tab");
+  await remove.focus();
+  await expect(remove).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(remove).toBeFocused();
+  await expect(remove).toHaveCSS("opacity", "1");
+});
+
 test("active summary has a primary save action that persists and applies changes", async ({
   page,
 }) => {
