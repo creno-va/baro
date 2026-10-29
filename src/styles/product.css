@@ -429,9 +429,10 @@
 .app-frame.app-frame--product .intake-summary-scene {
   max-width: 860px;
   margin-inline: auto;
+  padding-top: 24px;
 }
 .app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
-  padding: 8px 0 24px;
+  padding: 0 0 24px;
   text-align: left;
 }
 .app-frame.app-frame--product .intake-summary-scene .intake-scene-emblem {
@@ -745,8 +746,8 @@
   .app-frame.app-frame--product .report-export {
     padding: 0;
   }
-  .app-frame.app-frame--product .intake-summary-scene .intake-scene-heading {
-    padding-top: 0;
+  .app-frame.app-frame--product .intake-summary-scene {
+    padding-top: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
