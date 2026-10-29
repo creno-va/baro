@@ -664,6 +664,9 @@
   font-size: 0.85rem;
   line-height: 1.8;
 }
+.workspace-empty > p + .ui-button {
+  margin-top: 20px;
+}
 .workspace-buttons {
   display: flex;
   flex-wrap: wrap;
