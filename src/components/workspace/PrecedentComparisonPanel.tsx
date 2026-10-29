@@ -214,6 +214,13 @@ export function PrecedentComparisonPanel({
   const comparison =
     state?.comparison && state.comparison.source.citation.id === sourceId ? state.comparison : null;
   const refreshRequired = sourceExpired || sourceNeedsRefresh;
+  const comparisonStale =
+    !!comparison &&
+    (state?.stale ||
+      comparison.summaryRevision !== context.summaryRevision ||
+      (context.workspaceRevision !== comparison.basedOnWorkspaceRevision &&
+        context.workspaceRevision !== comparison.publishedWorkspaceRevision));
+  const needsResearch = refreshRequired || comparisonStale;
   const incomplete = !!state && !pending && state.job.status !== "completed";
   return (
     <section className="precedent-comparison" aria-label="유사 판례 비교">
@@ -235,13 +242,13 @@ export function PrecedentComparisonPanel({
           </Button>
         </div>
       </div>
-      {((refreshRequired && !pending) || !!error || incomplete) && (
+      {((needsResearch && !pending) || !!error || incomplete) && (
         <div className="precedent-state-card" role={sourceExpired || error ? "alert" : "status"}>
           <span className="precedent-state-icon">
             <CircleAlert size={28} aria-hidden="true" />
           </span>
           <h4>
-            {refreshRequired
+            {needsResearch
               ? "판례를 다시 확인해 주세요"
               : incomplete
                 ? "비교를 완료하지 못했어요"
@@ -250,16 +257,18 @@ export function PrecedentComparisonPanel({
           <p>
             {sourceExpired
               ? "판례 확인 시간이 지났거나 원문이 바뀌었어요. 다시 검색한 판례를 선택해 주세요."
-              : sourceNeedsRefresh
-                ? "새 비교를 시작하려면 최신 사건으로 판례를 다시 검색해 주세요."
-                : error
-                  ? errorMessage(error)
-                  : "최신 요약과 판례를 다시 확인한 뒤 비교해 주세요."}
+              : comparisonStale
+                ? "비교 이후 사건이나 확인한 원문 상태가 바뀌었어요. 최신 요약과 판례로 다시 비교해 주세요."
+                : sourceNeedsRefresh
+                  ? "새 비교를 시작하려면 최신 사건으로 판례를 다시 검색해 주세요."
+                  : error
+                    ? errorMessage(error)
+                    : "최신 요약과 판례를 다시 확인한 뒤 비교해 주세요."}
           </p>
           {!!error && refreshRequired && !sourceExpired && <p>{errorMessage(error)}</p>}
           <p className="precedent-state-note">처리 중인 작업과 저장한 내용은 유지돼요.</p>
           {!pending &&
-            (refreshRequired ? (
+            (needsResearch ? (
               <Button
                 className="precedent-primary"
                 onClick={() => {
@@ -288,15 +297,6 @@ export function PrecedentComparisonPanel({
       {comparison && state && (
         <>
           <ComparisonResult key={state.job.id} comparison={comparison} />
-          {(state.stale ||
-            comparison.summaryRevision !== context.summaryRevision ||
-            (context.workspaceRevision !== comparison.basedOnWorkspaceRevision &&
-              context.workspaceRevision !== comparison.publishedWorkspaceRevision)) && (
-            <p role="status" className="precedent-notice">
-              비교 이후 사건이나 확인한 원문 상태가 바뀌었어요. 최신 요약과 판례로 다시 비교해
-              주세요.
-            </p>
-          )}
           {comparison.factsPartial && (
             <p className="precedent-scope">저장된 사실 중 일부가 이번 비교에 포함되지 않았어요.</p>
           )}

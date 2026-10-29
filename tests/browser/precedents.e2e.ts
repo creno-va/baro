@@ -468,6 +468,7 @@ test("comparison survives foreground during admission, renders fixed indicators 
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("status")).toContainText("비교 이후");
+  await expect(region.locator(".precedent-state-card")).toHaveCount(1);
 });
 
 test("comparison recovers a lost receipt without another POST and preserves work on read failure", async ({

@@ -312,7 +312,7 @@ test("RN cases model reads legacy guidance and removes its selected case through
     f.db.close();
   }
 });
-test("an unannounced server role change denies legacy reading/removal and a fresh session exposes the new role", async () => {
+test("a lawyer retains reading and removal of their own legacy case after a server account-type change", async () => {
   const f = await fixture();
   try {
     f.db.sqlite
@@ -321,13 +321,11 @@ test("an unannounced server role change denies legacy reading/removal and a fres
       )
       .run(`account-type:${f.owner.userId}`, new Date().toISOString());
     const client = f.client();
-    await expect(client.cases(true).get(f.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(client.deletion.deleteCase(f.id, "DELETE", "1")).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    expect((await client.cases(true).get(f.id)).id).toBe(f.id);
+    await client.deletion.deleteCase(f.id, "DELETE", "1");
     const session = await client.request<{ user: { accountType: string } }>("/api/me/session");
     expect(session.user.accountType).toBe("lawyer");
-    expect(f.db.sqlite.query("SELECT id FROM cases WHERE id=?").get(f.id)).toEqual({ id: f.id });
+    expect(f.db.sqlite.query("SELECT id FROM cases WHERE id=?").get(f.id)).toBeNull();
   } finally {
     f.db.close();
   }
