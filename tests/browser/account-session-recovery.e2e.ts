@@ -300,7 +300,9 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
         reject(new Error("Synthetic startup failed"));
       });
     });
-    await context.addCookies([seed.cookie]);
+    // Start signed out: authenticated visits now redirect before the login form.
+    // The callback establishes the browser session; the seeded SQL session below
+    // independently verifies that the same account receives the selected role.
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
