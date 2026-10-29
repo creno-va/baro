@@ -117,8 +117,7 @@ casesApi.saveAnswers = async (...args) => {
 
 async function previousQuestion(page: Page, ordinal: number) {
   for (let current = 6; current > ordinal; --current) {
-    await page.getByText("답변 관리", { exact: true }).click();
-    await page.getByRole("button", { name: "이전 질문", exact: true }).click();
+    await page.getByRole("button", { name: "이전으로", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: `합성 저장 질문 ${current - 1}`, exact: true }),
     ).toBeVisible();
@@ -406,9 +405,9 @@ for (const explicitRetry of [false, true]) {
 test("summary processing continues to lock saved-answer navigation and edits", async ({ page }) => {
   await savedIntake(page, { processing: true });
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toBeDisabled();
-  await page.getByText("답변 관리", { exact: true }).click();
-  await expect(page.getByRole("button", { name: "이전 질문", exact: true })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toBeDisabled();
+
+  await expect(page.getByRole("button", { name: "이전으로", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "다음 질문", exact: true })).toHaveCount(0);
   expect(await calls(page)).toEqual({ advance: 0, save: 0 });
 });

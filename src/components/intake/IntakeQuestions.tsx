@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
@@ -7,13 +7,19 @@ import type { CaseView, QuestionView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
-import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 import { useSceneTransition } from "./useSceneTransition";
+
+type AnswerSnapshot = {
+  questionId: string;
+  value: string;
+  state: NonNullable<QuestionView["answerState"]>;
+  revision: number;
+};
 
 export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
@@ -22,17 +28,18 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [value, setValue] = useState("");
   const [answerState, setAnswerState] = useState<QuestionView["answerState"]>();
   const [busy, setBusy] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
-  const [exit, setExit] = useState(false);
   const [editing, setEditing] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const { leaving, transition } = useSceneTransition();
   const pending = useRef(false);
   const failedOperation = useRef<
-    { kind: "advance" } | { kind: "save"; move: boolean; state: QuestionView["answerState"] } | null
+    { kind: "advance" } | ({ kind: "save"; move: boolean } & AnswerSnapshot) | null
   >(null);
   const loaded = useRef(false);
   const caseSnapshot = useRef<CaseView | null>(null);
@@ -41,6 +48,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const drafts = useRef(new Map<string, { value: string; state: QuestionView["answerState"] }>());
   const draftSnapshot = useRef<{ dirty: boolean; revision: number } | null>(null);
   const acknowledgedRevision = useRef<number | null>(null);
+  const inputSnapshot = useRef<{
+    questionId?: string | undefined;
+    value: string;
+    state: QuestionView["answerState"];
+  }>({ value: "", state: undefined });
+  const preservedInput = useRef<typeof inputSnapshot.current | null>(null);
+  const preserveQuestionOnRecovery = useRef<string | null>(null);
+  const moveAfterSave = useRef<string | null>(null);
   const {
     ready,
     canMutate,
@@ -61,7 +76,10 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setValue("");
       setAnswerState(undefined);
       setIndex(0);
-      setExit(false);
+      inputSnapshot.current = { value: "", state: undefined };
+      preservedInput.current = null;
+      preserveQuestionOnRecovery.current = null;
+      moveAfterSave.current = null;
       setEditing(false);
       setPreparing(false);
       setRecovering(false);
@@ -70,6 +88,8 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setNotice("");
       setError(null);
       setBusy(false);
+      setAutoSaving(false);
+      setComposing(false);
       pending.current = false;
       failedOperation.current = null;
     },
@@ -86,8 +106,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     [deny],
   );
   const question = result?.questions[index];
+  inputSnapshot.current = { questionId: question?.id, value, state: answerState };
   const answerTooLong = answerState === "answered" && [...value.trim()].length > 1000;
-  const dirty = value !== (question?.answer ?? "") || answerState !== question?.answerState;
+  const dirty =
+    answerState !== question?.answerState ||
+    (answerState === "answered" && value.trim() !== (question?.answer ?? ""));
   draftSnapshot.current = result
     ? { dirty: dirty || drafts.current.size > 0, revision: result.revision }
     : null;
@@ -164,9 +187,6 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           저장한 답변 확인·수정
         </Button>
       ) : null}
-      <ButtonLink variant="ghost" href="/cases">
-        나중에 이어하기
-      </ButtonLink>
     </div>
   );
   const load = useCallback(
@@ -217,6 +237,14 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         const initial = !loaded.current;
         loaded.current = true;
         const previous = displayed.current.index;
+        const recoveredIndex =
+          !initial &&
+          acknowledgedRevision.current === questions.revision &&
+          preserveQuestionOnRecovery.current
+            ? questions.questions.findIndex(
+                (question) => question.id === preserveQuestionOnRecovery.current,
+              )
+            : -1;
         const nextIndex =
           initial &&
           params.has("question") &&
@@ -225,15 +253,17 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           requested < questions.questions.length &&
           !questions.processing
             ? requested
-            : questions.processing || questions.failed || (!initial && !poll)
-              ? initial
-                ? Math.max(0, questions.questions.length - 1)
-                : previous
-              : unanswered >= 0
-                ? unanswered
-                : initial
-                  ? 0
-                  : previous;
+            : recoveredIndex >= 0
+              ? recoveredIndex
+              : questions.processing || questions.failed || (!initial && !poll)
+                ? initial
+                  ? Math.max(0, questions.questions.length - 1)
+                  : previous
+                : unanswered >= 0
+                  ? unanswered
+                  : initial
+                    ? Math.max(0, questions.questions.length - 1)
+                    : previous;
         if (
           questions.complete &&
           !questions.processing &&
@@ -246,10 +276,36 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         else {
           const show = () => {
             acknowledgedRevision.current = null;
+            preserveQuestionOnRecovery.current = null;
+            if (moveAfterSave.current !== questions.questions[nextIndex]?.id)
+              moveAfterSave.current = null;
+            // A postflight failure may be recovered by this read after the
+            // server accepted the answer. Clear only drafts it proves saved.
+            if (!replaceDraft) {
+              for (const saved of questions.questions) {
+                const draft = drafts.current.get(saved.id);
+                if (
+                  draft &&
+                  draft.state === saved.answerState &&
+                  (draft.state !== "answered" || draft.value.trim() === saved.answer)
+                ) {
+                  if (inputSnapshot.current.questionId === saved.id)
+                    preservedInput.current = inputSnapshot.current;
+                  drafts.current.delete(saved.id);
+                }
+              }
+            }
+            if (
+              recoveredIndex >= 0 &&
+              !drafts.current.has(questions.questions[recoveredIndex]?.id ?? "")
+            )
+              setNotice("자동 저장됐어요.");
             setResult(questions);
             setIndex(nextIndex);
             setRecovering(false);
             if (replaceDraft) {
+              moveAfterSave.current = null;
+              preservedInput.current = null;
               drafts.current.clear();
               setValue(questions.questions[nextIndex]?.answer ?? "");
               setAnswerState(questions.questions[nextIndex]?.answerState);
@@ -275,7 +331,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (version) void load();
   }, [load, version]);
   useEffect(() => {
-    const draft = question?.id ? drafts.current.get(question.id) : undefined;
+    const preserved = preservedInput.current;
+    preservedInput.current = null;
+    const draft =
+      (question?.id ? drafts.current.get(question.id) : undefined) ??
+      (preserved?.questionId === question?.id ? preserved : undefined);
     setValue(draft?.value ?? question?.answer ?? "");
     setAnswerState(draft ? draft.state : question?.answerState);
     if (question?.id) {
@@ -308,16 +368,73 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, [result?.processing, recovering, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (
-        value !== (question?.answer ?? "") ||
-        answerState !== question?.answerState ||
-        drafts.current.size > 0
-      )
-        event.preventDefault();
+      if (draftSnapshot.current?.dirty) event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [value, answerState, question]);
+  }, []);
+  const latestSave = useRef(save);
+  latestSave.current = save;
+  useEffect(() => {
+    if (
+      !ready ||
+      !canMutate ||
+      !question?.id ||
+      !dirty ||
+      !answerState ||
+      (answerState === "answered" && (!value.trim() || answerTooLong)) ||
+      busy ||
+      autoSaving ||
+      composing ||
+      waiting ||
+      leaving ||
+      error ||
+      failedOperation.current ||
+      (result?.complete && !editing) ||
+      item?.stage === "active" ||
+      item?.stage === "archived"
+    )
+      return;
+    const timer = window.setTimeout(
+      () => void latestSave.current(moveAfterSave.current === question.id, undefined, true),
+      900,
+    );
+    return () => window.clearTimeout(timer);
+  }, [
+    ready,
+    canMutate,
+    question?.id,
+    dirty,
+    answerState,
+    value,
+    answerTooLong,
+    busy,
+    autoSaving,
+    composing,
+    waiting,
+    leaving,
+    error,
+    result?.complete,
+    editing,
+    item?.stage,
+  ]);
+
+  function changeAnswer(nextValue: string, state: QuestionView["answerState"]) {
+    inputSnapshot.current = { questionId: question?.id, value: nextValue, state };
+    if (question) {
+      if (
+        !pending.current &&
+        failedOperation.current?.kind !== "save" &&
+        state === question.answerState &&
+        (state !== "answered" || nextValue.trim() === question.answer)
+      )
+        drafts.current.delete(question.id);
+      else drafts.current.set(question.id, { value: nextValue, state });
+    }
+    setValue(nextValue);
+    setAnswerState(state);
+    setNotice("");
+  }
   function prepareNext() {
     setPreparing(true);
     setEditing(false);
@@ -365,21 +482,32 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       );
     } else setResult(next);
   }
-  function navigateQuestion(nextIndex: number) {
+  async function navigateQuestion(nextIndex: number) {
     if (
       !ready ||
       !result ||
       busy ||
+      pending.current ||
       waiting ||
       leaving ||
       nextIndex < 0 ||
       nextIndex >= result.questions.length
     )
       return;
+    moveAfterSave.current = null;
     if (question) {
       if (dirty) drafts.current.set(question.id, { value, state: answerState });
       else drafts.current.delete(question.id);
     }
+    if (
+      dirty &&
+      canMutate &&
+      !error &&
+      answerState &&
+      (answerState !== "answered" || (value.trim() && !answerTooLong)) &&
+      !(await save(false))
+    )
+      return;
     const epoch = ticket();
     void transition(
       () => {
@@ -391,6 +519,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }
   async function advance() {
     if (!canMutate || !result || pending.current || result.processing) return;
+    moveAfterSave.current = null;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
@@ -416,53 +545,93 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       }
     }
   }
-  async function save(move: boolean, state = answerState) {
+  async function save(
+    move: boolean,
+    state = answerState,
+    automatic = false,
+    replay?: AnswerSnapshot,
+  ): Promise<boolean> {
+    if (!canMutate || !result || !question || pending.current || result.processing) return false;
+    const submittedState = replay?.state ?? state;
+    const submittedValue = replay?.value ?? value;
     if (
-      !canMutate ||
-      !result ||
-      !question ||
-      !state ||
-      (state === "answered" && (!value.trim() || [...value.trim()].length > 1000)) ||
-      pending.current ||
-      result.processing
+      !submittedState ||
+      (submittedState === "answered" &&
+        (!submittedValue.trim() || [...submittedValue.trim()].length > 1000))
     )
-      return;
+      return false;
+    const submitted: AnswerSnapshot = replay ?? {
+      questionId: question.id,
+      value,
+      state: submittedState,
+      revision: result.revision,
+    };
+    if (submitted.questionId !== question.id) return false;
+    if (automatic && (!dirty || composing || error || waiting || leaving)) return false;
+    moveAfterSave.current = move ? question.id : null;
+    const latest = inputSnapshot.current;
+    const changedSinceSubmission =
+      latest.state !== submitted.state ||
+      (latest.state === "answered" && latest.value.trim() !== submitted.value.trim());
+    preserveQuestionOnRecovery.current =
+      automatic || !move || changedSinceSubmission ? question.id : null;
     ++request.current;
     setLoading(false);
     const epoch = ticket();
     pending.current = true;
-    setBusy(true);
+    if (automatic) setAutoSaving(true);
+    else setBusy(true);
     setError(null);
     setNotice("");
     try {
-      failedOperation.current = { kind: "save", move, state };
-      if (!(await verify(false, true)) || !accessCurrent(epoch)) return;
+      failedOperation.current = { kind: "save", move, ...submitted };
+      if (!(await verify(false, true)) || !accessCurrent(epoch)) return false;
       const next = await api.cases.saveAnswers(caseId, {
-        expectedRevision: result.revision,
+        expectedRevision: submitted.revision,
         answers: [
-          state === "answered"
-            ? { questionId: question.id, state, value: value.trim() }
-            : { questionId: question.id, state },
+          submitted.state === "answered"
+            ? {
+                questionId: submitted.questionId,
+                state: submitted.state,
+                value: submitted.value.trim(),
+              }
+            : { questionId: submitted.questionId, state: submitted.state },
         ],
       });
-      if (!alive(epoch)) return;
-      drafts.current.delete(question.id);
+      if (!alive(epoch)) return false;
       // The adapter reads again after saving, so its response can already include
       // a peer edit. Only the next revision with our answer proves this snapshot.
       const savedQuestion = next.questions.find((candidate) => candidate.id === question.id);
       acknowledgedRevision.current =
-        next.revision === result.revision + 1 &&
-        savedQuestion?.answerState === state &&
-        (state !== "answered" || savedQuestion.answer === value.trim())
+        next.revision === submitted.revision + 1 &&
+        savedQuestion?.answerState === submitted.state &&
+        (submitted.state !== "answered" || savedQuestion.answer === submitted.value.trim())
           ? next.revision
           : null;
-      if (!(await verifyCompletion(epoch))) return;
+      if ((automatic || replay) && acknowledgedRevision.current === null)
+        throw new ApiError(
+          "CONFLICT",
+          "다른 화면에서 답변이 바뀌었어요. 작성 중인 답변은 남겨뒀어요. 최신 내용을 확인해 주세요.",
+        );
+      if (!(await verifyCompletion(epoch))) return false;
+      const live = inputSnapshot.current;
+      if (live.questionId === question.id) {
+        preservedInput.current = live;
+        if (
+          live.state === savedQuestion?.answerState &&
+          (live.state !== "answered" || live.value.trim() === savedQuestion?.answer)
+        )
+          drafts.current.delete(question.id);
+        else drafts.current.set(question.id, { value: live.value, state: live.state });
+      }
       acknowledgedRevision.current = null;
+      preserveQuestionOnRecovery.current = null;
       failedOperation.current = null;
       setResult(next);
-      setAnswerState(state);
-      setNotice("답변이 저장됐어요. 내 사건에서 다시 이어갈 수 있어요.");
-      if (move && index < next.questions.length - 1) {
+      setNotice(automatic ? "자동 저장됐어요." : "답변이 저장됐어요.");
+      const shouldMove = move && !drafts.current.has(question.id);
+      if (shouldMove) moveAfterSave.current = null;
+      if (shouldMove && index < next.questions.length - 1) {
         await transition(
           () => {
             setIndex(index + 1);
@@ -470,20 +639,23 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           },
           () => accessCurrent(epoch),
         );
-      } else if (move) {
+      } else if (shouldMove) {
         // The answer is saved. Retry only generation with its new revision.
         failedOperation.current = { kind: "advance" };
         prepareNext();
         const advanced = await api.cases.advance(caseId, { expectedRevision: next.revision });
-        if (!(await verifyCompletion(epoch))) return;
+        if (!(await verifyCompletion(epoch))) return false;
         failedOperation.current = null;
         await showNext(advanced, epoch);
       }
+      return true;
     } catch (cause) {
       if (alive(epoch)) report(cause);
+      return false;
     } finally {
       if (alive(epoch)) {
         setBusy(false);
+        setAutoSaving(false);
         setPreparing(false);
         pending.current = false;
       }
@@ -508,8 +680,9 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
           retry={() => {
             const operation = failedOperation.current;
             if ((error as { code?: string }).code === "CONFLICT") void load(false, true);
-            else if (operation?.kind === "advance") void advance();
-            else if (operation?.kind === "save") void save(operation.move);
+            else if (operation?.kind === "advance") void (dirty ? save(true) : advance());
+            else if (operation?.kind === "save")
+              void save(operation.move, operation.state, false, operation);
             else void load();
           }}
           disabled={
@@ -594,135 +767,155 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   </Button>
                 )
               ) : (
-                <>
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (requiresAdvanceRetry) return;
-                      if (canNavigateSavedAnswer) {
-                        navigateQuestion(index + 1);
-                      } else if (canAdvanceSavedAnswer) {
-                        void advance();
-                      } else if (result.failed && !dirty) {
-                        if (result.retryable || result.canPrepareSummary) void advance();
-                      } else void save(true);
-                    }}
-                  >
-                    <div className="intake-scene-composer">
-                      {question.kind === "choice" ? (
-                        <fieldset
-                          className="intake-options"
-                          disabled={locked}
-                          aria-labelledby="question-heading"
-                        >
-                          <legend className="sr-only">답변 선택</legend>
-                          {question.options?.map((option) => (
-                            <label
-                              key={option}
-                              className={
-                                answerState === "answered" && value === option ? "selected" : ""
-                              }
-                            >
-                              <input
-                                type="radio"
-                                name={question.id}
-                                value={option}
-                                checked={answerState === "answered" && value === option}
-                                onChange={() => {
-                                  setValue(option);
-                                  setAnswerState("answered");
-                                }}
-                              />
-                              <span>{option}</span>
-                            </label>
-                          ))}
-                        </fieldset>
-                      ) : (
-                        <>
-                          <label className="sr-only" htmlFor="question-answer">
-                            답변
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (requiresAdvanceRetry || pending.current) return;
+                    if (canNavigateSavedAnswer) {
+                      navigateQuestion(index + 1);
+                    } else if (canAdvanceSavedAnswer) {
+                      void advance();
+                    } else if (result.failed && !dirty) {
+                      if (result.retryable || result.canPrepareSummary) void advance();
+                    } else void save(true);
+                  }}
+                >
+                  <div className="intake-scene-composer">
+                    {question.kind === "choice" ? (
+                      <fieldset
+                        className="intake-options"
+                        disabled={locked}
+                        aria-labelledby="question-heading"
+                      >
+                        <legend className="sr-only">답변 선택</legend>
+                        {question.options?.map((option) => (
+                          <label
+                            key={option}
+                            className={
+                              answerState === "answered" && value === option ? "selected" : ""
+                            }
+                          >
+                            <input
+                              type="radio"
+                              name={question.id}
+                              value={option}
+                              checked={answerState === "answered" && value === option}
+                              onChange={() => {
+                                changeAnswer(option, "answered");
+                              }}
+                            />
+                            <span>{option}</span>
                           </label>
-                          <Textarea
-                            id="question-answer"
-                            value={answerState === "answered" ? value : ""}
-                            disabled={locked}
-                            onChange={(event) => {
-                              setValue(event.target.value);
-                              setAnswerState("answered");
-                            }}
-                            placeholder="여기에 편하게 적어주세요."
-                          />
-                          {answerTooLong && (
-                            <p role="alert">
-                              답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
-                            </p>
-                          )}
-                        </>
-                      )}
-                      {answerState === "unknown" || answerState === "skipped" ? (
-                        <p className="intake-scene-answer-state">
-                          {busy && failedOperation.current?.kind === "save"
-                            ? "답변을 저장하고 있어요."
-                            : question.answerState === answerState
-                              ? answerState === "unknown"
-                                ? "모름으로 저장했어요."
-                                : "건너뛰기로 저장했어요."
-                              : "아직 저장되지 않았어요. 다시 시도해 주세요."}
-                        </p>
-                      ) : null}
-                      <div className="intake-scene-options">
-                        <Button
-                          variant="ghost"
+                        ))}
+                      </fieldset>
+                    ) : (
+                      <>
+                        <label className="sr-only" htmlFor="question-answer">
+                          답변
+                        </label>
+                        <Textarea
+                          id="question-answer"
+                          onCompositionStart={() => setComposing(true)}
+                          onCompositionEnd={() => setComposing(false)}
+                          value={answerState === "answered" ? value : ""}
                           disabled={locked}
-                          onClick={() => {
-                            setAnswerState("unknown");
-                            void save(true, "unknown");
+                          onChange={(event) => {
+                            changeAnswer(event.target.value, "answered");
                           }}
-                        >
-                          모름
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={locked}
-                          onClick={() => {
-                            setAnswerState("skipped");
-                            void save(true, "skipped");
-                          }}
-                        >
-                          건너뛰기
-                        </Button>
-                      </div>
+                          placeholder="여기에 편하게 적어주세요."
+                        />
+                        {answerTooLong && (
+                          <p role="alert">
+                            답변은 1,000자까지 입력할 수 있어요. 내용을 줄인 뒤 저장해 주세요.
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {answerState === "unknown" || answerState === "skipped" ? (
+                      <p className="intake-scene-answer-state">
+                        {busy && failedOperation.current?.kind === "save"
+                          ? "답변을 저장하고 있어요."
+                          : question.answerState === answerState
+                            ? answerState === "unknown"
+                              ? "모름으로 저장했어요."
+                              : "건너뛰기로 저장했어요."
+                            : "아직 저장되지 않았어요. 다시 시도해 주세요."}
+                      </p>
+                    ) : null}
+                    <div className="intake-scene-options">
+                      <Button
+                        variant="ghost"
+                        disabled={locked || autoSaving}
+                        onClick={() => {
+                          changeAnswer(value, "unknown");
+                          void save(true, "unknown");
+                        }}
+                      >
+                        모름
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={locked || autoSaving}
+                        onClick={() => {
+                          changeAnswer(value, "skipped");
+                          void save(true, "skipped");
+                        }}
+                      >
+                        건너뛰기
+                      </Button>
                     </div>
-                    <div className="intake-scene-action">
-                      {waiting ? (
-                        <PreparationStatus title={statusTitle} saved />
-                      ) : !canMutate ? (
-                        <Button
-                          className="intake-scene-primary"
-                          type="button"
-                          disabled={busy || leaving || index >= result.questions.length - 1}
-                          onClick={() => navigateQuestion(index + 1)}
-                        >
-                          다음 질문
-                          <ArrowRight size={18} aria-hidden="true" />
-                        </Button>
-                      ) : (
-                        <Button
-                          className="intake-scene-primary"
-                          type="submit"
-                          disabled={
-                            locked ||
-                            requiresAdvanceRetry ||
-                            (result.failed &&
-                              !result.retryable &&
-                              !result.canPrepareSummary &&
-                              !dirty &&
-                              !canNavigateSavedAnswer) ||
-                            !answerState ||
-                            (answerState === "answered" && (!value.trim() || answerTooLong))
-                          }
-                        >
-                          {busy
+                  </div>
+                  <div className="intake-scene-action intake-scene-navigation">
+                    <Button
+                      className="intake-scene-back"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        busy ||
+                        autoSaving ||
+                        waiting ||
+                        leaving ||
+                        index === 0 ||
+                        (error as { code?: string })?.code === "CONFLICT" ||
+                        (!!error && failedOperation.current?.kind === "save")
+                      }
+                      onClick={() => void navigateQuestion(index - 1)}
+                    >
+                      <ArrowLeft size={15} aria-hidden="true" />
+                      이전으로
+                    </Button>
+                    {waiting ? (
+                      <PreparationStatus title={statusTitle} saved />
+                    ) : !canMutate ? (
+                      <Button
+                        className="intake-scene-primary"
+                        type="button"
+                        disabled={busy || leaving || index >= result.questions.length - 1}
+                        onClick={() => navigateQuestion(index + 1)}
+                      >
+                        다음 질문
+                        <ArrowRight size={18} aria-hidden="true" />
+                      </Button>
+                    ) : (
+                      <Button
+                        className="intake-scene-primary"
+                        type="submit"
+                        disabled={
+                          locked ||
+                          autoSaving ||
+                          requiresAdvanceRetry ||
+                          (result.failed &&
+                            !result.retryable &&
+                            !result.canPrepareSummary &&
+                            !dirty &&
+                            !canNavigateSavedAnswer) ||
+                          !answerState ||
+                          (answerState === "answered" && (!value.trim() || answerTooLong))
+                        }
+                      >
+                        {autoSaving
+                          ? "자동 저장 중…"
+                          : busy
                             ? "답변을 저장하고 있어요"
                             : canNavigateSavedAnswer
                               ? "다음 질문"
@@ -735,72 +928,22 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                                   : lastInRound && round.ordinal < roundLimit
                                     ? `저장하고 ${round.ordinal + 1}차 질문 보기`
                                     : "저장하고 다음 질문"}
-                          <ArrowRight size={18} aria-hidden="true" />
-                        </Button>
-                      )}
-                    </div>
-                    {result.failed && !waiting ? (
-                      <StatePanel
-                        variant="error"
-                        title={failureTitle}
-                        description={failureDescription}
-                        action={recoveryActions}
-                      />
-                    ) : null}
-                    <p className="intake-scene-notice" role="status">
-                      {waiting ? "" : notice}
-                    </p>
-                    <details className="intake-scene-management">
-                      <summary>답변 관리</summary>
-                      <div className="intake-scene-tools">
-                        <Button
-                          variant="ghost"
-                          disabled={busy || waiting || leaving || index === 0}
-                          onClick={() => navigateQuestion(index - 1)}
-                        >
-                          <ArrowLeft size={15} aria-hidden="true" />
-                          이전 질문
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={
-                            locked ||
-                            !answerState ||
-                            (answerState === "answered" && (!value.trim() || answerTooLong))
-                          }
-                          onClick={() => void save(false)}
-                        >
-                          <Save size={15} aria-hidden="true" />
-                          답변 저장
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          aria-haspopup="dialog"
-                          onClick={(event) => {
-                            event.currentTarget.focus();
-                            setExit(true);
-                          }}
-                          disabled={busy || leaving}
-                        >
-                          나중에 이어하기
-                        </Button>
-                      </div>
-                    </details>
-                  </form>
-                  <Dialog
-                    open={exit}
-                    onOpenChange={setExit}
-                    title="사이드바에서 다시 이어갈 수 있어요"
-                    description="수정 중인 답변은 저장한 뒤 이동해 주세요."
-                  >
-                    <div className="intake-actions">
-                      <ButtonLink href="/app">입력 화면으로 이동</ButtonLink>
-                      <Button variant="outline" onClick={() => setExit(false)}>
-                        계속 답하기
+                        <ArrowRight size={18} aria-hidden="true" />
                       </Button>
-                    </div>
-                  </Dialog>
-                </>
+                    )}
+                  </div>
+                  {result.failed && !waiting ? (
+                    <StatePanel
+                      variant="error"
+                      title={failureTitle}
+                      description={failureDescription}
+                      action={recoveryActions}
+                    />
+                  ) : null}
+                  <p className="intake-scene-notice" role="status">
+                    {waiting ? "" : autoSaving ? "자동 저장 중이에요." : dirty ? "" : notice}
+                  </p>
+                </form>
               )}
             </div>
           )}

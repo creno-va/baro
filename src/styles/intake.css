@@ -811,56 +811,26 @@
   padding: 14px 20px;
   white-space: normal;
 }
-.intake-scene-management {
-  text-align: center;
-  margin-top: 18px;
-}
-.intake-scene-management > summary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 8px 12px;
-  color: var(--muted-foreground);
-  font-size: 0.8rem;
-  cursor: pointer;
-  list-style: none;
-  border-radius: 12px;
-}
-.intake-scene-management > summary::-webkit-details-marker {
-  display: none;
-}
-.intake-scene-management > summary::after {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: translateY(-2px) rotate(45deg);
-  transition: transform 160ms ease;
-}
-.intake-scene-management[open] > summary::after {
-  transform: translateY(2px) rotate(225deg);
-}
-.intake-scene-management > summary:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.intake-scene-tools {
+.intake-scene-navigation {
   display: flex;
-  justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 12px;
 }
-.intake-scene .intake-scene-tools .ui-button {
+.intake-scene .intake-scene-back {
+  flex: none;
   font-size: 0.8rem;
   min-height: 44px;
 }
-.intake-scene .intake-scene-tools .ui-button + .ui-button {
+.intake-scene .intake-scene-navigation > .intake-scene-primary {
+  flex: 1;
+  width: auto;
+  min-width: 0;
   margin-left: 0;
+  padding-inline: 12px;
+}
+.intake-scene-navigation > .intake-scene-status {
+  flex: 1;
+  min-width: 0;
 }
 .intake-scene-notice {
   text-align: center;
@@ -1102,8 +1072,7 @@
     animation: none;
     transform: none;
   }
-  .intake-scene-composer,
-  .intake-scene-management > summary::after {
+  .intake-scene-composer {
     transition: none;
   }
   ::view-transition-group(*),
