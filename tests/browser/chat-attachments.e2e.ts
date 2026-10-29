@@ -526,7 +526,7 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   ).toBe(0);
 });
 
-test("long chat has a roomy viewport and scrolls internally after scrolling past the header", async ({
+test("long chat fills the available width and passes scrolling to the page at its boundary", async ({
   page,
 }) => {
   await seed(page);
@@ -574,9 +574,12 @@ test("long chat has a roomy viewport and scrolls internally after scrolling past
     const before = await tabs.boundingBox();
     const composer = await page.locator(".workspace-composer").boundingBox();
     const bounds = await log.boundingBox();
+    const panel = await page.locator(".workspace-main").boundingBox();
     const documentScroll = await page.evaluate(() => scrollY);
     expect(documentScroll).toBeGreaterThan(0);
-    if (!before || !composer || !bounds) throw new Error("Synthetic chat layout missing");
+    if (!before || !composer || !bounds || !panel) throw new Error("Synthetic chat layout missing");
+    expect(bounds.width).toBeCloseTo(panel.width, 0);
+    expect(composer.width).toBeCloseTo(panel.width, 0);
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.wheel(0, 600);
     await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
@@ -597,7 +600,7 @@ test("long chat has a roomy viewport and scrolls internally after scrolling past
       node.scrollTop = node.scrollHeight;
     });
     await page.mouse.wheel(0, 3000);
-    expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
+    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(documentScroll);
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
   }

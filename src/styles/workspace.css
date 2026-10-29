@@ -1488,9 +1488,10 @@
 }
 .app-frame.app-frame--product .workspace--chat .workspace-messages {
   flex: 1;
+  max-width: none;
   min-height: 0;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   scrollbar-gutter: stable;
   padding: 16px 8px;
 }
@@ -1501,9 +1502,10 @@
 .app-frame.app-frame--product .workspace--chat .workspace-composer {
   position: static;
   flex: 0 1 auto;
+  max-width: none;
   max-height: 55%;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
   margin-inline: auto;
 }
 .app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
