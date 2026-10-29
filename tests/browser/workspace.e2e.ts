@@ -2173,6 +2173,7 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
     "base64",
   );
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "synthetic.png", mimeType: "image/png", buffer: bytes });
