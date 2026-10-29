@@ -7,7 +7,7 @@ import {
 } from "./development-checks";
 
 test("browser failures do not hide later adapter failures and still reject the complete run", async () => {
-  const calls: { command: string[]; env?: Record<string, string | undefined> }[] = [];
+  const calls: { command: string[]; env: Record<string, string | undefined> | undefined }[] = [];
   const codes = [1, 0, 2];
   let failure = "";
   try {
