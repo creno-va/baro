@@ -202,15 +202,7 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(selected).toBeInViewport({ ratio: 1 });
   await menu.getByRole("link", { name: "대화", exact: true }).click();
   await expect(page).toHaveURL(base);
-  await page.locator(".case-options summary").click();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "사건 삭제", exact: true })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".case-options")).not.toHaveAttribute("open");
-  await expect(page.locator(".case-options summary")).toBeFocused();
+  await expect(page.locator(".case-options")).toHaveCount(0);
   await page.goto("/cases");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   const remove = page.getByRole("button", {

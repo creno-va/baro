@@ -25,7 +25,6 @@ import type { CustomerWorkspaceView } from "../../client/api/workspace";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
-import { CaseDeleteDialog } from "../intake/CaseDeleteDialog";
 import { FactAnswer } from "../intake/FactAnswer";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { BrandMark } from "../ui/brand";
@@ -117,7 +116,6 @@ export function Workspace({
     null,
   );
   const [original, setOriginal] = useState<{ url: string; type: string } | null>(null);
-  const [deletingCase, setDeletingCase] = useState(false);
   const [uploadConsent, setUploadConsent] = useState(false);
   const [retryUploads, setRetryUploads] = useState<File[]>([]);
   const [acceptedFileRetries, setAcceptedFileRetries] = useState<string[]>([]);
@@ -160,7 +158,6 @@ export function Workspace({
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
-    setDeletingCase(false);
     ++latest.current;
     operationError.current = null;
     acknowledgedTimeline.current = false;
@@ -350,10 +347,9 @@ export function Workspace({
     let animation = 0;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      const top = panel.getBoundingClientRect().top + window.scrollY;
       panel.style.setProperty(
         "--chat-panel-height",
-        `${Math.max(160, ((window.visualViewport?.height ?? window.innerHeight) - top - 12) / zoom)}px`,
+        `${Math.max(160, (window.visualViewport?.height ?? window.innerHeight) / zoom)}px`,
       );
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(followReply);
@@ -900,29 +896,7 @@ export function Workspace({
         subjectContext={ready ? view?.case.subjectContext : undefined}
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
-        action={
-          ready && view ? (
-            <Button
-              variant="ghost"
-              disabled={!!busy}
-              aria-haspopup="dialog"
-              onClick={(event) => {
-                event.currentTarget.focus();
-                setDeletingCase(true);
-              }}
-            >
-              사건 삭제
-            </Button>
-          ) : undefined
-        }
       />
-      {deletingCase && ready && view && (
-        <CaseDeleteDialog
-          item={view.case}
-          onClose={() => setDeletingCase(false)}
-          onDeleted={() => window.location.replace("/app")}
-        />
-      )}
       <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
         {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
       </div>
@@ -1505,7 +1479,6 @@ export function Workspace({
                       <span className="workspace-upload-title">
                         {view.files.length ? "파일 추가" : "파일 선택"}
                       </span>
-                      <span className="workspace-upload-types">문서 · 이미지 · 음성 · 영상</span>
                       <span className="workspace-upload-limit">
                         문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
                         {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
@@ -1783,36 +1756,31 @@ export function Workspace({
                 </>
               )}
             </section>
-            {tab === "chat" && (
-              <details className="workspace-chat-guide">
-                <summary>대화·자료 안내</summary>
-                <p className="workspace-chat-notice" id="workspace-chat-notice">
-                  사진·파일은 여기에 끌어놓거나 붙여넣을 수 있어요. 근거로 활용한 자료는 자료 탭에서
-                  확인해요.
-                  <br />
-                  BARO는 AI로 사실을 정리하며 법률 판단을 대신하지 않아요.
-                  <br className="workspace-mobile-break" /> 중요한 내용은 원본과 전문가에게 확인해
-                  주세요.
-                </p>
-              </details>
-            )}
             <aside
               className="workspace-sidebar"
               aria-label="사건 요약 및 준비 현황"
               {...privateContent}
             >
               {tab === "files" ? (
-                <section className="workspace-context-content">
-                  <h2>사건 요약과 준비 현황</h2>
-                  <p>
-                    자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
-                    확인해 주세요.
-                  </p>
-                  <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
-                    요약 검토하기 <ArrowRight size={14} />
-                  </a>
-                  <CaseMaterials caseId={caseId} files={view.files} />
-                </section>
+                <details className="workspace-context">
+                  <summary>
+                    <FileText size={17} />
+                    <span>사건 요약과 준비 현황</span>
+                    <ChevronDown size={16} />
+                  </summary>
+                  <div className="workspace-context-content workspace-context-content--files">
+                    <section>
+                      <p>
+                        자료의 처리 상태는 이 화면에서 확인할 수 있어요. 사건 요약은 요약 페이지에서
+                        확인해 주세요.
+                      </p>
+                      <a className="workspace-summary-link" href={`${base}/summary?from=files`}>
+                        요약 검토하기 <ArrowRight size={14} />
+                      </a>
+                      <CaseMaterials caseId={caseId} files={view.files} />
+                    </section>
+                  </div>
+                </details>
               ) : (
                 <details className="workspace-context">
                   <summary>

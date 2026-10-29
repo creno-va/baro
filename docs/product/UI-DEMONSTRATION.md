@@ -62,7 +62,7 @@ UI-21~23은 ADR-0014에 따라 MVP 제외이며 원래 요구는 아래 역사 �
 | UI-27 / all |320px/mobile·desktop·200%·keyboard 전체 flow |focus/dialogrestore·aria/errors/status·44px·contrast·reduced motion | #56,#69 |
 | UI-28 / all |builtWorkerCSP의 font/icons/dialog/upload/chat/Turnstile |blockedscript·hydration/fallback·동일 SVG 교체모든사용처·font 라이선스 | #56,#69,#71 |
 | UI-29 / F005/09 |변호사연락링크선택→case 로돌아와자료추가/report 갱신 |contact 완료강요없음·자료자동전송없음·전략대신사실준비계속 | #61,#64,#65,#66,#69 |
-| UI-30 / privacy |선택 analytics 동의/거부→실제기능사용 |optout 기능동일·동의철회정리·원문/검색어/파일명/PII 없는 allowlist | #68,#69 |
+| UI-30 / privacy |동의 UI 없는 기본 탭 로컬 사용 기록 |외부 전송 없음·기록 저장 차단 시 기능 유지·원문/검색어/파일명/실제 계정 정보 없는 allowlist | #68,#69,#600 |
 | UI-31 / renewal |재동의 전 기존 본인 고객 사건·사실·자료 조회/다운로드 |새 AI/수정/upload 차단·타인/역할/session/삭제 가드 유지 | #65,#58,#69 |
 | UI-32 / renewal |재동의 전 기존 본인 리포트/HTML/PDF/ZIP 조회·다운로드 |새 생성/수정 차단·옛 revision 표시·최신 사실 새 리포트 비교 | #66,#69 |
 | UI-33 / renewal |재동의 전 기존 본인 프로필·업로드 자료 조회/다운로드 |새 작성/수정/공개/upload 차단·소유/session/삭제·public 현재동의 유지 | #62,#69 |

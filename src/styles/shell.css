@@ -368,19 +368,6 @@ body {
   max-width: 1040px;
   padding-bottom: 24px;
 }
-.app-frame .case-utilities {
-  color: #626d80;
-  margin: 42px auto 0;
-  font-size: 0.75rem;
-  max-width: 780px;
-}
-.case-utilities summary {
-  width: fit-content;
-  margin: auto;
-  cursor: pointer;
-  min-height: 32px;
-  padding: 8px;
-}
 .app-frame .case-notice {
   max-width: 780px;
   margin: 6px auto 0;

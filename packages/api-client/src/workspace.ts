@@ -11,6 +11,8 @@ import { intakeQuestionContext, workspaceProgressText } from "@baro/client-core"
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
 import { caseDetailResponseSchema, opaqueIdSchema } from "@baro/contracts/v1";
 import {
+  caseDisplayTitle,
+  caseTitleSchema,
   type V2MessageRequest,
   v2AcceptedOperationSchema,
   v2ActionSchema,
@@ -439,6 +441,7 @@ export function createWorkspaceClient(dependencies: {
     const metadata = z
       .object({
         narrative: z.string(),
+        caseTitle: caseTitleSchema.optional(),
         summary: z.object({ revision: z.number() }).nullable(),
         revision: z.number().int().positive().optional(),
         batches: z.array(v2QuestionBatchSchema).optional(),
@@ -615,7 +618,7 @@ export function createWorkspaceClient(dependencies: {
     });
     const caseView: CaseView = {
       id: w.id,
-      title: [...metadata.narrative].slice(0, 60).join("") || w.title,
+      title: caseDisplayTitle(metadata.narrative, metadata.caseTitle),
       subjectContext: w.subjectContext,
       stage: w.status,
       revision: w.workspaceRevision,

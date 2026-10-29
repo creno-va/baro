@@ -72,6 +72,23 @@ function client(
   });
 }
 
+test("generated case title is shared by new clients while older metadata remains readable", async () => {
+  let caseTitle: string | undefined = "거래 대금의 지급 약속 확인";
+  const request: OperationRequest = async <T>(operation: string) => {
+    if (operation === "cases.owner")
+      return { user: { id: "synthetic_owner", accountType: "customer" }, needsConsent: false } as T;
+    if (operation === "cases.workspace") return workspace() as T;
+    if (operation === "cases.intake")
+      return { ...metadata(), ...(caseTitle ? { caseTitle } : {}) } as T;
+    throw new Error(`Unexpected synthetic operation: ${operation}`);
+  };
+  expect((await client(request, memoryStorage().storage).get(id)).title).toBe(caseTitle);
+  caseTitle = undefined;
+  expect((await client(request, memoryStorage().storage).get(id)).title).toBe(
+    "계약 내용과 이행 문제",
+  );
+});
+
 test("an app restart replays a response-lost creation with the same key and no stored narrative", async () => {
   const { records, storage } = memoryStorage();
   const keys = new Set<string>();

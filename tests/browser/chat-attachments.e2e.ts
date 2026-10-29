@@ -55,28 +55,54 @@ async function attach(page: Page) {
   await (await chooser).setFiles(file);
 }
 
-test("workspace deletion has no title or typed confirmation and aligns delete before cancel", async ({
+test("case header shows a concise title below its small subject label and deletion stays in the sidebar", async ({
   page,
 }) => {
   await seed(page);
-  await page.getByLabel("사건 관리").click();
-  const opener = page.getByRole("button", { name: "사건 삭제", exact: true });
-  await opener.click();
-  const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await expect(modal.getByRole("textbox")).toHaveCount(0);
-  await expect(modal.getByText("합성 첨부 사건", { exact: true })).toHaveCount(0);
-  await expect(modal.locator(".deletion-dialog-actions button")).toHaveText(["사건 삭제", "취소"]);
-  await expect(modal.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
+  const title = "지인에게 빌려준 돈의 반환 문제";
+  await page.evaluate(
+    ({ id, title }) => {
+      const key = "baro-api-mock-v1:cases";
+      const cases = JSON.parse(localStorage.getItem(key) ?? "{}");
+      cases[id].title = title;
+      cases[id].subjectContext = "company";
+      localStorage.setItem(key, JSON.stringify(cases));
+    },
+    { id, title },
+  );
+  await page.reload();
+  const nav = page.locator(".case-navigation");
+  await expect(nav.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await expect(nav.getByLabel("사건 관리")).toHaveCount(0);
+  await expect(nav.getByRole("button", { name: "사건 삭제", exact: true })).toHaveCount(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
-    if (width === 390) await page.screenshot({ path: ".wrangler/workspace-deletion-390.png" });
+    const layout = await nav.evaluate((node) => {
+      const label = node.querySelector(".case-subject-context");
+      const heading = node.querySelector("h1");
+      if (!label || !heading) throw new Error("Case heading missing");
+      return {
+        above: label.getBoundingClientRect().bottom <= heading.getBoundingClientRect().top,
+        small:
+          parseFloat(getComputedStyle(label).fontSize) <
+          parseFloat(getComputedStyle(heading).fontSize),
+      };
+    });
+    expect(layout).toEqual({ above: true, small: true });
+    await expect(nav.locator(".case-subject-context")).toHaveText("기업 사건");
+    if (width !== 320) await page.screenshot({ path: `.wrangler/case-heading-${width}.png` });
   }
+  const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
+  await expect(row).toContainText(title);
+  await row.hover();
+  await row.getByRole("button", { name: `${title} 사건 삭제`, exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await modal.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(modal).toHaveCount(0);
-  await opener.click();
+  await row.hover();
+  await row.getByRole("button", { name: `${title} 사건 삭제`, exact: true }).click();
   await modal.getByRole("button", { name: "사건 삭제", exact: true }).click();
   await expect(page).toHaveURL(/\/app$/);
   expect(
@@ -94,6 +120,13 @@ test("materials use one upload placeholder then a compact bar, aligned with the 
   await page.goto(`${base}/files`);
   const target = page.getByRole("button", { name: "파일 선택", exact: true });
   await expect(target).toBeEnabled();
+  await expect(page.locator(".workspace-upload-types")).toHaveCount(0);
+  await expect(target).toContainText("문서·이미지 100 MB");
+  const context = page.locator(".workspace-context");
+  const disclosure = context.locator(":scope > summary");
+  const summaryLink = context.getByRole("link", { name: "요약 검토하기" });
+  await expect(context).not.toHaveAttribute("open");
+  await expect(summaryLink).not.toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "전체 첨부 파일", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "근거로 활용한 자료", exact: true })).toHaveCount(0);
@@ -126,6 +159,15 @@ test("materials use one upload placeholder then a compact bar, aligned with the 
     expect(geometry.overflow).toBe(false);
     if (width === 390 || width === 1440)
       await page.screenshot({ path: `.wrangler/materials-empty-${width}.png`, fullPage: true });
+    await disclosure.focus();
+    await disclosure.press("Enter");
+    await expect(context).toHaveAttribute("open");
+    await expect(summaryLink).toBeVisible();
+    await expect(summaryLink).toHaveAttribute("href", `${base}/summary?from=files`);
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `.wrangler/materials-context-${width}.png`, fullPage: true });
+    await disclosure.press("Enter");
+    await expect(context).not.toHaveAttribute("open");
   }
   const chooser = page.waitForEvent("filechooser");
   await target.click();
@@ -462,6 +504,7 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
     element.scrollTop = 0;
     element.dispatchEvent(new Event("scroll"));
   });
+  const documentScroll = await page.evaluate(() => scrollY);
   const text = "한 문장씩 편하게 읽으실 수 있어요. 합성 검증입니다.\n".repeat(60);
   await publishSyntheticReply(page, text);
   const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
@@ -470,20 +513,20 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   await expect
     .poll(async () => (await reply.textContent())?.length ?? 0)
     .toBeGreaterThan(start + 20);
-  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
   ).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reply).toHaveCount(0);
   await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
-  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),
   ).toBe(0);
 });
 
-test("long chat scrolls internally while tabs and composer stay in place across screen sizes", async ({
+test("long chat has a roomy viewport and scrolls internally after scrolling past the header", async ({
   page,
 }) => {
   await seed(page);
@@ -501,6 +544,7 @@ test("long chat scrolls internally while tabs and composer stay in place across 
   await page.reload();
   const log = page.getByRole("log", { name: "사건 대화" });
   await expect(log.locator("article")).toHaveCount(24);
+  await expect(page.getByText("대화·자료 안내", { exact: true })).toHaveCount(0);
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
@@ -509,7 +553,10 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     await page.setViewportSize(viewport);
     await expect
       .poll(() => log.evaluate((node) => node.clientHeight))
-      .toBeGreaterThan(Math.min(220, viewport.height / 4));
+      .toBeGreaterThan(viewport.height * 0.55);
+    await page
+      .locator(".workspace-main")
+      .evaluate((node) => node.scrollIntoView({ block: "start" }));
     await expect
       .poll(async () => {
         const composer = await page.locator(".workspace-composer").boundingBox();
@@ -524,13 +571,15 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     const before = await tabs.boundingBox();
     const composer = await page.locator(".workspace-composer").boundingBox();
     const bounds = await log.boundingBox();
+    const documentScroll = await page.evaluate(() => scrollY);
+    expect(documentScroll).toBeGreaterThan(0);
     if (!before || !composer || !bounds) throw new Error("Synthetic chat layout missing");
     await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     await page.mouse.wheel(0, 600);
     await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
     expect((await tabs.boundingBox())?.y).toBeCloseTo(before.y, 1);
     expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
-    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
     expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
     const preparation = await page.locator(".workspace-sidebar").boundingBox();
     expect(preparation?.y).toBeGreaterThan(composer.y + composer.height);
@@ -545,7 +594,7 @@ test("long chat scrolls internally while tabs and composer stay in place across 
       node.scrollTop = node.scrollHeight;
     });
     await page.mouse.wheel(0, 3000);
-    expect(await page.evaluate(() => scrollY)).toBe(0);
+    expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
   }
@@ -566,11 +615,5 @@ test("long chat scrolls internally while tabs and composer stay in place across 
     .getByRole("link", { name: "대화", exact: true })
     .click();
   await expect(log.locator("article")).toHaveCount(24);
-  await page.getByLabel("사건 관리").click();
-  await page.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  const deletion = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await expect(deletion).toBeVisible();
-  await expect(deletion.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
-  await deletion.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(deletion).toHaveCount(0);
+  await expect(page.locator(".case-options")).toHaveCount(0);
 });

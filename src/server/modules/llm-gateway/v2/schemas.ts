@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { displayText, hasUniqueIds, opaqueIdSchema } from "../../../../contracts";
 import {
+  caseTitleSchema,
   V2_INTAKE_POLICY,
   v2ActionSchema,
   v2FactReferenceSchema,
@@ -17,12 +18,14 @@ import { materialWindowRequestSchema } from "../../workspace/materials";
 export const workspaceQuestionsOutputSchema = z.strictObject({
   questions: v2QuestionsSchema.max(V2_INTAKE_POLICY.questionsPerBatch),
 });
-export const workspaceSummaryOutputSchema = v2SummarySchema.omit({
-  schemaVersion: true,
-  revision: true,
-  intakeRevision: true,
-  createdAt: true,
-});
+export const workspaceSummaryOutputSchema = v2SummarySchema
+  .omit({
+    schemaVersion: true,
+    revision: true,
+    intakeRevision: true,
+    createdAt: true,
+  })
+  .extend({ caseTitle: caseTitleSchema.optional() });
 export const workspaceChatOutputSchema = z.strictObject({
   text: displayText(10000),
   references: z.array(v2FactReferenceSchema).max(100),

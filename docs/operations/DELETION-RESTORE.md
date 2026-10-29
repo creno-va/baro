@@ -10,7 +10,7 @@ DELETE /api/me는 Origin, signed SQL session, 실제 callback 인증 10분과 st
 확인하며 journal과 user cascade를 함께 commit한다. 필수 동의나 암호화 키가 없더라도
 자신의 계정을 삭제할 수 있다. 202는 primary 삭제/모든 세션 폐기다. settings는 이 탭에서
 시작한 동일 계정의 새로운 callback 후 DELETE 입력을 다시 요구한다. URL/새로고침으로
-자동 제출하지 않는다. 선택 account_deleted 이벤트는 opt-in allowlist와 탭 저장소만 사용한다.
+자동 제출하지 않는다. account_deleted 이벤트는 기본 탭 로컬 기록의 allowlist와 탭 저장소만 사용하며 외부로 전송하지 않는다.
 
 journal은 target ID/삭제 시각/모든 analysis retry ID/상태만 보존한다. 원문·인증 token·
 이메일·암호문 shadow copy를 저장하지 않는다. 기존 case journal도 동일 cleanup을 쓴다.

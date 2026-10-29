@@ -56,7 +56,7 @@
 .app-frame.app-frame--product .ui-button--primary {
   background: var(--product-blue);
 }
-.app-frame.app-frame--product :where(.case-utilities, .case-notice) {
+.app-frame.app-frame--product .case-notice {
   font-size: 12px;
 }
 .app-frame.app-frame--product :where([id]) {
@@ -201,43 +201,6 @@
 }
 .app-frame.app-frame--product .workspace-tabs a:focus-visible {
   outline-offset: -2px;
-}
-.app-frame.app-frame--product .case-options {
-  position: relative;
-  flex-shrink: 0;
-  z-index: 5;
-}
-.app-frame.app-frame--product .case-options > summary {
-  display: grid;
-  place-items: center;
-  list-style: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  cursor: pointer;
-  color: var(--muted-foreground);
-}
-.app-frame.app-frame--product .case-options > summary::-webkit-details-marker {
-  display: none;
-}
-.app-frame.app-frame--product .case-options:where([open]) > summary,
-.app-frame.app-frame--product .case-options > summary:where(:hover) {
-  background: var(--muted);
-}
-.app-frame.app-frame--product .case-options > div {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  min-width: 140px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--card);
-  box-shadow: 0 8px 24px #191f2810;
-}
-.app-frame.app-frame--product .case-options .ui-button {
-  width: 100%;
-  color: var(--destructive);
 }
 .app-frame.app-frame--product .workspace-grid {
   width: 100%;
@@ -410,10 +373,13 @@
 .app-frame.app-frame--product .settings-section-heading {
   margin-bottom: 20px;
 }
+.app-frame.app-frame--product .settings-danger .settings-section-heading {
+  margin-bottom: 0;
+}
 .app-frame.app-frame--product .settings-section-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
 }
 .app-frame.app-frame--product .settings-card h2 {
   font-size: 19px;

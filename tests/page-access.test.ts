@@ -65,6 +65,63 @@ test("anonymous GET and HEAD app entries redirect on the server, including norma
       );
 });
 
+test("authenticated login redirects before HTML while app retains consent and role gates", async () => {
+  const fixture = await signedIn();
+  const app = application();
+  const read = (path: string, method = "GET") =>
+    app.request(
+      `http://localhost:4321${path}`,
+      { method, headers: { cookie: fixture.cookie } },
+      fixture.env,
+    );
+  for (const path of ["/login", "/login/", "/%6cogin", "//login", "/login%2f"])
+    for (const method of ["GET", "HEAD"]) await expectRedirect(await read(path, method), "/app");
+  await expectRedirect(await read("/login?returnTo=https://foreign.test&error=oauth"), "/app");
+  await expectRedirect(await read("/app"), "/consent");
+  fixture.consent();
+  await saveAccountType(fixture.env.DB, fixture.userId, "lawyer");
+  await expectRedirect(await read("/login"), "/app");
+  await expectRedirect(await read("/app"), "/lawyer");
+  await saveAccountType(fixture.env.DB, fixture.userId, "customer");
+  expect((await read("/app")).status).toBe(200);
+});
+
+test("anonymous login stays available before OAuth configuration and never caches HTML", async () => {
+  for (const cookie of ["", "theme=blue", "better-auth.session_token="])
+    for (const method of ["GET", "HEAD"]) {
+      const response = await application().request(
+        "/login?error=access_denied",
+        { method, headers: { cookie } },
+        { APP_ENV: "local" } as Env,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("cache-control")).toContain("private, no-store");
+    }
+});
+
+test("forged, deleted-account and expired sessions stay on login without redirect loops", async () => {
+  const fixture = await signedIn();
+  const read = (cookie = fixture.cookie) =>
+    application().request("/login", { headers: { cookie } }, fixture.env);
+  const expectLogin = async (response: Response) => {
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("cache-control")).toContain("private, no-store");
+  };
+  await expectLogin(await read("better-auth.session_token=forged-cookie"));
+  fixture.database.sqlite
+    .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
+    .run(fixture.userId, new Date().toISOString());
+  await expectLogin(await read());
+  fixture.database.sqlite.exec("DELETE FROM v2_tombstones; UPDATE session SET expires_at=1");
+  const expired = await read();
+  await expectLogin(expired);
+  expect(
+    expired.headers.getSetCookie().find((value) => value.startsWith("better-auth.session_token=")),
+  ).toContain("Max-Age=0");
+});
+
 test("missing, empty and unrelated cookies reach login even before OAuth is configured", async () => {
   for (const cookie of [
     "",
@@ -81,7 +138,7 @@ test("missing, empty and unrelated cookies reach login even before OAuth is conf
 
 test("other methods cannot render the application or bypass its GET and HEAD guard", async () => {
   for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    for (const path of ["/app", "/app/", "/%61pp"]) {
+    for (const path of ["/app", "/app/", "/%61pp", "/login", "/login/", "/%6cogin"]) {
       const response = await application().request(path, { method }, { APP_ENV: "local" } as Env);
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("GET, HEAD");
@@ -145,6 +202,10 @@ test("secure OAuth cookies retain the same consent and customer boundary in open
   const env = { ...fixture.env, APP_ENV: "production", PUBLIC_BETA_ENABLED: "true" } as Env;
   const app = application();
   await expectRedirect(
+    await app.request("/login", { headers: { cookie: fixture.cookie } }, env),
+    "/app",
+  );
+  await expectRedirect(
     await app.request("/app", { headers: { cookie: fixture.cookie } }, env),
     "/consent",
   );
@@ -154,32 +215,34 @@ test("secure OAuth cookies retain the same consent and customer boundary in open
   );
 });
 
-test("sliding session cookies survive both consent redirects and successful app rendering", async () => {
+test("sliding session cookies survive login and consent redirects and successful app rendering", async () => {
   const fixture = await signedIn();
   const app = application();
-  for (const consented of [false, true]) {
-    if (consented) fixture.consent();
-    const now = Date.now();
-    fixture.database.sqlite
-      .query("UPDATE session SET updated_at=?,expires_at=?")
-      .run(
-        now - SESSION_UPDATE_SECONDS * 1_000 - 1,
-        now + (SESSION_EXPIRES_SECONDS - SESSION_UPDATE_SECONDS) * 1_000 - 1,
+  for (const consented of [false, true])
+    for (const path of ["/login", "/app"]) {
+      if (consented) fixture.consent();
+      const now = Date.now();
+      fixture.database.sqlite
+        .query("UPDATE session SET updated_at=?,expires_at=?")
+        .run(
+          now - SESSION_UPDATE_SECONDS * 1_000 - 1,
+          now + (SESSION_EXPIRES_SECONDS - SESSION_UPDATE_SECONDS) * 1_000 - 1,
+        );
+      const response = await app.request(
+        path,
+        { headers: { cookie: fixture.cookie } },
+        fixture.env,
       );
-    const response = await app.request(
-      "/app",
-      { headers: { cookie: fixture.cookie } },
-      fixture.env,
-    );
-    expect(response.status).toBe(consented ? 200 : 302);
-    expect(response.headers.get("cache-control")).toContain("private, no-store");
-    const refreshed = response.headers
-      .getSetCookie()
-      .find((value) => value.startsWith("better-auth.session_token="));
-    expect(refreshed).toContain(`Max-Age=${SESSION_EXPIRES_SECONDS}`);
-    expect(refreshed).toContain("HttpOnly");
-    expect(refreshed).toContain("SameSite=Lax");
-  }
+      expect(response.status).toBe(path === "/app" && consented ? 200 : 302);
+      if (path === "/login") expect(response.headers.get("location")).toBe("/app");
+      expect(response.headers.get("cache-control")).toContain("private, no-store");
+      const refreshed = response.headers
+        .getSetCookie()
+        .find((value) => value.startsWith("better-auth.session_token="));
+      expect(refreshed).toContain(`Max-Age=${SESSION_EXPIRES_SECONDS}`);
+      expect(refreshed).toContain("HttpOnly");
+      expect(refreshed).toContain("SameSite=Lax");
+    }
 });
 
 test("OAuth configuration and database failures return safe 503s without login loops", async () => {
@@ -193,14 +256,16 @@ test("OAuth configuration and database failures return safe 503s without login l
   } as unknown as D1Database);
   const cookie = await signedSessionCookie("synthetic-token", unavailable.BETTER_AUTH_SECRET);
   for (const env of [misconfigured, unavailable]) {
-    const response = await application().request("/app", { headers: { cookie } }, env);
-    expect(response.status).toBe(503);
-    expect(response.headers.get("location")).toBeNull();
-    expect(response.headers.get("cache-control")).toContain("private, no-store");
-    const body = await response.text();
-    expect(body).toContain("로그인 상태를 확인할 수 없어요.");
-    expect(body).not.toMatch(/SQL|credential|synthetic-token|BETTER_AUTH_SECRET/);
-    expect(body).not.toContain("Synthetic application reached");
+    for (const path of ["/app", "/login"]) {
+      const response = await application().request(path, { headers: { cookie } }, env);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("cache-control")).toContain("private, no-store");
+      const body = await response.text();
+      expect(body).toContain("로그인 상태를 확인할 수 없어요.");
+      expect(body).not.toMatch(/SQL|credential|synthetic-token|BETTER_AUTH_SECRET/);
+      expect(body).not.toContain("Synthetic application reached");
+    }
   }
 });
 
