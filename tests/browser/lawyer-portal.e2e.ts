@@ -106,6 +106,7 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   });
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/lawyer");
+  await page.locator('astro-island[component-export="Editor"]:not([ssr])').waitFor();
   await expect(page.getByRole("heading", { name: "내 변호사 프로필" })).toBeVisible();
   await expect(page.getByLabel("이름", { exact: true })).toBeVisible();
   await page.getByLabel("이름", { exact: true }).fill("합성 변호사");
@@ -174,14 +175,16 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   await expect(page.getByRole("link", { name: "합성 변호사", exact: true })).toBeVisible();
   await expect(page.getByText("본인 작성 정보 · 자격 확인 표시 없음")).toBeVisible();
   await page.getByRole("link", { name: "프로필과 연락처 보기" }).click();
-  await expect(page.getByRole("link", { name: "전화", exact: true })).toHaveAttribute(
+  await page.getByRole("button", { name: "연락처 보기", exact: true }).click();
+  const contact = page.getByRole("dialog", { name: "연락처", exact: true });
+  await expect(contact.getByRole("link", { name: "02-000-0000", exact: true })).toHaveAttribute(
     "href",
     "tel:020000000",
   );
-  await expect(page.getByRole("link", { name: "이메일", exact: true })).toHaveAttribute(
-    "href",
-    "mailto:lawyer%40example.invalid",
-  );
+  await expect(
+    contact.getByRole("link", { name: "lawyer@example.invalid", exact: true }),
+  ).toHaveAttribute("href", "mailto:lawyer%40example.invalid");
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("link", { name: "Google 길찾기" })).toHaveAttribute(
     "href",
     /destination=/,

@@ -62,6 +62,7 @@ test("common login and B intake flow through C workspace and D report with origi
     mimeType: "text/plain",
     buffer: Buffer.from("공통 저장소의 합성 원본 자료입니다."),
   };
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles(source);
   await page.getByRole("button", { name: "업로드 다시 시도" }).click();
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
@@ -93,7 +94,10 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toBeVisible();
   await openReportOptions(page);
   await expect(page.getByText("shared-synthetic.txt", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "사건으로 돌아가기" }).click();
+  await page
+    .getByRole("navigation", { name: "사건 메뉴" })
+    .getByRole("link", { name: "대화", exact: true })
+    .click();
   await page
     .getByRole("link", { name: /변호사 탐색/ })
     .first()
@@ -157,7 +161,7 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
   await page.goto("/cases/synthetic-material-case/reports");
   await openReportEditor(page);
-  const report = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const report = page.getByRole("textbox", { name: "준비할 자료와 처리 범위 수정", exact: true });
   await expect(report).toHaveValue(/Synthetic corrected first chunk/);
   await expect(report).not.toHaveValue(/Synthetic second chunk/);
 });

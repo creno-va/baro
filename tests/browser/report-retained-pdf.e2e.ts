@@ -54,13 +54,10 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await context.addCookies([seed.cookie]);
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
     await openReportEditor(page);
-    const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+    const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
     await expect(editor).toBeVisible();
-    await page.locator(".report-basis > summary").click();
-    await expect(page.getByText(/생성 기준: 요약 1/)).toBeVisible();
     const originalText = await editor.inputValue();
-    const reviewed = page.getByRole("checkbox", { name: "내용·식별정보·선택한 사진을 확인했어요" });
-    await reviewed.check();
+    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
     const firstEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const first = await firstEvent,
@@ -71,14 +68,15 @@ test("stored real PDF and report remain readable after source change/re-consent,
       200,
     );
     await page.reload();
-    await openReportEditor(page);
-    await expect(editor).toHaveValue(originalText);
-    await expect(editor).toBeDisabled();
+    await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
+      originalText,
+    );
+    await expect(page.getByRole("button", { name: "리포트 내용 수정하기" })).toBeDisabled();
     await expect(page.getByText(/새 리포트 생성과 수정은 필수 동의 후/)).toBeVisible();
-    await expect(page.getByText(/이 리포트는 위 생성 기준의 내용/)).toBeVisible();
     await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "검토 내용 저장" })).toBeDisabled();
-    await reviewed.check();
+    await expect(
+      page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }),
+    ).toBeDisabled();
     const secondEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const second = await secondEvent,

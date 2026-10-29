@@ -243,16 +243,21 @@ test("reports start in reading mode and retain editing through a focus check", a
   await seed(page);
   await page.goto(`${base}/reports`);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "리포트 내용 편집" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: "리포트 내용 편집" });
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await editor.fill("수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(editor).toBeVisible();
   await expect(editor).toHaveValue("수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.");
-  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "검토 내용 저장", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("저장");
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
+    "수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.",
+  );
+  await page.reload();
+  await openReportEditor(page);
+  await expect(editor).toHaveValue("수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.");
 });
 
 test("initial summary uses a single editor without fact controls, checkbox or previous-answer action", async ({
