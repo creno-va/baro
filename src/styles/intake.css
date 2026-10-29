@@ -779,6 +779,9 @@
   background: var(--secondary);
   border-color: var(--primary);
 }
+.intake-scene .intake-choice-custom-input {
+  margin-top: 12px;
+}
 .intake-scene-options {
   display: flex;
   gap: 2px;

@@ -6,6 +6,7 @@ import { casesApi } from "../src/client/api/cases";
 import { createFilesApi as createClientFilesApi } from "../src/client/api/files";
 import { createWorkspaceApi, workspaceMutation } from "../src/client/api/workspace";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import { v2QuestionBatchSchema } from "../src/contracts/v2";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { meApi } from "../src/server/api/me";
 import { createFilesApi } from "../src/server/api/v2/files";
@@ -61,6 +62,80 @@ async function fixture() {
     );
   return { ...f, env, app, transport };
 }
+
+test("custom choice text survives real answer validation, encrypted storage and replay", async () => {
+  const f = await fixture();
+  const before = await f.service.intake(f.owner.userId, f.workspace.id);
+  const firstBatch = before?.batches[0];
+  const question = firstBatch?.questions[0];
+  if (!before || !firstBatch || !question) throw new Error("Missing synthetic question");
+  const row = f.db.sqlite
+    .query("SELECT revision,encrypted_payload FROM v2_question_batches WHERE id=?")
+    .get(firstBatch.id) as { revision: number; encrypted_payload: string };
+  const body = await f.core.decrypt(
+    "v2_question_batches",
+    firstBatch.id,
+    f.owner.userId,
+    row.revision,
+    row.encrypted_payload,
+    v2QuestionBatchSchema,
+  );
+  body.questions = body.questions.map((item) =>
+    item.id === question.id
+      ? {
+          id: item.id,
+          prompt: item.prompt,
+          answerType: "choice" as const,
+          options: ["계좌 이체 내역", "차용증"],
+        }
+      : item,
+  );
+  f.db.sqlite
+    .query("UPDATE v2_question_batches SET encrypted_payload=? WHERE id=?")
+    .run(
+      await f.core.encrypt(
+        "v2_question_batches",
+        firstBatch.id,
+        f.owner.userId,
+        row.revision,
+        body,
+      ),
+      firstBatch.id,
+    );
+  const value = "직접 입력한 합성 자료 설명입니다. 일부 금액은 현금으로 전달했습니다.";
+  const request = {
+    method: "PUT",
+    headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+    body: JSON.stringify({
+      expectedRevision: before.revision,
+      answers: [{ questionId: question.id, status: "answered", value }],
+    }),
+  };
+  const path = `/api/v2/cases/${f.workspace.id}/intake/answers`;
+  expect((await f.transport(path, request)).status).toBe(200);
+  expect((await f.transport(path, request)).status).toBe(200);
+  const saved = await f.service.intake(f.owner.userId, f.workspace.id);
+  expect(saved?.revision).toBe(before.revision + 1);
+  expect(saved?.batches[0]?.questions[0]).toMatchObject({
+    answerType: "choice",
+    options: ["계좌 이체 내역", "차용증"],
+  });
+  expect(saved?.batches[0]?.answers[0]).toMatchObject({ status: "answered", value });
+  const encrypted = f.db.sqlite
+    .query("SELECT encrypted_payload FROM v2_answers WHERE batch_id=? AND question_id=?")
+    .get(firstBatch.id, question.id);
+  expect(JSON.stringify(encrypted)).not.toContain(value);
+  const other = await seedTestSession(f.db, { consent: true });
+  expect(
+    (
+      await f.transport(
+        path,
+        { ...request, headers: { ...request.headers, "idempotency-key": crypto.randomUUID() } },
+        other.cookie,
+      )
+    ).status,
+  ).toBe(404);
+});
 
 for (const operation of ["saveSummary", "confirmSummary"] as const) {
   test(`product Hono ${operation} recovers a committed lost response with identical body/key and denies changed/stale/foreign requests`, async () => {

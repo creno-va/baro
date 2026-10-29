@@ -396,6 +396,84 @@ test("typing emoji counts code points and over-limit drafts cannot save", async 
   expect([...(f.writes[0]?.value ?? "")]).toHaveLength(1000);
 });
 
+test("custom choice answers autosave, restore and switch back to suggested options", async ({
+  page,
+}) => {
+  const f = await fixture(page, "첫 질문의 합성 답변", false, { includeNext: true });
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await page.getByRole("radio", { name: "직접 입력", exact: true }).check();
+  const answer = page.getByRole("textbox", { name: "직접 입력 답변", exact: true });
+  await expect(answer).toBeFocused();
+  await answer.fill("정확한 날짜는 모르지만 지난봄에 있었던 일입니다.");
+  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  expect(f.writes.map((write) => write.value)).toEqual([
+    "정확한 날짜는 모르지만 지난봄에 있었던 일입니다.",
+  ]);
+  expect(f.requests.some((request) => request.includes("/intake/advance"))).toBe(false);
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "직접 입력", exact: true })).toBeChecked();
+  await expect(answer).toHaveValue("정확한 날짜는 모르지만 지난봄에 있었던 일입니다.");
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await page.screenshot({ path: `.wrangler/intake-custom-${width}.png`, fullPage: true });
+  }
+  await page.getByRole("radio", { name: "알고 있음", exact: true }).check();
+  await expect(answer).toHaveCount(0);
+  await expect.poll(() => f.writes.at(-1)?.value).toBe("알고 있음");
+  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "알고 있음", exact: true })).toBeChecked();
+  await expect(answer).toHaveCount(0);
+});
+
+test("custom choice late acknowledgement preserves the newer suggested answer", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const gateSave = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const f = await fixture(page, "첫 질문의 합성 답변", false, { includeNext: true, gateSave });
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await page.getByRole("radio", { name: "직접 입력", exact: true }).check();
+  await page
+    .getByRole("textbox", { name: "직접 입력 답변", exact: true })
+    .fill("시기를 직접 설명한 합성 답변");
+  await expect.poll(() => f.writes.length).toBe(1);
+  await page.getByRole("radio", { name: "알고 있음", exact: true }).check();
+  release();
+  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  expect(f.writes.map((write) => write.value)).toEqual([
+    "시기를 직접 설명한 합성 답변",
+    "알고 있음",
+  ]);
+  await expect(page.getByRole("textbox", { name: "직접 입력 답변", exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "알고 있음", exact: true })).toBeChecked();
+});
+
+test("custom choice text keeps the existing blank and Unicode length guards", async ({ page }) => {
+  const f = await fixture(page, "첫 질문의 합성 답변", false, { includeNext: true });
+  await page.getByRole("button", { name: "다음 질문", exact: true }).click();
+  await page.clock.install();
+  await page.getByRole("radio", { name: "직접 입력", exact: true }).check();
+  const answer = page.getByRole("textbox", { name: "직접 입력 답변", exact: true });
+  await answer.fill(" ");
+  await page.clock.runFor(1200);
+  expect(f.writes).toHaveLength(0);
+  await answer.fill("😀".repeat(1001));
+  await page.clock.runFor(1200);
+  await expect(page.getByRole("alert")).toContainText("1,000자");
+  expect(f.writes).toHaveLength(0);
+  await answer.fill("😀".repeat(1000));
+  await page.clock.runFor(1200);
+  await expect(page.locator(".intake-scene-notice")).toHaveText("자동 저장됐어요.");
+  expect([...(f.writes[0]?.value ?? "")]).toHaveLength(1000);
+});
+
 async function summaryFixture(page: Page) {
   const originalFact = summary.facts[0];
   if (!originalFact) throw new Error("MISSING_SYNTHETIC_FACT");

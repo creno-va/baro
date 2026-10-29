@@ -30,6 +30,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [busy, setBusy] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [customQuestionId, setCustomQuestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
@@ -90,6 +91,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       setBusy(false);
       setAutoSaving(false);
       setComposing(false);
+      setCustomQuestionId(null);
       pending.current = false;
       failedOperation.current = null;
     },
@@ -106,6 +108,10 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     [deny],
   );
   const question = result?.questions[index];
+  const customAnswer =
+    question?.kind === "choice" &&
+    (customQuestionId === question.id ||
+      (answerState === "answered" && !question.options?.includes(value)));
   inputSnapshot.current = { questionId: question?.id, value, state: answerState };
   const answerTooLong = answerState === "answered" && [...value.trim()].length > 1000;
   const dirty =
@@ -348,6 +354,15 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     if (question?.id && !waiting) heading.current?.focus({ preventScroll: true });
   }, [question?.id, waiting]);
   useEffect(() => {
+    if (!question?.id) return;
+    setCustomQuestionId(null);
+    setComposing(false);
+  }, [question?.id]);
+  useEffect(() => {
+    if (customQuestionId === question?.id)
+      document.getElementById("question-answer")?.focus({ preventScroll: true });
+  }, [customQuestionId, question?.id]);
+  useEffect(() => {
     if ((!result?.processing && !recovering) || busy) return;
     let cancelled = false;
     let timer: number;
@@ -420,6 +435,10 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   ]);
 
   function changeAnswer(nextValue: string, state: QuestionView["answerState"]) {
+    if (state !== "answered") {
+      setCustomQuestionId(null);
+      setComposing(false);
+    }
     inputSnapshot.current = { questionId: question?.id, value: nextValue, state };
     if (question) {
       if (
@@ -781,7 +800,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   }}
                 >
                   <div className="intake-scene-composer">
-                    {question.kind === "choice" ? (
+                    {question.kind === "choice" && (
                       <fieldset
                         className="intake-options"
                         disabled={locked}
@@ -792,29 +811,55 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           <label
                             key={option}
                             className={
-                              answerState === "answered" && value === option ? "selected" : ""
+                              !customAnswer && answerState === "answered" && value === option
+                                ? "selected"
+                                : ""
                             }
                           >
                             <input
                               type="radio"
                               name={question.id}
                               value={option}
-                              checked={answerState === "answered" && value === option}
+                              checked={
+                                !customAnswer && answerState === "answered" && value === option
+                              }
                               onChange={() => {
+                                setCustomQuestionId(null);
+                                setComposing(false);
                                 changeAnswer(option, "answered");
                               }}
                             />
                             <span>{option}</span>
                           </label>
                         ))}
+                        <label
+                          className={customAnswer && answerState === "answered" ? "selected" : ""}
+                        >
+                          <input
+                            type="radio"
+                            name={question.id}
+                            value=""
+                            checked={customAnswer && answerState === "answered"}
+                            aria-controls={customAnswer ? "question-answer" : undefined}
+                            onChange={() => {
+                              setCustomQuestionId(question.id);
+                              changeAnswer(customAnswer ? value : "", "answered");
+                            }}
+                          />
+                          <span>직접 입력</span>
+                        </label>
                       </fieldset>
-                    ) : (
+                    )}
+                    {(question.kind !== "choice" || customAnswer) && (
                       <>
                         <label className="sr-only" htmlFor="question-answer">
-                          답변
+                          {question.kind === "choice" ? "직접 입력 답변" : "답변"}
                         </label>
                         <Textarea
                           id="question-answer"
+                          className={
+                            question.kind === "choice" ? "intake-choice-custom-input" : undefined
+                          }
                           onCompositionStart={() => setComposing(true)}
                           onCompositionEnd={() => setComposing(false)}
                           value={answerState === "answered" ? value : ""}
@@ -822,7 +867,11 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                           onChange={(event) => {
                             changeAnswer(event.target.value, "answered");
                           }}
-                          placeholder="여기에 편하게 적어주세요."
+                          placeholder={
+                            question.kind === "choice"
+                              ? "선택지에 없는 내용을 적어주세요."
+                              : "여기에 편하게 적어주세요."
+                          }
                         />
                         {answerTooLong && (
                           <p role="alert">

@@ -36,6 +36,7 @@ import {
   v2ProfileRevisionSchema,
   v2ProfileSubmitForAssetsSchema,
   v2PublicLawyerSchema,
+  v2QuestionBatchSchema,
   v2ReportBodySchema,
   v2ReportCreateRequestSchema,
   v2ReportForSnapshotSchema,
@@ -159,7 +160,7 @@ test("text bounds count Unicode code points, trim input and reject rendered HTML
   rejects(v2MessageSchema(), rejectedFixtures.unvalidatedAssistant);
 });
 
-test("partial intake answers persist but advance validates all server questions and options", () => {
+test("partial intake answers allow custom choice text while requiring known questions and complete batches", () => {
   const partial = {
     expectedRevision: 2,
     answers: [{ questionId: "q1", status: "answered", value: "합성 응답" }],
@@ -167,9 +168,18 @@ test("partial intake answers persist but advance validates all server questions 
   accepts(v2AnswersForBatchSchema(batch), partial);
   rejects(v2AnswersForBatchSchema(batch, true), partial);
   accepts(v2AnswersForBatchSchema(batch, true), { expectedRevision: 2, answers: batch.answers });
+  accepts(v2AnswersForBatchSchema(batch), {
+    expectedRevision: 2,
+    answers: [{ questionId: "q2", status: "answered", value: "직접 입력한 다른 합성 상황" }],
+  });
+  accepts(v2QuestionBatchSchema, {
+    ...batch,
+    answers: [{ questionId: "q2", status: "answered", value: "직접 입력한 다른 합성 상황" }],
+  });
   for (const answer of [
     rejectedFixtures.skippedWithValue,
-    { questionId: "q2", status: "answered", value: "없는 선택지" },
+    { questionId: "q2", status: "answered", value: " " },
+    { questionId: "q2", status: "answered", value: "😀".repeat(1001) },
     { questionId: "foreign", status: "unknown" },
   ])
     rejects(v2AnswersForBatchSchema(batch), { expectedRevision: 2, answers: [answer] });
