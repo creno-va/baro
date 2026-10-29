@@ -7,12 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
-import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto } from "./AssetPhoto";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
 import { lawyerProfileHref } from "./navigation";
 
-export function Directory({ preview = false }: { preview?: boolean }) {
+export function Directory() {
   const [items, setItems] = useState<DirectoryItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
@@ -86,7 +85,6 @@ export function Directory({ preview = false }: { preview?: boolean }) {
           description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
         />
       </div>
-      <ApiModeNotice preview={preview} />
       <Card className="directory-search">
         <CardContent>
           <form

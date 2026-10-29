@@ -5,17 +5,14 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
-import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
 import { FIELD_LABELS } from "./labels";
 import { contactLinks, directionLinks } from "./links";
 export function Profile({
   id,
-  preview = false,
   directoryHref = "/lawyers",
 }: {
   id: string;
-  preview?: boolean;
   directoryHref?: string;
 }) {
   const [lawyer, setLawyer] = useState<LawyerView | null>(null);
@@ -46,7 +43,6 @@ export function Profile({
       <a className="ui-button ui-button--ghost" href={directoryHref}>
         변호사 목록으로
       </a>
-      <ApiModeNotice preview={preview} />
       {error ? (
         <StatePanel
           variant="error"

@@ -27,6 +27,8 @@ test("profile round trip retains applied search filters after reload and ignores
 }) => {
   await page.route("**/api/v2/lawyers**", (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path.startsWith("/api/v2/lawyers/self-service/"))
+      return route.fulfill({ status: 404, json: {} });
     if (path === "/api/v2/lawyers/directory")
       return route.fulfill({ json: directoryPage([directoryLawyer]) });
     if (path.includes("/assets/")) return route.fulfill({ status: 404 });
@@ -38,15 +40,46 @@ test("profile round trip retains applied search filters after reload and ignores
     legalField: "company",
   });
   const listPath = `/lawyers?${filters}`;
-  for (const width of [320, 1024]) {
+  for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 760 });
     await page.goto(listPath);
     const profile = page.getByRole("link", { name: "프로필과 연락처 보기" });
     await expect(profile).toBeVisible();
+    await expect(page.getByText("Preview 환경 · 실제 API에 연결합니다.")).toHaveCount(0);
+    const controls = await page
+      .getByRole("form", { name: "변호사 검색" })
+      .locator("input, select, button[type=submit]")
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const { height, bottom } = element.getBoundingClientRect();
+          return { height, bottom };
+        }),
+      );
+    expect(controls).toHaveLength(4);
+    const button = controls[3];
+    if (!button) throw new Error("Search button is missing");
+    for (const field of controls.slice(0, 3)) {
+      expect(Math.abs(field.height - button.height)).toBeLessThanOrEqual(1);
+    }
+    expect(controls.slice(0, 3).some((field) => Math.abs(field.bottom - button.bottom) <= 1)).toBe(
+      true,
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    if (width === 390 || width === 1440) {
+      await page.screenshot({ path: `.wrangler/directory-controls-${width}.png`, fullPage: true });
+    }
     await page.getByLabel("이름 또는 사무실", { exact: true }).fill("검색하지 않은 입력");
     await expect(profile).toHaveAttribute("href", `/lawyers/${directoryLawyer.id}?${filters}`);
     await profile.click();
     await page.reload();
+    await expect(
+      page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Preview 환경 · 실제 API에 연결합니다.")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
       "href",
       listPath,

@@ -17,7 +17,6 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
-import { ApiModeNotice } from "./ApiModeNotice";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
 import { FIELD_LABELS, REGION_LABELS } from "./labels";
 import { ProfileContent } from "./Profile";
@@ -494,7 +493,6 @@ export function Editor() {
   };
   return (
     <div className="lawyer-editor space-y-6">
-      <ApiModeNotice />
       <PageHeader
         title="내 변호사 프로필"
         description="소개와 연락처를 작성하고, 공개할 정보를 직접 관리하세요."
