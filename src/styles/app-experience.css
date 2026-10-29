@@ -6,6 +6,24 @@
   --app-fast: 160ms;
   --app-enter: 240ms;
 }
+/* Pointer actions and their automatic focus moves do not need a keyboard ring. */
+:root[data-focus-input="pointer"] .app-frame :focus-visible {
+  outline: none;
+}
+/* Keep semantic focus and keyboard scrolling without outlining the whole page/region. */
+.app-frame
+:is(
+  main[tabindex="-1"],
+  h1[tabindex="-1"],
+  h2[tabindex="-1"],
+  h3[tabindex="-1"],
+  [role="tabpanel"],
+  .workspace-messages,
+  .sidebar-recent__list,
+  dialog
+):focus-visible {
+  outline: none;
+}
 .app-frame .app-surface {
   background: var(--app-canvas);
 }
