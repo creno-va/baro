@@ -355,7 +355,7 @@
   position: static;
 }
 .workspace-composer-surface {
-  padding: 13px 16px 12px;
+  padding: 8px;
   border: 1px solid #e3eaf5;
   border-radius: 20px;
   background: #fff;
@@ -373,61 +373,47 @@
     0 0 0 3px #3182f608;
 }
 .case-shell .workspace-composer textarea {
-  min-height: 5rem;
-  max-height: 13.75rem;
-  padding: 8px 5px;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 10px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
   font-size: max(1rem, 16px);
-  line-height: 1.8;
+  line-height: 24px;
   color: #202838;
   outline: 0;
   box-shadow: none;
-  resize: vertical;
+  resize: none;
 }
 .workspace-composer textarea::placeholder {
   color: #5c6b80;
 }
-.workspace-composer-footer {
-  flex-wrap: wrap;
+.workspace-composer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 9px;
+  gap: 8px;
 }
-.workspace-attach-short,
-.workspace-lookup-short {
-  display: none;
-}
-.workspace-composer-footer > .workspace-lookup-open {
+.workspace-composer-row > .workspace-lookup-open {
   min-width: 44px;
   min-height: 44px;
   color: #526176;
   font-size: 0.78rem;
   padding: 8px;
 }
-.workspace-composer-footer > .workspace-send {
-  margin-left: auto;
+.workspace-composer-row > .ui-button {
+  margin: 0;
   flex: none;
 }
-.workspace .workspace-message-length {
-  margin: 6px 2px 0;
-  text-align: right;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: #526176;
-}
-.workspace .workspace-message-length[role="alert"] {
-  color: var(--destructive);
-}
-.workspace-attach {
+.workspace-attach.ui-button {
   display: inline-flex;
   gap: 5px;
   align-items: center;
   min-height: 44px;
-  padding: 0 7px;
+  padding: 0;
   border-radius: 10px;
   color: #526176;
   font-size: 0.78rem;
@@ -1089,19 +1075,10 @@
   }
   .workspace-composer-surface {
     border-radius: 22px;
-    padding: 10px 12px;
+    padding: 8px;
   }
-  .workspace-composer-footer {
-    flex-wrap: nowrap;
-    gap: 8px;
-  }
-  .workspace-attach-label,
-  .workspace-lookup-label {
-    display: none;
-  }
-  .workspace-attach-short,
-  .workspace-lookup-short {
-    display: inline;
+  .workspace-composer-row {
+    gap: 4px;
   }
   .workspace-attach {
     min-width: 44px;
@@ -1516,10 +1493,6 @@
 .app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
   flex: none;
   max-height: none;
-}
-.app-frame.app-frame--product .workspace--chat .workspace-composer textarea {
-  min-height: 3rem;
-  max-height: min(8rem, 25dvh);
 }
 .workspace--chat > .workspace-feedback:empty {
   display: none;

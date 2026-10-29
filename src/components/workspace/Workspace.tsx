@@ -101,8 +101,8 @@ export function Workspace({
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
-  const messageLength = [...draft.trim()].length;
-  const messageTooLong = messageLength > 10000;
+  const draftComposing = useRef(false);
+  const messageTooLong = [...draft.trim()].length > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [localAttachments, setLocalAttachments] = useState<File[]>([]);
   const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
@@ -168,6 +168,7 @@ export function Workspace({
     newestMessageAt.current = "";
     setProgressiveIds(new Set());
     setView(null);
+    draftComposing.current = false;
     setDraft("");
     setSelected([]);
     setLocalAttachments([]);
@@ -370,12 +371,6 @@ export function Workspace({
       window.visualViewport?.removeEventListener("resize", fit);
     };
   }, [tab, view, followReply]);
-  useEffect(() => {
-    const input = draftInput.current;
-    if (!input) return;
-    input.style.height = draft ? "auto" : "";
-    if (draft) input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
-  }, [draft]);
   useEffect(() => {
     const open = !!(preview || deleteFile || entry);
     if (open && !dialog.current?.open) dialog.current?.showModal();
@@ -1338,59 +1333,24 @@ export function Workspace({
                           </fieldset>
                         </details>
                       )}
-                      <label className="workspace-sr-only" htmlFor="workspace-message">
-                        추가 사실 또는 질문
-                      </label>
-                      <textarea
-                        ref={draftInput}
-                        id="workspace-message"
-                        rows={2}
-                        value={draft}
-                        disabled={readonly || busy === "send" || queuedSend}
-                        onChange={(event) => setDraft(event.target.value)}
-                        placeholder="추가로 기억나는 사실이나 궁금한 점을 이야기해 주세요."
-                        aria-describedby="workspace-message-length"
-                        aria-invalid={messageTooLong}
-                        onKeyDown={(event) => {
-                          if (
-                            event.key === "Enter" &&
-                            (event.metaKey || event.ctrlKey) &&
-                            !event.nativeEvent.isComposing &&
-                            !busy &&
-                            !pendingResponse &&
-                            !readonly &&
-                            !queuedSend &&
-                            (draft.trim() ||
-                              selected.length ||
-                              localAttachments.length ||
-                              chatAttachments.length) &&
-                            (!localAttachments.length || uploadConsent) &&
-                            !messageTooLong
-                          ) {
-                            event.preventDefault();
-                            event.currentTarget.form?.requestSubmit();
-                          }
-                        }}
-                      />
-                      <div className="workspace-composer-footer">
-                        <button
+                      <div className="workspace-composer-row">
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
                           className="workspace-attach"
+                          title="사진·파일 첨부"
                           aria-label="사진·파일 첨부"
                           disabled={!!busy || readonly || queuedSend}
                           onClick={() => uploadInput.current?.click()}
                         >
                           <Plus size={19} />
-                          <span className="workspace-attach-label">사진·파일 첨부</span>
-                          <span className="workspace-attach-short" aria-hidden="true">
-                            첨부
-                          </span>
-                        </button>
+                        </Button>
                         {lookupAvailable && view.case.schemaVersion === "2" && (
                           <Button
                             type="button"
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             className="workspace-lookup-open"
                             aria-label="외부 조회"
                             title="외부 조회"
@@ -1401,12 +1361,55 @@ export function Workspace({
                             }}
                           >
                             <Search size={17} />
-                            <span className="workspace-lookup-label">외부 조회</span>
-                            <span className="workspace-lookup-short" aria-hidden="true">
-                              조회
-                            </span>
                           </Button>
                         )}
+                        <label className="workspace-sr-only" htmlFor="workspace-message">
+                          추가 사실 또는 질문
+                        </label>
+                        <textarea
+                          ref={draftInput}
+                          id="workspace-message"
+                          rows={1}
+                          // Native maxlength counts UTF-16; the change handler caps Unicode characters.
+                          maxLength={20000}
+                          value={draft}
+                          disabled={readonly || busy === "send" || queuedSend}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setDraft(
+                              draftComposing.current ? value : [...value].slice(0, 10000).join(""),
+                            );
+                          }}
+                          onCompositionStart={() => {
+                            draftComposing.current = true;
+                          }}
+                          onCompositionEnd={(event) => {
+                            draftComposing.current = false;
+                            setDraft([...event.currentTarget.value].slice(0, 10000).join(""));
+                          }}
+                          placeholder="메시지를 입력하세요."
+                          aria-invalid={messageTooLong}
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "Enter" &&
+                              (event.metaKey || event.ctrlKey) &&
+                              !event.nativeEvent.isComposing &&
+                              !busy &&
+                              !pendingResponse &&
+                              !readonly &&
+                              !queuedSend &&
+                              (draft.trim() ||
+                                selected.length ||
+                                localAttachments.length ||
+                                chatAttachments.length) &&
+                              (!localAttachments.length || uploadConsent) &&
+                              !messageTooLong
+                            ) {
+                              event.preventDefault();
+                              event.currentTarget.form?.requestSubmit();
+                            }
+                          }}
+                        />
                         <Button
                           className="workspace-send"
                           type="submit"
@@ -1435,15 +1438,6 @@ export function Workspace({
                         </Button>
                       </div>
                     </div>
-                    <p
-                      className="workspace-message-length"
-                      id="workspace-message-length"
-                      role={messageTooLong ? "alert" : undefined}
-                    >
-                      {messageLength.toLocaleString()} / 10,000자
-                      {messageTooLong &&
-                        " · 10,000자 이하로 줄여 주세요. 입력한 내용은 그대로 남아 있어요."}
-                    </p>
                   </form>
                 </>
               )}

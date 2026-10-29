@@ -263,7 +263,7 @@ test("fact sources identify the referenced material and page", async ({ page }) 
   await expect(link).toContainText("7쪽");
 });
 
-test("chat retains Unicode input, blocks over-limit text and submits the complete valid text", async ({
+test("chat caps typing, paste and completed composition at 10,000 Unicode characters", async ({
   page,
 }) => {
   const view = { ...initial(), timeline: [], files: [] };
@@ -294,13 +294,19 @@ test("chat retains Unicode input, blocks over-limit text and submits the complet
   await expect(input).toHaveValue("😀".repeat(6000));
   await expect(send).toBeEnabled();
   await input.fill("😀".repeat(10001));
+  await expect(input).toHaveValue("😀".repeat(10000));
+  await expect(send).toBeEnabled();
+  await input.press("End");
+  await page.keyboard.insertText("더");
+  await expect(input).toHaveValue("😀".repeat(10000));
+  await expect(page.locator(".workspace-message-length")).toHaveCount(0);
+  await input.dispatchEvent("compositionstart");
+  await input.fill("가".repeat(10001));
   await expect(send).toBeDisabled();
-  await input.press("Control+Enter");
-  expect(sent).toHaveLength(0);
-  await expect(input).toHaveValue("😀".repeat(10001));
-  await expect(page.getByText(/10,000자 이하로 줄여 주세요/)).toBeVisible();
+  await input.dispatchEvent("compositionend");
+  await expect(input).toHaveValue("가".repeat(10000));
   const text = "😀".repeat(10000);
-  await input.fill("  " + text + "  ");
+  await input.fill(text);
   await expect(send).toBeEnabled();
   await send.click();
   await expect.poll(() => sent.length).toBe(1);

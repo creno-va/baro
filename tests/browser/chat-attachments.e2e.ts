@@ -55,6 +55,53 @@ async function attach(page: Page) {
   await (await chooser).setFiles(file);
 }
 
+test("compact composer keeps attachment, fixed input and send on one row at phone and desktop widths", async ({
+  page,
+}, testInfo) => {
+  await seed(page);
+  const input = page.getByLabel("추가 사실 또는 질문", { exact: true });
+  const attach = page.getByRole("button", { name: "사진·파일 첨부", exact: true });
+  await expect(attach).toHaveText("");
+  await expect(page.locator(".workspace-message-length")).toHaveCount(0);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: width === 320 ? 568 : 900 });
+    await expect(input).toBeInViewport();
+    const measure = () =>
+      page.locator(".workspace-composer-row").evaluate((row) => {
+        const input = row.querySelector("textarea");
+        const attach = row.querySelector(".workspace-attach");
+        const send = row.querySelector(".workspace-send");
+        const surface = row.parentElement;
+        if (!input || !attach || !send || !surface) throw new Error("Composer controls missing");
+        const boxes = [attach, input, send].map((node) => node.getBoundingClientRect());
+        const centers = boxes.map((box) => box.y + box.height / 2);
+        return {
+          aligned: Math.max(...centers) - Math.min(...centers) <= 1,
+          ordered: boxes[0].right <= boxes[1].left && boxes[1].right <= boxes[2].left,
+          height: input.getBoundingClientRect().height,
+          resize: getComputedStyle(input).resize,
+          surfaceHeight: surface.getBoundingClientRect().height,
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+    await expect.poll(measure).toEqual({
+      aligned: true,
+      ordered: true,
+      height: 44,
+      resize: "none",
+      surfaceHeight: 62,
+      overflow: false,
+    });
+    await input.fill("궁금한 내용을 적어요.\n추가 내용도 입력해요.\n세 번째 줄이에요.");
+    expect((await measure()).height).toBe(44);
+    await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
+    await page
+      .locator(".workspace-composer-surface")
+      .screenshot({ path: testInfo.outputPath(`compact-composer-${width}.png`) });
+    await input.fill("");
+  }
+});
+
 test("case header shows a concise title below its small subject label and deletion stays in the sidebar", async ({
   page,
 }) => {
@@ -597,6 +644,8 @@ test("long chat fills the available width and passes scrolling to the page at it
       true,
     );
     await log.evaluate((node) => {
+      // Position near the boundary, then reach it with normal wheel movement.
+      node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight - 600);
       node.dataset.scrollEndedAtBottom = "false";
       const settled = () => {
         if (node.scrollHeight - node.scrollTop - node.clientHeight > 1) return;
@@ -605,13 +654,17 @@ test("long chat fills the available width and passes scrolling to the page at it
       };
       node.addEventListener("scrollend", settled);
     });
-    await page.mouse.wheel(0, 100000);
+    await page.mouse.wheel(0, 600);
     await expect(log).toHaveAttribute("data-scroll-ended-at-bottom", "true");
     await expect
       .poll(() => log.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight))
       .toBeLessThanOrEqual(1);
-    await page.mouse.wheel(0, 3000);
-    await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(documentScroll);
+    // Native wheel transactions can consume the first input at the boundary.
+    // Continued wheel movement must reach the page rather than stay trapped.
+    await expect(async () => {
+      await page.mouse.wheel(0, 3000);
+      expect(await page.evaluate(() => scrollY)).toBeGreaterThan(documentScroll);
+    }).toPass({ intervals: [250], timeout: 2000 });
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
   }
