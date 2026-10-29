@@ -182,7 +182,7 @@ test("fresh operator requires exact main, operator, environment secrets and sequ
 
 test("live-activity resume is derived from the actual allowlisted Worker binding", async () => {
   for (const id of [FRESH_DATABASES.preview.id, FRESH_DATABASES.preview.original, "unexpected"]) {
-    const mock = (async () =>
+    const mock = (async (_input: RequestInfo | URL) =>
       Response.json({ success: true, result: { bindings: [{ name: "DB", id }] } })) as typeof fetch;
     if (id === "unexpected")
       await expect(freshTargetIsConnected("preview", "synthetic", mock)).rejects.toThrow(
