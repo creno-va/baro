@@ -127,8 +127,8 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
   await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("civil");
   await page.getByRole("button", { name: "검색", exact: true }).click();
-  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toHaveCount(1);
-  await page.getByRole("link", { name: "프로필과 연락처 보기" }).click();
+  await expect(page.locator("a.directory-profile")).toHaveCount(1);
+  await page.locator("a.directory-profile").click();
   await expect(
     page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }),
   ).toBeVisible();

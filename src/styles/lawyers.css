@@ -427,6 +427,8 @@
   border: 1px solid var(--border);
   border-radius: 22px;
   background: var(--card);
+  color: var(--foreground);
+  text-decoration: none;
   box-shadow: none;
   transition:
     border-color 0.2s,
@@ -478,13 +480,6 @@
   line-height: 1.5;
   letter-spacing: -0.03em;
 }
-.directory-profile .ui-card__title a {
-  color: var(--foreground);
-  text-decoration: none;
-}
-.directory-profile .ui-card__title a:hover {
-  color: var(--primary);
-}
 .directory-profile .ui-card__title span {
   color: var(--muted-foreground);
   font-size: 13px;
@@ -500,7 +495,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  padding: 22px 26px 0;
+  padding: 22px 26px 26px;
 }
 .directory-profile__location {
   display: flex;
@@ -537,32 +532,10 @@
   line-height: 1.5;
 }
 .directory-profile__disclosure {
-  margin: 0 0 18px;
+  margin: 0;
   color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.7;
-}
-.directory-profile__link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 60px;
-  border-top: 1px solid var(--border);
-  color: var(--primary);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-}
-.directory-profile__link:hover {
-  color: #154bb7;
-}
-.directory-profile__link svg {
-  flex-shrink: 0;
-  transition: transform 0.2s;
-}
-:where(.directory-profile__link):hover svg {
-  transform: translateX(3px);
 }
 .lawyer-directory .directory-more {
   display: flex;
@@ -669,7 +642,7 @@
     padding: 23px 22px 0;
   }
   .directory-profile .directory-profile__content {
-    padding: 20px 22px 0;
+    padding: 20px 22px 22px;
   }
   .directory-profile__introduction {
     font-size: 14px;
@@ -680,7 +653,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .directory-profile,
-  .directory-profile__link svg,
   .directory-search input,
   .directory-search select {
     transition: none;

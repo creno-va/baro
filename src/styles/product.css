@@ -283,7 +283,7 @@
   padding: 24px 24px 0;
 }
 .app-frame.app-frame--product .directory-profile__content {
-  padding: 18px 24px 0;
+  padding: 18px 24px 24px;
 }
 .app-frame.app-frame--product .directory-disclosure {
   background: transparent;
@@ -627,7 +627,6 @@
   }
   .app-frame.app-frame--product .workspace-tabs a {
     font-size: 13px;
-    flex: 0 0 auto;
     white-space: nowrap;
     text-align: center;
     padding: 10px 12px;
