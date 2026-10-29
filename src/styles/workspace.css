@@ -204,10 +204,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 8px;
 }
 .workspace-section-actions .ui-button {
   flex-shrink: 0;
+}
+.workspace-section-actions > .ui-button + .ui-button {
+  margin-left: 0;
 }
 .workspace-sidebar h2 {
   font-size: 0.9rem;
