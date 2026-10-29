@@ -14,6 +14,7 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await expect(page.locator("#settings-usage-title")).toBeVisible();
   await expect(page.locator("#settings-help-title")).toBeVisible();
   await expect(page.locator("#settings-danger-title")).toBeVisible();
+  await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
   const disclosure = page.locator(".settings-usage-guide");
   const summary = disclosure.locator("summary");
   const content = disclosure.locator("p");
@@ -24,13 +25,24 @@ test("settings usage disclosure stacks content below its summary and toggles acc
     await summary.click();
     await expect(content).toBeVisible();
     await expect(help).toBeVisible();
-    const heading = await summary.boundingBox();
-    const body = await content.boundingBox();
-    const link = await help.boundingBox();
-    if (!heading || !body || !link) throw new Error("Synthetic usage disclosure missing");
-    expect(body.y).toBeGreaterThanOrEqual(heading.y + heading.height - 1);
-    expect(link.y).toBeGreaterThanOrEqual(body.y + body.height - 1);
-    expect(Math.abs(body.x - heading.x)).toBeLessThanOrEqual(1);
+    // Clicking/expanding can move the document through scroll anchoring. Read
+    // all rectangles in one frame so their viewport origin is identical.
+    const geometry = await disclosure.evaluate((node) => {
+      const heading = node.querySelector("summary")?.getBoundingClientRect();
+      const body = node.querySelector("p")?.getBoundingClientRect();
+      const link = node.querySelector("a")?.getBoundingClientRect();
+      if (!heading || !body || !link) throw new Error("Synthetic usage disclosure missing");
+      return {
+        headingBottom: heading.bottom,
+        bodyTop: body.top,
+        bodyBottom: body.bottom,
+        linkTop: link.top,
+        leftDifference: Math.abs(body.left - heading.left),
+      };
+    });
+    expect(geometry.bodyTop).toBeGreaterThanOrEqual(geometry.headingBottom - 1);
+    expect(geometry.linkTop).toBeGreaterThanOrEqual(geometry.bodyBottom - 1);
+    expect(geometry.leftDifference).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
