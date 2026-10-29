@@ -209,6 +209,7 @@ test("mobile chat keeps the composer visible and every case destination reachabl
     name: "돌려받지 못한 보증금, 함께 정리한 이야기 사건 삭제",
     exact: true,
   });
+  await remove.focus();
   await remove.click();
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
