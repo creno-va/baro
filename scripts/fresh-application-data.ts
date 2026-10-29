@@ -4,7 +4,11 @@ import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { transitionFreshBinding } from "./fresh-database-binding";
 import { remoteBudgetD1 } from "./remote-budget-d1";
-import { prepareSyntheticLawyers, SYNTHETIC_PROFILE_COUNT } from "./synthetic-lawyer-seed";
+import {
+  prepareSyntheticLawyers,
+  type Seed,
+  SYNTHETIC_PROFILE_COUNT,
+} from "./synthetic-lawyer-seed";
 
 export const FRESH_CONFIRMATION = "prepare-fresh-databases-with-ten-synthetic-lawyers";
 export const FRESH_DATABASES = {
@@ -64,6 +68,24 @@ export async function verifyFreshState(db: D1Database) {
   return state;
 }
 
+/** Resume only the ten authorized synthetic records in an explicitly allowlisted fresh target. */
+export async function existingSyntheticSeed(db: D1Database): Promise<Seed | null> {
+  const schema = await db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user'")
+    .first();
+  if (!schema) return null;
+  await verifyFreshState(db);
+  const profiles = (
+    await db
+      .prepare(
+        "SELECT p.id,p.owner_id AS ownerId,u.name FROM v2_profiles p JOIN user u ON u.id=p.owner_id WHERE p.id LIKE 'synthetic-lawyer-%' AND u.id LIKE 'synthetic-owner-%' AND u.email LIKE '%@example.invalid' AND EXISTS(SELECT 1 FROM app_metadata m WHERE m.key='synthetic-seed:'||u.id AND m.value='operator-authorized-synthetic-fixture')",
+      )
+      .all<{ id: string; ownerId: string; name: string }>()
+  ).results;
+  if (profiles.length !== SYNTHETIC_PROFILE_COUNT) throw new Error("FRESH_RESUME_NOT_SYNTHETIC");
+  return { sql: "", profiles };
+}
+
 if (import.meta.main) {
   let phase = "preparation";
   const environment = process.env.FRESH_ENVIRONMENT;
@@ -79,45 +101,46 @@ if (import.meta.main) {
     const target = FRESH_DATABASES[environment];
     assertFreshTarget(environment, target.id);
     const db = remoteBudgetD1(process.env.CLOUDFLARE_API_TOKEN, account, target.id);
-    await assertEmpty(db);
-    // Read only the original technical capacity, never original customer rows or payloads.
-    const original = remoteBudgetD1(process.env.CLOUDFLARE_API_TOKEN, account, target.original);
-    const capacity = await original
-      .prepare("SELECT capacity_bytes FROM v2_physical_storage_capacity WHERE environment=?")
-      .bind(environment)
-      .first<number>("capacity_bytes");
-    if (!Number.isSafeInteger(capacity) || !capacity || capacity < 1)
-      throw new Error("FRESH_CAPACITY_INVALID");
-    const cipher = await createCaseDataCipher({
-      CASE_DATA_KEY_V1: process.env.CASE_DATA_KEY_V1,
-    });
-    const seed = await prepareSyntheticLawyers(cipher, new Date().toISOString());
-    await mkdir(directory, { recursive: true });
-    const config = `${directory}/config-${environment}.json`;
-    await Bun.write(
-      config,
-      JSON.stringify({
-        name: `baro-fresh-${environment}`,
-        account_id: account,
-        d1_databases: [
-          {
-            binding: "DB",
-            database_name: target.name,
-            database_id: target.id,
-            migrations_dir: "../../drizzle",
-          },
-        ],
-      }),
-    );
-    phase = "migrations";
-    await wrangler(config, ["migrations", "apply", target.name, "--remote"]);
-    phase = "synthetic_seed";
-    const file = `${directory}/seed-${environment}.sql`;
-    await Bun.write(
-      file,
-      `${seed.sql}\nINSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES('${environment}',0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0;\nINSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('${environment}',${capacity}) ON CONFLICT(environment) DO UPDATE SET capacity_bytes=excluded.capacity_bytes;\nUPDATE v2_directory_epoch SET revision=${Date.now()} WHERE id=1;`,
-    );
-    await wrangler(config, ["execute", target.name, "--remote", "--file", file, "--yes"]);
+    const cipher = await createCaseDataCipher({ CASE_DATA_KEY_V1: process.env.CASE_DATA_KEY_V1 });
+    let seed = await existingSyntheticSeed(db);
+    if (!seed) {
+      await assertEmpty(db);
+      // Read only the original technical capacity, never original customer rows or payloads.
+      const original = remoteBudgetD1(process.env.CLOUDFLARE_API_TOKEN, account, target.original);
+      const capacity = await original
+        .prepare("SELECT capacity_bytes FROM v2_physical_storage_capacity WHERE environment=?")
+        .bind(environment)
+        .first<number>("capacity_bytes");
+      if (!Number.isSafeInteger(capacity) || !capacity || capacity < 1)
+        throw new Error("FRESH_CAPACITY_INVALID");
+      seed = await prepareSyntheticLawyers(cipher, new Date().toISOString());
+      await mkdir(directory, { recursive: true });
+      const config = `${directory}/config-${environment}.json`;
+      await Bun.write(
+        config,
+        JSON.stringify({
+          name: `baro-fresh-${environment}`,
+          account_id: account,
+          d1_databases: [
+            {
+              binding: "DB",
+              database_name: target.name,
+              database_id: target.id,
+              migrations_dir: "../../drizzle",
+            },
+          ],
+        }),
+      );
+      phase = "migrations";
+      await wrangler(config, ["migrations", "apply", target.name, "--remote"]);
+      phase = "synthetic_seed";
+      const file = `${directory}/seed-${environment}.sql`;
+      await Bun.write(
+        file,
+        `${seed.sql}\nINSERT INTO v2_cost_execution_policy(environment,limits_enabled) VALUES('${environment}',0) ON CONFLICT(environment) DO UPDATE SET limits_enabled=0;\nINSERT INTO v2_physical_storage_capacity(environment,capacity_bytes) VALUES('${environment}',${capacity}) ON CONFLICT(environment) DO UPDATE SET capacity_bytes=excluded.capacity_bytes;\nUPDATE v2_directory_epoch SET revision=${Date.now()} WHERE id=1;`,
+      );
+      await wrangler(config, ["execute", target.name, "--remote", "--file", file, "--yes"]);
+    }
     phase = "verification";
     const state = await verifyFreshState(db);
     const profiles = createSelfProfileService(createV2Core(db, cipher));
@@ -160,7 +183,7 @@ if (import.meta.main) {
             : "original_restored"
           : "unchanged",
       error:
-        error instanceof Error && /^FRESH_[A-Z_]+$/.test(error.message)
+        error instanceof Error && /^FRESH_[A-Z_0-9]+$/.test(error.message)
           ? error.message
           : "FRESH_FAILED",
     };
