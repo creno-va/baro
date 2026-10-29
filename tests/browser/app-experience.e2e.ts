@@ -45,6 +45,94 @@ async function fits(page: Page) {
   ).toBe(true);
 }
 
+test("sidebar delete overlays a full-width title and stays centered on hover and focus", async ({
+  page,
+}) => {
+  await session(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/app");
+  await settled(page);
+  const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
+  const link = row.locator(".sidebar-story");
+  const copy = row.locator("strong");
+  const remove = row.getByRole("button");
+  for (const product of [false, true]) {
+    await page
+      .locator(".app-frame")
+      .evaluate((node, product) => node.classList.toggle("app-frame--product", product), product);
+    await page.locator("main").focus();
+    await page.mouse.move(800, 400);
+    await expect(remove).toHaveCSS("opacity", "0");
+    await expect(remove).toHaveCSS("pointer-events", "none");
+    const rowBounds = await row.boundingBox();
+    const copyBounds = await copy.boundingBox();
+    if (!rowBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
+    expect(copyBounds.width).toBeGreaterThanOrEqual(rowBounds.width - 22);
+    if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-rest.png" });
+    await row.hover();
+    await expect(remove).toHaveCSS("opacity", "1");
+    const button = await remove.boundingBox();
+    const icon = await remove.locator("svg").boundingBox();
+    if (!button || !icon) throw new Error("Synthetic sidebar icon missing");
+    expect(
+      Math.abs(button.y + button.height / 2 - rowBounds.y - rowBounds.height / 2),
+    ).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2)).toBeLessThanOrEqual(
+      0.5,
+    );
+    expect(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2)).toBeLessThanOrEqual(
+      0.5,
+    );
+    expect((await copy.boundingBox())?.width).toBeCloseTo(copyBounds.width, 1);
+    if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-hover.png" });
+    await page.mouse.move(800, 400);
+    await link.focus();
+    await expect(remove).toHaveCSS("opacity", "1");
+    await page.keyboard.press("Tab");
+    await expect(remove).toBeFocused();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeDisabled();
+    await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  }
+});
+
+test("touch sidebar retains a visible centered overlay delete control", async ({
+  browser,
+  baseURL,
+}) => {
+  if (!baseURL) throw new Error("Synthetic sidebar base URL missing");
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  try {
+    const page = await context.newPage();
+    await session(page);
+    await page.goto("/app");
+    await settled(page);
+    const row = page.locator(".ui-sheet .sidebar-story-row").first();
+    const remove = row.getByRole("button");
+    await expect(remove).toHaveCSS("opacity", "1");
+    await expect(remove).toHaveCSS("pointer-events", "auto");
+    const bounds = await row.boundingBox();
+    const button = await remove.boundingBox();
+    if (!bounds || !button) throw new Error("Synthetic touch sidebar missing");
+    expect(
+      Math.abs(button.y + button.height / 2 - bounds.y - bounds.height / 2),
+    ).toBeLessThanOrEqual(0.5);
+    await remove.tap();
+    await expect(
+      page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test("press feedback keeps the pointer target fixed with motion enabled", async ({ page }) => {
   await session(page);
   await page.emulateMedia({ reducedMotion: "no-preference" });
