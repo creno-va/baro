@@ -222,7 +222,7 @@
   padding: 40px 20px;
 }
 .app-frame.app-frame--product .workspace-context-content {
-  gap: 24px;
+  gap: 40px 48px;
 }
 
 /* Compact search leaves the results in view, including at tablet sidebar boundaries. */
@@ -748,6 +748,9 @@
   }
   .app-frame.app-frame--product .intake-summary-scene {
     padding-top: 16px;
+  }
+  .app-frame.app-frame--product .workspace-context-content {
+    gap: 28px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

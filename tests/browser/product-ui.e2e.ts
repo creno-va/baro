@@ -230,6 +230,36 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(remove).toBeFocused();
 });
 
+test("chat height stays fixed when preparation expands and the page scrolls", async ({ page }) => {
+  await seed(page, true);
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(base);
+    await hydrated(page);
+    const panel = page.locator(".workspace-main");
+    const send = page.getByRole("button", { name: "보내기", exact: true });
+    await expect(panel).toHaveAttribute("style", /--chat-panel-height/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(send).toBeInViewport({ ratio: 1 });
+    const initialHeight = await panel.evaluate((element) => element.clientHeight);
+    const context = page.locator(".workspace-context");
+    await context.locator("summary").click();
+    await expect(context).toHaveAttribute("open", "");
+    await context.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(send).toBeInViewport({ ratio: 1 });
+    await context.locator("summary").evaluate((element) => element.click());
+    await expect(context).not.toHaveAttribute("open");
+    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await expect(send).toBeInViewport({ ratio: 1 });
+  }
+});
+
 test("mobile workspace dialogs return focus to their own opener", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });

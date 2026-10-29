@@ -176,8 +176,8 @@
 .workspace-context-content {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-  padding: 4px 0 22px;
+  gap: 40px 48px;
+  padding: 12px 0 32px;
 }
 .workspace-context-content > section {
   min-width: 0;
@@ -226,6 +226,29 @@
 }
 .workspace-sidebar :where(a) span {
   color: #526176;
+}
+.workspace-preparation-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+.workspace-sidebar .workspace-preparation-badges a {
+  display: inline-flex;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.workspace-preparation-badges strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 .workspace-summary {
   white-space: pre-wrap;
@@ -1079,7 +1102,7 @@
   }
   .workspace-context-content {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: 28px;
     padding: 0 0 18px;
   }
   .workspace-context-footer {
@@ -1211,6 +1234,14 @@
   padding: 0;
   margin: 12px 0;
   overflow-wrap: anywhere;
+}
+.workspace-facts.workspace-unknowns {
+  list-style: disc;
+  padding-inline-start: 20px;
+  gap: 10px;
+}
+.workspace-unknowns > li::marker {
+  color: var(--muted-foreground);
 }
 .workspace-facts small,
 .workspace-fact-source {

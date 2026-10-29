@@ -361,15 +361,24 @@ export function Workspace({
     const panel = chatPanel.current;
     if (!panel) return;
     let animation = 0;
+    let fittedHeight = -1;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
       const viewport = window.visualViewport;
       const viewportHeight = viewport?.height ?? window.innerHeight;
-      const panelTop = Math.max(0, panel.getBoundingClientRect().top - (viewport?.offsetTop ?? 0));
+      // Page scrolling (including native details scroll anchoring) must not
+      // change the chat's height. Anchor to its document position instead.
+      const panelTop = Math.max(
+        0,
+        panel.getBoundingClientRect().top + window.scrollY - (viewport?.offsetTop ?? 0),
+      );
       // The entire chat, including its composer, uses the space BELOW the
       // header/tabs in both empty and existing conversations.
       const height = viewportHeight - panelTop - 16;
-      panel.style.setProperty("--chat-panel-height", `${Math.max(96, height / zoom)}px`);
+      const nextHeight = Math.max(96, height / zoom);
+      if (nextHeight === fittedHeight) return;
+      fittedHeight = nextHeight;
+      panel.style.setProperty("--chat-panel-height", `${nextHeight}px`);
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(() => {
         if (view.messages.length) followReply();
@@ -377,21 +386,23 @@ export function Workspace({
       });
     };
     fit();
-    const navigation = panel.closest(".workspace")?.querySelector(".case-navigation");
     const observer = new ResizeObserver(fit);
-    if (navigation) observer.observe(navigation);
     const workspace = panel.closest(".workspace");
-    if (workspace) observer.observe(workspace);
+    // Only content above the chat affects its available viewport space.
+    // The preparation accordion below it must not trigger another fit.
+    if (workspace)
+      for (const element of workspace.children) {
+        if (element.contains(panel)) break;
+        observer.observe(element);
+      }
     window.addEventListener("resize", fit);
     window.visualViewport?.addEventListener("resize", fit);
-    window.visualViewport?.addEventListener("scroll", fit);
     return () => {
       cancelAnimationFrame(animation);
       observer.disconnect();
       panel.style.removeProperty("--chat-panel-height");
       window.removeEventListener("resize", fit);
       window.visualViewport?.removeEventListener("resize", fit);
-      window.visualViewport?.removeEventListener("scroll", fit);
     };
   }, [tab, view, followReply]);
   useEffect(() => {
@@ -1867,7 +1878,7 @@ export function Workspace({
                       <section>
                         <h2>아직 확인할 내용</h2>
                         {view.unknowns?.length ? (
-                          <ul className="workspace-facts">
+                          <ul className="workspace-facts workspace-unknowns">
                             {view.unknowns.map((unknown) => (
                               <li key={unknown}>{unknown}</li>
                             ))}
@@ -1898,16 +1909,29 @@ export function Workspace({
                             ? "회사와 상대방의 계약 관계, 담당자의 역할, 업무 지시·승인 기록과 정산 자료를 확인해 보세요. 회사 내부 자료는 전달 범위를 먼저 확인해 주세요."
                             : "상대방과 주고받은 약속, 날짜별 대화와 입금·피해 자료를 확인해 보세요. 개인 식별정보는 필요한 범위만 남겨 주세요."}
                         </p>
-                        <a href={`${base}/files`}>
-                          자료 <span>{view.files.length}개</span>
-                        </a>
-                        <a href={`${base}/timeline`}>
-                          타임라인 <span>{view.timeline.length}개</span>
-                        </a>
-                        <a href={`${base}/actions`}>
-                          다음 행동{" "}
-                          <span>{view.actions.filter((action) => !action.done).length}개 남음</span>
-                        </a>
+                        <ul
+                          className="workspace-preparation-badges"
+                          aria-label="준비 현황 바로가기"
+                        >
+                          <li>
+                            <a href={`${base}/files`}>
+                              자료 <strong>{view.files.length}</strong>
+                            </a>
+                          </li>
+                          <li>
+                            <a href={`${base}/timeline`}>
+                              타임라인 <strong>{view.timeline.length}</strong>
+                            </a>
+                          </li>
+                          <li>
+                            <a href={`${base}/actions`}>
+                              남은 다음 행동{" "}
+                              <strong>
+                                {view.actions.filter((action) => !action.done).length}
+                              </strong>
+                            </a>
+                          </li>
+                        </ul>
                         <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
                       </section>
                       {!!view.notices?.length && (

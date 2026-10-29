@@ -161,7 +161,10 @@
 .app-frame .workspace-composer-surface {
   background: var(--card);
   border-color: #c5d1e2;
-  box-shadow: 0 6px 24px rgb(32 56 90 / 6%);
+  box-shadow: none;
+}
+.app-frame .workspace-composer-surface:focus-within {
+  box-shadow: none;
 }
 .app-frame .workspace-suggestions .ui-button {
   background: var(--card);
