@@ -1120,9 +1120,9 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await expect(page.getByRole("status").filter({ hasText: /저장됐어요/ })).toBeVisible();
   await holdGeneration(page, "summary", true);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
   await answer.fill("확인해 보니 200만 원이에요.");
-  await page.getByRole("button", { name: "답변 저장하고 다시 준비하기", exact: true }).click();
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
   await expect(
     page.getByRole("status").filter({ hasText: "사건 요약을 정리하고 있어요" }),
   ).toBeVisible();
@@ -1382,24 +1382,24 @@ for (const recovery of [
     );
     await expect(page.getByRole("alert")).toContainText("저장한 답변은 그대로 남아 있어요");
     await expect(page.getByRole("alert")).not.toContainText("POLICY_REJECTED");
-    await expect(page.getByRole("link", { name: "나중에 이어하기" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveClass(
+      /ui-button--outline/,
+    );
     await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
       "보존할 합성 답변",
     );
     if (canPrepareSummary) {
-      await expect(page.getByRole("button", { name: "다시 준비하기", exact: true })).toHaveCount(0);
-      await page.getByRole("button", { name: "저장한 답변으로 요약 보기" }).click();
+      await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     } else if (retryable) {
-      await page.getByRole("button", { name: "다시 준비하기" }).click();
+      await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     } else {
-      await expect(page.getByRole("button", { name: "다시 준비하기" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: "저장하고 요약 보기" })).toBeDisabled();
-      await page.getByRole("button", { name: "저장한 답변 확인·수정" }).click();
       await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
         "보존할 합성 답변",
       );
       await page.getByRole("textbox", { name: "답변", exact: true }).fill("수정한 합성 답변");
-      await page.getByRole("button", { name: "답변 저장하고 다시 준비하기" }).click();
+      await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     }
     await expect(page).toHaveURL(/\/summary/);
     await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(

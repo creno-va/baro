@@ -162,37 +162,40 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   const failureDescription =
     "저장한 답변은 그대로 남아 있어요. " +
     (result?.canPrepareSummary
-      ? "추가 질문 없이 저장한 답변으로 요약을 준비할 수 있어요."
+      ? "다시 시도하면 추가 질문 없이 저장한 답변으로 요약을 준비해요."
       : result?.retryable
-        ? "다시 준비하거나 저장한 답변을 확인할 수 있어요."
-        : "지금은 같은 내용으로 다시 준비할 수 없어요. 답변을 확인·수정하거나 내 사건에서 나중에 이어갈 수 있어요.");
+        ? "다시 시도하거나 나중에 이어갈 수 있어요."
+        : "지금은 같은 내용으로 다시 시도할 수 없어요. 답변을 수정하거나 나중에 이어갈 수 있어요.");
   const recoveryActions = (
     <div className="intake-actions">
-      {result?.retryable || result?.canPrepareSummary || dirty ? (
-        <Button
-          onClick={() => (dirty ? void save(true) : void advance())}
-          disabled={
-            locked ||
-            (dirty &&
-              (!answerState || (answerState === "answered" && (!value.trim() || answerTooLong))))
-          }
-        >
-          {dirty
-            ? "답변 저장하고 다시 준비하기"
-            : result?.canPrepareSummary
-              ? "저장한 답변으로 요약 보기"
-              : "다시 준비하기"}
-        </Button>
-      ) : null}
-      {question ? (
-        <Button
-          variant="outline"
-          disabled={locked}
-          onClick={() => (document.getElementById("question-answer") ?? heading.current)?.focus()}
-        >
-          저장한 답변 확인·수정
-        </Button>
-      ) : null}
+      <Button
+        onClick={() => (dirty ? void save(true) : void advance())}
+        disabled={
+          locked ||
+          autoSaving ||
+          (!result?.retryable && !result?.canPrepareSummary && !dirty) ||
+          (dirty &&
+            (!answerState || (answerState === "answered" && (!value.trim() || answerTooLong))))
+        }
+      >
+        다시 시도
+      </Button>
+      <Button
+        variant="outline"
+        disabled={
+          busy ||
+          autoSaving ||
+          waiting ||
+          leaving ||
+          (dirty &&
+            (locked ||
+              !answerState ||
+              (answerState === "answered" && (!value.trim() || answerTooLong))))
+        }
+        onClick={() => void resumeLater()}
+      >
+        나중에 이어하기
+      </Button>
     </div>
   );
   const load = useCallback(
@@ -536,6 +539,16 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       () => accessCurrent(epoch),
     );
   }
+  async function resumeLater() {
+    if (!ready || pending.current || busy || waiting || leaving) return;
+    moveAfterSave.current = null;
+    if (dirty) {
+      if (!(await save(false)) || drafts.current.size > 0) return;
+      // Navigation can run before React commits the acknowledged answer.
+      if (draftSnapshot.current) draftSnapshot.current.dirty = false;
+    }
+    window.location.assign("/app");
+  }
   async function advance() {
     if (!canMutate || !result || pending.current || result.processing) return;
     moveAfterSave.current = null;
@@ -771,6 +784,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   <PreparationStatus title={statusTitle} />
                 ) : result.failed ? (
                   <StatePanel
+                    className="intake-recovery"
                     variant="error"
                     title={failureTitle}
                     description={failureDescription}
@@ -983,6 +997,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                   </div>
                   {result.failed && !waiting ? (
                     <StatePanel
+                      className="intake-recovery"
                       variant="error"
                       title={failureTitle}
                       description={failureDescription}

@@ -802,6 +802,9 @@
   margin-top: 20px;
   min-height: 56px;
 }
+.intake-scene .intake-recovery {
+  margin-top: 24px;
+}
 .intake-scene .intake-scene-primary,
 .conversation-home .conversation-primary-action .ui-button {
   width: 100%;
