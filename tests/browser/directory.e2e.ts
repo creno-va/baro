@@ -103,6 +103,13 @@ test("profile round trip retains applied search filters after reload and ignores
 test("directory filters, empty supply, approved detail and office-only contact work at 320px", async ({
   page,
 }) => {
+  const profileFixture = {
+    ...publicLawyer,
+    content: {
+      ...publicLawyer.content,
+      contact: { ...publicLawyer.content.contact, email: "synthetic-profile@example.test" },
+    },
+  };
   const seen: URL[] = [];
   await page.route("**/api/v2/lawyers**", (route) => {
     const url = new URL(route.request().url());
@@ -121,7 +128,7 @@ test("directory filters, empty supply, approved detail and office-only contact w
       return route.fulfill({
         json: directoryPage(url.searchParams.get("region") === "jeju" ? [] : [directoryLawyer]),
       });
-    return route.fulfill({ json: publicLawyer });
+    return route.fulfill({ json: profileFixture });
   });
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/lawyers");
@@ -141,6 +148,33 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await expect(
     page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
   ).toBeVisible();
+  await expect(page.getByText("공개 프로필", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "소개", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /소개와 분야|직접 연락/ })).toHaveCount(0);
+  const contact = page.getByRole("button", { name: "연락처 보기", exact: true });
+  await contact.click();
+  const dialog = page.getByRole("dialog", { name: "연락처", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: profileFixture.content.contact.phone ?? "", exact: true }),
+  ).toHaveAttribute("href", `tel:${profileFixture.content.contact.phone?.replace(/[^+0-9]/g, "")}`);
+  await expect(
+    dialog.getByRole("link", { name: "synthetic-profile@example.test", exact: true }),
+  ).toHaveAttribute("href", "mailto:synthetic-profile%40example.test");
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(contact).toBeFocused();
+  const cardStyles = await page
+    .locator(".lawyer-profile > .ui-card")
+    .first()
+    .evaluate((card) => ({
+      radius: Number.parseFloat(getComputedStyle(card).borderRadius),
+      padding: Number.parseFloat(
+        getComputedStyle(card.querySelector(".ui-card__content")!).paddingLeft,
+      ),
+    }));
+  expect(cardStyles.radius).toBeGreaterThanOrEqual(16);
+  expect(cardStyles.padding).toBeGreaterThanOrEqual(20);
   for (const name of ["네이버 지도", "카카오맵", "Google 길찾기"]) {
     const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
     expect(decodeURIComponent(href ?? "")).toContain(publicLawyer.content.office.address);

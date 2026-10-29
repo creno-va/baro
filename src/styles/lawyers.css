@@ -2,6 +2,57 @@
 .lawyer-profile {
   overflow-wrap: anywhere;
 }
+.lawyer-public-detail .lawyer-profile-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-decoration: none;
+}
+.lawyer-profile-back:hover {
+  color: var(--foreground);
+}
+.lawyer-profile-back:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.lawyer-profile > dialog.ui-dialog {
+  margin: auto;
+}
+.lawyer-contact-list {
+  display: grid;
+  gap: 20px;
+  margin: 0 0 24px;
+}
+.lawyer-contact-list dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.lawyer-contact-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.lawyer-contact-list dd a {
+  color: var(--primary);
+  text-underline-offset: 4px;
+}
+.lawyer-contact-list dd span,
+.lawyer-contact-note {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.lawyer-contact-note {
+  margin: 20px 0 0;
+}
 .lawyer-editor .page-header {
   padding-top: 0;
   align-items: center;

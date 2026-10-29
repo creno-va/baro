@@ -1,8 +1,10 @@
+import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, LawyerApiError, type LawyerView, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { V2Office } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Dialog } from "../ui/dialog";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
@@ -40,7 +42,8 @@ export function Profile({
   }, [id, reload]);
   return (
     <div className="lawyer-public-detail space-y-6">
-      <a className="ui-button ui-button--ghost" href={directoryHref}>
+      <a className="lawyer-profile-back" href={directoryHref}>
+        <ArrowLeft size={18} aria-hidden="true" />
         변호사 목록으로
       </a>
       {error ? (
@@ -72,6 +75,12 @@ export function ProfileContent({
   canDeliverDownload?: () => Promise<boolean>;
 }) {
   const [assetError, setAssetError] = useState("");
+  const [contactOpen, setContactOpen] = useState(false);
+  const contacts = contactLinks({
+    phone: lawyer.phone || null,
+    email: lawyer.email || null,
+    consultationUrl: lawyer.website || null,
+  });
   return (
     <div className="space-y-6 lawyer-profile">
       <header className="lawyer-profile-hero">
@@ -83,7 +92,6 @@ export function ProfileContent({
           privateRead={privateRead}
         />
         <div>
-          <p className="eyebrow">공개 프로필</p>
           <h1>{lawyer.name || "프로필 미리보기"}</h1>
           <p>{lawyer.officeName}</p>
           <p className="lawyer-profile-fields">
@@ -92,57 +100,82 @@ export function ProfileContent({
               .join(" · ")}
           </p>
         </div>
-        <a className="ui-button ui-button--primary" href="#lawyer-contact">
+        <Button onClick={() => setContactOpen(true)} aria-haspopup="dialog">
           연락처 보기
-        </a>
+        </Button>
       </header>
       <p className="text-sm text-muted-foreground">
         본인 작성 정보입니다. 역할 선택과 프로필 등록은 변호사 자격 확인을 의미하지 않습니다.
       </p>
       <Card>
         <CardHeader>
-          <CardTitle>소개와 분야</CardTitle>
+          <CardTitle>소개</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="whitespace-pre-wrap break-words">
             {lawyer.introduction || "소개를 작성해 주세요."}
           </p>
-          <p className="mt-4">
-            {lawyer.practiceAreas
-              .map((field) => FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field)
-              .join(" · ")}
-          </p>
         </CardContent>
       </Card>
-      <Card id="lawyer-contact">
-        <CardHeader>
-          <CardTitle>직접 연락</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>
-            상담 여부와 조건은 변호사에게 직접 확인해 주세요. BARO 이용과 별개로 상담·위임 비용이
-            발생할 수 있어요. 사건이나 자료는 자동으로 전송되지 않습니다.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {contactLinks({
-              phone: lawyer.phone || null,
-              email: lawyer.email || null,
-              consultationUrl: lawyer.website || null,
-            }).map((link) => (
-              <a
-                className="ui-button ui-button--outline"
-                key={link.label}
-                href={link.href}
-                target={link.href.startsWith("https:") ? "_blank" : undefined}
-                rel="noopener noreferrer"
-                referrerPolicy="no-referrer"
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <Dialog
+        open={contactOpen}
+        onOpenChange={setContactOpen}
+        title="연락처"
+        description={[lawyer.name, lawyer.officeName].filter(Boolean).join(" · ")}
+      >
+        <dl className="lawyer-contact-list">
+          {[
+            {
+              label: "전화번호",
+              value: lawyer.phone,
+              href: contacts.find((link) => link.label === "전화")?.href,
+              Icon: Phone,
+            },
+            {
+              label: "이메일",
+              value: lawyer.email,
+              href: contacts.find((link) => link.label === "이메일")?.href,
+              Icon: Mail,
+            },
+          ].map(({ label, value, href, Icon }) => (
+            <div key={label}>
+              <dt>
+                <Icon size={18} aria-hidden="true" />
+                {label}
+              </dt>
+              <dd>
+                {value && href ? (
+                  <a href={href} referrerPolicy="no-referrer">
+                    {value}
+                  </a>
+                ) : (
+                  <span>
+                    {label === "전화번호" ? "등록된 전화번호가 없어요." : "등록된 이메일이 없어요."}
+                  </span>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {contacts
+          .filter((link) => link.label === "외부 상담 페이지")
+          .map((link) => (
+            <a
+              className="ui-button ui-button--outline"
+              key={link.label}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              referrerPolicy="no-referrer"
+            >
+              {link.label}
+            </a>
+          ))}
+        <p className="lawyer-contact-note">
+          상담 여부와 조건은 직접 확인해 주세요. 상담·위임 비용은 별도이며, 사건이나 자료는 자동으로
+          전송되지 않아요.
+        </p>
+      </Dialog>
       <Card>
         <CardHeader>
           <CardTitle>사무실과 길찾기</CardTitle>

@@ -329,16 +329,15 @@
   font-size: 13px;
 }
 .app-frame.app-frame--product .lawyer-profile > .ui-card {
-  border: 0;
-  border-bottom: 1px solid var(--product-line);
-  border-radius: 0;
+  border: 1px solid var(--product-line);
+  border-radius: 20px;
   box-shadow: none;
 }
 .app-frame.app-frame--product
   .lawyer-profile
   > .ui-card
   > :where(.ui-card__header, .ui-card__content) {
-  padding-inline: 0;
+  padding-inline: clamp(20px, 3vw, 28px);
 }
 .app-frame.app-frame--product .lawyer-editor :where(.ui-card) {
   border-radius: var(--product-radius);
@@ -708,7 +707,7 @@
   .app-frame.app-frame--product .lawyer-profile-hero h1 {
     font-size: 27px;
   }
-  .app-frame.app-frame--product .lawyer-profile-hero > a {
+  .app-frame.app-frame--product .lawyer-profile-hero > .ui-button {
     grid-column: 1 / -1;
   }
   .app-frame.app-frame--product .settings-heading {
