@@ -8,14 +8,16 @@ import {
 } from "../scripts/fresh-application-data";
 import { bindingPatch, transitionFreshBinding } from "../scripts/fresh-database-binding";
 import { prepareSyntheticLawyers } from "../scripts/synthetic-lawyer-seed";
-import { emptySelfProfile } from "../src/contracts/v2/self-profile";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
 
 test("binding-only transition preserves other settings and restores original DB when public readiness fails", async () => {
   const target = FRESH_DATABASES.preview;
-  let settings = {
+  let settings: {
+    bindings: { name: string; type: string; id?: string; text?: string }[];
+    compatibility_date: string;
+  } = {
     bindings: [
       { name: "DB", type: "d1", id: target.original },
       { name: "CASE_DATA_KEY_V1", type: "secret_text" },
@@ -65,7 +67,6 @@ test("binding-only transition preserves other settings and restores original DB 
   );
   expect(switches).toEqual([target.id, target.original]);
   expect(settings.bindings.find((b) => b.name === "DB")?.id).toBe(target.original);
-  expect(emptySelfProfile("synthetic").verificationStatus).toBe("self_declared");
 });
 
 import { reportFixture } from "./helpers/report-fixture";

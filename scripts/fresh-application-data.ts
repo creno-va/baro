@@ -110,7 +110,7 @@ if (import.meta.main) {
       }),
     );
     phase = "migrations";
-    await wrangler(config, ["migrations", "apply", target.name, "--remote", "--yes"]);
+    await wrangler(config, ["migrations", "apply", target.name, "--remote"]);
     phase = "synthetic_seed";
     const file = `${directory}/seed-${environment}.sql`;
     await Bun.write(

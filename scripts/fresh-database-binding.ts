@@ -4,7 +4,7 @@ import { FRESH_DATABASES } from "./fresh-application-data";
 type Binding = { name: string; type: string; id?: string; text?: string; [key: string]: unknown };
 type Settings = { bindings: Binding[]; [key: string]: unknown };
 type Deployment = { versions: { version_id: string; percentage: number }[] };
-export function bindingPatch(settings: Settings, databaseId: string) {
+export function bindingPatch(settings: Settings, databaseId: string): Settings {
   if (
     !Object.values(FRESH_DATABASES).some((db) => db.id === databaseId || db.original === databaseId)
   )
