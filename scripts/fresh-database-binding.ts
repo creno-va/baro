@@ -116,7 +116,7 @@ export async function transitionFreshBinding(
       ready.schemaVersion !== "0018_external_lookup_admission"
     )
       throw new Error("FRESH_READINESS_FAILED");
-    const directory = await fetcher(`${origin}/api/v2/lawyers/directory`, {
+    const directory = await fetcher(`${origin}/api/v2/lawyers/self-service`, {
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
     });

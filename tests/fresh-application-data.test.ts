@@ -8,66 +8,88 @@ import {
 } from "../scripts/fresh-application-data";
 import { bindingPatch, transitionFreshBinding } from "../scripts/fresh-database-binding";
 import { prepareSyntheticLawyers } from "../scripts/synthetic-lawyer-seed";
+import { emptySelfProfile } from "../src/contracts/v2/self-profile";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
 
-test("binding-only transition preserves other settings and restores original DB when public readiness fails", async () => {
-  const target = FRESH_DATABASES.preview;
-  let settings: {
-    bindings: { name: string; type: string; id?: string; text?: string }[];
-    compatibility_date: string;
-  } = {
-    bindings: [
-      { name: "DB", type: "d1", id: target.original },
-      { name: "CASE_DATA_KEY_V1", type: "secret_text" },
-      { name: "RELEASE_SHA", type: "plain_text", text: "original-release" },
-    ],
-    compatibility_date: "2026-10-01",
-  };
-  const patch = bindingPatch(settings, target.id);
-  expect(patch.bindings.find((b) => b.name === "CASE_DATA_KEY_V1")).toEqual({
-    name: "CASE_DATA_KEY_V1",
-    type: "inherit",
+for (const fail of [false, true])
+  test(`binding transition preserves settings and ${fail ? "rolls back on failure" : "verifies all public profiles"}`, async () => {
+    const target = FRESH_DATABASES.preview;
+    let settings: {
+      bindings: { name: string; type: string; id?: string; text?: string }[];
+      compatibility_date: string;
+    } = {
+      bindings: [
+        { name: "DB", type: "d1", id: target.original },
+        { name: "CASE_DATA_KEY_V1", type: "secret_text" },
+        { name: "RELEASE_SHA", type: "plain_text", text: "original-release" },
+      ],
+      compatibility_date: "2026-10-01",
+    };
+    const patch = bindingPatch(settings, target.id);
+    expect(patch.bindings.find((b) => b.name === "CASE_DATA_KEY_V1")).toEqual({
+      name: "CASE_DATA_KEY_V1",
+      type: "inherit",
+    });
+    expect(patch.compatibility_date).toBe(settings.compatibility_date);
+    let version = "original",
+      deployed = "original";
+    const switches: string[] = [];
+    const mock = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      let result: unknown;
+      if (url.endsWith("/settings") && init?.method === "PATCH") {
+        const payload = JSON.parse(String((init.body as FormData).get("settings"))) as typeof patch;
+        const id = payload.bindings.find((b) => b.name === "DB")?.id;
+        expect(typeof id).toBe("string");
+        switches.push(String(id));
+        settings = {
+          ...settings,
+          bindings: settings.bindings.map((b) =>
+            b.name === "DB" ? { ...b, id: id as typeof target.original } : b,
+          ),
+        };
+        version = `version-${switches.length}`;
+        result = settings;
+      } else if (url.endsWith("/settings")) result = settings;
+      else if (url.endsWith("/versions")) result = { items: [{ id: version }] };
+      else if (url.endsWith("/deployments") && init?.method === "POST") {
+        deployed = version;
+        result = {};
+      } else if (url.endsWith("/deployments"))
+        result = { deployments: [{ versions: [{ version_id: deployed, percentage: 100 }] }] };
+      else if (url.endsWith("/api/health/ready"))
+        return fail
+          ? Response.json({ status: "not_ready" }, { status: 503 })
+          : Response.json({ status: "ready", schemaVersion: "0018_external_lookup_admission" });
+      else if (url.endsWith("/api/v2/lawyers/self-service"))
+        return Response.json({
+          items: Array.from({ length: 10 }, (_, i) => ({ id: `synthetic-lawyer-${i}` })),
+        });
+      else if (url.includes("/api/v2/lawyers/self-service/")) {
+        const id = url.split("/").at(-1) ?? "";
+        return Response.json({
+          ...emptySelfProfile(id),
+          published: true,
+          introduction: "합성 프로필",
+        });
+      } else throw new Error("unexpected request");
+      return Response.json({ success: true, result });
+    }) as typeof fetch;
+    if (fail) {
+      await expect(transitionFreshBinding("preview", "synthetic-token", mock)).rejects.toThrow(
+        "FRESH_READINESS_FAILED",
+      );
+      expect(switches).toEqual([target.id, target.original]);
+      expect(settings.bindings.find((b) => b.name === "DB")?.id).toBe(target.original);
+    } else {
+      expect(
+        (await transitionFreshBinding("preview", "synthetic-token", mock)).publicProfiles,
+      ).toBe(10);
+      expect(switches).toEqual([target.id]);
+    }
   });
-  expect(patch.compatibility_date).toBe(settings.compatibility_date);
-  let version = "original",
-    deployed = "original";
-  const switches: string[] = [];
-  const mock = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    let result: unknown;
-    if (url.endsWith("/settings") && init?.method === "PATCH") {
-      const payload = JSON.parse(String((init.body as FormData).get("settings"))) as typeof patch;
-      const id = payload.bindings.find((b) => b.name === "DB")?.id;
-      expect(typeof id).toBe("string");
-      switches.push(String(id));
-      settings = {
-        ...settings,
-        bindings: settings.bindings.map((b) =>
-          b.name === "DB" ? { ...b, id: id as typeof target.original } : b,
-        ),
-      };
-      version = `version-${switches.length}`;
-      result = settings;
-    } else if (url.endsWith("/settings")) result = settings;
-    else if (url.endsWith("/versions")) result = { items: [{ id: version }] };
-    else if (url.endsWith("/deployments") && init?.method === "POST") {
-      deployed = version;
-      result = {};
-    } else if (url.endsWith("/deployments"))
-      result = { deployments: [{ versions: [{ version_id: deployed, percentage: 100 }] }] };
-    else if (url.endsWith("/api/health/ready"))
-      return Response.json({ status: "not_ready" }, { status: 503 });
-    else throw new Error("unexpected request");
-    return Response.json({ success: true, result });
-  }) as typeof fetch;
-  await expect(transitionFreshBinding("preview", "synthetic-token", mock)).rejects.toThrow(
-    "FRESH_READINESS_FAILED",
-  );
-  expect(switches).toEqual([target.id, target.original]);
-  expect(settings.bindings.find((b) => b.name === "DB")?.id).toBe(target.original);
-});
 
 import { reportFixture } from "./helpers/report-fixture";
 
