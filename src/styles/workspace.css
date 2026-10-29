@@ -497,7 +497,7 @@
   font-size: 0.8rem;
   gap: 7px;
 }
-.workspace-send.ui-button:disabled {
+.app-frame .workspace-send.ui-button:disabled {
   background: #eef2f7;
   color: #5c6b80;
   border-color: transparent;
@@ -1482,8 +1482,8 @@
   margin: 6px 0;
 }
 
-/* Give the conversation and composer a full viewport of their own.
-   The document can scroll past the header; messages keep their internal scroll. */
+/* Empty chat fits below the header; existing conversations keep a full viewport.
+   Messages retain their internal scroll in either state. */
 .app-frame.app-frame--product .workspace--chat .case-navigation {
   margin-bottom: 8px;
 }
@@ -1514,6 +1514,10 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   margin-inline: auto;
+}
+.app-frame.app-frame--product .workspace--chat.workspace--empty .workspace-composer {
+  flex: none;
+  max-height: none;
 }
 .app-frame.app-frame--product .workspace--chat .workspace-composer textarea {
   min-height: 3rem;

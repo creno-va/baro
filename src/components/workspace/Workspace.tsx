@@ -347,10 +347,10 @@ export function Workspace({
     let animation = 0;
     const fit = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      panel.style.setProperty(
-        "--chat-panel-height",
-        `${Math.max(160, (window.visualViewport?.height ?? window.innerHeight) / zoom)}px`,
-      );
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const panelTop = panel.getBoundingClientRect().top + window.scrollY;
+      const height = view.messages.length ? viewportHeight : viewportHeight - panelTop - 16;
+      panel.style.setProperty("--chat-panel-height", `${Math.max(160, height / zoom)}px`);
       cancelAnimationFrame(animation);
       animation = requestAnimationFrame(followReply);
     };
