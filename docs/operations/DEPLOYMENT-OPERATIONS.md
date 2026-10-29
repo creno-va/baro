@@ -26,6 +26,34 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
+### 승인된 계정·사건 초기화와 합성 변호사 시딩
+
+`reset-application-data.yml`은 사용자에게 양쪽 환경 초기화와 운영 환경 합성 시딩까지
+명시적으로 승인받은 경우에만 수동 실행한다. 현재 main의 정확한 SHA와 성공한 main CI,
+지정 운영자 및 각 GitHub Environment 보호를 검사한다. 앱을 배포하거나 키를 변경하지 않는다.
+
+각 환경의 기존 암호화 키는 해당 Environment 안에서만 사용한다. 신규 합성 프로필의
+실제 공개 조회를 먼저 확인한 뒤, 모든 계정·세션·OAuth 연결·사건·자료/리포트·프로필
+데이터를 원자적으로 초기화하고 김예시·박합성2개만 시딩한다. 합성 계정은 SSO 연결이나
+로그인 세션·자격 검증을 갖지 않으며 프로필은 합성 소개와 `self_declared`를 사용한다.
+기존 고객 payload는 읽거나 복호화하지 않는다. 실행 중 작업은 초기화를 중단하며,
+대기 작업을 포함한 앱 데이터와 기존 폴더/검색 캐시는 초기화한다.
+
+스키마/migration·기술용량 설정·비용/실행 원장·물리 저장 및 삭제 처리 기록은 보존한다.
+비용의 unknown/stale·미정산 상태를 성공/정산으로 바꾸지 않는다. R2 물리 삭제는 이 DB
+작업에 포함하지 않으며 기존 정리 기록을 보존한다. 성공 receipt에는 합계와 새 합성 ID만
+저장하며 원문·암호문·키·토큰·원래 사용자 ID를 artifact에 업로드하지 않는다.
+
+```bash
+gh workflow run reset-application-data.yml --ref main \
+  -f target_sha=<현재_main_40자_SHA> \
+  -f confirmation=reset-both-databases-and-seed-two-synthetic-lawyers
+```
+
+preview를 먼저 검증하고 production을 수행한다. 암호화 probe가 실패하면 신규 합성 행만
+정리하며 기존 데이터는 초기화하지 않는다. 원자적 초기화 응답이 불명확하면 추가 삭제나
+자동 재실행을 하지 않고 receipt 단계와 실제 합계부터 확인한다.
+
 - pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행
 - preview: 명령으로 선택한 현재 main SHA를 수동 배포; CI 성공이나 merge가 배포를 시작하지 않음
 - production: 명령으로 같은 SHA를 요청하고 preview smoke·출시 체크·SHA별 운영자 승인 후 배포
