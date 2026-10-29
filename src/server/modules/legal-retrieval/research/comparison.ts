@@ -3,8 +3,19 @@ import type { V2Fact } from "../../../../contracts/v2";
 import {
   type PrecedentComparisonDraft,
   precedentComparisonDraftSchema,
+  precedentComparisonMetricSchema,
   type precedentComparisonSourceSchema,
+  type precedentCriterionSchema,
 } from "../../../../contracts/v2/precedent-comparison";
+
+/** Private model candidate. Cross-field evidence requirements are checked per
+ * indicator below; empty evidence must not invalidate unrelated indicators. */
+export const comparisonCandidateSchema = z.strictObject({
+  metrics: z
+    .array(z.strictObject(precedentComparisonMetricSchema.shape))
+    .length(8)
+    .refine((metrics) => new Set(metrics.map((metric) => metric.criterion)).size === 8),
+});
 
 export const comparisonEvidenceObservationSchema = z
   .strictObject({
@@ -18,6 +29,7 @@ export const comparisonEvidenceObservationSchema = z
       "source_quote_missing",
       "source_quote_ambiguous",
       "source_quote_invalid",
+      "audit_metric_rejected",
     ]),
     validSpans: z.number().int().min(0).max(24),
     uniqueExactSpans: z.number().int().min(0).max(24),
@@ -107,6 +119,52 @@ export function checkPrecedentComparison(
   source: z.infer<typeof precedentComparisonSourceSchema>,
 ) {
   return inspectPrecedentComparison(raw, facts, source).draft;
+}
+
+export function unverifiedComparisonMetric(criterion: z.infer<typeof precedentCriterionSchema>) {
+  return {
+    criterion,
+    verdict: "unknown" as const,
+    explanation: "제공된 사건 사실과 판례에서 이 항목을 비교할 근거를 확인하지 못했어요.",
+    caseEvidence: [],
+    precedentEvidence: [],
+  };
+}
+
+/** Reuse the exact strict evidence check independently for each bounded
+ * indicator. Unverifiable content is discarded in full, not rewritten into a
+ * match/difference; the resulting complete draft still needs semantic audit. */
+export function groundPrecedentComparison(
+  raw: unknown,
+  facts: readonly V2Fact[],
+  source: z.infer<typeof precedentComparisonSourceSchema>,
+) {
+  const parsed = comparisonCandidateSchema.safeParse(raw);
+  if (!parsed.success)
+    return {
+      draft: null,
+      observations: [inspectPrecedentComparison(raw, facts, source).observation],
+    };
+  const observations: ComparisonEvidenceObservation[] = [];
+  const metrics = parsed.data.metrics.map((metric) => {
+    const checked = inspectPrecedentComparison(
+      {
+        metrics: parsed.data.metrics.map((other) =>
+          other.criterion === metric.criterion
+            ? metric
+            : unverifiedComparisonMetric(other.criterion),
+        ),
+      },
+      facts,
+      source,
+    );
+    observations.push(checked.observation);
+    return (
+      checked.draft?.metrics.find((other) => other.criterion === metric.criterion) ??
+      unverifiedComparisonMetric(metric.criterion)
+    );
+  });
+  return { draft: { metrics }, observations };
 }
 
 export function precedentComparisonScore(draft: PrecedentComparisonDraft) {

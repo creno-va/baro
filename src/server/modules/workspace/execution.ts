@@ -151,6 +151,7 @@ export async function executeWorkspace(
       params.workspaceId,
       latest?.role === "user" ? latest : undefined,
       options.guideHosts,
+      comparisonJob ? "precedent_comparison" : "full",
     );
     const pipeline = await options.pipeline(
       acquired.job,

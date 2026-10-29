@@ -30,6 +30,7 @@ export async function readWorkspaceContext(
   id: string,
   latest?: V2UserMessage,
   guideHosts: readonly string[] = [],
+  profile: "full" | "precedent_comparison" = "full",
 ): Promise<WorkspaceContext> {
   const repo = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
   const metadata = await repo.metadata(actor, id);
@@ -72,6 +73,52 @@ export async function readWorkspaceContext(
         "대화 맥락은 저장된 자료의 일부입니다. 포함되지 않은 사실은 없다고 단정하지 않습니다.",
       ],
       notices: ["확인된 사건 사실을 준비하는 대화이며 법률 판단이 아닙니다."],
+    };
+  }
+  if (profile === "precedent_comparison") {
+    // Comparison's model projection uses only saved facts, confirmed summary
+    // and the separately verified selected judgment. Do not decrypt chat history,
+    // inspect prior uploads or re-read unrelated legal sources for this task.
+    const status = z
+      .enum(["collecting", "generating_questions", "reviewing_summary", "confirmed"])
+      .parse(metadata.status);
+    const intake: V2Intake = {
+      ...metadata,
+      status: status === "generating_questions" ? "collecting" : status,
+      summary,
+      currentJobId: null,
+    };
+    const workspace = await repo.findWorkspace(actor, id);
+    if (!workspace) throw new Error("Workspace unavailable");
+    return {
+      subjectContext: workspace.subjectContext,
+      calendar: workspaceCalendar(actor.now),
+      intake,
+      confirmedSummary: status === "confirmed" ? summary : null,
+      facts: factPage.facts,
+      latestMessage: latest
+        ? { ...publicStoredUserMessageSchema.parse(latest), createdAt: "1970-01-01T00:00:00.000Z" }
+        : null,
+      messages: [],
+      history: [],
+      citations: [],
+      materials: [],
+      references: {
+        intakeRevision: metadata.revision,
+        answeredQuestionIds: [],
+        messages: [],
+        files: [],
+        verifiedCitationIds: [],
+      },
+      contextCoverage: {
+        factsPartial: factPage.nextId !== null,
+        partiesPartial: partyPage.nextId !== null,
+        summaryPartial: (metadata.summary?.byteLength ?? 0) > 1048576,
+        messagesPartial: true,
+        materialsPartial: true,
+        sourcesPartial: true,
+        preparationPartial: true,
+      },
     };
   }
   const messageRows = (

@@ -5,6 +5,45 @@ import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
 import { readWorkspaceContext } from "../src/server/modules/workspace/context";
 import { reportFixture } from "./helpers/report-fixture";
 
+test("comparison context reads current facts and summary without unrelated chat, files or sources", async () => {
+  const f = await reportFixture();
+  const original = await readWorkspaceContext(f.core, f.actor, f.workspaceId);
+  const reads: string[] = [];
+  const prepare = f.db.binding.prepare.bind(f.db.binding);
+  f.db.binding.prepare = (sql) => {
+    reads.push(sql);
+    return prepare(sql);
+  };
+  const comparison = await readWorkspaceContext(
+    f.core,
+    f.actor,
+    f.workspaceId,
+    undefined,
+    [],
+    "precedent_comparison",
+  );
+  expect(comparison.facts).toEqual(original.facts);
+  expect(comparison.confirmedSummary).toEqual(original.confirmedSummary);
+  expect(comparison.calendar).toEqual(original.calendar);
+  expect(comparison.contextCoverage?.factsPartial).toBe(original.contextCoverage?.factsPartial);
+  expect(comparison.contextCoverage?.summaryPartial).toBe(original.contextCoverage?.summaryPartial);
+  expect(comparison.contextCoverage).toMatchObject({
+    messagesPartial: true,
+    materialsPartial: true,
+    sourcesPartial: true,
+  });
+  expect(
+    reads.some((sql) =>
+      /FROM v2_(messages|files|material_observations|citation_bindings|actions|timeline_entries)\b/.test(
+        sql,
+      ),
+    ),
+  ).toBe(false);
+  expect(comparison.messages).toEqual([]);
+  expect(comparison.materials).toEqual([]);
+  expect(comparison.citations).toEqual([]);
+});
+
 for (const bytes of [null, 1048576, 1048577]) {
   test(`context reads a summary once using the correct byte boundary (${bytes ?? "small"})`, async () => {
     const f = await reportFixture();

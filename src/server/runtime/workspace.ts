@@ -183,6 +183,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         input.caseId,
         latest,
         GUIDE_HOSTS,
+        input.chat?.precedentComparisonRequest ? "precedent_comparison" : "full",
       );
       const comparison = input.chat?.precedentComparisonRequest;
       if (comparison) {

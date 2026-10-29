@@ -7,8 +7,8 @@ import {
   structuredCaseSchema,
   validationOutputSchema,
 } from "../../../contracts";
-import { precedentComparisonDraftSchema } from "../../../contracts/v2/precedent-comparison";
 import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
+import { comparisonCandidateSchema } from "../legal-retrieval/research/comparison";
 import {
   type GatewayAttemptHandle,
   type GatewayAttemptLedger,
@@ -18,6 +18,7 @@ import {
   responseReceipt,
   unavailableReceipt,
 } from "./attempts";
+import { comparisonAuditOutputSchema, isComparisonAudit } from "./comparison-audit";
 import { COMPARISON_PROMPT_VERSION } from "./comparison-prompts";
 import { readModelCompletion } from "./completion";
 import {
@@ -50,7 +51,7 @@ const schemas = {
   validation: validationOutputSchema,
   workspace_questions: workspaceQuestionsOutputSchema,
   workspace_summary: workspaceSummaryOutputSchema,
-  workspace_precedent_compare: precedentComparisonDraftSchema,
+  workspace_precedent_compare: comparisonCandidateSchema,
   workspace_chat: workspaceChatOutputSchema,
   workspace_audit: workspaceAuditOutputSchema,
 };
@@ -148,7 +149,9 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
       input !== null &&
       typeof input === "object" &&
       (input as { phase?: unknown }).phase === "workspace_precedent_compare");
-  const envelope = z.strictObject({ output: schemas[phase] });
+  const envelope = z.strictObject({
+    output: isComparisonAudit(phase, input) ? comparisonAuditOutputSchema : schemas[phase],
+  });
   // Strict provider output must include defaulted fields too; input schemas mark
   // them optional, which the provider rejects before generating a response.
   const jsonSchema = wireSchema(
@@ -250,7 +253,7 @@ export function createLlmGateway(
         throw new ModelError("MODEL_UNAVAILABLE");
       if (ledger && (!invocationId || !invocationIdSchema.test(invocationId)))
         throw new ModelError("MODEL_UNAVAILABLE");
-      const schema = schemas[phase];
+      const schema = isComparisonAudit(phase, input) ? comparisonAuditOutputSchema : schemas[phase];
       const envelope = z.strictObject({ output: schema });
       let correction = false;
       for (let call = 0; call < 3; call++) {
