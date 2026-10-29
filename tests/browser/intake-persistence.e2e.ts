@@ -143,14 +143,21 @@ test("answers autosave without advancing, survive reload and keep only an inline
   await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveCount(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const back = await page.getByRole("button", { name: "이전으로", exact: true }).boundingBox();
-    const next = await page.locator(".intake-scene-action .intake-scene-primary").boundingBox();
-    if (!back || !next) throw new Error("Intake navigation missing");
-    expect(back.x + back.width).toBeLessThanOrEqual(next.x);
-    expect(Math.abs(back.y + back.height / 2 - next.y - next.height / 2)).toBeLessThanOrEqual(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true,
-    );
+    const geometry = await page.locator(".intake-scene-action").evaluate((node) => {
+      const back = node.querySelector(".intake-scene-back")?.getBoundingClientRect();
+      const next = node.querySelector(".intake-scene-primary")?.getBoundingClientRect();
+      if (!back || !next) throw new Error("Intake navigation missing");
+      return {
+        backRight: back.right,
+        nextLeft: next.left,
+        centerDifference: Math.abs(back.y + back.height / 2 - next.y - next.height / 2),
+      };
+    });
+    expect(geometry.backRight).toBeLessThanOrEqual(geometry.nextLeft);
+    expect(geometry.centerDifference).toBeLessThanOrEqual(1);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+      .toBe(true);
     if (width !== 320)
       await page.screenshot({ path: `.wrangler/intake-autosave-${width}.png`, fullPage: true });
   }
