@@ -93,7 +93,9 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(page).toHaveURL(`${base}/reports`);
   await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toBeVisible();
   await openReportOptions(page);
-  await expect(page.getByText("shared-synthetic.txt", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
+    "shared-synthetic.txt",
+  );
   await page
     .getByRole("navigation", { name: "사건 메뉴" })
     .getByRole("link", { name: "대화", exact: true })
@@ -133,6 +135,8 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
     put("files", {});
   });
   await page.goto("/cases/synthetic-material-case/files");
+  await page.locator('astro-island[component-export="Workspace"]:not([ssr])').waitFor();
+  await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   const text = `${"a".repeat(5000)}Synthetic second chunk`;
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
