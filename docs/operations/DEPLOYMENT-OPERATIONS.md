@@ -26,6 +26,32 @@ D1, Workflow, SESSION KV는 `preview`와 `production` 이름으로 각각 분리
 
 ## 브랜치와 배포
 
+### 승인된 실제 D1 전체 데이터 초기화와 합성 변호사 시딩
+
+`reset-application-data.yml`은 사용자가 preview·production 실제 D1의 기존 데이터 전부
+삭제와 합성 변호사10개씩 시딩을 명시적으로 승인한 경우에만 수동 실행한다. 현재 main의
+정확한 SHA·성공한 main CI·지정 운영자·명시적 확인문·각 Environment 보호를 검사한다.
+preview 성공 후 production을 수행하며 앱을 배포하거나 암호화 키를 교체하지 않는다.
+
+D1 복구 bookmark를 기록하고 신규 합성 프로필만 실제 공개 조회로 먼저 검증한다.
+이후 원자적 SQL import에서 기존 업무/원장 테이블을 재구성하고 승인된 migration을
+다시 적용한다. 계정·OAuth 연결·세션·사건·자료/리포트·기존 프로필·비용/실행 원장 등
+기존 행은 모두 제거한다. 원장의 미정산을 성공/정산으로 바꾸지 않으며 원래 DB 상태는
+기록한 Time Travel 복구 지점으로 구분한다. migration 이력과 관리형 D1 내부 테이블,
+스키마 및 필수 기술용량 설정만 유지·재구성한다. R2 bucket 자체 삭제는 포함하지 않는다.
+
+환경 키는 GitHub Environment 안에서만 사용한다. 기존 고객 payload는 읽거나 복호화하지
+않으며, 시딩된 합성 계정은 로그인 세션·SSO 연결·자격 검증을 갖지 않는다. 프로필에는 합성
+소개와 self_declared를 사용한다. artifact에는 복구 bookmark·합계·새 합성 ID만 기록한다.
+실행 중 작업이 있으면 초기화를 중단한다. probe 실패 시 신규 합성 행만 정리하고,
+원자적 초기화 응답이 불명확하면 추가 삭제/재실행 대신 실제 상태부터 확인한다.
+
+```bash
+gh workflow run reset-application-data.yml --ref main \
+  -f target_sha=<현재_main_40자_SHA> \
+  -f confirmation=reset-both-databases-and-seed-ten-synthetic-lawyers
+```
+
 - pull request/main: 빠른 `Quality gate`만 자동 실행; 무거운 검증은 필요한 범위만 로컬 실행
 - preview: 명령으로 선택한 현재 main SHA를 수동 배포; CI 성공이나 merge가 배포를 시작하지 않음
 - production: 명령으로 같은 SHA를 요청하고 preview smoke·출시 체크·SHA별 운영자 승인 후 배포
