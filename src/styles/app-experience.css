@@ -556,21 +556,44 @@
   gap: 0;
   border-radius: 8px;
 }
-.app-frame .sidebar-story-row:hover {
+.app-frame .sidebar-story-row:hover,
+.app-frame .sidebar-story-row:focus-within {
   background: var(--muted);
 }
-.app-frame .sidebar-story-row .sidebar-story {
-  padding-right: 40px;
+.app-frame .sidebar-story-row:hover .sidebar-story,
+.app-frame .sidebar-story-row:focus-within .sidebar-story {
+  background: var(--muted);
 }
 .app-frame .sidebar-story-delete {
   position: absolute;
-  right: 2px;
-  top: 2px;
+  z-index: 1;
+  right: 0;
+  inset-block: 0;
+  margin-block: auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 0;
+  background: var(--muted);
   opacity: 0;
+  pointer-events: none;
+}
+.app-frame .sidebar-story-delete::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: -12px;
+  width: 12px;
+  background: linear-gradient(to right, transparent, var(--muted));
+  pointer-events: none;
 }
 .app-frame .sidebar-story-row:hover .sidebar-story-delete,
 .app-frame .sidebar-story-row:focus-within .sidebar-story-delete {
   opacity: 1;
+  pointer-events: auto;
 }
 .conversation-subject-help {
   margin: 12px 0 0;
@@ -581,5 +604,6 @@
 @media (hover: none) {
   .app-frame .sidebar-story-delete {
     opacity: 1;
+    pointer-events: auto;
   }
 }
