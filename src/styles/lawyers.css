@@ -647,7 +647,7 @@
 /* Private profile editor: one clear action row and quiet, separated sections. */
 .app-frame.app-frame--product .lawyer-editor .page-header {
   position: sticky;
-  top: 0;
+  top: 24px;
   z-index: 4;
   background: var(--app-canvas);
   align-items: flex-start;
@@ -922,7 +922,7 @@
 }
 @media (max-width: 1100px), (max-height: 560px) {
   .app-frame.app-frame--product .lawyer-editor .page-header {
-    top: 72px;
+    top: 96px;
   }
 }
 @media (max-width: 600px) {
@@ -943,5 +943,157 @@
   }
   .lawyer-editor .lawyer-portfolio-row {
     padding: 18px;
+  }
+}
+/* Numbered profile form: a quiet photo surface and full-width sections. */
+.app-frame.app-frame--product .lawyer-editor .page-header {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+.app-frame.app-frame--product .lawyer-editor .page-header::before {
+  content: "";
+  position: absolute;
+  height: 24px;
+  top: -24px;
+  left: 0;
+  right: 0;
+  background: var(--app-canvas, #f5f7fb);
+  pointer-events: none;
+}
+#lawyer-profile-form {
+  padding: 32px;
+  border-radius: 20px;
+  background: var(--card);
+}
+.lawyer-editor .lawyer-editor-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.lawyer-photo-surface {
+  padding: 28px;
+  border-radius: 16px;
+  background: #f5f6f8;
+}
+.lawyer-editor .lawyer-photo-surface .lawyer-photo-row {
+  margin: 0;
+  align-items: center;
+  gap: 28px;
+}
+.lawyer-photo-surface h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 650;
+}
+.lawyer-photo-surface p {
+  margin: 0 0 12px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.lawyer-photo-surface .lawyer-photo {
+  flex: none;
+  border-radius: 50%;
+}
+.lawyer-photo-surface .lawyer-avatar {
+  flex: none;
+  border-radius: 50%;
+  background: #e9edf2;
+  color: #687385;
+}
+.lawyer-photo-surface .lawyer-photo-upload + p {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+.app-frame.app-frame--product .lawyer-editor .profile-edit-section {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lawyer-editor .profile-edit-section > :is(header, .ui-card__header) {
+  margin-bottom: 20px;
+}
+.profile-edit-section h2,
+.lawyer-editor .profile-edit-section .ui-card__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.6;
+}
+.profile-edit-section :is(h2, .ui-card__title) small {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.profile-edit-section header > p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.7;
+}
+.profile-required {
+  color: #c53535;
+}
+.lawyer-editor .lawyer-fields--three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.profile-edit-section > .lawyer-field + .lawyer-fields {
+  margin-top: 24px;
+}
+.lawyer-editor .lawyer-field :where(input:not([type="checkbox"]), select) {
+  min-height: 50px;
+}
+.lawyer-editor .lawyer-field textarea {
+  background: #f5f6f8;
+  min-height: 160px;
+  resize: vertical;
+}
+.lawyer-editor .lawyer-practice-options {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.lawyer-editor .lawyer-practice-options .lawyer-checkboxes {
+  margin: 0;
+}
+.lawyer-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.lawyer-form-footer > button {
+  min-width: 180px;
+  min-height: 48px;
+}
+@media (max-width: 760px) {
+  #lawyer-profile-form {
+    padding: 24px 20px;
+  }
+  .lawyer-editor .lawyer-fields--three {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .lawyer-photo-surface {
+    padding: 24px 20px;
+  }
+  .lawyer-editor .lawyer-photo-surface .lawyer-photo-row {
+    gap: 18px;
+  }
+  .lawyer-editor .lawyer-editor-sections {
+    gap: 32px;
+  }
+}
+@media (max-width: 380px) {
+  .lawyer-editor .lawyer-photo-surface .lawyer-photo-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

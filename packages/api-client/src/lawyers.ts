@@ -125,6 +125,7 @@ export function createLawyersClient(dependencies: {
     async saveMine(profile: LawyerView): Promise<LawyerView> {
       const parsed = selfProfileSchema.safeParse({
         ...profile,
+        published: true,
         email: typeof profile?.email === "string" ? profile.email.trim() : profile?.email,
         phone: typeof profile?.phone === "string" ? profile.phone.trim() : profile?.phone,
         website: typeof profile?.website === "string" ? profile.website.trim() : profile?.website,
@@ -164,6 +165,7 @@ export function createLawyersClient(dependencies: {
       published: boolean,
       current?: Pick<LawyerView, "id" | "revision">,
     ): Promise<LawyerView> {
+      if (!published) throw new ApiError("VALIDATION_ERROR", "프로필은 저장하면 공개돼요.");
       const mine = current ?? (await client.getMine());
       return decode(
         selfProfileSchema,

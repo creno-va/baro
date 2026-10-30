@@ -203,7 +203,7 @@ test("native own profile retains original revision, validates editable fields an
   expect(profileDirty(f.model.getSnapshot())).toBe(false);
   f.stop();
 });
-test("publication requires clean saved profile plus explicit disclosure consent; withdrawal uses its original revision", async () => {
+test("publication requires clean saved profile plus explicit disclosure consent; private transitions are no longer available", async () => {
   const f = fixture();
   await loaded(f);
   f.model.field("officeName", "수정");
@@ -218,12 +218,12 @@ test("publication requires clean saved profile plus explicit disclosure consent;
   expect(f.model.getSnapshot().profile?.published).toBe(true);
   f.model.requestPublication(false);
   await f.model.confirmAction();
-  expect(f.model.getSnapshot().profile?.published).toBe(false);
+  expect(f.model.getSnapshot().profile?.published).toBe(true);
   expect(
     f.calls
       .filter((call) => call.kind === "publish")
       .map((call) => (call.body as { basis: { revision: number } }).basis.revision),
-  ).toEqual([2, 3]);
+  ).toEqual([2]);
   f.stop();
 });
 test("lost save/publication ACK freezes a copy and fresh reads resolve committed state without an automatic second mutation", async () => {

@@ -278,7 +278,10 @@ test("native profile action observes actual Hono/encrypted SQL publication withd
     });
     await model.load(saved.id);
     expect(model.getSnapshot().profile?.phone).toBe("02-1234-5678");
-    await api.lawyers.publishMine(false, published);
+    await expect(api.lawyers.publishMine(false, published)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+    await saveAccountType(db.binding, owner.userId, "customer");
     await model.open({ kind: "phone" });
     expect(opened).toEqual([]);
     expect(model.getSnapshot()).toMatchObject({ phase: "error", profile: null });

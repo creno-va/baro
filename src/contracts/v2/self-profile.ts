@@ -80,6 +80,7 @@ export function isDuplicateProfileSave(current: SelfProfile, incoming: SelfProfi
       JSON.stringify({
         ...incoming,
         revision: current.revision,
+        published: current.published ? true : incoming.published,
         verificationStatus: "self_declared",
       })
   );
@@ -103,7 +104,17 @@ export function emptySelfProfile(id: string, name = ""): SelfProfile {
     verificationStatus: "self_declared",
   };
 }
-export function profileReady(profile: SelfProfile) {
+export function profileReady(profile: {
+  name: string;
+  introduction: string;
+  officeName: string;
+  address: string;
+  region: string;
+  practiceAreas: readonly string[];
+  phone: string;
+  email: string;
+  website: string;
+}) {
   return !!(
     profile.name &&
     profile.introduction &&

@@ -67,14 +67,21 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       sessionId?: string,
     ): Promise<SelfProfile> {
       const current = await service.getMine(ownerId);
-      const incoming = selfProfileSchema.parse(input);
+      const incoming = selfProfileSchema.parse({
+        ...selfProfileSchema.parse(input),
+        published: true,
+      });
+      if (publish === false)
+        throw new z.ZodError([
+          { code: "custom", path: ["published"], message: "Saved lawyer profiles are public" },
+        ]);
       if (current.id !== incoming.id) throw new LawyerError("NOT_FOUND");
       if (publish === undefined && isDuplicateProfileSave(current, incoming)) return current;
       if (current.revision !== incoming.revision) throw new LawyerError("STALE_REVISION");
       const next = selfProfileSchema.parse({
         ...incoming,
         revision: current.revision + 1,
-        published: publish ?? current.published,
+        published: true,
         verificationStatus: "self_declared",
       });
       if (next.published && !profileReady(next))
@@ -144,6 +151,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
           `DELETE FROM v2_private_snapshots WHERE target_id=? AND purpose='profile_revision' AND revision<? AND ${sqlClaim}`,
           [next.id, next.revision, claimId],
         ),
+        core.statement(
+          `UPDATE v2_profiles SET self_listing_state='listed' WHERE id=? AND owner_id=? AND ${sqlClaim}`,
+          [next.id, ownerId, claimId],
+        ),
         ...(listing
           ? directoryProjectionStatements(core, listing, claimId)
           : [
@@ -164,6 +175,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       profileId: string,
       sessionId?: string,
     ) {
+      if (!published)
+        throw new z.ZodError([
+          { code: "custom", path: ["published"], message: "Saved lawyer profiles are public" },
+        ]);
       const current = await service.getMine(ownerId);
       if (current.id !== profileId) throw new LawyerError("NOT_FOUND");
       if (current.revision === expectedRevision + 1 && current.published === published)
@@ -190,7 +205,7 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       const assets = selfAssetClaim(profile);
       return !!(await core
         .statement(
-          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND p.owner_id=? AND s.revision=?${assets.sql}`,
+          `${latest} AND p.self_listing_state='listed' AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND p.owner_id=? AND s.revision=?${assets.sql}`,
           [publicVersion, profile.id, ownerId, profile.revision, ...assets.args],
         )
         .first());
@@ -198,10 +213,10 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
     async get(id: string) {
       opaqueIdSchema.parse(id);
       const row = await core
-        .statement(`${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=?`, [
-          publicVersion,
-          id,
-        ])
+        .statement(
+          `${latest} AND p.self_listing_state='listed' AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=?`,
+          [publicVersion, id],
+        )
         .first<Row>();
       if (!row) throw new LawyerError("NOT_FOUND");
       const profile = await decode(row);
@@ -213,7 +228,7 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       }
       const current = await core
         .statement(
-          `${latest} AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND s.id=?`,
+          `${latest} AND p.self_listing_state='listed' AND c.version=? AND ${role} AND ${currentConsentSql} AND p.id=? AND s.id=?`,
           [publicVersion, id, row.snapshot_id],
         )
         .first<Row>();

@@ -134,6 +134,13 @@
       "when": 1793032228550,
       "tag": "0018_external_lookup_admission",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793385722992,
+      "tag": "0019_self_profile_listing",
+      "breakpoints": true
     }
   ]
 }

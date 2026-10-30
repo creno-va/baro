@@ -185,7 +185,7 @@ async function fixture() {
     },
   };
 }
-test("native profile model + captured-cookie transport + signed Hono/SQL saves, resolves lost ACK, attaches only sanitized ready asset, publishes/withdraws then detaches/deletes", async () => {
+test("native profile model + captured-cookie transport + signed Hono/SQL saves, resolves lost ACK, attaches only sanitized ready asset, publishes on save then detaches/deletes", async () => {
   const f = await fixture();
   try {
     f.model.attach(f.params.assetId);
@@ -229,7 +229,7 @@ test("native profile model + captured-cookie transport + signed Hono/SQL saves, 
     expect(f.model.getSnapshot().confirm).toBeNull();
     f.model.requestPublication(false);
     await f.model.confirmAction();
-    expect((await f.app.request(publicPath, {}, f.env)).status).toBe(404);
+    expect((await f.app.request(publicPath, {}, f.env)).status).toBe(200);
     await f.model.preview(f.params.assetId);
     expect(f.downloaded.at(-1)).toEqual(f.output);
     f.model.removePhoto();
@@ -257,7 +257,16 @@ test("server consent, role and expected-owner checks still reject writes/reads d
     f.db.sqlite
       .query("UPDATE user_consents SET privacy_version='stale' WHERE user_id=?")
       .run(f.actor.ownerId);
-    f.model.field("name", "거절될 수정");
+    for (const [key, value] of Object.entries({
+      name: "거절될 수정",
+      introduction: "합성 소개",
+      officeName: "합성 사무소",
+      address: "합성 주소",
+      email: "synthetic@example.invalid",
+    }))
+      f.model.field(key as "name", value);
+    f.model.region("seoul");
+    f.model.practice("civil");
     await f.model.save();
     expect(f.calls.at(-1)?.status).toBe(403);
     expect(f.model.getSnapshot().canWrite).toBe(false);

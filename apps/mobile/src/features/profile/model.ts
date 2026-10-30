@@ -477,18 +477,26 @@ export function createProfileModel(dependencies: {
       publish({ ...state, draft, notice: "자료를 선택했어요. 프로필을 저장해야 적용돼요." });
     },
     async save() {
-      if (!editable() || !state.draft || state.conflict || !profileDirty(state)) return;
+      if (
+        !editable() ||
+        !state.draft ||
+        state.conflict ||
+        (!profileDirty(state) && state.profile?.published)
+      )
+        return;
       const parsed = selfProfileSchema.safeParse(state.draft);
-      if (!parsed.success) {
+      if (!parsed.success || !profileReady(parsed.data)) {
         publish({
           ...state,
-          error: "프로필 입력을 확인해 주세요. 연락처·분야·소개 자료의 형식을 확인해 주세요.",
+          error:
+            "필수 정보와 프로필 입력을 확인해 주세요. 연락처·분야·소개 자료의 형식을 확인해 주세요.",
         });
         return;
       }
       await execute({ kind: "save", profile: parsed.data });
     },
     requestPublication(published: boolean) {
+      if (!published) return;
       if (
         !editable() ||
         !state.profile ||

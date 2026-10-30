@@ -11,6 +11,7 @@ import { createTestDatabase } from "./helpers/d1";
 import { countD1Calls } from "./helpers/d1-call-count";
 import { DIRECTORY_NOW, directoryOptions, directorySeedSql } from "./helpers/directory-index";
 import { publicationFixture } from "./helpers/lawyer-publication";
+import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
 import { seedTestSession } from "./helpers/session";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
@@ -167,7 +168,11 @@ test("published edits update terms atomically; withdrawal removes all derived ro
   expect((await f.index.page({ name: "한글", limit: 20 })).items).toEqual([]);
   expect((await f.index.page({ name: "changed", limit: 20 })).items).toHaveLength(1);
   const current = await f.service.getMine(f.owner.userId);
-  await f.service.publishMine(f.owner.userId, false, current.revision, current.id);
+  await seedLegacySelfProfile(f.core, f.owner.userId, {
+    ...current,
+    published: false,
+    revision: current.revision + 1,
+  });
   for (const table of [
     "v2_directory_entries",
     "v2_directory_terms",
@@ -234,7 +239,11 @@ test("bounded backfill is idempotent, indexes existing public sources and never 
   const before = f.db.sqlite.query("SELECT revision FROM v2_directory_epoch").get();
   await maintenance.batch();
   expect(f.db.sqlite.query("SELECT revision FROM v2_directory_epoch").get()).toEqual(before);
-  await f.service.publishMine(f.owner.userId, false, f.value.revision, f.value.id);
+  await seedLegacySelfProfile(f.core, f.owner.userId, {
+    ...f.value,
+    published: false,
+    revision: f.value.revision + 1,
+  });
   const noPrivate = createDirectoryMaintenance(
     createV2Core(f.db.binding, publicCipher),
     () => DIRECTORY_NOW,
@@ -254,7 +263,7 @@ test("verified public cards keep qualification status; a private self version su
   expect((await index.page({ limit: 20 })).items[0]?.verificationStatus).toBe("verified");
   const self = createSelfProfileService(f.core, () => "2026-10-06T00:00:00.000Z");
   const blank = await self.getMine(f.owner.userId);
-  await self.saveMine(f.owner.userId, { ...blank, name: "Private draft" });
+  await seedLegacySelfProfile(f.core, f.owner.userId, { ...blank, name: "Private draft" });
   expect((await index.page({ limit: 20 })).items).toEqual([]);
   expect((await createDirectoryMaintenance(f.core).batch()).indexed).toBe(0);
 });

@@ -81,7 +81,7 @@ test("existing asset upload/sanitizer feeds persisted self profile; only its pub
   expect(
     (await f.request(f.path.replace(f.params.assetId, "foreign-or-original-asset"))).status,
   ).toBe(404);
-  await f.service.publishMine(f.actor.ownerId, false, f.profile.revision, f.profile.id);
+  await saveAccountType(f.db.binding, f.actor.ownerId, "customer");
   expect((await f.request()).status).toBe(404);
 });
 
@@ -222,7 +222,7 @@ test("stream revision fences avoid snapshot decryption and support own uploads b
   expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(false);
   await saveAccountType(f.db.binding, f.actor.ownerId, "lawyer");
   expect(decryptions).toBe(0);
-  await f.service.publishMine(f.actor.ownerId, false, f.profile.revision, f.profile.id);
+  await saveAccountType(f.db.binding, f.actor.ownerId, "customer");
   expect(await service.isCurrent(f.actor.ownerId, f.profile, true)).toBe(false);
   expect(await service.isCurrent(f.actor.ownerId, f.profile, false, sessionId)).toBe(false);
   const fresh = await selfAssetFixture();

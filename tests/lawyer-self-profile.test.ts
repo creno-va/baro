@@ -170,9 +170,10 @@ test("mock owner edit/publish/refresh/directory share one profile; customers can
     published,
   ]);
   await expect(api.saveMine(stale)).rejects.toThrow();
-  await api.publishMine(false, { profileId: published.id, expectedRevision: published.revision });
-  expect(await api.list({ query: "합성변호사" })).toEqual([]);
-  await expect(api.get(published.id)).rejects.toThrow();
+  await expect(
+    api.publishMine(false, { profileId: published.id, expectedRevision: published.revision }),
+  ).rejects.toThrow();
+  expect(await api.list({ query: "합성변호사" })).toEqual([published]);
   user = { id: "customer", name: "고객", accountType: "customer" };
   await expect(api.getMine()).rejects.toThrow();
   user = { id: "other-lawyer", name: "타인", accountType: "lawyer" };
@@ -282,7 +283,7 @@ test("self directory and mock match Latin name/office case and literal punctuati
   ).toEqual([profile.id]);
 });
 
-test("real API stores encrypted self profiles, records publication consent, hides and cleans up", async () => {
+test("real API stores encrypted self profiles, publishes on save, rejects privacy toggles and cleans up", async () => {
   const f = await fixture();
   const blank = selfProfileSchema.parse(
     await (await f.request("/v2/me/lawyer/self-profile")).json(),
@@ -306,7 +307,8 @@ test("real API stores encrypted self profiles, records publication consent, hide
   expect((await f.request("/v2/lawyers/self-service")).status).toBe(200);
   expect(
     selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
-  ).toEqual([]);
+  ).toEqual([saved]);
+  expect(saved.published).toBe(true);
   const withoutConsent = await f.request(
     "/v2/me/lawyer/self-profile/publication",
     f.owner,
@@ -343,7 +345,11 @@ test("real API stores encrypted self profiles, records publication consent, hide
     f.db.sqlite.query("SELECT role FROM v2_role_bindings WHERE owner_id=?").all(f.owner.userId),
   ).toEqual([{ role: "lawyer_applicant" }]);
   expect(
-    (await f.request("/v2/me/lawyer/self-profile", f.owner, "PUT", { profile: saved })).status,
+    (
+      await f.request("/v2/me/lawyer/self-profile", f.owner, "PUT", {
+        profile: { ...saved, name: "stale change" },
+      })
+    ).status,
   ).toBe(409);
   const hidden = await f.request("/v2/me/lawyer/self-profile/publication", f.owner, "POST", {
     published: false,
@@ -351,11 +357,11 @@ test("real API stores encrypted self profiles, records publication consent, hide
     expectedRevision: published.revision,
     consent: false,
   });
-  expect(hidden.status).toBe(200);
+  expect(hidden.status).toBe(400);
   expect(
     selfDirectoryPageSchema.parse(await (await f.request("/v2/lawyers/self-service")).json()).items,
-  ).toEqual([]);
-  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(404);
+  ).toEqual([published]);
+  expect((await f.request(`/v2/lawyers/self-service/${published.id}`)).status).toBe(200);
   f.db.sqlite.query("DELETE FROM user WHERE id=?").run(f.owner.userId);
   expect(
     f.db.sqlite

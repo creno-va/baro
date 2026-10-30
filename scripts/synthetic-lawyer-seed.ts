@@ -136,7 +136,7 @@ export async function prepareSyntheticLawyers(cipher: EnvelopeCipher, now: strin
     sql.push(
       render(
         core.statement(
-          "INSERT INTO v2_profiles(id,owner_id,created_at,updated_at) VALUES(?,?,?,?)",
+          "INSERT INTO v2_profiles(id,owner_id,created_at,updated_at,self_listing_state) VALUES(?,?,?,?,'listed')",
           [id, ownerId, now, now],
         ),
       ),

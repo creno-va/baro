@@ -34,7 +34,7 @@ export function directoryEligibleSql(d = "d") {
   return `EXISTS(SELECT 1 FROM v2_profiles p WHERE p.id=${d}.profile_id AND p.owner_id=${d}.owner_id
     AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=p.owner_id) OR (target_kind='profile' AND target_id=p.id))
     AND (
-      (${d}.source='self'
+      (${d}.source='self' AND p.self_listing_state='listed'
         AND (EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value='lawyer') OR (NOT EXISTS(SELECT 1 FROM app_metadata WHERE key='account-type:'||p.owner_id AND value IN ('customer','lawyer')) AND EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=p.owner_id AND role IN ('lawyer_applicant','verified_lawyer'))))
         AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=p.owner_id AND terms_version='${CURRENT_POLICY_VERSIONS.termsVersion}' AND privacy_version='${CURRENT_POLICY_VERSIONS.privacyVersion}' AND ai_notice_version='${CURRENT_POLICY_VERSIONS.aiNoticeVersion}' AND over_14_confirmed=1)
         AND EXISTS(SELECT 1 FROM v2_private_snapshots s JOIN v2_consents consent ON consent.id=s.id AND consent.owner_id=s.owner_id WHERE s.id=${d}.source_id AND s.target_id=p.id AND s.owner_id=p.owner_id AND s.purpose='profile_revision' AND s.state='published' AND s.revision=${d}.revision AND consent.kind='profile_publication' AND consent.version='${selfPublicationVersions.public}' AND consent.revision=s.revision AND NOT EXISTS(SELECT 1 FROM v2_private_snapshots newer WHERE newer.purpose='profile_revision' AND newer.target_id=p.id AND newer.revision>s.revision))

@@ -923,14 +923,26 @@ export const v2Consents = sqliteTable(
   ],
 );
 
-export const v2Profiles = sqliteTable("v2_profiles", {
-  id: id(),
-  ownerId: owner().unique(),
-  revision: revision(),
-  approvedRevisionId: text("approved_revision_id"),
-  createdAt: created(),
-  updatedAt: text("updated_at").notNull(),
-});
+export const v2Profiles = sqliteTable(
+  "v2_profiles",
+  {
+    id: id(),
+    ownerId: owner().unique(),
+    revision: revision(),
+    approvedRevisionId: text("approved_revision_id"),
+    createdAt: created(),
+    updatedAt: text("updated_at").notNull(),
+    selfListingState: text("self_listing_state", { enum: ["unlisted", "listed"] })
+      .notNull()
+      .default("unlisted"),
+  },
+  (t) => [
+    check(
+      "v2_profiles_self_listing_state_check",
+      sql`${t.selfListingState} IN ('unlisted','listed')`,
+    ),
+  ],
+);
 const profile = () =>
   text("profile_id")
     .notNull()
