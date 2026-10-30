@@ -199,9 +199,8 @@
   padding: 0;
   margin: 0;
   display: grid;
-  grid-template-rows: repeat(3, auto);
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
   min-width: 0;
 }
@@ -224,6 +223,10 @@
   font-size: 19px;
   font-weight: 650;
   line-height: 1.6;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .precedent-card-footer {
   display: flex;
@@ -828,5 +831,103 @@
   .precedent-workspace .precedent-detail-actions > button {
     padding-inline: 12px;
     font-size: 13px;
+  }
+}
+/* Compact whole-card results and a readable full judgment. */
+.precedent-result-heading > h3 {
+  flex: none;
+  white-space: nowrap;
+}
+.precedent-result-heading > time {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.precedent-workspace button.precedent-card {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 24px;
+  border-radius: 14px;
+  text-align: left;
+  background: var(--card);
+}
+.precedent-workspace button.precedent-card:hover:not(:disabled) {
+  border-color: #a5b9d6;
+  background: #fbfcfe;
+}
+.precedent-card > .precedent-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.precedent-card > .precedent-card-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.precedent-card-topics > span {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #edf4ff;
+  color: #2463b9;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.precedent-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+.precedent-more > button {
+  min-width: 160px;
+}
+.precedent-full-text {
+  min-width: 0;
+  padding-top: 8px;
+}
+.precedent-full-text > h4 {
+  margin: 36px 0 18px;
+  color: #203b62;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.precedent-full-text > h4:first-child {
+  margin-top: 0;
+}
+.precedent-full-text > h5 { margin: 24px 0 12px; font-size: 16px; line-height: 1.7; font-weight: 650; }
+.precedent-full-text > .precedent-body {
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.95;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .precedent-list {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+  .precedent-workspace button.precedent-card {
+    padding: 20px;
+  }
+  .precedent-result-heading {
+    gap: 10px;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    align-items: center;
+  }
+  .precedent-result-heading h3 {
+    font-size: 18px;
+  }
+  .precedent-full-text > h4 {
+    font-size: 18px;
   }
 }

@@ -32,7 +32,12 @@ import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../v2/source-authority";
 import type { Transport } from "../v2/transport";
 import { isWorkspacePublicQuery } from "../v2/workspace-plans";
 import { createPrecedentRelevance } from "./relevance";
-import { signResearchToken, verifyResearchToken } from "./tokens";
+import {
+  signResearchPage,
+  signResearchToken,
+  verifyResearchPage,
+  verifyResearchToken,
+} from "./tokens";
 import { RESEARCH_CONCEPTS, recommendPrecedentTopics, researchExcerpt } from "./topics";
 
 export class PrecedentResearchError extends Error {
@@ -108,6 +113,7 @@ export function createPrecedentResearchService(
     id: string,
     raw: unknown,
     executionRevision?: number,
+    fullText = true,
   ) {
     const request = v2PrecedentReadRequestSchema.parse(raw);
     await scope(ownerId, id, executionRevision ?? request.expectedRevision);
@@ -161,6 +167,7 @@ export function createPrecedentResearchService(
       workspaceRevision: request.expectedRevision,
       citation,
       excerpt: researchExcerpt(source.body, [], 4000),
+      ...(fullText && request.includeFullText ? { fullText: source.body } : {}),
     });
     // Source hashing yields: fence the exact current original and case again.
     if (JSON.stringify(await load()) !== JSON.stringify(row))
@@ -207,10 +214,27 @@ export function createPrecedentResearchService(
     },
     async search(ownerId: string, id: string, raw: unknown, signal?: AbortSignal) {
       const request = v2PrecedentSearchRequestSchema.parse(raw);
+      const paginated = request.pageSize === 5 || !!request.cursor;
       const current = await scope(ownerId, id, request.expectedRevision, request.summaryRevision);
       if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET.length < 32)
         throw new PrecedentResearchError("UNAVAILABLE");
       const checkedAt = now();
+      const page = request.cursor
+        ? await verifyResearchPage(env.BETTER_AUTH_SECRET, request.cursor, Date.parse(checkedAt))
+        : null;
+      if (
+        request.cursor &&
+        (!page ||
+          page.ownerId !== ownerId ||
+          page.workspaceId !== id ||
+          page.revision !== request.expectedRevision ||
+          page.summaryRevision !== request.summaryRevision ||
+          JSON.stringify(page.topics) !== JSON.stringify(request.topics))
+      )
+        throw new PrecedentResearchError("NOT_FOUND");
+      const positions = page?.positions ?? request.topics.map(() => 0);
+      const activeTopics = request.topics.filter((_, index) => positions[index] !== null);
+      const nextPositions = request.topics.map(() => null as number | null);
       const summary = await readSnapshot(
         core,
         { ownerId, now: checkedAt },
@@ -230,14 +254,25 @@ export function createPrecedentResearchService(
           return false;
         }
       };
-      const queries = request.topics.map((topic) => RESEARCH_CONCEPTS[topic]);
+      const queries = activeTopics.map((topic) => RESEARCH_CONCEPTS[topic]);
+      const queryPositions = new Map(
+        activeTopics.map((topic) => [RESEARCH_CONCEPTS[topic], request.topics.indexOf(topic)]),
+      );
       const repository = createV2OfficialSourceRepository(core);
       const retrieval = createV2LegalRetrieval(env, repository, {
         observeRequest: reportLegalRequest,
         observeOutcome: reportLegalOutcome,
         observeUpstreamRejection: reportLegalRejection,
         ...(options.transport ? { transport: options.transport } : {}),
-        precedentDiscovery: { rank: relevance.candidates },
+        precedentDiscovery: {
+          rank: relevance.candidates,
+          offset: (query) => positions[queryPositions.get(query) ?? -1] ?? 0,
+          exclude: page?.seen ?? [],
+          onPage: (query, offset) => {
+            const index = queryPositions.get(query);
+            if (index !== undefined) nextPositions[index] = offset;
+          },
+        },
         // Research is read-only for private case state. The short-lived signed
         // result proof below supplies scope; do not add automatic chat citations.
         bindCitation: async (citation) =>
@@ -255,7 +290,11 @@ export function createPrecedentResearchService(
         {
           now: checkedAt,
           asOfDate: new Date(Date.parse(checkedAt) + 9 * 3600000).toISOString().slice(0, 10),
-          plans: queries.map((query) => ({ kind: "precedent", query, limit: 4 })),
+          plans: queries.map((query, index) => ({
+            kind: "precedent",
+            query,
+            limit: Math.floor(5 / queries.length) + (index < 5 % queries.length ? 1 : 0),
+          })),
         },
         {
           authorize: authorized,
@@ -270,7 +309,7 @@ export function createPrecedentResearchService(
       const unavailableTopics: V2PrecedentTopic[] = [];
       const availabilityIssues: NonNullable<V2PrecedentSearchResponse["availabilityIssues"]> = [];
       for (const [index, outcome] of result.outcomes.entries()) {
-        const topic = request.topics[index];
+        const topic = activeTopics[index];
         if (!topic) continue;
         const reasons = [
           ...new Set([
@@ -323,14 +362,29 @@ export function createPrecedentResearchService(
           b.citation.decisionDate.localeCompare(a.citation.decisionDate) ||
           a.id.localeCompare(b.id),
       );
-      const retained = new Set(
-        request.topics.flatMap((topic) =>
-          ordered
-            .filter((item) => item.matchedTopics.includes(topic))
-            .slice(0, 3)
-            .map((item) => item.id),
-        ),
-      );
+      const retained = new Set(ordered.slice(0, 5).map((item) => item.id));
+      const seen = [
+        ...new Set([...(page?.seen ?? []), ...ordered.map((item) => item.citation.officialId)]),
+      ];
+      const hasMore =
+        seen.length < 500 && nextPositions.some((position) => position !== null && position < 4000);
+      const issuedAt = page?.issuedAt ?? Date.parse(checkedAt);
+      const nextCursor =
+        hasMore && paginated
+          ? await signResearchPage(env.BETTER_AUTH_SECRET, {
+              ownerId,
+              workspaceId: id,
+              revision: request.expectedRevision,
+              summaryRevision: request.summaryRevision,
+              topics: request.topics,
+              positions: nextPositions.map((position) =>
+                position !== null && position >= 4000 ? null : position,
+              ),
+              seen,
+              issuedAt,
+              expiresAt: issuedAt + 600000,
+            })
+          : null;
       const response = v2PrecedentSearchResponseSchema.parse({
         schemaVersion: "2",
         workspaceRevision: request.expectedRevision,
@@ -346,6 +400,7 @@ export function createPrecedentResearchService(
             : "empty",
         searchTruncated:
           result.outcomes.some((o) => o.searchTruncated) || ordered.length > retained.size,
+        ...(paginated ? { nextCursor } : {}),
         items: ordered.filter((item) => retained.has(item.id)),
         unavailableTopics,
         availabilityIssues,
@@ -365,6 +420,7 @@ export function createPrecedentResearchService(
         id,
         { expectedRevision: request.expectedRevision, readToken: request.readToken },
         executionRevision,
+        false,
       );
       await scope(ownerId, id, executionRevision, request.summaryRevision);
       return value;

@@ -1,17 +1,23 @@
 import { useState } from "react";
-import { precedentHighlights } from "../../client/precedent-highlights";
 import {
   PRECEDENT_COMPARISON_CRITERIA,
   type V2PrecedentComparison,
 } from "../../contracts/v2/precedent-comparison";
 import { Dialog } from "../ui/dialog";
+import { PrecedentDocument } from "./PrecedentDocument";
 
 const verdictLabels = {
   yes: "유사 · +12.5점",
   no: "차이 있음 · +0점",
   unknown: "확인 불가 · +0점",
 };
-export function ComparisonResult({ comparison }: { comparison: V2PrecedentComparison }) {
+export function ComparisonResult({
+  comparison,
+  fullText,
+}: {
+  comparison: V2PrecedentComparison;
+  fullText?: string | undefined;
+}) {
   const [selected, setSelected] = useState<number[]>([]);
   return (
     <div className="comparison-result">
@@ -65,27 +71,16 @@ export function ComparisonResult({ comparison }: { comparison: V2PrecedentCompar
             <p>파란색 문장을 눌러 내 사건과 유사한 이유를 확인하세요.</p>
           )}
         </div>
-        <p className="precedent-body">
-          {precedentHighlights(comparison).map((segment) =>
-            segment.metrics.length ? (
-              <button
-                key={segment.start}
-                type="button"
-                className="comparison-highlight"
-                onClick={() => setSelected(segment.metrics)}
-                aria-label={`${segment.text} · 유사한 이유 보기`}
-              >
-                {segment.text}
-              </button>
-            ) : (
-              <span key={segment.start}>{segment.text}</span>
-            ),
-          )}
-        </p>
+        <PrecedentDocument
+          text={fullText ?? comparison.source.excerpt.text}
+          startUtf16={fullText ? 0 : comparison.source.excerpt.startUtf16}
+          comparison={comparison}
+          onSelect={setSelected}
+        />
         {!comparison.matchedCount && (
           <p className="precedent-scope">양쪽 근거로 일치가 확인된 부분이 아직 없어요.</p>
         )}
-        {comparison.source.excerpt.truncated && (
+        {!fullText && comparison.source.excerpt.truncated && (
           <p className="precedent-scope">
             원문 일부를 표시했어요. 전체 내용은 공식 원문에서 확인해 주세요.
           </p>

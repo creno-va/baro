@@ -55,11 +55,18 @@ const topics = z
   .min(1)
   .max(2)
   .refine((values) => new Set(values).size === values.length, "Duplicate research topics");
+const pageToken = z
+  .string()
+  .min(16)
+  .max(16384)
+  .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 
 export const v2PrecedentSearchRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   summaryRevision: revisionSchema,
   topics,
+  cursor: pageToken.optional(),
+  pageSize: z.literal(5).optional(),
 });
 export type V2PrecedentSearchRequest = z.infer<typeof v2PrecedentSearchRequestSchema>;
 
@@ -113,6 +120,7 @@ export const v2PrecedentSearchResponseSchema = z
     topics,
     status: z.enum(["complete", "partial", "empty", "unavailable"]),
     searchTruncated: z.boolean(),
+    nextCursor: pageToken.nullable().optional(),
     availabilityIssues: z
       .array(
         z.strictObject({
@@ -123,6 +131,7 @@ export const v2PrecedentSearchResponseSchema = z
       .max(42)
       .optional(),
     // Availability concerns the returned original, never a match/merits score.
+    // Accept historical two-topic responses; current paged searches return at most five total.
     items: z.array(v2PrecedentResearchItemSchema).max(6).refine(hasUniqueIds),
     unavailableTopics: z
       .array(v2PrecedentTopicSchema)
@@ -168,14 +177,30 @@ export type V2PrecedentSearchResponse = z.infer<typeof v2PrecedentSearchResponse
 export const v2PrecedentReadRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   readToken,
+  includeFullText: z.literal(true).optional(),
 });
 export type V2PrecedentReadRequest = z.infer<typeof v2PrecedentReadRequestSchema>;
 
-export const v2PrecedentReadResponseSchema = z.strictObject({
-  schemaVersion: z.literal("2"),
-  workspaceRevision: revisionSchema,
-  citation: researchCitation,
-  // Bounded text page. Full official original remains available via citation.url.
-  excerpt: v2PrecedentExcerptSchema,
-});
+export const v2PrecedentReadResponseSchema = z
+  .strictObject({
+    schemaVersion: z.literal("2"),
+    workspaceRevision: revisionSchema,
+    citation: researchCitation,
+    // Keep bounded comparison excerpts; full text is for reading only, never a larger model input.
+    excerpt: v2PrecedentExcerptSchema,
+    fullText: z
+      .string()
+      .min(1)
+      .max(1048576)
+      .refine((value) => value.trim().length > 0 && !/<\/?[a-z!][^>]*>/i.test(value))
+      .optional(),
+  })
+  .refine(
+    (value) =>
+      value.fullText === undefined ||
+      (value.fullText.length === value.excerpt.fullLengthUtf16 &&
+        value.fullText.slice(value.excerpt.startUtf16, value.excerpt.endUtf16) ===
+          value.excerpt.text),
+    "Full text and verified comparison excerpt must agree",
+  );
 export type V2PrecedentReadResponse = z.infer<typeof v2PrecedentReadResponseSchema>;

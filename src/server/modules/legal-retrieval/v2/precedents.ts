@@ -38,7 +38,7 @@ export function matchesPrecedentCaseNumber(listNumber: string, detailNumber: str
   const leadingSerial = leading?.match(/[가-힣]+(\d+)$/)?.[1];
   return leading === listNumber && new Set([leadingSerial, ...serials]).size === serials.length + 1;
 }
-export function precedentCandidates(value: unknown, asOfDate: string, limit: number) {
+export function precedentCandidates(value: unknown, asOfDate: string, limit: number, offset = 0) {
   const root = z
     .object({
       PrecSearch: z.object({
@@ -49,7 +49,7 @@ export function precedentCandidates(value: unknown, asOfDate: string, limit: num
     .parse(value).PrecSearch;
   const rows = root.prec ? (Array.isArray(root.prec) ? root.prec : [root.prec]) : [];
   if (rows.length > root.totalCnt) throw new RetrievalFailure("schema_mismatch");
-  if (root.totalCnt > 0 && !rows.length) throw new RetrievalFailure("schema_mismatch");
+  if (root.totalCnt > offset && !rows.length) throw new RetrievalFailure("schema_mismatch");
   const valid: PrecedentCandidate[] = [];
   let malformed = false;
   for (const row of rows) {
@@ -65,7 +65,7 @@ export function precedentCandidates(value: unknown, asOfDate: string, limit: num
     throw new RetrievalFailure("identity_mismatch");
   return {
     rows: valid.filter((row) => row.선고일자 <= asOfDate).slice(0, limit),
-    truncated: root.totalCnt > rows.length,
+    truncated: root.totalCnt > offset + rows.length,
     ...(malformed ? { failures: ["schema_mismatch" as const] } : {}),
   };
 }

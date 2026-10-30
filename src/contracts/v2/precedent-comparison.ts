@@ -27,9 +27,9 @@ export const v2PrecedentComparisonRequestSchema = v2PrecedentReadRequestSchema.e
   summaryRevision: revisionSchema,
 });
 export type V2PrecedentComparisonRequest = z.infer<typeof v2PrecedentComparisonRequestSchema>;
-export const precedentComparisonSourceSchema = v2PrecedentReadResponseSchema.pick({
-  citation: true,
-  excerpt: true,
+export const precedentComparisonSourceSchema = z.strictObject({
+  citation: v2PrecedentReadResponseSchema.shape.citation,
+  excerpt: v2PrecedentReadResponseSchema.shape.excerpt,
 });
 // Quoted evidence is not display prose: never trim or normalize its exact bytes.
 const exactQuote = z

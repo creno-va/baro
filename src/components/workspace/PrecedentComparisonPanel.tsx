@@ -20,26 +20,26 @@ export function PrecedentComparisonPanel({
   selected,
   sourceId,
   sourceNeedsRefresh,
-  onRecovered,
   access,
   onSettled,
   onRefreshSources,
   heading,
   originalLink,
   children,
+  fullText,
 }: {
   caseId: string;
   context: V2PrecedentResearchContext;
   selected: V2PrecedentSearchResponse["items"][number] | null;
   sourceId: string | null;
   sourceNeedsRefresh: boolean;
-  onRecovered: (comparison: V2PrecedentComparisonState["comparison"]) => void;
   access: ReturnType<typeof useCustomerAccess>;
   onSettled: () => void;
   onRefreshSources: () => void;
   heading: ReactNode;
   originalLink: ReactNode;
   children: ReactNode;
+  fullText?: string | undefined;
 }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [state, setState] = useState<V2PrecedentComparisonState | null>(null);
@@ -52,12 +52,8 @@ export function PrecedentComparisonPanel({
   const settled = useRef("");
   const completed = useRef(onSettled);
   completed.current = onSettled;
-  const recovered = useRef(onRecovered);
-  recovered.current = onRecovered;
-  useEffect(() => {
-    if (state?.comparison) recovered.current(state.comparison);
-  }, [state?.comparison]);
-  const key = `baro-precedent-comparison:${caseId}`;
+  const attemptedRevision = useRef<number | null>(null);
+  const key = `baro-precedent-comparison:${caseId}:${sourceId ?? "none"}`;
   useEffect(() => () => startController.current?.abort(), []);
   const remember = useCallback(
     (id: string | null) => {
@@ -87,8 +83,19 @@ export function PrecedentComparisonPanel({
           ? null
           : await precedentComparisonApi.latest(caseId, controller.signal);
         if (controller.signal.aborted || !boundary.current.current(ticket)) return;
-        if (remembered || latest?.kind === "chat_response")
-          setJobId((current) => current ?? remembered ?? latest?.id ?? null);
+        if (remembered) setJobId((current) => current ?? remembered);
+        else if (latest?.kind === "chat_response") {
+          const value = await precedentComparisonApi.get(caseId, latest.id, controller.signal);
+          if (controller.signal.aborted || !boundary.current.current(ticket)) return;
+          const sameSource = value.comparison?.source.citation.sourceId === sourceId;
+          const sameAdmission = attemptedRevision.current !== null && value.job.target.kind === "workspace" && value.job.target.workspaceRevision === attemptedRevision.current + 1;
+          if (sameSource || (sameAdmission && !terminal.has(value.job.status))) {
+            setState(value);
+            setError(null);
+            setJobId(latest.id);
+            remember(latest.id);
+          }
+        }
       } catch (cause) {
         if (
           !controller.signal.aborted &&
@@ -102,7 +109,7 @@ export function PrecedentComparisonPanel({
     return () => {
       controller.abort();
     };
-  }, [caseId, key, access.version]);
+  }, [caseId, key, sourceId, remember, access.version]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Restart polling with a fresh owner ticket after foreground verification.
   useEffect(() => {
     if (!jobId) return;
@@ -121,6 +128,14 @@ export function PrecedentComparisonPanel({
       try {
         const value = await precedentComparisonApi.get(caseId, jobId, controller.signal);
         if (controller.signal.aborted || !boundary.current.current(ticket)) return;
+        if (value.comparison && value.comparison.source.citation.sourceId !== sourceId) {
+          done = true;
+          remember(null);
+          setJobId(null);
+          setState(null);
+          setError(null);
+          return;
+        }
         setState(value);
         setError(null);
         remember(jobId);
@@ -165,7 +180,7 @@ export function PrecedentComparisonPanel({
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [caseId, jobId, remember, access.version]);
+  }, [caseId, jobId, sourceId, remember, access.version]);
   const pending = starting || (!!jobId && (!state || !terminal.has(state.job.status)));
   const sourceExpired = !!selected && selected.readToken === expiredToken;
   async function start() {
@@ -173,6 +188,7 @@ export function PrecedentComparisonPanel({
     const controller = new AbortController();
     startController.current = controller;
     const ticket = access.ticket();
+    attemptedRevision.current = context.workspaceRevision;
     setStarting(true);
     setError(null);
     try {
@@ -212,8 +228,10 @@ export function PrecedentComparisonPanel({
   }
   if (!access.ready) return null;
   const comparison =
-    state?.comparison && state.comparison.source.citation.id === sourceId ? state.comparison : null;
-  const refreshRequired = sourceExpired || sourceNeedsRefresh;
+    state?.comparison && state.comparison.source.citation.sourceId === sourceId
+      ? state.comparison
+      : null;
+  const refreshRequired = sourceExpired || (sourceNeedsRefresh && !comparison);
   const comparisonStale =
     !!comparison &&
     (state?.stale ||
@@ -222,6 +240,7 @@ export function PrecedentComparisonPanel({
         context.workspaceRevision !== comparison.publishedWorkspaceRevision));
   const needsResearch = refreshRequired || comparisonStale;
   const incomplete = !!state && !pending && state.job.status !== "completed";
+  const unreadable = !!error && !comparison;
   return (
     <section className="precedent-comparison" aria-label="유사 판례 비교">
       <h3 className="sr-only">사건과 판례 비교</h3>
@@ -242,8 +261,11 @@ export function PrecedentComparisonPanel({
           </Button>
         </div>
       </div>
-      {((needsResearch && !pending) || !!error || incomplete) && (
-        <div className="precedent-state-card" role={sourceExpired || error ? "alert" : "status"}>
+      {((needsResearch && !pending) || unreadable || incomplete) && (
+        <div
+          className="precedent-state-card"
+          role={sourceExpired || unreadable ? "alert" : "status"}
+        >
           <span className="precedent-state-icon">
             <CircleAlert size={28} aria-hidden="true" />
           </span>
@@ -296,7 +318,7 @@ export function PrecedentComparisonPanel({
       )}
       {comparison && state && (
         <>
-          <ComparisonResult key={state.job.id} comparison={comparison} />
+          <ComparisonResult key={state.job.id} comparison={comparison} fullText={fullText} />
           {comparison.factsPartial && (
             <p className="precedent-scope">저장된 사실 중 일부가 이번 비교에 포함되지 않았어요.</p>
           )}

@@ -1,18 +1,29 @@
 import type { V2PrecedentComparison } from "../contracts/v2/precedent-comparison";
 
 /** Keep the verified excerpt intact, including overlapping evidence and UTF-16 offsets. */
-export function precedentHighlights(comparison: V2PrecedentComparison) {
-  const { text, startUtf16 } = comparison.source.excerpt;
+export function precedentHighlights(
+  comparison: V2PrecedentComparison,
+  span = comparison.source.excerpt as { text: string; startUtf16: number },
+) {
+  const { text, startUtf16 } = span;
   const ranges = comparison.metrics.flatMap((metric, index) =>
     metric.verdict === "yes"
       ? metric.precedentEvidence.flatMap((evidence) => {
           const start = evidence.startUtf16 - startUtf16;
           const end = evidence.endUtf16 - startUtf16;
-          return start >= 0 &&
-            end <= text.length &&
-            end > start &&
-            text.slice(start, end) === evidence.text
-            ? [{ start, end, index }]
+          const clippedStart = Math.max(0, start),
+            clippedEnd = Math.min(text.length, end);
+          const originalStart = evidence.startUtf16 - comparison.source.excerpt.startUtf16;
+          return evidence.endUtf16 - evidence.startUtf16 === evidence.text.length &&
+            originalStart >= 0 &&
+            comparison.source.excerpt.text.slice(
+              originalStart,
+              originalStart + evidence.text.length,
+            ) === evidence.text &&
+            clippedEnd > clippedStart &&
+            text.slice(clippedStart, clippedEnd) ===
+              evidence.text.slice(clippedStart - start, clippedEnd - start)
+            ? [{ start: clippedStart, end: clippedEnd, index }]
             : [];
         })
       : [],

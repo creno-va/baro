@@ -39,7 +39,10 @@ async function seed(page: Page) {
     },
     { id, summary },
   );
-  await page.goto(`/cases/${id}/precedents`);
+  const response = await page.goto(`/cases/${id}/precedents`);
+  // A cold Vite optimization can replace React during the first SSR request.
+  // Retry only that HTTP 5xx once; persistent failures and UI assertions still fail.
+  if (response && response.status() >= 500) await page.reload();
   await expect(page.getByRole("button", { name: "판례 찾기", exact: true })).toBeEnabled();
 }
 
@@ -67,10 +70,7 @@ test("desktop and mobile complete topic, result and original flow without overfl
     await page.screenshot({ path: `.wrangler/precedent-results-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await list
-    .getByRole("button", { name: /판례 내용 보기/ })
-    .first()
-    .click();
+  await list.getByRole("button").first().click();
   const original = page.getByRole("link", { name: /국가법령정보센터에서 전체 원문 보기/ });
   await expect(original).toHaveAttribute(
     "href",
@@ -111,10 +111,7 @@ test("desktop and mobile complete topic, result and original flow without overfl
   await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
   await expect(list).toBeVisible();
   await expect(page.getByRole("region", { name: "유사 판례 비교" })).toHaveCount(0);
-  await list
-    .getByRole("button", { name: /판례 내용 보기/ })
-    .first()
-    .click();
+  await list.getByRole("button").first().click();
   await expect(selected.locator(".precedent-document-heading h3")).toBeFocused();
   await expect
     .poll(
@@ -123,6 +120,114 @@ test("desktop and mobile complete topic, result and original flow without overfl
     .toBeGreaterThanOrEqual(80);
   const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
   expect(scan.violations).toEqual([]);
+});
+
+test("five-card pages append on demand, cards clamp titles and the full judgment has section headings", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.evaluate(
+    async ({ fixture }) => {
+      const { registerMockHandlers } = await import(`${location.origin}/src/client/api/core.ts`);
+      const base = fixture.items[0];
+      if (!base) throw new Error("Missing synthetic original");
+      const fullText = `【판시사항】\n[1] 계약 해석과 대여금 반환의 합성 쟁점\n【판결요지】\n${"대여금 지급과 반환 약속에 관한 합성 판례 문장입니다.\n".repeat(180)}【주 문】\n판결문 맨 끝의 합성 주문`;
+      const excerptText = fullText.slice(0, 4000).trimEnd();
+      const items = Array.from({ length: 10 }, (_, index) => ({
+        ...base,
+        id: `paged-citation-${index}`,
+        citation: {
+          ...base.citation,
+          id: `paged-citation-${index}`,
+          sourceId: `paged-source-${index}`,
+          title: `합성 대여금 반환 판례 ${index + 1} · ${"긴 판례 제목의 두 줄 말줄임 검증 ".repeat(10)}`,
+          caseNumber: `2026다${700 + index}`,
+          officialId: String(90000000700 + index),
+          url: `https://www.law.go.kr/LSW/precInfoP.do?precSeq=${90000000700 + index}`,
+        },
+        readToken: `synthetic_read_receipt.paged_${index}`,
+        excerpt: {
+          text: excerptText,
+          startUtf16: 0,
+          endUtf16: excerptText.length,
+          fullLengthUtf16: fullText.length,
+          truncated: true,
+        },
+      }));
+      registerMockHandlers({
+        "precedents.search": ({
+          body,
+        }: {
+          body: {
+            expectedRevision: number;
+            summaryRevision: number;
+            topics: string[];
+            cursor?: string;
+          };
+        }) => ({
+          ...fixture,
+          workspaceRevision: body.expectedRevision,
+          summaryRevision: body.summaryRevision,
+          checkedAt: new Date().toISOString(),
+          topics: body.topics,
+          items: items
+            .slice(body.cursor ? 5 : 0, body.cursor ? 10 : 5)
+            .map((item) => ({ ...item, matchedTopics: [body.topics[0]] })),
+          nextCursor: body.cursor ? null : "synthetic_page_cursor.next_page",
+          status: "complete",
+          unavailableTopics: [],
+        }),
+        "precedents.read": ({
+          body,
+        }: {
+          body: { expectedRevision: number; readToken: string };
+        }) => {
+          const item = items.find((item) => item.readToken === body.readToken);
+          if (!item) throw new Error("Missing original");
+          return {
+            schemaVersion: "2",
+            workspaceRevision: body.expectedRevision,
+            citation: item.citation,
+            excerpt: item.excerpt,
+            fullText,
+          };
+        },
+      });
+    },
+    { fixture: syntheticSearch },
+  );
+  await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+  const list = page.getByRole("list", { name: "관련 판례 목록" });
+  await expect(list.getByRole("listitem")).toHaveCount(5);
+  await expect(
+    page.locator(
+      ".precedent-result-heading > p,.precedent-result-heading > div,.precedent-result-note",
+    ),
+  ).toHaveCount(0);
+  await expect(list.getByRole("button", { name: /판례 내용 보기/ })).toHaveCount(0);
+  await expect(list.locator("h4").first()).toHaveCSS("-webkit-line-clamp", "2");
+  expect((await list.getByRole("button").first().boundingBox())?.height).toBeLessThan(240);
+  await page.getByRole("button", { name: "더보기", exact: true }).click();
+  await expect(list.getByRole("listitem")).toHaveCount(10);
+  await expect(page.getByRole("button", { name: "더보기", exact: true })).toHaveCount(0);
+  await expect(list.getByText(/관련 주제/)).toHaveCount(0);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: `.wrangler/precedent-feedback-list-${width}.png`,
+      fullPage: true,
+    });
+  }
+  await list.getByRole("button").first().click();
+  const detail = page.getByRole("region", { name: "선택한 판례" });
+  await expect(detail.getByRole("heading", { name: "【판시사항】" })).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "【판결요지】" })).toBeVisible();
+  await expect(detail.locator(".precedent-full-text")).toContainText("판결문 맨 끝의 합성 주문");
+  await expect(detail.getByText("원문 일부", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: ".wrangler/precedent-feedback-full-text.png" });
 });
 
 test("empty, partial, unavailable and failed requests show actionable states", async ({ page }) => {
@@ -164,10 +269,10 @@ test("empty, partial, unavailable and failed requests show actionable states", a
         page.getByText("선택한 주제와 가까운 판례를 찾지 못했어요. 다른 주제로 다시 찾아보세요."),
       ).toBeVisible();
     if (status === "partial")
-      await expect(page.getByText(/주제를 일부 확인하지 못했어요/)).toBeVisible();
+      await expect(page.getByText(/주제를 일부 확인하지 못했어요/)).toHaveCount(0);
     if (status === "unavailable")
       await expect(
-        page.getByText("공식 판례를 지금 확인할 수 없어요. 잠시 후 다시 검색해 주세요."),
+        page.getByText("판례를 확인하지 못했어요. 잠시 후 다시 검색해 주세요."),
       ).toBeVisible();
     if (status === "error") await expect(page.getByRole("alert")).toContainText("합성 연결 실패");
   }
@@ -225,7 +330,9 @@ test("changed case revision invalidates old result actions and exposes fresh sea
     localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
     window.dispatchEvent(new Event("focus"));
   }, id);
-  await expect(page.getByRole("button", { name: /판례 내용 보기/ }).first()).toBeDisabled();
+  await expect(
+    page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first(),
+  ).toBeDisabled();
   await expect(
     page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요."),
   ).toBeVisible();
@@ -344,13 +451,63 @@ async function selectComparison(page: Page) {
   await seed(page);
   await comparisonTransport(page);
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
-  await page
-    .getByRole("list", { name: "관련 판례 목록" })
-    .getByRole("button", { name: /판례 내용 보기/ })
-    .first()
-    .click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
 }
+
+test("unattempted comparisons ignore failed latest jobs and legacy case-wide hints without opening a detail", async ({
+  page,
+}) => {
+  await seed(page);
+  await comparisonTransport(page);
+  await page.evaluate((caseId) => {
+    sessionStorage.setItem("synthetic-comparison", "{}");
+    sessionStorage.setItem("synthetic-comparison-failed", "true");
+    sessionStorage.setItem(`baro-precedent-comparison:${caseId}`, "synthetic-comparison-job");
+    window.dispatchEvent(new Event("focus"));
+  }, id);
+  await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
+  await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
+  await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
+});
+
+test("a completed comparison survives its own revision and does not leak onto another selected original", async ({
+  page,
+}) => {
+  await selectComparison(page);
+  await page.getByRole("button", { name: "내 사건과 유사도 비교" }).click();
+  await page.evaluate(() => {
+    sessionStorage.setItem("synthetic-comparison-done", "true");
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").nth(1).click();
+  await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
+  await expect(page.locator(".precedent-state-card,.comparison-result")).toHaveCount(0);
+  await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await page.evaluate((caseId) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[caseId].revision = 3;
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    window.dispatchEvent(new Event("focus"));
+  }, id);
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await page.evaluate(() => {
+    sessionStorage.setItem("synthetic-comparison-read-failure", "true");
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+});
 
 test("failed comparison uses one recovery card and keeps the original readable", async ({
   page,
@@ -457,6 +614,9 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await page.reload();
   await comparisonTransport(page);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(region).toHaveCount(0);
+  await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
   await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
   expect(
     await page.evaluate(
@@ -602,10 +762,7 @@ test("an expired comparison proof requires fresh search and never automatically 
     { id, fixture: syntheticSearch },
   );
   const search = page.getByRole("button", { name: "판례 찾기", exact: true });
-  const choose = page
-    .getByRole("list", { name: "관련 판례 목록" })
-    .getByRole("button", { name: /판례 내용 보기/ })
-    .first();
+  const choose = page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first();
   const compare = page.getByRole("button", { name: "내 사건과 유사도 비교", exact: true });
   await search.click();
   await choose.click();
@@ -625,7 +782,7 @@ test("an expired comparison proof requires fresh search and never automatically 
   ).toBe(1);
 });
 
-test("specific partial-source reasons stay visible and an expired proof triggers new search instead of the same read", async ({
+test("partial-source diagnostics stay out of verified results and an expired proof triggers a new search", async ({
   page,
 }) => {
   await seed(page);
@@ -662,22 +819,16 @@ test("specific partial-source reasons stay visible and an expired proof triggers
     });
   }, syntheticSearch);
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
-  await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toContainText(
-    "공식 기관의 응답이 늦어",
-  );
+  await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toHaveCount(0);
   for (const width of [320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toBeVisible();
+    await expect(page.getByRole("list", { name: "공식 자료 확인 상태" })).toHaveCount(0);
     // Viewport changes can precede the responsive style/layout commit.
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       .toBe(true);
   }
-  await page
-    .getByRole("list", { name: "관련 판례 목록" })
-    .getByRole("button", { name: /판례 내용 보기/ })
-    .first()
-    .click();
+  await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
   await page
     .getByRole("region", { name: "선택한 판례" })
     .getByRole("button", { name: "다시 검색", exact: true })
