@@ -23,6 +23,7 @@ import {
   v2UploadSessionSchema,
 } from "@baro/contracts/v2";
 import { z } from "zod";
+import { uploadParts } from "./upload-parts";
 import {
   createUploadRecovery,
   type UploadRecovery,
@@ -286,6 +287,8 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
   coalesceWrites?: "credential-scope";
   /** Existing clients keep strict workspace CAS unless their adapter opts in. */
   completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY;
+  /** Bounded overlap, opt-in for adapters with independent part readers. */
+  uploadConcurrency?: 1 | 2 | 3;
   signal?: AbortSignal;
   newKey: () => string;
   openUpload: (source: Source, signal: AbortSignal) => Promise<UploadReader>;
@@ -481,7 +484,9 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
           throw cause;
         }
       }
-      const existing = (await list(id, options)).find((item) => item.id === session.fileId);
+      // This owner-checked preflight already contains any replayed reservation.
+      // A new reservation cannot have completed before its first body arrives.
+      const existing = current.find((item) => item.id === session.fileId);
       if (existing?.uploadRejection)
         throw workspaceError(
           "FILE_REJECTED",
@@ -492,34 +497,43 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
         uploads.delete(identity);
         return existing;
       }
-      const parts = [];
+      let completedBytes = 0;
       progress("uploading");
-      for (let start = 0, index = 0; start < file.size; start += session.chunkBytes, index++) {
-        const end = Math.min(start + session.chunkBytes, file.size);
-        const chunk = await reader.part(start, end);
-        ensureCurrent();
-        if (chunk.byteLength !== end - start || !v2HashSchema.safeParse(chunk.contentHash).success)
-          throw workspaceError(
-            "UNAVAILABLE",
-            "파일 조각을 확인하지 못했어요. 다시 선택해 주세요.",
-            true,
-          );
-        const part = { index, byteLength: chunk.byteLength, contentHash: chunk.contentHash };
-        await workspaceJson(
-          request,
-          `${base(id)}/files/${encodeURIComponent(session.fileId)}/parts/${index}`,
-          {
-            method: "PUT",
-            headers: {
-              "content-type": "application/octet-stream",
-              "x-upload-session": session.uploadSession,
+      const parts = await uploadParts(
+        Math.ceil(file.size / session.chunkBytes),
+        dependencies.uploadConcurrency ?? 1,
+        async (index) => {
+          const start = index * session.chunkBytes;
+          const end = Math.min(start + session.chunkBytes, file.size);
+          const chunk = await reader.part(start, end);
+          ensureCurrent();
+          if (
+            chunk.byteLength !== end - start ||
+            !v2HashSchema.safeParse(chunk.contentHash).success
+          )
+            throw workspaceError(
+              "UNAVAILABLE",
+              "파일 조각을 확인하지 못했어요. 다시 선택해 주세요.",
+              true,
+            );
+          const part = { index, byteLength: chunk.byteLength, contentHash: chunk.contentHash };
+          await workspaceJson(
+            request,
+            `${base(id)}/files/${encodeURIComponent(session.fileId)}/parts/${index}`,
+            {
+              method: "PUT",
+              headers: {
+                "content-type": "application/octet-stream",
+                "x-upload-session": session.uploadSession,
+              },
+              body: chunk.body,
             },
-            body: chunk.body,
-          },
-        );
-        parts.push(part);
-        progress("uploading", start + chunk.byteLength);
-      }
+          );
+          completedBytes += chunk.byteLength;
+          progress("uploading", completedBytes);
+          return part;
+        },
+      );
       const manifest = { byteLength: file.size, contentHash, parts };
       progress("checking", file.size);
       const completion = workspaceMutation(
@@ -683,33 +697,42 @@ export function createFilesClient<Source extends UploadMetadata, Download>(depen
         throw workspaceError("UNAVAILABLE", "원래 파일의 업로드 상태를 다시 확인해 주세요.", true);
       const completed = await known();
       if (completed) return completed;
-      const parts = [];
+      let completedBytes = 0;
       progress("uploading");
-      for (let start = 0, index = 0; start < file.size; start += session.chunkBytes, index++) {
-        const end = Math.min(start + session.chunkBytes, file.size),
-          chunk = await reader.part(start, end);
-        ensureCurrent();
-        if (chunk.byteLength !== end - start || !v2HashSchema.safeParse(chunk.contentHash).success)
-          throw workspaceError(
-            "UNAVAILABLE",
-            "파일 조각을 확인하지 못했어요. 다시 선택해 주세요.",
-            true,
-          );
-        await workspaceJson(
-          request,
-          `${path}/${encodeURIComponent(session.fileId)}/parts/${index}`,
-          {
-            method: "PUT",
-            body: chunk.body,
-            headers: {
-              "content-type": "application/octet-stream",
-              "x-upload-session": session.uploadSession,
+      const parts = await uploadParts(
+        Math.ceil(file.size / session.chunkBytes),
+        dependencies.uploadConcurrency ?? 1,
+        async (index) => {
+          const start = index * session.chunkBytes;
+          const end = Math.min(start + session.chunkBytes, file.size),
+            chunk = await reader.part(start, end);
+          ensureCurrent();
+          if (
+            chunk.byteLength !== end - start ||
+            !v2HashSchema.safeParse(chunk.contentHash).success
+          )
+            throw workspaceError(
+              "UNAVAILABLE",
+              "파일 조각을 확인하지 못했어요. 다시 선택해 주세요.",
+              true,
+            );
+          await workspaceJson(
+            request,
+            `${path}/${encodeURIComponent(session.fileId)}/parts/${index}`,
+            {
+              method: "PUT",
+              body: chunk.body,
+              headers: {
+                "content-type": "application/octet-stream",
+                "x-upload-session": session.uploadSession,
+              },
             },
-          },
-        );
-        parts.push({ index, byteLength: chunk.byteLength, contentHash: chunk.contentHash });
-        progress("uploading", end);
-      }
+          );
+          completedBytes += chunk.byteLength;
+          progress("uploading", completedBytes);
+          return { index, byteLength: chunk.byteLength, contentHash: chunk.contentHash };
+        },
+      );
       const manifest = { byteLength: file.size, contentHash, parts };
       const requestHash = await recovery.fingerprint(
         JSON.stringify({ uploadSession: session.uploadSession, manifest }),

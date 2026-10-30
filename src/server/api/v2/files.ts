@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import {
@@ -7,6 +7,7 @@ import {
   type V2ErrorCode,
 } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
+import { createPreviewD1Timing } from "../../db/preview-d1-timing";
 import { createV2Core, type V2Core } from "../../db/v2-core";
 import { DefinitiveFileRejection, ProcessingError } from "../../modules/file-processing/protocol";
 import { createFileRetry } from "../../modules/file-processing/retry";
@@ -49,12 +50,22 @@ export function createFilesApi(
   } = {},
 ) {
   const app = new Hono<ApiEnvironment>();
+  const timings = new WeakMap<
+    Context<ApiEnvironment>,
+    NonNullable<ReturnType<typeof createPreviewD1Timing>>
+  >();
   app.use("*", async (c, next) => {
     c.header("cache-control", "private, no-store");
     c.header("x-content-type-options", "nosniff");
     if (c.env.APP_ENV === "production" && c.env.PUBLIC_BETA_ENABLED !== "true")
       return c.json(errorBody(c, "BETA_NOT_OPEN", "공개 베타를 준비하고 있어요."), 503);
     await next();
+    try {
+      const timing = timings.get(c)?.finish();
+      if (timing) c.header("server-timing", timing, { append: true });
+    } catch {
+      // Optional preview metrics contain numbers/enums only and cannot fail uploads.
+    }
     c.header("cache-control", "private, no-store");
     return;
   });
@@ -108,16 +119,27 @@ export function createFilesApi(
     return c.json(errorBody(c, "INTERNAL_ERROR", "자료 요청을 처리하지 못했어요.", true), 500);
   });
   const service = async (
-    env: Env,
+    c: Context<ApiEnvironment>,
     ownerId: string,
     sessionId?: string,
     storagePart = false,
     afterComplete?: (task: () => Promise<void>) => void,
     completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY,
   ) => {
+    const env = c.env;
+    const operation =
+      c.req.method === "PUT"
+        ? "file_part"
+        : c.req.method === "POST"
+          ? c.req.path.endsWith("/complete")
+            ? "file_complete"
+            : "file_reserve"
+          : null;
+    const timing = operation ? createPreviewD1Timing(env.DB, env.APP_ENV, operation) : null;
+    if (timing) timings.set(c, timing);
     if (options.testOnlyMissingD1Meta && env.APP_ENV === "production")
       throw new FileError("PROCESSING_UNAVAILABLE");
-    const base = createV2Core(env.DB, await createCaseDataCipher(env), {
+    const base = createV2Core(timing?.binding ?? env.DB, await createCaseDataCipher(env), {
       applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
@@ -134,7 +156,7 @@ export function createFilesApi(
     if (access.response) return access.response;
     const query = z.strictObject({ afterId: opaqueIdSchema.optional() }).parse(c.req.query());
     return c.json(
-      await (await service(c.env, access.ownerId)).list(
+      await (await service(c, access.ownerId)).list(
         access.ownerId,
         c.req.param("caseId"),
         query.afterId,
@@ -148,7 +170,7 @@ export function createFilesApi(
     if (!revision || !/^[1-9]\d*$/.test(revision)) throw new FileError("INVALID_FILE");
     const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
     return c.json(
-      await (await service(c.env, access.ownerId)).reserve(
+      await (await service(c, access.ownerId)).reserve(
         access.ownerId,
         c.req.param("caseId"),
         Number(revision),
@@ -163,7 +185,7 @@ export function createFilesApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     return c.json(
-      await (await service(c.env, access.ownerId)).resumeUpload(
+      await (await service(c, access.ownerId)).resumeUpload(
         access.ownerId,
         c.req.param("caseId"),
         c.req.param("fileId"),
@@ -185,7 +207,7 @@ export function createFilesApi(
       throw new FileError("INVALID_FILE");
     const uploadId = opaqueIdSchema.parse(c.req.header("x-upload-session"));
     return c.json(
-      await (await service(c.env, access.ownerId, undefined, true)).putPart(
+      await (await service(c, access.ownerId, undefined, true)).putPart(
         access.ownerId,
         c.req.param("caseId"),
         c.req.param("fileId"),
@@ -205,7 +227,7 @@ export function createFilesApi(
     const response = c.json(
       await (
         await service(
-          c.env,
+          c,
           access.ownerId,
           access.sessionId,
           false,
@@ -337,7 +359,7 @@ export function createFilesApi(
     const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
-    const result = await (await service(c.env, access.ownerId, access.sessionId)).content(
+    const result = await (await service(c, access.ownerId, access.sessionId)).content(
       access.ownerId,
       c.req.param("caseId"),
       c.req.param("fileId"),
@@ -357,7 +379,7 @@ export function createFilesApi(
     if (access.response) return access.response;
     const body = deleteSchema.parse(await c.req.json());
     return c.json(
-      await (await service(c.env, access.ownerId)).remove(
+      await (await service(c, access.ownerId)).remove(
         access.ownerId,
         c.req.param("caseId"),
         c.req.param("fileId"),

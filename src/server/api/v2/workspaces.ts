@@ -8,6 +8,7 @@ import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { lookupCatalog, lookupConfiguration } from "../../modules/external-tools/catalog";
 import { verifyTurnstile } from "../../modules/intake/service";
+import { backgroundDispatch } from "../../modules/workspace/background-dispatch";
 import {
   createWorkspaceService,
   type WorkspaceDependencies,
@@ -104,18 +105,24 @@ export function createWorkspacesApi(
     reportDependencyFailure(error);
     return c.json(errorBody(c, "DEPENDENCY_UNAVAILABLE", "사건을 불러오지 못했어요.", true), 503);
   });
-  const service = async (env: Env, ownerId: string, binding = env.DB) => {
+  const service = async (c: Context<ApiEnvironment>, ownerId: string, binding = c.env.DB) => {
+    const env = c.env;
     const core = createV2Core(binding, await createCaseDataCipher(env), {
       applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
-    return createWorkspaceService(core, await options.dependencies?.(env, core, ownerId));
+    return createWorkspaceService(
+      core,
+      backgroundDispatch((await options.dependencies?.(env, core, ownerId)) ?? {}, (work) =>
+        c.executionCtx.waitUntil(work),
+      ),
+    );
   };
   app.get("/", async (c) => {
     const a = await customerAccess(c);
     if (a.response) return a.response;
     const q = pageQuery.parse(c.req.query());
-    const s = await service(c.env, a.ownerId);
+    const s = await service(c, a.ownerId);
     const items = await s.list(a.ownerId, q.limit, before(q.before));
     const last = items.at(-1);
     return c.json({
@@ -134,7 +141,7 @@ export function createWorkspacesApi(
     emptyQuery.parse(c.req.query());
     const request = v2CreateCaseRequestSchema.parse(await c.req.json());
     const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
-    const s = await service(c.env, a.ownerId);
+    const s = await service(c, a.ownerId);
     const replay = await s.replayCreate(a.ownerId, key, request);
     if (replay) return c.json(replay, 201);
     if (!(await abuseAllowed(c, a.ownerId, true)))
@@ -148,7 +155,7 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
-      await (await service(c.env, a.ownerId, domainBinding(c, "workspace_read"))).find(
+      await (await service(c, a.ownerId, domainBinding(c, "workspace_read"))).find(
         a.ownerId,
         c.req.param("id"),
       ),
@@ -158,7 +165,7 @@ export function createWorkspacesApi(
     const a = await customerAccess(c, false, true);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    await (await service(c.env, a.ownerId)).find(a.ownerId, c.req.param("id"));
+    await (await service(c, a.ownerId)).find(a.ownerId, c.req.param("id"));
     return c.json({ schemaVersion: "2", tools: lookupCatalog(lookupConfiguration(c.env)) });
   });
   app.get("/:id/intake", async (c) => {
@@ -166,7 +173,7 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
-      await (await service(c.env, a.ownerId, domainBinding(c, "intake_read"))).intake(
+      await (await service(c, a.ownerId, domainBinding(c, "intake_read"))).intake(
         a.ownerId,
         c.req.param("id"),
       ),
@@ -176,7 +183,7 @@ export function createWorkspacesApi(
     const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    const s = await service(c.env, a.ownerId);
+    const s = await service(c, a.ownerId);
     return c.json({
       schemaVersion: "2",
       results: await s.toolResults(a.ownerId, c.req.param("id"), c.req.param("messageId")),
@@ -186,7 +193,7 @@ export function createWorkspacesApi(
     const a = await customerAccess(c);
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
-    const s = await service(c.env, a.ownerId);
+    const s = await service(c, a.ownerId);
     if (!(await s.summaryAvailable(a.ownerId, c.req.param("id"))))
       throw new WorkspaceError("NOT_FOUND");
     const fragments = s.summary(a.ownerId, c.req.param("id"))[Symbol.asyncIterator]();
@@ -242,7 +249,7 @@ export function createWorkspacesApi(
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
       const body: unknown = await c.req.json(),
         s = await service(
-          c.env,
+          c,
           a.ownerId,
           name === "answers" ? domainBinding(c, "answers_save") : c.env.DB,
         ),
@@ -265,7 +272,7 @@ export function createWorkspacesApi(
     const a = await customerAccess(c);
     if (a.response) return a.response;
     const q = pageQuery.parse(c.req.query());
-    const items = await (await service(c.env, a.ownerId)).messages(
+    const items = await (await service(c, a.ownerId)).messages(
       a.ownerId,
       c.req.param("id"),
       q.limit,
@@ -285,7 +292,7 @@ export function createWorkspacesApi(
       const a = await customerAccess(c);
       if (a.response) return a.response;
       const q = afterQuery.parse(c.req.query());
-      const items = await (await service(c.env, a.ownerId))[name](
+      const items = await (await service(c, a.ownerId))[name](
         a.ownerId,
         c.req.param("id"),
         q.after,
@@ -298,7 +305,7 @@ export function createWorkspacesApi(
       if (a.response) return a.response;
       emptyQuery.parse(c.req.query());
       const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
-      const s = await service(c.env, a.ownerId),
+      const s = await service(c, a.ownerId),
         body: unknown = await c.req.json();
       return c.json(
         await s[name === "actions" ? "updateAction" : "editTimeline"](
@@ -315,7 +322,7 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
-      await (await service(c.env, a.ownerId)).createTimeline(
+      await (await service(c, a.ownerId)).createTimeline(
         a.ownerId,
         c.req.param("id"),
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
@@ -329,7 +336,7 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
-      await (await service(c.env, a.ownerId, domainBinding(c, "latest_job_read"))).latestJob(
+      await (await service(c, a.ownerId, domainBinding(c, "latest_job_read"))).latestJob(
         a.ownerId,
         c.req.param("id"),
       ),
@@ -340,11 +347,7 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     return c.json(
-      await (await service(c.env, a.ownerId)).job(
-        a.ownerId,
-        c.req.param("id"),
-        c.req.param("jobId"),
-      ),
+      await (await service(c, a.ownerId)).job(a.ownerId, c.req.param("id"), c.req.param("jobId")),
     );
   });
   app.post("/:id/workspace-jobs/:jobId/retry", async (c) => {
@@ -354,7 +357,7 @@ export function createWorkspacesApi(
     idempotencyKeySchema.parse(c.req.header("idempotency-key"));
     if (!(await abuseAllowed(c, a.ownerId, false)))
       return c.json(errorBody(c, "RATE_LIMITED", "잠시 후 다시 시도해 주세요.", true), 429);
-    const result = await (await service(c.env, a.ownerId)).retry(
+    const result = await (await service(c, a.ownerId)).retry(
       a.ownerId,
       c.req.param("id"),
       c.req.param("jobId"),

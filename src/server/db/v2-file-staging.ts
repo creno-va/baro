@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
-import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../contracts/consent";
 import {
   positionMatchesProbe,
   type V2Derivative,
@@ -41,7 +44,7 @@ const publicationScope = (context: FilePublicationContext | undefined, fileId: s
   return {
     sql: `w.status=? AND w.intake_revision=? AND w.confirmed_summary_revision IS ? AND w.current_job_id IS ?
       AND EXISTS(SELECT 1 FROM v2_files source WHERE source.id=? AND source.workspace_id=w.id AND source.manifest_snapshot_id=?)
-      AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=w.owner_id AND file_id=? AND kind='auto_processing' AND version=?)
+      AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=w.owner_id AND file_id=? AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}'))
       AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=w.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
     values: [
       context.status,

@@ -4,6 +4,7 @@ export { responseError } from "@baro/api-client";
 export { cacheClient } from "@baro/client-core";
 
 import { ApiError } from "./errors";
+import { apiFetch } from "./fetch";
 import { mockRequest } from "./mock/runtime";
 
 export { ApiError, errorMessage } from "./errors";
@@ -41,7 +42,7 @@ export async function request<T>(
 }
 
 const realRequest = createJsonRequester({
-  transport: (path, init) => fetch(path, { ...init, credentials: "same-origin" }),
+  transport: apiFetch,
   newKey: () => crypto.randomUUID(),
   encodeBody: (value) =>
     value instanceof FormData
@@ -59,7 +60,7 @@ export async function apiRequest(path: string, init: RequestInit = {}): Promise<
     throw new ApiError("VALIDATION_ERROR", "요청 경로를 확인해 주세요.");
   if (apiMode === "real") {
     try {
-      return await fetch(path, { ...init, credentials: "same-origin" });
+      return await apiFetch(path, init);
     } catch {
       throw new ApiError("UNAVAILABLE", "연결하지 못했어요. 다시 시도해 주세요.", true);
     }

@@ -8,7 +8,7 @@ import {
   schemaVersionSchema,
   timestampSchema,
 } from "./common";
-import { CURRENT_POLICY_VERSIONS } from "./consent";
+import { CURRENT_POLICY_VERSIONS, PREVIOUS_AI_NOTICE_VERSION } from "./consent";
 
 export const contentHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const officialSourceUrlSchema = z
@@ -131,7 +131,11 @@ const policyBase = {
   helpLinks: z.array(helpLinkSchema).max(5),
 };
 export const resultShapeSchema = z.discriminatedUnion("kind", [
-  guidanceResultSchema,
+  // Stored v1 results keep their original notice. New generation still uses
+  // guidanceResultSchema above, which requires the current notice version.
+  guidanceResultSchema.extend({
+    noticeVersion: z.enum([CURRENT_POLICY_VERSIONS.aiNoticeVersion, PREVIOUS_AI_NOTICE_VERSION]),
+  }),
   z.strictObject({
     ...policyBase,
     kind: z.literal("out_of_scope"),

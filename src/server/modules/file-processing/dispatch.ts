@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../../contracts";
-import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../../contracts/consent";
 import type { V2Core } from "../../db/v2-core";
 import { stopExpiredUndispatchedJob } from "../../db/v2-expired-undispatched-job";
 import { jobAlive } from "../../db/v2-jobs";
@@ -50,7 +53,7 @@ const consentValues = [
 ];
 const joins =
   "FROM v2_outbox outbox JOIN v2_jobs j ON j.id=outbox.job_id AND j.operation_id=outbox.operation_id JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id AND f.workspace_id=j.workspace_id JOIN v2_workspaces w ON w.id=f.workspace_id AND w.owner_id=o.owner_id";
-const live = `outbox.kind='job_dispatch' AND outbox.target_id=j.runtime_instance_id AND j.target_kind='file' AND j.kind='file_processing' AND j.status IN ('queued','running','validating') AND j.target_revision=f.revision AND f.current_job_id=j.id AND f.operation_id=o.id AND f.state='queued' AND o.state='admitted' AND w.status IN ('active','intake') AND ${jobAlive} AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?)`;
+const live = `outbox.kind='job_dispatch' AND outbox.target_id=j.runtime_instance_id AND j.target_kind='file' AND j.kind='file_processing' AND j.status IN ('queued','running','validating') AND j.target_revision=f.revision AND f.current_job_id=j.id AND f.operation_id=o.id AND f.state='queued' AND o.state='admitted' AND w.status IN ('active','intake') AND ${jobAlive} AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}'))`;
 type Row = {
   id: string;
   operation_id: string;

@@ -1,7 +1,10 @@
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
-import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../../contracts/consent";
 import * as schema from "../../db/schema";
 import { guardSchema, type V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
@@ -45,7 +48,7 @@ export function createFileRetry(
     const file = await files.metadata(g, fileId);
     const consent = await core
       .statement(
-        "SELECT file_id FROM v2_consents WHERE owner_id=? AND file_id=? AND kind='auto_processing' AND version=?",
+        `SELECT file_id FROM v2_consents WHERE owner_id=? AND file_id=? AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}')`,
         [ownerId, fileId, CURRENT_POLICY_VERSIONS.aiNoticeVersion],
       )
       .first();

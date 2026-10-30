@@ -1,6 +1,9 @@
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
-import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../contracts/consent";
 import * as schema from "../db/schema";
 import { type Actor, hashSchema, type V2Core } from "../db/v2-core";
 import { createV2FilesRepository } from "../db/v2-files";
@@ -109,7 +112,7 @@ export function createFileProcessingAdmission(
               `SELECT j.id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id
           WHERE j.id=? AND o.owner_id=? AND j.lease_token=? AND j.fencing=? AND j.lease_until>? AND j.status='running' AND ${jobAlive}
           AND EXISTS(SELECT 1 FROM v2_upload_sessions WHERE id=? AND file_id=j.target_id AND revision=? AND state='open' AND encrypted_payload IS ? AND expires_at>?)
-          AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=j.target_id AND owner_id=o.owner_id AND kind='auto_processing' AND version=?)`,
+          AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=j.target_id AND owner_id=o.owner_id AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}'))`,
               [
                 lease.jobId,
                 input.ownerId,

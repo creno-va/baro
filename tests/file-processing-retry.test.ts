@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../src/contracts/consent";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2DeletionReconciler } from "../src/server/modules/deletion/v2-reconcile";
@@ -45,6 +48,28 @@ async function failedFile() {
   const input = () => ({ expectedRevision: f.rev(), fileRevision: 2 });
   return { ...f, u, jobs, jobId, oldLease: acquired.lease, retry, input };
 }
+
+test("same-purpose legacy file consent resumes after fresh account consent without rewriting its receipt", async () => {
+  const f = await failedFile();
+  try {
+    f.db.sqlite
+      .query("UPDATE v2_consents SET version=? WHERE file_id=? AND kind='auto_processing'")
+      .run(COMPATIBLE_FILE_AI_NOTICE_VERSION, f.u.session.fileId);
+    const before = f.db.sqlite
+      .query("SELECT * FROM v2_consents WHERE file_id=? AND kind='auto_processing'")
+      .all(f.u.session.fileId);
+    expect(
+      (await f.retry(f.actor.ownerId, f.workspaceId, f.u.session.fileId, f.input()))?.status,
+    ).toBe("queued");
+    expect(
+      f.db.sqlite
+        .query("SELECT * FROM v2_consents WHERE file_id=? AND kind='auto_processing'")
+        .all(f.u.session.fileId),
+    ).toEqual(before);
+  } finally {
+    f.db.close();
+  }
+});
 test("actual failed file retry keeps immutable original and operation, creates one outbox and fences the old lease", async () => {
   const f = await failedFile(),
     before = f.db.sqlite

@@ -1055,7 +1055,7 @@ export function Editor() {
                 <div className="lawyer-publication-confirm">
                   <p className="mb-3 text-sm">
                     공개 정보는 누구나 보고 저장할 수 있어요. 비공개로 전환해도 제3자가 보관한
-                    사본은 삭제할 수 없어요. <a href="/policies/privacy">개인정보 처리방침 초안</a>
+                    사본은 삭제할 수 없어요. <a href="/policies/privacy">개인정보 처리방침</a>
                     에서 공개 범위를 확인하세요.
                   </p>
                   <label className="flex items-start gap-2">

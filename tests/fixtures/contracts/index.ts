@@ -1,4 +1,5 @@
 import type { Citation, Question, Result, StructuredFact } from "../../../src/contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../../src/contracts/consent";
 
 export const fixtureMetadata = {
   schemaVersion: "1",
@@ -66,7 +67,7 @@ export const guidance: Extract<Result, { kind: "guidance" }> = {
     },
   ],
   citations: [syntheticCitation],
-  noticeVersion: "2026-10-04",
+  noticeVersion: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
 };
 export const outOfScope: Extract<Result, { kind: "out_of_scope" }> = {
   schemaVersion: "1",

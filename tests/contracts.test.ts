@@ -15,6 +15,7 @@ import {
   dateSchema,
   errorResponseSchema,
   factSchema,
+  guidanceResultSchema,
   idempotencyKeySchema,
   officialSourceUrlSchema,
   questionOutputSchema,
@@ -26,6 +27,7 @@ import {
   timestampSchema,
   validationOutputSchema,
 } from "../src/contracts";
+import { PREVIOUS_AI_NOTICE_VERSION } from "../src/contracts/consent";
 import {
   analysisId,
   caseId,
@@ -36,6 +38,13 @@ import {
   syntheticCitation,
   urgentRedirect,
 } from "./fixtures/contracts";
+
+test("old saved guidance remains readable with its actual notice while new generation requires current notice", () => {
+  const legacy = { ...guidance, noticeVersion: PREVIOUS_AI_NOTICE_VERSION };
+  expect(resultSchema.parse(legacy)).toMatchObject({ noticeVersion: PREVIOUS_AI_NOTICE_VERSION });
+  expect(guidanceResultSchema.safeParse(legacy).success).toBe(false);
+  expect(guidanceResultSchema.safeParse(guidance).success).toBe(true);
+});
 
 const input = {
   narrative: "합성 사용자 A가 지인에게 금전을 빌려주었다고 진술했습니다.",

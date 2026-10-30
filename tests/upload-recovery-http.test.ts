@@ -1,8 +1,45 @@
 import { expect, test } from "bun:test";
 import type { WorkspaceTransport } from "@baro/api-client";
-import { FILE_TARGET_UPLOAD_CONSISTENCY, UPLOAD_CONSISTENCY_HEADER } from "@baro/contracts/v2";
+import {
+  FILE_TARGET_UPLOAD_CONSISTENCY,
+  UPLOAD_CONSISTENCY_HEADER,
+  V2_LIMITS,
+} from "@baro/contracts/v2";
 import { seedTestSession } from "./helpers/session";
 import { uploadRecoveryHttpFixture as fixture } from "./helpers/upload-recovery-http";
+
+test("parallel browser-style chunks survive reordered ACKs through signed HTTP, encrypted R2 and final digest validation", async () => {
+  const bytes = new Uint8Array(V2_LIMITS.chunkBytes * 3 + 17).fill(65);
+  bytes[bytes.length - 1] = 90;
+  const f = await fixture({ bytes });
+  const writes: number[] = [];
+  let active = 0,
+    maximum = 0;
+  try {
+    const request: WorkspaceTransport = async (path, init) => {
+      const match = /\/parts\/(\d+)$/.exec(path);
+      if (!match) return f.transport(path, init);
+      const index = Number(match[1]);
+      if (index) expect(writes).toContain(0);
+      active++;
+      maximum = Math.max(maximum, active);
+      const response = await f.transport(path, init);
+      await Bun.sleep(index === 1 ? 30 : 1);
+      writes.push(index);
+      active--;
+      return response;
+    };
+    const result = await f
+      .client(request, false, undefined, { uploadConcurrency: 3 })
+      .upload(f.workspace.id, f.source, undefined, { metadataOnly: true });
+    expect(result.status).toBe("waiting");
+    expect(maximum).toBe(3);
+    expect(writes[0]).toBe(0);
+    expect(writes.toSorted()).toEqual([0, 1, 2, 3]);
+  } finally {
+    f.db.close();
+  }
+}, 30_000);
 
 for (const recover of [false, true])
   test(`versioned completion crosses actual signed HTTP and a publication race; persisted recovery=${recover}`, async () => {

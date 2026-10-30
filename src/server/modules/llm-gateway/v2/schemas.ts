@@ -38,6 +38,7 @@ export const workspaceChatOutputSchema = z.strictObject({
   unknowns: v2SummarySchema.shape.unknowns.nullable().default(null),
   requestedSources: z.array(workspaceSourceRequestSchema).max(2),
   requestedTools: z.array(v2LookupToolIdSchema).max(2).default([]),
+  requestedCurrentTime: z.boolean().default(false),
   requestedMaterials: z.array(materialWindowRequestSchema).max(2).default([]),
   sourceClaims: z.array(sourceClaimSchema).max(50).default([]),
   timeline: z.array(v2TimelineEntrySchema).max(5),
