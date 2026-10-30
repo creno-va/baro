@@ -99,7 +99,9 @@ test("consent renewal leaves ready preview readable while edits/upload/publicati
     />,
   );
   expect(screen.getByLabelText("이름").props.editable).toBe(false);
-  for (const label of ["프로필 사진 파일 선택", "프로필 사진 1 삭제", "프로필 공개 준비"])
+  expect(screen.queryByRole("button", { name: "프로필 공개 준비" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "프로필 공개 철회" })).toBeNull();
+  for (const label of ["프로필 사진 파일 선택", "프로필 사진 1 삭제", "프로필 저장"])
     expect(screen.getByRole("button", { name: label }).props.accessibilityState.disabled).toBe(
       true,
     );
@@ -182,6 +184,8 @@ test("uncertain conflicting save keeps typed input but disables resend until a d
   );
   expect(screen.getByDisplayValue("보존할 입력")).toBeTruthy();
   expect(screen.getByLabelText("이름").props.editable).toBe(false);
+  expect(screen.queryByRole("button", { name: "프로필 공개 준비" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "프로필 공개 철회" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "이전 요청 직접 다시 확인" }));
   expect(handlers.retryUnconfirmed).not.toHaveBeenCalled();
   expect(handlers.save).not.toHaveBeenCalled();

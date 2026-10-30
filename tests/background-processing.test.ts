@@ -1,6 +1,23 @@
 import { expect, spyOn, test } from "bun:test";
+import { productBoundaryFindings } from "../scripts/product-boundaries";
 import { backgroundDispatch } from "../src/server/modules/workspace/background-dispatch";
 import { runScheduledTasks } from "../src/server/runtime/scheduled-tasks";
+
+test("scheduled diagnostics allow only the reviewed enum stage, never errors or payloads", async () => {
+  const path = "src/server/runtime/scheduled-tasks.ts";
+  const source = await Bun.file(path).text();
+  expect(productBoundaryFindings(path, source)).toEqual([]);
+  expect(productBoundaryFindings("src/server/other.ts", source)).toContain(
+    "unapproved_payload_log",
+  );
+  for (const field of ["error", "sql", "token", "payload"])
+    expect(
+      productBoundaryFindings(
+        path,
+        source.replace("stage: task.stage", `stage: task.stage, ${field}: task`),
+      ),
+    ).toContain("unapproved_payload_log");
+});
 
 test("admission returns while durable dispatch is still pending, independently of the request", async () => {
   const gate = Promise.withResolvers<void>();
