@@ -247,3 +247,179 @@ test("URL restores before input; a slow initial response cannot erase fast edits
   await expect(name).toHaveValue("");
   await expect(page).toHaveURL(/\/lawyers$/);
 });
+
+const nextPageCursor = (n: number) => `synthetic-directory-next-${String(n).padStart(16, "0")}`;
+const cards = (start: number, count: number): DirectoryItem[] =>
+  Array.from({ length: count }, (_, i) => ({
+    ...directoryLawyer,
+    id: `synthetic-profile-${start + i}`,
+    name: `합성 변호사 ${start + i}`,
+    photoAssetId: null,
+    photoUrl: null,
+  }));
+
+test("infinite scrolling requests one 20-card page at a time, deduplicates and stops at the last cursor", async ({
+  page,
+}) => {
+  const calls: URL[] = [];
+  let release: () => void = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v2/lawyers/directory?*", async (route) => {
+    const url = new URL(route.request().url());
+    calls.push(url);
+    const cursor = url.searchParams.get("cursor");
+    if (cursor === nextPageCursor(1)) await pending;
+    const result =
+      cursor === nextPageCursor(1)
+        ? cards(20, 20)
+        : cursor === nextPageCursor(2)
+          ? cards(40, 1)
+          : cards(1, 20);
+    await route.fulfill({
+      json: {
+        ...directoryPage(result),
+        nextCursor:
+          cursor === nextPageCursor(1)
+            ? nextPageCursor(2)
+            : cursor === nextPageCursor(2)
+              ? null
+              : nextPageCursor(1),
+      },
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/lawyers");
+  await expect(page.locator("a.directory-profile")).toHaveCount(20);
+  expect(calls).toHaveLength(1);
+  await page.locator(".directory-pagination").scrollIntoViewIfNeeded();
+  await expect.poll(() => calls.length).toBe(2);
+  await expect(page.getByRole("button", { name: "더 보기", exact: true })).toBeDisabled();
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+  release();
+  await expect(page.locator("a.directory-profile")).toHaveCount(39);
+  await page.locator(".directory-pagination").scrollIntoViewIfNeeded();
+  await expect(page.locator("a.directory-profile")).toHaveCount(40);
+  await expect(page.getByRole("button", { name: "더 보기", exact: true })).toHaveCount(0);
+  expect(calls.map((url) => url.searchParams.get("cursor"))).toEqual([
+    null,
+    nextPageCursor(1),
+    nextPageCursor(2),
+  ]);
+  expect(calls.every((url) => url.searchParams.get("limit") === "20")).toBe(true);
+  expect(
+    new Set(
+      await page
+        .locator("a.directory-profile")
+        .evaluateAll((items) => items.map((item) => item.getAttribute("href"))),
+    ).size,
+  ).toBe(40);
+});
+
+test("changing search cancels an in-flight scroll page and cannot append old results", async ({
+  page,
+}) => {
+  let release: () => void = () => {},
+    nextStarted = false;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/v2/lawyers/directory?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("cursor")) {
+      nextStarted = true;
+      await pending;
+      return route.fulfill({ json: directoryPage(cards(21, 20)) });
+    }
+    return route.fulfill({
+      json:
+        url.searchParams.get("name") === "새 검색"
+          ? directoryPage(cards(99, 1))
+          : { ...directoryPage(cards(1, 20)), nextCursor: nextPageCursor(1) },
+    });
+  });
+  await page.goto("/lawyers");
+  await expect(page.locator("a.directory-profile")).toHaveCount(20);
+  await page.locator(".directory-pagination").scrollIntoViewIfNeeded();
+  await expect.poll(() => nextStarted).toBe(true);
+  await page.getByLabel("이름 또는 사무실", { exact: true }).fill("새 검색");
+  await page.getByRole("button", { name: "검색", exact: true }).click();
+  await expect(page.locator("a.directory-profile")).toHaveCount(1);
+  release();
+  await expect(page.getByRole("link", { name: "합성 변호사 99", exact: true })).toBeVisible();
+  await expect(page.locator("a.directory-profile")).toHaveCount(1);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("empty candidate windows advance automatically but pause before an unattended whole-directory scan", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route("**/api/v2/lawyers/directory?*", (route) => {
+    calls++;
+    return route.fulfill({
+      json:
+        calls > 3
+          ? directoryPage(cards(99, 1))
+          : { ...directoryPage(), nextCursor: nextPageCursor(calls) },
+    });
+  });
+  await page.goto("/lawyers");
+  await expect.poll(() => calls).toBe(3);
+  const more = page.getByRole("button", { name: "더 보기", exact: true });
+  await expect(more).toBeEnabled();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  expect(calls).toBe(3);
+  await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toHaveCount(0);
+  await more.click();
+  await expect(page.locator("a.directory-profile")).toHaveCount(1);
+  expect(calls).toBe(4);
+});
+
+for (const status of [503, 409]) {
+  test(`scroll page ${status === 409 ? "expiry restarts search" : "failure retries the same cursor"} without an automatic retry loop`, async ({
+    page,
+  }) => {
+    const calls: URL[] = [];
+    let failed = false;
+    await page.route("**/api/v2/lawyers/directory?*", (route) => {
+      const url = new URL(route.request().url());
+      calls.push(url);
+      if (url.searchParams.has("cursor") && !failed) {
+        failed = true;
+        return route.fulfill({
+          status,
+          json: { error: { code: status === 409 ? "CURSOR_EXPIRED" : "DEPENDENCY_UNAVAILABLE" } },
+        });
+      }
+      if (failed) return route.fulfill({ json: directoryPage(cards(99, 1)) });
+      return route.fulfill({
+        json: { ...directoryPage(cards(1, 20)), nextCursor: nextPageCursor(1) },
+      });
+    });
+    await page.goto("/lawyers");
+    await expect(page.locator("a.directory-profile")).toHaveCount(20);
+    await page.locator(".directory-pagination").scrollIntoViewIfNeeded();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.locator("a.directory-profile")).toHaveCount(20);
+    expect(calls).toHaveLength(2);
+    if (status === 409) await expect(page.getByRole("alert")).toContainText("목록이 갱신됐어요.");
+    await page
+      .getByRole("button", { name: status === 409 ? "다시 검색" : "다시 불러오기", exact: true })
+      .click();
+    await expect(page.locator("a.directory-profile")).toHaveCount(status === 409 ? 1 : 21);
+    expect(calls.at(-1)?.searchParams.get("cursor")).toBe(
+      status === 409 ? null : nextPageCursor(1),
+    );
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
+}

@@ -1,6 +1,6 @@
 import { ChevronDown, Info, MapPin, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, lawyerErrorMessage } from "../../client/api/lawyers";
+import { api, LawyerApiError, lawyerErrorMessage } from "../../client/api/lawyers";
 import type { DirectoryItem } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -16,19 +16,31 @@ export function Directory() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [retryCursor, setRetryCursor] = useState<string>();
+  const [autoPaused, setAutoPaused] = useState(false);
   const [ready, setReady] = useState(false);
   const [filters, setFilters] = useState({ name: "", region: "", legalField: "" });
   const current = useRef<AbortController | null>(null);
+  const requestKey = useRef<string | null>(null);
+  const sentinel = useRef<HTMLDivElement | null>(null);
+  const emptyPages = useRef(0);
+  const activeCursor = useRef<string | null>(null);
   const query = useRef("");
   const load = useCallback(async (params: URLSearchParams, cursor?: string) => {
+    const key = JSON.stringify([params.toString(), cursor ?? null]);
+    if (current.current && !current.current.signal.aborted && requestKey.current === key) return;
     current.current?.abort();
     const controller = new AbortController();
     current.current = controller;
+    requestKey.current = key;
     setBusy(true);
     setError("");
     if (!cursor) {
+      emptyPages.current = 0;
+      setAutoPaused(false);
       setItems([]);
       setNextCursor(null);
+      activeCursor.current = null;
     }
     try {
       const page = await api.lawyers.listPage(
@@ -41,16 +53,32 @@ export function Directory() {
         controller.signal,
       );
       if (controller.signal.aborted) return;
+      if (cursor && page.nextCursor === cursor) throw new Error("Directory cursor did not advance");
       setItems((previous) =>
         cursor
           ? [...previous, ...page.items.filter((item) => !previous.some((p) => p.id === item.id))]
           : page.items,
       );
       setNextCursor(page.nextCursor);
+      activeCursor.current = page.nextCursor;
+      emptyPages.current = page.items.length ? 0 : emptyPages.current + 1;
+      // Sparse search windows may be empty but still have a next cursor. Keep
+      // advancing, without scanning the entire directory unattended in one view.
+      setAutoPaused(emptyPages.current >= 3);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(lawyerErrorMessage(cause));
+      if (!controller.signal.aborted) {
+        const restart =
+          cause instanceof LawyerApiError &&
+          (cause.code === "CONFLICT" || cause.httpStatus === 400);
+        setRetryCursor(restart ? undefined : cursor);
+        setError(restart ? "목록이 갱신됐어요. 다시 검색해 주세요." : lawyerErrorMessage(cause));
+      }
     } finally {
-      if (!controller.signal.aborted) setBusy(false);
+      if (current.current === controller) {
+        current.current = null;
+        requestKey.current = null;
+        if (!controller.signal.aborted) setBusy(false);
+      }
     }
   }, []);
   useEffect(() => {
@@ -76,6 +104,32 @@ export function Directory() {
       window.removeEventListener("popstate", restore);
     };
   }, [load]);
+  useEffect(() => {
+    if (
+      busy ||
+      error ||
+      !nextCursor ||
+      autoPaused ||
+      !sentinel.current ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    const search = query.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          query.current === search &&
+          activeCursor.current === nextCursor &&
+          !current.current &&
+          entries.some((entry) => entry.isIntersecting)
+        )
+          void load(new URLSearchParams(search), nextCursor);
+      },
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(sentinel.current);
+    return () => observer.disconnect();
+  }, [busy, error, nextCursor, autoPaused, load]);
   return (
     <div className="lawyer-directory">
       <div className="directory-intro">
@@ -182,7 +236,9 @@ export function Directory() {
           variant="error"
           title={error}
           action={
-            <Button onClick={() => void load(new URLSearchParams(query.current))}>다시 검색</Button>
+            <Button onClick={() => void load(new URLSearchParams(query.current), retryCursor)}>
+              {retryCursor ? "다시 불러오기" : "다시 검색"}
+            </Button>
           }
         />
       )}
@@ -260,16 +316,22 @@ export function Directory() {
           <LoadingContent layout="directory" title="공개 프로필을 불러오고 있어요." />
         ))}
       {nextCursor && !error && (
-        <Button
-          variant="outline"
-          className="directory-more"
-          disabled={busy}
-          loading={busy}
-          onClick={() => void load(new URLSearchParams(query.current), nextCursor)}
-        >
-          더 보기
-          <ChevronDown size={17} aria-hidden="true" />
-        </Button>
+        <div ref={sentinel} className="directory-pagination">
+          <Button
+            variant="outline"
+            className="directory-more"
+            disabled={busy}
+            loading={busy}
+            onClick={() => {
+              emptyPages.current = 0;
+              setAutoPaused(false);
+              void load(new URLSearchParams(query.current), nextCursor);
+            }}
+          >
+            더 보기
+            <ChevronDown size={17} aria-hidden="true" />
+          </Button>
+        </div>
       )}
       <div className="directory-disclosure">
         <Info size={18} aria-hidden="true" />
