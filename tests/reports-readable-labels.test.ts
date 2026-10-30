@@ -121,7 +121,8 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
     "사건 개요",
     "당사자와 관계",
     "주요 경위",
-    "주요 사실과 자료",
+    "주요 사실",
+    "증거 자료",
     "추가 확인 사항",
   ])
     expect(report.content).toContain(label);
@@ -163,6 +164,123 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
   });
   expect(excluded.content).toContain("이용자 진술 · 합성 답변");
   expect(excluded.content).not.toContain("준비할 행동");
+});
+
+test("evidence exports file observations with matching fact positions and excludes hidden materials", async () => {
+  const f = await reportFixture();
+  fixtures.push(f);
+  const u = await readyFile(f, "합성 송금 기록"),
+    fileId = u.session.fileId;
+  const position = { kind: "document" as const, page: 1, paragraph: 1, table: null };
+  const text = "송금일자 2026-10-20 · 합성은행 · 300만원 · 이체 완료";
+  for (const [ordinal, included] of [true, false].entries()) {
+    const rowId = crypto.randomUUID(),
+      entityId = crypto.randomUUID();
+    const value = {
+      id: entityId,
+      text: included ? text : "제외한 민감 관찰",
+      position,
+      certainty: "observed",
+      userEdited: false,
+      included,
+    };
+    f.db.sqlite
+      .query(
+        "INSERT INTO v2_file_observations(id,entity_id,file_id,revision,file_revision,ordinal,encrypted_payload) VALUES(?,?,?,2,2,?,?)",
+      )
+      .run(
+        rowId,
+        entityId,
+        fileId,
+        ordinal,
+        await f.core.encrypt("v2_file_observations", rowId, f.actor.ownerId, 2, value),
+      );
+  }
+  const fact: V2ReportBody["facts"][number] = {
+    id: crypto.randomUUID(),
+    text,
+    attribution: "user_material",
+    certainty: "observed",
+    significance: "neutral",
+    userEdited: false,
+    references: [{ kind: "user_material", fileId, fileRevision: 2, position }],
+    conflictingFactIds: [],
+  };
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_facts(id,entity_id,workspace_id,summary_revision,encrypted_payload) VALUES(?,?,?,1,?)",
+    )
+    .run(
+      fact.id,
+      fact.id,
+      f.workspaceId,
+      await f.core.encrypt("v2_facts", fact.id, f.actor.ownerId, 1, fact),
+    );
+  const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  expect(report.content).toContain(`자료 기재 · ${text} (증거 1 · 1쪽 · 1번째 문단)`);
+  expect(report.content).toContain("증거 자료\n### 증거 1 ·");
+  expect(report.content).toContain(`- 1쪽 · 1번째 문단 · 자료 기재 · ${text}`);
+  expect(report.content).not.toContain("제외한 민감 관찰");
+  expect(report.content).not.toContain(fileId);
+  const html = await f.reports.html(f.actor.ownerId, report.id);
+  expect(html).toContain("<h2>증거 자료</h2>");
+  expect(html).toContain("<h4>증거 1 ·");
+  expect(html).toContain(text);
+  const excluded = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: report.revision,
+    content: report.content,
+    maskIdentifiers: false,
+    excludedFileIds: [fileId],
+  });
+  expect(excluded.content).not.toContain(text);
+  expect(excluded.content).not.toContain("### 증거 1 ·");
+});
+
+test("evidence references distinguish photos, audio intervals and sampled video without claiming authentication", async () => {
+  const f = await reportFixture();
+  fixtures.push(f);
+  const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
+  const body = structuredClone(source.body);
+  const positions = [
+    { kind: "image" as const, region: null },
+    { kind: "audio" as const, startSeconds: 12.5, endSeconds: 19.25 },
+    {
+      kind: "video" as const,
+      timestampSeconds: 24,
+      frameIndex: 48,
+      sampling: "scene_change" as const,
+    },
+  ];
+  body.selectedFiles = positions.map((_, i) => ({
+    id: `file-${i}`,
+    revision: 2,
+    name: ["합성 사진.jpg", "합성 녹취.wav", "합성 영상.mp4"][i]!,
+    byteLength: 100,
+    contentHash: "a".repeat(64),
+  }));
+  body.facts = positions.map((position, i) => ({
+    id: `fact-${i}`,
+    text: `합성 관찰 ${i}`,
+    attribution: "user_material",
+    certainty: i === 1 ? "uncertain" : "observed",
+    significance: "neutral",
+    references: [{ kind: "user_material", fileId: `file-${i}`, fileRevision: 2, position }],
+    conflictingFactIds: [],
+    userEdited: i === 1,
+  }));
+  const text = reportText(body, [], {
+    ...source.display,
+    materials: body.selectedFiles.map((file) => ({
+      id: file.id,
+      observations: ["확인 필요 · 합성 판독"],
+    })),
+  });
+  expect(text).toContain("증거 1 · 이미지 관찰");
+  expect(text).toContain("확인 필요 · 직접 수정 · 합성 관찰 1 (증거 2 · 12.5–19.25초)");
+  expect(text).toContain("증거 3 · 24초 · 프레임 48 · 장면 전환 표본");
+  expect(text).not.toContain("사실 확인됨");
+  body.selectedFiles[0]!.revision = 3;
+  expect(reportText(body, [], source.display)).not.toContain("(증거 1 · 이미지 관찰)");
 });
 
 test("source display never invents question positions or exposes internal IDs, and retains canonical provenance", async () => {

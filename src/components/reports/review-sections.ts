@@ -77,7 +77,10 @@ export function withInlineReportPhotos(
   const present = new Set(reportPhotoIds(content));
   const missing = photos.filter((photo) => !present.has(photo.id));
   const sections = reportReviewSections(content);
-  const target = sections.find((section) => section.title.includes("자료")) ?? sections[0];
+  const target =
+    sections.find((section) => section.title === "증거 자료") ??
+    sections.find((section) => section.title.includes("자료")) ??
+    sections[0];
   if (!missing.length || !target) return content;
   return replaceReportReviewSection(
     content,

@@ -346,7 +346,7 @@ export async function buildReportSource(
           `${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`,
         );
         material.observations.push(
-          `${value.position.kind === "image" ? "" : `${position} · `}${value.userEdited ? "직접 수정 · " : value.certainty === "uncertain" ? "확인 필요 · " : "자료 기재 · "}${value.text}`,
+          `${position} · ${value.userEdited ? "직접 수정 · " : value.certainty === "uncertain" ? "확인 필요 · " : value.position.kind === "audio" ? "녹취 전사 · " : value.position.kind === "video" ? "화면 관찰 · " : value.position.kind === "image" ? "이미지 관찰 · " : "자료 기재 · "}${value.text}`,
         );
       }
       if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
@@ -494,6 +494,16 @@ export function reportText(
   display?: ReportDisplayContext,
 ) {
   const bullet = (text: string) => `- ${text.replace(/\r?\n/gu, "\n  ")}`;
+  const evidenceReferences = (references: V2ReportBody["facts"][number]["references"]) => {
+    const labels = references.flatMap((reference) => {
+      if (reference.kind !== "user_material") return [];
+      const index = body.selectedFiles.findIndex(
+        (file) => file.id === reference.fileId && file.revision === reference.fileRevision,
+      );
+      return index < 0 ? [] : [`증거 ${index + 1} · ${sourcePositionText(reference.position)}`];
+    });
+    return labels.length ? ` (${[...new Set(labels)].join(" / ")})` : "";
+  };
   const factLabel = (fact: V2ReportBody["facts"][number]) => {
     const qualification =
       fact.certainty === "conflicting"
@@ -508,7 +518,7 @@ export function reportText(
         : fact.attribution === "user_statement"
           ? "이용자 진술 · "
           : "AI 정리 · ";
-    return bullet(`${qualification}${basis}${fact.text}`);
+    return bullet(`${qualification}${basis}${fact.text}${evidenceReferences(fact.references)}`);
   };
   const text = [
     "사건 개요",
@@ -518,21 +528,43 @@ export function reportText(
     ...body.parties.map((party) => bullet(`${party.label} · ${party.role}`)),
     "",
     "주요 경위",
-    ...body.timeline.map((entry) =>
-      bullet(
-        `${entry.datePrecision === "year" ? `${entry.date?.slice(0, 4)}년` : entry.datePrecision === "month" ? entry.date?.slice(0, 7) : (entry.date ?? "날짜 미확인")} · ${entry.event}${entry.certainty === "conflicting" ? " (상반된 내용 확인 필요)" : entry.certainty === "uncertain" ? " (미확인)" : ""}`,
-      ),
-    ),
+    ...body.timeline.map((entry) => {
+      const date =
+        entry.datePrecision === "year"
+          ? `${entry.date?.slice(0, 4)}년`
+          : entry.datePrecision === "month"
+            ? entry.date?.slice(0, 7)
+            : (entry.date ?? "날짜 미확인");
+      const qualification =
+        entry.certainty === "conflicting"
+          ? " (상반된 내용 확인 필요)"
+          : entry.certainty === "uncertain"
+            ? " (미확인)"
+            : "";
+      const references = [
+        ...entry.references,
+        ...body.facts
+          .filter((fact) => entry.factIds.includes(fact.id))
+          .flatMap((fact) => fact.references),
+      ];
+      return bullet(`${date} · ${entry.event}${qualification}${evidenceReferences(references)}`);
+    }),
     "",
-    "주요 사실과 자료",
+    "주요 사실",
     ...body.facts.filter((fact) => fact.attribution !== "official_source").map(factLabel),
     "",
-    ...body.selectedFiles.flatMap((file) => {
+    "증거 자료",
+    ...(body.selectedFiles.length ? [] : ["처리 완료된 증거 자료가 없습니다."]),
+    ...body.selectedFiles.flatMap((file, index) => {
       const observations =
         display?.materials?.find((material) => material.id === file.id)?.observations ?? [];
       return [
-        bullet(`**${file.name.replaceAll("*", "")}**`),
-        ...observations.map((text) => bullet(text)),
+        // A filename must not create another Markdown section, photo or emphasis.
+        `### 증거 ${index + 1} · ${file.name.replace(/[\r\n`*~]/gu, " ")}`,
+        ...(observations.length
+          ? observations.map((text) => bullet(text))
+          : [bullet("판독된 내용이 없어 원본 확인이 필요합니다.")]),
+        "",
       ];
     }),
     "",

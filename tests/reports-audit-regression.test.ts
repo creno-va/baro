@@ -341,8 +341,7 @@ test("unedited uncertain observations retain their uncertainty label", async () 
   const file = await createV2FilesRepository(f.core).read(f.actor, u.session.fileId);
   expect(file?.observations[0]?.certainty).toBe("uncertain");
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
-  const coverageBlock =
-    report.content.split("주요 사실과 자료")[1]?.split("추가 확인 사항")[0] ?? "";
+  const coverageBlock = report.content.split("주요 사실")[1]?.split("추가 확인 사항")[0] ?? "";
   expect(coverageBlock).toContain(`확인 필요 · ${observation.text}`);
   expect(coverageBlock).toContain("1쪽 · 2번째 문단");
   expect(coverageBlock).not.toContain("자료 내용 확인됨");
@@ -582,7 +581,7 @@ test("corrected material facts retain user-edit attribution", async () => {
   const canonical = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(canonical?.body.facts[0]?.userEdited).toBe(true);
   expect(report.content).toContain(`확인 필요 · 직접 수정 · ${fact.text}`);
-  const factSection = report.content.split("주요 사실과 자료")[1]?.split("추가 확인 사항")[0] ?? "";
+  const factSection = report.content.split("주요 사실")[1]?.split("추가 확인 사항")[0] ?? "";
   expect(factSection).toContain("직접 수정");
   const { reportText, buildReportSource } = await import("../src/server/modules/reports/source");
   const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);

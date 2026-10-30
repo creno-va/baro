@@ -12,7 +12,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     updatedAt: "2026-10-31T00:00:00Z",
     stale: false,
     content:
-      "사건 개요\n약속한 기한이 지나도 빌려준 돈을 돌려받지 못했습니다.\n\n당사자와 관계\n- 의뢰인 · 대여자\n- 지인 · 차용자\n\n주요 경위\n- 2026.03.12 · 송금\n- 2026.06.30 · 약속한 반환일\n\n주요 사실과 자료\n- 이용자 진술 · 반환 약속이 있었습니다.\n- 자료 기재 · 이체 금액 300만원\n\n추가 확인 사항\n- 일부 변제 여부\n- 상대방 입장",
+      "사건 개요\n약속한 기한이 지나도 빌려준 돈을 돌려받지 못했습니다.\n\n당사자와 관계\n- 의뢰인 · 대여자\n- 지인 · 차용자\n\n주요 경위\n- 2026.03.12 · 송금\n- 2026.06.30 · 약속한 반환일\n\n주요 사실\n- 이용자 진술 · 반환 약속이 있었습니다.\n- 자료 기재 · 이체 금액 300만원 (증거 1 · 이미지 관찰)\n\n증거 자료\n### 증거 1 · 합성 송금 확인서.jpg\n- 자료 기재 · 이체 금액 300만원\n\n추가 확인 사항\n- 일부 변제 여부\n- 상대방 입장",
     excludedFileIds: [],
     maskIdentifiers: false,
     includedPhotoIds: [] as string[],
@@ -62,9 +62,13 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   await expect(page.locator(".report-output-options,.report-export-notice")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "식별정보 가리기" })).toHaveCount(0);
   await openReportEditor(page);
-  const section = page.locator(".report-reading-section").first();
+  const section = page
+    .locator(".report-reading-section")
+    .filter({ has: page.getByRole("heading", { name: "증거 자료", exact: true }) });
   const field = section.getByRole("textbox");
-  await field.fill("- **송금 확인**\n\n사진 뒤에 이어질 내용");
+  await field.fill(
+    "### 증거 1 · 합성 송금 확인서.jpg\n- **송금 확인**\n\n사진 뒤에 이어질 내용\n\n### 증거 2 · 합성 녹취.wav\n- 12.5–19.25초 · 확인 필요 · 반환일 언급\n\n### 증거 3 · 합성 영상.mp4\n- 24초 · 프레임 48 · 장면 전환 표본 · 자료 기재 · 서류 전달 장면",
+  );
   await field.evaluate((input: HTMLTextAreaElement) => {
     const position = input.value.indexOf("사진 뒤에");
     input.setSelectionRange(position, position);
@@ -79,6 +83,8 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   );
   await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
   await expect(section.locator("strong")).toHaveText("송금 확인");
+  await expect(section.getByRole("heading", { level: 4 })).toHaveCount(3);
+  await expect(section).toContainText("12.5–19.25초");
   const image = section.locator("figure img");
   await expect(image).toBeVisible();
   await expect

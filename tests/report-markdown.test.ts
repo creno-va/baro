@@ -89,3 +89,40 @@ test("PDF shares inline Markdown/photo order and rejects repeated images before 
     createReportHtml({ ...base, content: `사건 개요\n${Array(13).fill(token).join("\n")}` }),
   ).toThrow("REPORT_INLINE_PHOTO_LIMIT");
 });
+
+test("compatibility photos stay inside evidence, and its headings survive shared screen/PDF rendering", () => {
+  const content =
+    "주요 사실\n- 송금 기록 (증거 1 · 이미지 관찰)\n\n증거 자료\n### 증거 1 · 합성 사진.jpg\n- 이미지 관찰 · 합성 내용\n\n추가 확인 사항\n- 반환 여부";
+  const placed = withInlineReportPhotos(content, [{ id: "photo-1", name: "합성 사진.jpg" }]);
+  const sections = reportReviewSections(placed);
+  expect(sections.map((section) => section.title)).toEqual([
+    "주요 사실",
+    "증거 자료",
+    "추가 확인 사항",
+  ]);
+  expect(sections[0]?.text).not.toContain("baro-photo:");
+  expect(sections[1]?.text).toContain("baro-photo:photo-1");
+  const html = createReportHtml({
+    title: "합성 증거 리포트",
+    content: placed,
+    revision: 1,
+    updatedAt: "2026-10-31T00:00:00Z",
+    stale: false,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+    photos: [
+      {
+        id: "photo-1",
+        name: "합성 사진.jpg",
+        revision: 2,
+        dataUrl: "data:image/jpeg;base64,/9j/2Q==",
+      },
+    ],
+  });
+  expect(html).toContain("<h2>증거 자료</h2>");
+  expect(html).toContain("<h4>증거 1 · 합성 사진.jpg</h4>");
+  expect(html.indexOf("<h2>증거 자료")).toBeLessThan(html.indexOf('data-report-photo="photo-1"'));
+  expect(html.indexOf('data-report-photo="photo-1"')).toBeLessThan(
+    html.indexOf("<h2>추가 확인 사항"),
+  );
+});
