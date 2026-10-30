@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+import { openReportEditor } from "../helpers/report-controls";
 
 test("ReportReview uses signed real SQL routes and saves a Korean font PDF from the reviewed HTML document", async ({
   page,
@@ -63,22 +63,19 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     await editor.fill(
       [
         "사건 요약",
-        "실제 다운로드 한글 검토 · 010-1234-5678 · synthetic@example.test",
+        "실제 다운로드 한글 검토 · [전화번호 직접 삭제] · [이메일 직접 삭제]",
         "자료와 사실은 합성 입력입니다.",
-        "사실·주장·출처",
+        "주요 사실과 자료",
         ...paragraphs,
         longParagraph,
-        "자료 처리 범위",
+        "추가 확인 사항",
         "대화 기록.pdf · 4쪽 중 3쪽 처리 · 확인 필요: 4쪽 품질 낮음",
         "통화 기록.wav · 2.25–8.75초 · 사용자 교정 · 미확인",
         "12.5–19.25초 누락 · 해당 구간은 원본 확인 필요",
-        "출처: 대화 기록.pdf · 2쪽 · 3번째 문단 · 합성 마지막 출처",
-        "안내",
+        "상담에서 확인할 내용",
         "합성 마지막 문장 · 모든 내용과 출처를 확인한 뒤 사용자가 직접 전달합니다.",
       ].join("\n"),
     );
-    await openReportOptions(page);
-    await page.getByRole("checkbox", { name: "식별정보 가리기" }).check();
     await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
     await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
@@ -90,7 +87,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
       await page.request.get(`${seed.origin}/api/v2/reports/${savedReport.id}/html`)
     ).text();
     expect(htmlText).toContain('data-baro-report="1"');
-    expect(htmlText).toContain("[전화번호 가림]");
+    expect(htmlText).toContain("[전화번호 직접 삭제]");
     expect(htmlText).not.toContain("010-1234-5678");
     const pdfEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드" }).click();
@@ -123,20 +120,21 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     });
     expect(printed.subarray(0, 5).toString()).toBe("%PDF-");
 
-    await expect(printPage.getByRole("heading", { name: "생성 기준", exact: true })).toBeVisible();
+    await expect(
+      printPage.getByRole("heading", { name: "주요 사실과 자료", exact: true }),
+    ).toBeVisible();
     const previewDocument = printPage.locator(".baro-report");
     const expectedLines = [
-      "실제 다운로드 한글 검토 · [전화번호 가림] · [이메일 가림]",
+      "실제 다운로드 한글 검토 · [전화번호 직접 삭제] · [이메일 직접 삭제]",
       "자료와 사실은 합성 입력입니다.",
       ...paragraphs,
       longParagraph,
       "대화 기록.pdf · 4쪽 중 3쪽 처리 · 확인 필요: 4쪽 품질 낮음",
       "통화 기록.wav · 2.25–8.75초 · 사용자 교정 · 미확인",
       "12.5–19.25초 누락 · 해당 구간은 원본 확인 필요",
-      "출처: 대화 기록.pdf · 2쪽 · 3번째 문단 · 합성 마지막 출처",
       "합성 마지막 문장 · 모든 내용과 출처를 확인한 뒤 사용자가 직접 전달합니다.",
     ];
-    const actualLines = await printPage.locator(".content .lines p").allTextContents();
+    const actualLines = await printPage.locator(".section .lines p").allTextContents();
     for (const line of expectedLines) expect(actualLines).toContain(line);
     const printedPages: string[] = JSON.parse(
       execFileSync(
@@ -155,11 +153,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     const printedText = compact(printedPages.join("\n"));
     for (const line of [
       ...expectedLines,
-      "생성 기준",
-      ...(await previewDocument.locator(".meta div").allTextContents()),
-      "내용과 출처, 미확인 사항을 원본과 비교해 주세요.",
-      "교정한 내용과 AI의 정리는 원본의 진정성이나 법적 효력을 증명하지 않습니다.",
-      "법률 판단과 사건의 결과를 보장하지 않습니다.",
+      ...(await previewDocument.locator(".section h2").allTextContents()),
     ]) {
       expect(printedText).toContain(compact(line));
     }

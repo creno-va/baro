@@ -106,51 +106,41 @@ async function fixture() {
   }
   return { ...f, questions };
 }
-function pdfText(raw: string) {
-  const glyphs = new Map(
-    [...raw.matchAll(/<([0-9a-f]{4})> <([0-9a-f]+)>/g)]
-      .filter((m) => m[2] !== "FFFF")
-      .map((m) => [
-        m[1],
-        String.fromCharCode(...((m[2] ?? "").match(/.{4}/g) ?? []).map((x) => parseInt(x, 16))),
-      ]),
-  );
-  return [...raw.matchAll(/<([0-9a-f]+)> Tj/g)]
-    .map((m) => ((m[1] ?? "").match(/.{4}/g) ?? []).map((cid) => glyphs.get(cid) ?? "").join(""))
-    .join("\n");
-}
 
-test("report labels follow actual encrypted question rounds and localize action state without changing provenance", async () => {
+test("lawyer-facing Markdown keeps facts, relationships and unknowns without app actions or internal reference labels", async () => {
   const f = await fixture();
   const selected = await readyFile(f, "합성 리포트 표시 검증 원본");
   const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
   const beforeDigest = await sourceDigest(f.core, f.actor, f.workspaceId);
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   for (const question of f.questions) {
-    expect(report.content).toContain(
-      `${question.text}\n[사용자 진술 · ${question.round}차 질문 ${question.number}번 답변]`,
-    );
+    expect(report.content).toContain(`- 이용자 진술 · ${question.text}`);
     expect(report.content).not.toContain(question.id);
   }
-  for (const [state, label] of [
-    ["todo", "진행 전"],
-    ["done", "완료"],
-    ["skipped", "건너뜀"],
+  for (const label of [
+    "사건 개요",
+    "당사자와 관계",
+    "주요 경위",
+    "주요 사실과 자료",
+    "추가 확인 사항",
   ])
-    expect(report.content).toContain(`합성 행동 ${state} (${label})`);
+    expect(report.content).toContain(label);
+  for (const omitted of [
+    "준비할 행동",
+    "자료 처리 범위",
+    "주의:",
+    "출처:",
+    "합성 행동 todo",
+    "질문: 합성",
+  ])
+    expect(report.content).not.toContain(omitted);
   expect(await sourceDigest(f.core, f.actor, f.workspaceId)).toBe(beforeDigest);
-  expect(report.content).toContain("질문: 합성 1차 1번 질문");
-  expect(report.content).toContain("질문: 합성 2차 3번 질문");
   const stored = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(stored?.body).toEqual(source.body);
+  expect(stored?.body.actions).toHaveLength(3);
   const html = await f.reports.html(f.actor.ownerId, report.id);
-  expect(html).toContain("2차 질문 3번 답변");
-  expect(html).toContain("합성 행동 todo (진행 전)");
-  const pdf = await f.reports.pdf(f.actor.ownerId, report.id);
-  const text = pdfText(await new Response(pdf.body).text());
-  expect(text).toContain("2차 질문 3번 답변");
-  expect(text).toContain("합성 행동 todo (진행 전)");
-  const manual = `사용자 편집본 todo · ${f.questions[0]?.id}`;
+  expect(html).toContain("<li>이용자 진술 · 합성 답변");
+  const manual = "사건 개요\n**직접 검토한 본문**\n- 첫 확인\n- 두 번째 확인";
   const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: report.revision,
     content: manual,
@@ -161,59 +151,28 @@ test("report labels follow actual encrypted question rounds and localize action 
   const generated = await f.reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: saved.revision,
   });
-  expect(generated.content).toContain("2차 질문 3번 답변");
-  expect(await f.reports.html(f.actor.ownerId, saved.id)).toContain(manual);
+  expect(generated.content).toContain("이용자 진술 · 합성 답변");
+  expect(await f.reports.html(f.actor.ownerId, saved.id)).toContain(
+    "<strong>직접 검토한 본문</strong>",
+  );
   const excluded = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: generated.revision,
     content: generated.content,
     maskIdentifiers: false,
     excludedFileIds: [selected.session.fileId],
   });
-  expect(excluded.content).toContain("2차 질문 3번 답변");
-  expect(excluded.content).toContain("합성 행동 todo (진행 전)");
+  expect(excluded.content).toContain("이용자 진술 · 합성 답변");
+  expect(excluded.content).not.toContain("준비할 행동");
 });
 
-test("historical body without display context hides internal answer and message IDs without inventing question order", async () => {
+test("source display never invents question positions or exposes internal IDs, and retains canonical provenance", async () => {
   const f = await fixture();
   const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
-  const messageId = crypto.randomUUID();
-  const body = structuredClone(source.body);
-  body.facts[0]?.references.push({ kind: "user_message", messageId, workspaceRevision: 1 });
-  const original = structuredClone(body);
+  const body = structuredClone(source.body),
+    original = structuredClone(source.body);
   const text = reportText(body, source.coverage);
-  expect(text).toContain("추가 질문에 대한 답변");
-  expect(text).toContain("추가 대화의 사용자 진술");
-  expect(text).not.toContain("차 질문");
-  expect(text).not.toContain(messageId);
   for (const question of f.questions) expect(text).not.toContain(question.id);
+  expect(text).not.toContain("차 질문");
+  expect(text).toContain("이용자 진술 · 합성 답변");
   expect(body).toEqual(original);
-  expect(text).not.toContain("입력 버전");
-  expect(text).not.toContain("진술됨");
 });
-
-for (const condition of ["wrong_revision", "unknown_question", "duplicate_question"] as const)
-  test(`display metadata ${condition} never invents a question position or exposes an ID`, async () => {
-    const f = await fixture();
-    const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
-    const display = {
-      intakeRevision: source.display.intakeRevision,
-      questions: source.display.questions.map((question) => ({ ...question })),
-    };
-    const body = structuredClone(source.body);
-    const first = body.facts[0]?.references[0];
-    if (first?.kind !== "intake_answer") throw new Error("Missing synthetic answer reference");
-    if (condition === "wrong_revision") display.intakeRevision++;
-    if (condition === "unknown_question") first.questionId = crypto.randomUUID();
-    if (condition === "duplicate_question") {
-      const match = display.questions.find((q) => q.id === first.questionId);
-      if (!match) throw new Error("Missing synthetic display question");
-      display.questions = [...display.questions, { ...match, round: 3, number: 2 }];
-    }
-    const original = structuredClone(body);
-    const text = reportText(body, source.coverage, display);
-    expect(text).toContain(`${body.facts[0]?.text}\n[사용자 진술 · 추가 질문에 대한 답변]`);
-    expect(text).not.toContain(first.questionId);
-    expect(body).toEqual(original);
-    expect(text).not.toContain("입력 버전");
-    expect(text).not.toContain("진술됨");
-  });

@@ -1,12 +1,17 @@
 import { expect, test } from "bun:test";
+import { Hono } from "hono";
 import { createReportHtml } from "../src/components/reports/document";
 import type { V2Fact } from "../src/contracts/v2";
+import type { ApiEnvironment } from "../src/server/api/errors";
+import { createReportsApi } from "../src/server/api/v2/reports";
 import { createV2Core, snapshotStatements } from "../src/server/db/v2-core";
 import { renderReportPdf } from "../src/server/modules/reports/pdf";
 import { createReportDependencies } from "../src/server/modules/reports/runtime";
 import { createReportsService } from "../src/server/modules/reports/service";
+import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { reportFixture } from "./helpers/report-fixture";
+import { seedTestSession } from "./helpers/session";
 
 async function photoFixture() {
   const base = await fixture({
@@ -93,7 +98,91 @@ async function photoFixture() {
   return { ...f, reports, id, rendered, reads: () => reads };
 }
 
-test("photo captions retain manual correction attribution and never present AI organization as document text", async () => {
+test("inline photo HTTP is private and owner-bound; deletion and a file change during read revoke access", async () => {
+  const f = await photoFixture();
+  const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const env = {
+    ...testEnvironment(f.db.binding),
+    CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
+    APP_ENV: "preview",
+  };
+  f.db.sqlite
+    .query("UPDATE session SET expires_at=? WHERE user_id=?")
+    .run(Date.now() + 3600000, f.actor.ownerId);
+  f.db.sqlite
+    .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,?,?)")
+    .run(`account-type:${f.actor.ownerId}`, "customer", f.actor.now);
+  const token = f.db.sqlite
+    .query("SELECT token FROM session WHERE user_id=?")
+    .get(f.actor.ownerId) as { token: string };
+  const cookie = await signedSessionCookie(token.token, env.BETTER_AUTH_SECRET);
+  const app = new Hono<ApiEnvironment>().route(
+    "/api/v2",
+    createReportsApi({
+      testOnlyMissingD1Meta: true,
+      dependencies: async () => ({ ...f.deps, files: f.service }),
+    }),
+  );
+  const path = `/api/v2/reports/${draft.id}/photos/${f.id}`;
+  const get = (auth = cookie) => app.request(path, { headers: { cookie: auth } }, env);
+  const response = await get();
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("image/jpeg");
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+    new Uint8Array(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer()),
+  );
+  const peer = await seedTestSession(f.db, { consent: true });
+  expect((await get(peer.cookie)).status).toBe(404);
+  expect((await get("")).status).toBe(401);
+  const service = createReportsService(f.core, {
+    ...f.deps,
+    files: {
+      ...f.service,
+      content: async (...args) => {
+        const result = await f.service.content(...args);
+        f.db.sqlite.query("DELETE FROM v2_files WHERE id=?").run(f.id);
+        return result;
+      },
+    },
+  });
+  await expect(service.photo(f.actor.ownerId, draft.id, f.id)).rejects.toThrow();
+  expect((await get()).status).not.toBe(200);
+});
+
+test("inline photo markers save exact position; forged selections and repeated image amplification fail", async () => {
+  const f = await photoFixture();
+  const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const token = `![합성 본문 사진](baro-photo:${f.id})`;
+  const content = `사건 개요\n사진 앞\n\n${token}\n\n사진 뒤\n\n추가 확인 사항\n- 거래 일시 확인`;
+  const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: draft.revision,
+    content,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+  });
+  expect(saved.includedPhotoIds).toEqual([f.id]);
+  expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(content);
+  const html = await f.reports.html(f.actor.ownerId, saved.id);
+  expect(html.indexOf("사진 앞")).toBeLessThan(html.indexOf("<figure"));
+  expect(html.indexOf("</figure>")).toBeLessThan(html.indexOf("사진 뒤"));
+  for (const input of [
+    { content, includedPhotoIds: [] },
+    { content: `사건 개요\n${Array(13).fill(token).join("\n")}` },
+    { content: "사건 개요\n![외부 자료](baro-photo:foreign-photo)" },
+  ])
+    await expect(
+      f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+        expectedRevision: saved.revision,
+        maskIdentifiers: false,
+        excludedFileIds: [],
+        ...input,
+      }),
+    ).rejects.toThrow();
+});
+
+test("report body retains correction attribution while captions contain only the chosen filename", async () => {
   const f = await photoFixture();
   const reference = {
     kind: "user_material" as const,
@@ -130,7 +219,8 @@ test("photo captions retain manual correction attribution and never present AI o
   });
   const html = await f.reports.html(f.actor.ownerId, saved.id);
   const caption = html.match(/<figcaption>([\s\S]*?)<\/figcaption>/)?.[1] ?? "";
-  expect(caption).toContain("직접 수정한 내용 (원문 대조 필요): 직접 고친 합성 사진 설명");
+  expect(caption).not.toContain("직접 고친 합성 사진 설명");
+  expect(html).toContain("직접 수정 · 직접 고친 합성 사진 설명");
   expect(caption).not.toContain("원문이 아닌 합성 AI 정리");
   expect(html).toContain("원문이 아닌 합성 AI 정리");
   f.db.close();
@@ -216,8 +306,8 @@ test("owned photo observations reach case report text; explicit selection reache
   });
   const html = await f.reports.html(owner, saved.id);
   expect(html).toContain("data:image/jpeg;base64,");
-  expect(html).toContain('data-file-revision="2"');
-  expect(html).toContain("의학적 판단");
+  expect(html).toContain(`data-report-photo="${f.id}"`);
+  expect(html).not.toContain("자료 처리 범위");
   await f.reports.pdf(owner, saved.id);
   expect(f.rendered).toHaveLength(1);
   expect(f.rendered[0]).toContain("data:image/jpeg;base64,");
@@ -417,7 +507,7 @@ test("historical photo preview keeps its immutable basis after an unrelated sour
     .query("UPDATE v2_workspaces SET confirmed_summary_revision=2,revision=revision+1 WHERE id=?")
     .run(f.workspaceId);
   const html = await f.reports.html(owner, saved.id);
-  expect(html).toContain("이전 생성 기준");
+  expect(html).not.toContain("이전 생성 기준");
   expect(html).toContain("data:image/jpeg;base64,");
   await expect(f.reports.pdf(owner, saved.id)).rejects.toThrow("STALE_REVISION");
 });

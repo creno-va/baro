@@ -64,11 +64,9 @@ test("HTML document stays readable on desktop/mobile and print with inert untrus
   await page.setContent(html);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("대여금 반환 상담 준비");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await expect(page.getByAltText("바로 로고")).toBeVisible();
+  await expect(page.getByAltText("BARO")).toBeVisible();
   expect(
-    await page
-      .getByAltText("바로 로고")
-      .evaluate((image) => (image as HTMLImageElement).naturalWidth),
+    await page.getByAltText("BARO").evaluate((image) => (image as HTMLImageElement).naturalWidth),
   ).toBeGreaterThan(0);
   expect(await page.locator("script").count()).toBe(0);
   await page.screenshot({ path: resolve(out, "desktop.png"), fullPage: true });
@@ -78,12 +76,9 @@ test("HTML document stays readable on desktop/mobile and print with inert untrus
   );
   await page.screenshot({ path: resolve(out, "mobile.png"), fullPage: true });
   await page.emulateMedia({ media: "print" });
-  await expect(page.getByRole("heading", { name: "생성 기준", exact: true })).toBeVisible();
-  await expect(page.locator(".meta")).toContainText("2 · 18");
-  await expect(page.locator(".meta")).toContainText("리포트 제외 자료");
-  await expect(page.locator(".meta")).toContainText("1개");
-  await expect(page.locator(".stale")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "자료 처리 범위", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "주요 경위", exact: true })).toBeVisible();
+  await expect(page.locator(".meta,.stale")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "자료 처리 범위", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );

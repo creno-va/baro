@@ -232,7 +232,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   await openReportOptions(page);
   await expect(page.getByRole("checkbox", { name: "PDF에 근거 사진 포함" })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(0);
   const pdfPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdf = await pdfPromise;

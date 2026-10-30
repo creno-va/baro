@@ -7,7 +7,7 @@ export async function openReportEditor(page: Page) {
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
 
+/** Compatibility for older shell fixtures: report options now live in the document editor. */
 export async function openReportOptions(page: Page) {
-  // Privacy settings are always visible; the old accordion no longer exists.
-  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeVisible();
+  await expect(page.locator(".report-reading")).toBeVisible();
 }

@@ -74,9 +74,9 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await expect(page.getByRole("button", { name: "리포트 내용 수정하기" })).toBeDisabled();
     await expect(page.getByText(/새 리포트 생성과 수정은 필수 동의 후/)).toBeVisible();
     await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeDisabled();
-    await expect(
-      page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }),
-    ).toBeDisabled();
+    await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(
+      0,
+    );
     const secondEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const second = await secondEvent,

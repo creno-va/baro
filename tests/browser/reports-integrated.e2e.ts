@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
-import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+import { openReportEditor } from "../helpers/report-controls";
 
 // Uses the actual product pages and shared facade, with no component/API alias or injected seed.
 test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared mock configuration.");
@@ -79,14 +79,12 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
-  await openReportOptions(page);
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
   await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
   await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await openReportEditor(page);
   await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
-  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(0);
   await expect(page.locator(".report-options,.report-html-preview")).toHaveCount(0);
   const pdfEvent = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();

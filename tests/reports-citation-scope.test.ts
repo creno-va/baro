@@ -78,7 +78,9 @@ for (const refresh of [false, true])
     const bytes = new Uint8Array(await new Response(result.body).arrayBuffer());
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
     expect(bytes.length).toBe(result.byteLength);
-    expect(await reports.html(f.actor.ownerId, original.id)).toContain("이전 생성 기준");
+    expect(await reports.html(f.actor.ownerId, original.id)).toContain(
+      `BARO · 리포트 ${original.revision}`,
+    );
     f.db.close();
   });
 

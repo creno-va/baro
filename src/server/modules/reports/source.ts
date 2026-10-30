@@ -297,6 +297,8 @@ export async function buildReportSource(
     throw new ReportError("VALIDATION_ERROR");
   const selectedFiles: V2ReportBody["selectedFiles"] = [],
     coverage: string[] = [];
+  const materials: { id: string; observations: string[] }[] = [];
+  const materialGaps: string[] = [];
   for (const row of fileRows.results) {
     if (excluded.includes(row.id)) continue;
     const file = await reportFile(core, actor, row.id);
@@ -305,6 +307,7 @@ export async function buildReportSource(
       coverage.push(
         `${file.name}: ${file.status === "failed" ? "처리 실패" : "처리 미완료"} · 원본에서 직접 확인 필요`,
       );
+      materialGaps.push(`${file.name} · 내용을 읽지 못해 원본 확인 필요`);
       continue;
     }
     selectedFiles.push({
@@ -317,6 +320,17 @@ export async function buildReportSource(
     coverage.push(
       `${file.name}: ${coverageText(file.coverage)} · 사실 여부와 원본의 진정성은 별도 확인 필요`,
     );
+    if (
+      !file.coverage ||
+      (file.coverage.category === "audio"
+        ? file.coverage.audio.status === "partial"
+        : file.coverage.status === "partial") ||
+      (file.coverage.category === "image" && file.coverage.observation !== "processed") ||
+      file.coverage.category === "video"
+    )
+      materialGaps.push(`${file.name} · ${coverageText(file.coverage)}`);
+    const material = { id: file.id, observations: [] as string[] };
+    materials.push(material);
     let cursor = -1;
     let lastPosition = "";
     do {
@@ -330,6 +344,9 @@ export async function buildReportSource(
         }
         coverage.push(
           `${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`,
+        );
+        material.observations.push(
+          `${value.position.kind === "image" ? "" : `${position} · `}${value.userEdited ? "직접 수정 · " : value.certainty === "uncertain" ? "확인 필요 · " : "자료 기재 · "}${value.text}`,
         );
       }
       if (coverage.join("\n").length > 20000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
@@ -443,6 +460,8 @@ export async function buildReportSource(
   // reference/fact order as a question number or modify canonical provenance.
   const display: ReportDisplayContext = {
     intakeRevision: intake.revision,
+    materials,
+    materialGaps,
     questions: intake.batches.flatMap((batch) =>
       batch.questions.map((question, index) => ({
         id: question.id,
@@ -466,104 +485,61 @@ export const sourcePositionText = (p: V2SourcePosition) =>
 type ReportDisplayContext = {
   readonly intakeRevision: number;
   readonly questions: readonly { id: string; round: number; number: number; prompt?: string }[];
+  readonly materials?: readonly { id: string; observations: readonly string[] }[];
+  readonly materialGaps?: readonly string[];
 };
 export function reportText(
   body: V2ReportBody,
-  coverage: readonly string[],
+  _coverage: readonly string[],
   display?: ReportDisplayContext,
 ) {
-  const labels = {
-    user_statement: "사용자 진술",
-    user_material: "자료에 적힌 내용",
-    official_source: "공식 출처",
-    ai_organization: "AI 정리",
+  const bullet = (text: string) => `- ${text.replace(/\r?\n/gu, "\n  ")}`;
+  const factLabel = (fact: V2ReportBody["facts"][number]) => {
+    const qualification =
+      fact.certainty === "conflicting"
+        ? "상반된 진술 · "
+        : fact.certainty === "uncertain"
+          ? "확인 필요 · "
+          : "";
+    const basis = fact.userEdited
+      ? "직접 수정 · "
+      : fact.attribution === "user_material"
+        ? "자료 기재 · "
+        : fact.attribution === "user_statement"
+          ? "이용자 진술 · "
+          : "AI 정리 · ";
+    return bullet(`${qualification}${basis}${fact.text}`);
   };
-  const certainty = {
-    reported: "진술됨",
-    observed: "자료에서 관찰",
-    uncertain: "미확인",
-    conflicting: "상반됨",
-  };
-  const actionStatus = { todo: "진행 전", done: "완료", skipped: "건너뜀" };
-  const answerLabel = (questionId: string, revision: number) => {
-    const matches =
-      display?.intakeRevision === revision
-        ? display.questions.filter((question) => question.id === questionId)
-        : [];
-    const question = matches.length === 1 ? matches[0] : undefined;
-    // Historical bodies may not retain their question metadata. Preserve their
-    // revision and source kind without exposing IDs or guessing a question order.
-    return question
-      ? `${question.round}차 질문 ${question.number}번 답변`
-      : "추가 질문에 대한 답변";
-  };
-  const factLabel = (id: string) => `사실 ${body.facts.findIndex((fact) => fact.id === id) + 1}`;
-  const questionContext = (references: V2ReportBody["facts"][number]["references"]) => {
-    const prompts = references.flatMap((ref) => {
-      if (!display || ref.kind !== "intake_answer" || ref.intakeRevision !== display.intakeRevision)
-        return [];
-      const matches = display.questions.filter((question) => question.id === ref.questionId);
-      const prompt = matches.length === 1 ? matches[0]?.prompt : undefined;
-      return prompt ? [prompt] : [];
-    });
-    return [...new Set(prompts)].map((prompt) => `\n질문: ${prompt}`).join("");
-  };
-  const citationLabel = (id: string) =>
-    `공식 출처 ${body.citations.findIndex((citation) => citation.id === id) + 1}`;
-  const refs = (references: V2ReportBody["facts"][number]["references"]) =>
-    references
-      .map((ref) =>
-        ref.kind === "user_material"
-          ? `${body.selectedFiles.find((file) => file.id === ref.fileId)?.name ?? "참조 자료"} · ${sourcePositionText(ref.position)}`
-          : ref.kind === "user_message"
-            ? "추가 대화의 사용자 진술"
-            : ref.kind === "intake_narrative"
-              ? "처음 입력한 이야기"
-              : ref.kind === "intake_answer"
-                ? answerLabel(ref.questionId, ref.intakeRevision)
-                : citationLabel(ref.citationId),
-      )
-      .join(" / ");
   const text = [
-    "사건 요약",
+    "사건 개요",
     body.overview,
     "",
-    "당사자",
-    ...body.parties.map((party) => `${party.label} · ${party.role}`),
+    "당사자와 관계",
+    ...body.parties.map((party) => bullet(`${party.label} · ${party.role}`)),
     "",
-    "사실·주장·출처",
-    ...body.facts.map(
-      (fact) =>
-        `${factLabel(fact.id)} · ${fact.text}\n[${[fact.userEdited ? "사용자가 수정한 내용" : "", labels[fact.attribution], fact.certainty === "reported" || (fact.certainty === "observed" && fact.attribution === "user_material") ? "" : certainty[fact.certainty], refs(fact.references)].filter(Boolean).join(" · ")}${fact.conflictingFactIds.length ? ` · 상반 항목: ${fact.conflictingFactIds.map(factLabel).join(", ")}` : ""}]${questionContext(fact.references)}`,
+    "주요 경위",
+    ...body.timeline.map((entry) =>
+      bullet(
+        `${entry.datePrecision === "year" ? `${entry.date?.slice(0, 4)}년` : entry.datePrecision === "month" ? entry.date?.slice(0, 7) : (entry.date ?? "날짜 미확인")} · ${entry.event}${entry.certainty === "conflicting" ? " (상반된 내용 확인 필요)" : entry.certainty === "uncertain" ? " (미확인)" : ""}`,
+      ),
     ),
     "",
-    "미확인 사항",
-    ...body.unknowns,
+    "주요 사실과 자료",
+    ...body.facts.filter((fact) => fact.attribution !== "official_source").map(factLabel),
     "",
-    "타임라인",
-    ...body.timeline.map(
-      (entry) =>
-        `${entry.datePrecision === "year" ? `${entry.date?.slice(0, 4)}년` : entry.datePrecision === "month" ? entry.date?.slice(0, 7) : (entry.date ?? "날짜 미확인")} · ${entry.event} · ${certainty[entry.certainty]} · ${refs(entry.references)}`,
-    ),
+    ...body.selectedFiles.flatMap((file) => {
+      const observations =
+        display?.materials?.find((material) => material.id === file.id)?.observations ?? [];
+      return [
+        bullet(`**${file.name.replaceAll("*", "")}**`),
+        ...observations.map((text) => bullet(text)),
+      ];
+    }),
     "",
-    "공식 출처",
-    ...body.citations.map(
-      (c) =>
-        `${citationLabel(c.id)} · ${c.title}\n${c.kind === "statute" ? `${c.article} · 시행일 ${c.effectiveDate}` : c.kind === "precedent" ? `${c.court} · ${c.caseNumber} · 선고일 ${c.decisionDate}` : `${c.section} · 게시일 ${c.publishedDate ?? "미확인"}`}\n${c.url}\n검증 시각: ${c.verifiedAt}`,
-    ),
-    "",
-    "준비할 행동",
-    ...body.actions.map(
-      (entry) =>
-        `${entry.title} (${actionStatus[entry.status]})\n${entry.instructions}\n주의: ${entry.caution}\n출처: ${refs(entry.references)}`,
-    ),
-    "",
-    "자료 처리 범위",
-    ...coverage,
-    "",
-    "안내",
-    ...body.notices,
-    `작성 시각: ${body.generatedAt}`,
+    "추가 확인 사항",
+    ...body.unknowns.map(bullet),
+    ...body.lawyerQuestions.map((question) => bullet(question.text)),
+    ...(display?.materialGaps ?? []).map(bullet),
   ].join("\n");
   if (text.length > 30000) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
   return text;

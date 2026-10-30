@@ -149,6 +149,23 @@ export function createReportsApi(
       201,
     );
   });
+  app.get("/reports/:reportId/photos/:fileId", async (c) => {
+    const access = await caseAccess(c);
+    if (access.response) return access.response;
+    z.strictObject({}).parse(c.req.query());
+    const photo = await (await service(c.env, access.ownerId, access.sessionId)).photo(
+      access.ownerId,
+      opaqueIdSchema.parse(c.req.param("reportId")),
+      opaqueIdSchema.parse(c.req.param("fileId")),
+    );
+    return new Response(photo.bytes, {
+      headers: {
+        "content-type": photo.contentType,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  });
   app.get("/reports/:reportId/html", async (c) => {
     const access = await caseAccess(c);
     if (access.response) return access.response;
