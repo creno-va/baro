@@ -1596,8 +1596,14 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
   padding: 16px 8px;
+}
+.workspace--chat .workspace-messages::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .workspace--chat .workspace-composer {
   position: static;
