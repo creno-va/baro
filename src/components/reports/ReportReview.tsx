@@ -326,6 +326,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
+  const initialLoading = !report && !error && Boolean(busy || accessChecking);
   return (
     <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
       <CaseNavigation
@@ -371,15 +372,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </div>
           )}
         </header>
-        {(busy || accessChecking) && (
+        {!initialLoading && (busy || accessChecking) && (
           <p role="status" className="report-progress">
             <Spinner />
             {progressText}
           </p>
         )}
-        {!report && !error && (busy || accessChecking) && (
-          <LoadingContent announce={false} layout="detail" title="리포트를 불러오고 있어요." />
-        )}
+        {initialLoading && <LoadingContent layout="detail" title="리포트를 불러오고 있어요." />}
         {error && !regenerate && !reloadConfirm && (
           <div className="report-error" role="alert">
             <p>{error}</p>
