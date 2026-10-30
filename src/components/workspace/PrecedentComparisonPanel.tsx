@@ -88,7 +88,10 @@ export function PrecedentComparisonPanel({
           const value = await precedentComparisonApi.get(caseId, latest.id, controller.signal);
           if (controller.signal.aborted || !boundary.current.current(ticket)) return;
           const sameSource = value.comparison?.source.citation.sourceId === sourceId;
-          const sameAdmission = attemptedRevision.current !== null && value.job.target.kind === "workspace" && value.job.target.workspaceRevision === attemptedRevision.current + 1;
+          const sameAdmission =
+            attemptedRevision.current !== null &&
+            value.job.target.kind === "workspace" &&
+            value.job.target.workspaceRevision === attemptedRevision.current + 1;
           if (sameSource || (sameAdmission && !terminal.has(value.job.status))) {
             setState(value);
             setError(null);

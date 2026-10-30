@@ -901,7 +901,12 @@
 .precedent-full-text > h4:first-child {
   margin-top: 0;
 }
-.precedent-full-text > h5 { margin: 24px 0 12px; font-size: 16px; line-height: 1.7; font-weight: 650; }
+.precedent-full-text > h5 {
+  margin: 24px 0 12px;
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 650;
+}
 .precedent-full-text > .precedent-body {
   margin: 0 0 24px;
   font-size: 15px;
