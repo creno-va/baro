@@ -7,6 +7,7 @@ on:
       - "src/components/reports/**"
       - "src/server/modules/reports/**"
       - "scripts/report-native-fixture.ts"
+      - "scripts/report-regressions.ts"
       - ".github/workflows/report-rendering.yml"
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - "src/components/reports/**"
       - "src/server/modules/reports/**"
       - "scripts/report-native-fixture.ts"
+      - "scripts/report-regressions.ts"
       - ".github/workflows/report-rendering.yml"
 
 permissions:
@@ -58,8 +60,8 @@ jobs:
             -v "$PWD/services/file-processor/server.mjs:/app/server.mjs:ro" \
             -v "$PWD/services/file-processor/report-test.py:/app/report-test.py:ro" \
             baro-report-rendering python3 /app/report-test.py
-      - name: Unit and integration regressions on Linux
-        run: bun test
+      - name: Report domain and export regressions on Linux
+        run: bun scripts/report-regressions.ts
       - name: Retain synthetic PDF and rendered pages for visual review
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

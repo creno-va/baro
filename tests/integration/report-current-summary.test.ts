@@ -3,6 +3,7 @@
 import { expect, test } from "bun:test";
 import type { V2Action, V2Fact, V2TimelineEntry } from "../../src/contracts/v2";
 import { createV2JobsRepository } from "../../src/server/db/v2-jobs";
+import { createV2ReportsRepository } from "../../src/server/db/v2-reports";
 import { createV2SummaryEditsRepository } from "../../src/server/db/v2-summary-edits";
 import { createV2WorkspaceRepository } from "../../src/server/db/v2-workspace";
 import { createV2WorkspaceResponseRepository } from "../../src/server/db/v2-workspace-response";
@@ -120,8 +121,12 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
   const afterChat = await f.reports.generate(a, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: initial.revision,
   });
-  for (const text of [fact.text, party.label, timeline.event, action.title])
+  for (const text of [fact.text, party.label, timeline.event])
     expect(afterChat.content).toContain(text);
+  expect(afterChat.content).not.toContain(action.title);
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, afterChat.id))?.body.actions,
+  ).toContainEqual(action);
   expect(afterChat.stale).toBe(false);
   const summaryId = (
     f.db.sqlite.query("SELECT summary_id FROM v2_intakes WHERE id=?").get(f.workspaceId) as {
@@ -183,9 +188,11 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
     "사용자가 교정한 합성 자료 보관 사실",
     party.label,
     "교정 사실과 연결한 최신 날짜 미상 사건",
-    "연결 자료 확인 (완료)",
   ])
     expect(current.content).toContain(text);
+  expect(
+    (await createV2ReportsRepository(f.core).read(f.actor, current.id))?.body.actions,
+  ).toContainEqual({ ...action, revision: 2, status: "done" });
   expect(current.content).not.toContain(fact.text);
   const oldPdf = await f.reports.pdf(a, initial.id);
   expect(new Uint8Array(await new Response(oldPdf.body).arrayBuffer())).toEqual(originalBytes);

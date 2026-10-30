@@ -41,17 +41,30 @@ export async function copySyntheticD1(
       Number(b.name === "v2_physical_blob_bindings"),
   )) {
     if (derived.has(name)) continue;
+    // Explicit historical fixtures copy only columns that existed at that
+    // migration. Latest-schema transfers still preserve every source column.
+    const historicalColumns = throughMigration
+      ? new Set(
+          (await binding.prepare(`PRAGMA table_info(${name})`).all<{ name: string }>()).results.map(
+            (column) => column.name,
+          ),
+        )
+      : null;
     for (const row of sqlite.query(`SELECT * FROM ${name}`).all() as Record<string, unknown>[]) {
       if (name === "app_metadata" && !String(row.key).startsWith("account-type:")) continue;
       const value = {
-        ...row,
+        ...Object.fromEntries(
+          Object.entries(row).filter(
+            ([column]) => !historicalColumns || historicalColumns.has(column),
+          ),
+        ),
         ...(name === "v2_runtime_controls" ? { phase: "frozen" } : {}),
         ...(name === "v2_physical_storage_capacity" ? { held_bytes: 0 } : {}),
       };
       statements.push(
         binding
           .prepare(
-            `INSERT INTO ${name}(${Object.keys(row).join(",")}) VALUES(${Object.keys(row)
+            `INSERT INTO ${name}(${Object.keys(value).join(",")}) VALUES(${Object.keys(value)
               .map(() => "?")
               .join(",")})`,
           )

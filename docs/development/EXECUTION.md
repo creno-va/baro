@@ -1,5 +1,12 @@
 # 에이전트 실행 기준
 
+2026-10-31 PR #617 릴리스 CI에서 기존 리포트 구조·중복 조회 수·구형 스키마 fixture에 남아 있던
+회귀 기대값을 현재 계약에 맞춘다. 원본 바이트/ACK·세션·삭제·snapshot immutability 검사는 유지한다.
+과거 migration fixture 전송은 그 시점의 실제 열만 복사하고 최신 schema 전송은 모든 열을 보존한다.
+사용자의 검사 축소 지시에 따라 PDF CI는 실제 native 렌더링·HTTP/resource 보안 검사와 report 이름의
+모든 단위/통합 테스트 및 사진 caption 회귀를 실행한다. 매 PDF 변경마다 전 도메인4564개를 반복하던
+검사만 분리하고 전체 프로젝트 검사는 validate:full에 보존한다. main CI·판례 CI는 유지한다.
+
 2026-10-31 대화 탭의 메시지 영역은 내부 스크롤을 유지하며 스크롤바와 예약 여백만 숨긴다.
 표준 scrollbar-width와 WebKit 의사 요소를 함께 적용한다. CSS/diff 확인 후 로컬에 누적한다.
 
