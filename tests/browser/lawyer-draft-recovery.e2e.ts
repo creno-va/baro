@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
 
-test("publication confirmation preserves edits made after opening it", async ({ page }) => {
+test("profile save replaces separate publication controls and preserves edits", async ({
+  page,
+}) => {
   let publications = 0;
   const profile = {
     id: "synthetic-profile",
@@ -10,8 +12,8 @@ test("publication confirmation preserves edits made after opening it", async ({ 
     introduction: "Saved introduction",
     officeName: "Synthetic office",
     address: "Synthetic address",
-    region: "",
-    practiceAreas: [],
+    region: "seoul",
+    practiceAreas: ["civil"],
     phone: "010-1234-5678",
     email: "",
     website: "",
@@ -42,13 +44,10 @@ test("publication confirmation preserves edits made after opening it", async ({ 
   await page.goto("/lawyer");
   const intro = page.locator("textarea").first();
   await expect(intro).toHaveValue(profile.introduction);
-  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
+  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toHaveCount(0);
   await intro.fill("Unsaved revised introduction");
-  await page
-    .getByLabel("내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.", { exact: true })
-    .check();
-  await expect(page.getByRole("button", { name: "동의하고 공개", exact: true })).toBeDisabled();
   await expect(intro).toHaveValue("Unsaved revised introduction");
+  await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toBeEnabled();
   expect(publications).toBe(0);
 });
 
@@ -64,8 +63,8 @@ test("selecting another ready photo replaces an uploaded photo preview before sa
     introduction: "Saved introduction",
     officeName: "Synthetic office",
     address: "Synthetic address",
-    region: "",
-    practiceAreas: [],
+    region: "seoul",
+    practiceAreas: ["civil"],
     phone: "010-1234-5678",
     email: "",
     website: "",
@@ -188,8 +187,8 @@ for (const outageMode of ["save", "focus", "postflight"] as const) {
       introduction: "Saved introduction",
       officeName: "Synthetic office",
       address: "Synthetic address",
-      region: "",
-      practiceAreas: [],
+      region: "seoul",
+      practiceAreas: ["civil"],
       phone: "010-1234-5678",
       email: "",
       website: "",
@@ -289,8 +288,8 @@ for (const nextSession of ["other-owner", "signed-out", "expired"] as const) {
               owner === "synthetic-owner" ? "Saved introduction" : "New owner introduction",
             officeName: "Synthetic office",
             address: "Synthetic address",
-            region: "",
-            practiceAreas: [],
+            region: "seoul",
+            practiceAreas: ["civil"],
             phone: "010-1234-5678",
             email: "",
             website: "",
@@ -351,8 +350,8 @@ for (const purpose of ["photo", "pdf"] as const) {
           introduction: "Saved introduction",
           officeName: "Synthetic office",
           address: "Synthetic address",
-          region: "",
-          practiceAreas: [],
+          region: "seoul",
+          practiceAreas: ["civil"],
           phone: "010-1234-5678",
           email: "",
           website: "",
@@ -569,12 +568,17 @@ for (const purpose of ["photo", "pdf"] as const) {
   }
 }
 
-for (const action of ["save", "publish", "assets"] as const) {
+for (const action of ["save", "assets"] as const) {
   test(`profile shows the pending operation and clears it on completion: ${action}`, async ({
     page,
   }) => {
     let profile = {
       ...emptySelfProfile("synthetic-progress-profile"),
+      introduction: "합성 소개",
+      officeName: "합성 사무실",
+      address: "합성 주소",
+      region: "seoul" as const,
+      practiceAreas: ["civil" as const],
       name: "Synthetic",
       phone: "010-1234-5678",
     };
@@ -610,12 +614,6 @@ for (const action of ["save", "publish", "assets"] as const) {
     if (action === "save") {
       await page.locator("textarea").first().fill("Synthetic revised introduction");
       await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
-    } else if (action === "publish") {
-      await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
-      await page
-        .getByLabel("내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.", { exact: true })
-        .check();
-      await page.getByRole("button", { name: "동의하고 공개", exact: true }).click();
     } else await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
     await expect.poll(() => !!release).toBe(true);
     const message = {

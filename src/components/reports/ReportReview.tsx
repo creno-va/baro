@@ -1,13 +1,16 @@
-import { Download, Image as ImageIcon, Pencil } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
+import { reportPhotoIds } from "../../utils/report-markdown";
+import { Button } from "../ui/button";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { downloadBlob } from "./download";
 import { ReportReading } from "./ReportReading";
+import { withInlineReportPhotos } from "./review-sections";
 
 type ReportView = BaseReportView & {
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
@@ -18,7 +21,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [report, setReport] = useState<ReportView | null>(null);
   const [files, setFiles] = useState<FileView[]>([]);
   const [content, setContent] = useState("");
-  const [mask, setMask] = useState(false);
   const [excluded, setExcluded] = useState<string[]>([]);
   const [includedPhotos, setIncludedPhotos] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
@@ -39,12 +41,21 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const loadSequence = useRef(0);
   const focusRequest = useRef(0);
   const accept = useCallback((value: ReportView) => {
-    setReport(value);
+    const positioned = value.maskIdentifiers
+      ? value.content
+      : withInlineReportPhotos(
+          value.content,
+          (value.includedPhotoIds ?? []).map((id) => ({
+            id,
+            name: value.photoCandidates?.find((photo) => photo.id === id)?.name ?? "사건 사진",
+          })),
+        );
+    setReport({ ...value, content: positioned });
     setEditing(false);
     setIncludedPhotos(value.includedPhotoIds ?? []);
 
-    setContent(value.content);
-    setMask(value.maskIdentifiers);
+    setContent(positioned);
+
     setExcluded(value.excludedFileIds);
 
     setInitialLimit(false);
@@ -61,7 +72,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setExportingPdf(false);
     setContent("");
     setEditing(false);
-    setMask(false);
+
     setExcluded([]);
     setIncludedPhotos([]);
 
@@ -199,7 +210,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
           ids.filter((id) => materials.some((file) => file.id === id && file.status === "ready")),
         );
 
-        // Content, masking and exclusions intentionally stay in the editor.
+        // Content, inline photos and exclusions intentionally stay in the editor.
       })()
         .catch((e: unknown) => {
           const failure = e as { code?: string; ownerRevoked?: boolean };
@@ -240,16 +251,15 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const dirty = Boolean(
     report &&
       (content !== report.content ||
-        mask !== report.maskIdentifiers ||
         JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
         JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)),
   );
-  const photoCandidates = (report?.photoCandidates ?? []).filter(
-    (photo) => !excluded.includes(photo.id),
-  );
-  const selectedPhotoBytes = files
-    .filter((file) => includedPhotos.includes(file.id))
-    .reduce((sum, file) => sum + file.sizeBytes, 0);
+  const photoCandidates = (report?.photoCandidates ?? [])
+    .filter((photo) => !excluded.includes(photo.id))
+    .map((photo) => ({
+      ...photo,
+      byteLength: files.find((file) => file.id === photo.id)?.sizeBytes ?? 0,
+    }));
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -313,7 +323,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         caseId,
         {
           content,
-          maskIdentifiers: mask,
+          maskIdentifiers: false,
           includedPhotoIds: includedPhotos,
           excludedFileIds: excluded,
         },
@@ -326,6 +336,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
+  const initialLoading = !report && !error && Boolean(busy || accessChecking);
   return (
     <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
       <CaseNavigation
@@ -371,15 +382,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
             </div>
           )}
         </header>
-        {(busy || accessChecking) && (
+        {!initialLoading && (busy || accessChecking) && (
           <p role="status" className="report-progress">
             <Spinner />
             {progressText}
           </p>
         )}
-        {!report && !error && (busy || accessChecking) && (
-          <LoadingContent announce={false} layout="detail" title="리포트를 불러오고 있어요." />
-        )}
+        {initialLoading && <LoadingContent layout="detail" title="리포트를 불러오고 있어요." />}
         {error && !regenerate && !reloadConfirm && (
           <div className="report-error" role="alert">
             <p>{error}</p>
@@ -445,83 +454,16 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   content={content}
                   editing={editing}
                   disabled={Boolean(busy) || needsConsent}
-                  onChange={setContent}
+                  reportId={report.id}
+                  photoCandidates={photoCandidates}
+                  savedPhotoIds={report.maskIdentifiers ? [] : (report.includedPhotoIds ?? [])}
+                  onChange={(next) => {
+                    setContent(next);
+                    setIncludedPhotos(reportPhotoIds(next));
+                  }}
                 />
               </div>
             </section>
-            <div className="report-output-options">
-              <section className="report-photo-selection" aria-labelledby="report-photos-heading">
-                <header>
-                  <div>
-                    <h3 id="report-photos-heading">PDF에 넣을 사진</h3>
-                    <p>선택한 사진은 본문 뒤에 첨부해요.</p>
-                  </div>
-                  <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료에서 사진 추가</a>
-                </header>
-                {report.stale ? (
-                  <p className="report-option-note">
-                    새 버전을 만들면 최신 자료에서 사진을 선택할 수 있어요.
-                  </p>
-                ) : photoCandidates.length ? (
-                  <>
-                    <ul className="report-photo-list" aria-label="첨부할 사진 선택">
-                      {photoCandidates.map((photo) => {
-                        const checked = includedPhotos.includes(photo.id);
-                        const size = files.find((file) => file.id === photo.id)?.sizeBytes ?? 0;
-                        return (
-                          <li key={photo.id}>
-                            <label className="report-photo-choice">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={
-                                  Boolean(busy) ||
-                                  needsConsent ||
-                                  mask ||
-                                  (!checked &&
-                                    (includedPhotos.length >= 12 ||
-                                      selectedPhotoBytes + size > 8_000_000))
-                                }
-                                onChange={() => setIncludedPhotos(toggle(includedPhotos, photo.id))}
-                              />
-                              <ImageIcon size={20} aria-hidden="true" />
-                              <span>{photo.name}</span>
-                            </label>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <p className="report-option-note">
-                      {mask
-                        ? "식별정보 가리기가 켜져 있어 사진은 PDF에 포함되지 않아요."
-                        : `${includedPhotos.length}장 선택 · 최대 12장, 합계 8 MB`}
-                    </p>
-                  </>
-                ) : (
-                  <p className="report-option-note">
-                    자료에 사진을 올린 뒤 새 버전을 만들어 주세요.
-                  </p>
-                )}
-              </section>
-              <section className="report-mask" aria-label="식별정보 설정">
-                <label className="report-check">
-                  <input
-                    type="checkbox"
-                    checked={mask}
-                    disabled={Boolean(busy) || needsConsent}
-                    aria-describedby="report-mask-description"
-                    onChange={(event) => setMask(event.target.checked)}
-                  />
-                  <span>식별정보 가리기</span>
-                </label>
-                <p id="report-mask-description" className="report-option-note">
-                  전화번호·이메일·주민등록번호 가리기
-                  <br />
-                  이름·주소 등 다른 식별정보는 내용에서 직접 수정해 주세요. 자동 가림은 모든
-                  개인정보를 찾아내지 못해요.
-                </p>
-              </section>
-            </div>
             <section className="report-export" aria-label="리포트 다운로드">
               {exportExhausted && (
                 <div className="report-callout">
@@ -576,10 +518,6 @@ export function ReportReview({ caseId }: { caseId: string }) {
                   {exportingPdf ? "PDF 만드는 중…" : "PDF 다운로드"}
                 </button>
               </div>
-              <p className="report-export-notice">
-                AI가 정리한 상담 준비 자료예요. 법률 판단·원본의 진정성·법적 효력을 보장하지 않아요.
-                변호사에게 전달하는 것은 직접 결정하고 진행해 주세요.
-              </p>
             </section>
           </fieldset>
         )}
@@ -590,39 +528,43 @@ export function ReportReview({ caseId }: { caseId: string }) {
             busyLabel={progressText}
             onCancel={() => setRegenerate(false)}
           >
-            <p>
-              최신 사건과 자료로 새 초안을 만들어요. 편집한 내용은 현재 버전에 남고 새 초안을 다시
-              검토해야 해요. 사건이 변경된 경우 저장하지 않은 편집은 새 초안으로 교체돼요. 필요한
-              내용은 먼저 복사해 보관하세요.
+            <p className="report-modal-description">
+              최신 사건과 자료로 리포트를 다시 만들어요.
+              {dirty && report.stale ? " 저장하지 않은 수정은 새 내용으로 바뀌어요." : ""}
             </p>
             {error && (
               <p role="alert" className="report-error">
                 {error}
               </p>
             )}
-            <button type="button" onClick={() => setRegenerate(false)}>
-              취소
-            </button>
-            <button
-              type="button"
-              disabled={Boolean(busy) || needsConsent}
-              onClick={() =>
-                void run("새 버전 생성 중…", async () => {
-                  const current = dirty && !report.stale ? await save() : report;
-                  const value = await ownedResult(
-                    api.reports.generate(caseId, undefined, current.revision),
-                  );
-                  setBusy("자료 목록 확인 중…");
-                  const materials = await ownedResult(api.files.list(caseId));
-                  accept(value);
-                  setFiles(materials);
-                  setIncludedPhotos([]);
-                  setRegenerate(false);
-                })
-              }
-            >
-              새 버전 생성
-            </button>
+            <div className="report-modal-actions">
+              <Button
+                disabled={Boolean(busy) || needsConsent}
+                onClick={() =>
+                  void run("새 버전 생성 중…", async () => {
+                    const current = dirty && !report.stale ? await save() : report;
+                    const value = await ownedResult(
+                      api.reports.generate(caseId, undefined, current.revision),
+                    );
+                    setBusy("자료 목록 확인 중…");
+                    const materials = await ownedResult(api.files.list(caseId));
+                    accept(value);
+                    setFiles(materials);
+                    setIncludedPhotos([]);
+                    setRegenerate(false);
+                  })
+                }
+              >
+                새 버전 생성
+              </Button>
+              <Button
+                variant="outline"
+                disabled={Boolean(busy)}
+                onClick={() => setRegenerate(false)}
+              >
+                취소
+              </Button>
+            </div>
           </ConfirmDialog>
         )}
         {reloadConfirm && (

@@ -8,6 +8,7 @@ import {
   v2ReportBodySchema,
   v2ReportCreateRequestSchema,
 } from "../../../contracts/v2";
+import { reportMarkdownBlocks, reportPhotoIds } from "../../../utils/report-markdown";
 import { createV2AccountingRepository, operationStatements } from "../../db/v2-accounting";
 import {
   type Actor,
@@ -487,7 +488,23 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         JSON.stringify([...old.review.excludedFileIds].sort());
       if (exclusionsChanged && value.content !== old.review.content)
         throw new ReportError("EDITS_REQUIRE_SAVE");
-      const includedPhotoIds = value.includedPhotoIds ?? old.review.includedPhotoIds ?? [];
+      const inlinePhotos = reportMarkdownBlocks(value.content).filter(
+        (block) => block.kind === "photo",
+      );
+      const includedPhotoIds =
+        value.includedPhotoIds ??
+        (inlinePhotos.length ? reportPhotoIds(value.content) : (old.review.includedPhotoIds ?? []));
+      if (inlinePhotos.some((photo) => !includedPhotoIds.includes(photo.id)))
+        throw new ReportError("VALIDATION_ERROR");
+      if (
+        inlinePhotos.length > 12 ||
+        inlinePhotos.reduce(
+          (sum, photo) =>
+            sum + (source.body.selectedFiles.find((file) => file.id === photo.id)?.byteLength ?? 0),
+          0,
+        ) > 8_000_000
+      )
+        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       await validatePhotos(core, a, source.body, includedPhotoIds, value.excludedFileIds);
       const review = {
         ...old.review,
@@ -564,6 +581,43 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     },
     async pdf(ownerId: string, id: string) {
       return exports.pdf(actor(ownerId), id);
+    },
+    async photo(ownerId: string, id: string, fileId: string) {
+      const a = actor(ownerId),
+        data = await read(a, id);
+      opaqueIdSchema.parse(fileId);
+      const selected = data.body.selectedFiles.find((file) => file.id === fileId);
+      if (!selected || data.review.excludedFileIds.includes(fileId) || data.review.maskIdentifiers)
+        throw new ReportError("NOT_FOUND");
+      const authorize = async () => {
+        await row(actor(ownerId), id);
+        await ownedWorkspace(core, actor(ownerId), data.row.workspace_id);
+        const current = await core
+          .statement(
+            "SELECT count(*) AS n FROM v2_files f WHERE f.id=? AND f.workspace_id=? AND f.revision=? AND f.state='ready' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id)",
+            [fileId, data.row.workspace_id, selected.revision],
+          )
+          .first<number>("n");
+        if (current !== 1) throw new ReportError("STALE_REVISION");
+      };
+      const photos = await loadReportPhotos(
+        core,
+        a,
+        data.row.workspace_id,
+        data.body,
+        data.review.content,
+        [opaqueIdSchema.parse(fileId)],
+        data.review.excludedFileIds,
+        deps.files,
+        authorize,
+      );
+      const photo = photos[0];
+      if (!photo) throw new ReportError("NOT_FOUND");
+      const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/u.exec(photo.dataUrl);
+      if (!match?.[1] || !match[2]) throw new ReportError("STORAGE_UNAVAILABLE");
+      const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
+      await authorize();
+      return { bytes, contentType: match[1] };
     },
     async html(ownerId: string, id: string) {
       const a = actor(ownerId);

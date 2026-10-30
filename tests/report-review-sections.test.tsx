@@ -14,13 +14,12 @@ test("the review omits duplicate fact/source blocks and gives unresolved checks 
     "사건 요약",
     "당사자",
     "미확인 사항",
-    "준비할 행동",
   ]);
   const html = renderToStaticMarkup(<ReportReading content={original} />);
   expect(html).not.toContain("사실·주장·출처");
   expect(html).not.toContain("공식 출처");
   expect(html).not.toContain("report-reading-section--uncertain");
-  expect(html).toContain("미확인 사항");
+  expect(html).toContain("추가 확인 사항");
 });
 
 test("inline editing replaces only the chosen body and retains exact hidden source blocks", () => {
@@ -30,7 +29,7 @@ test("inline editing replaces only the chosen body and retains exact hidden sour
   expect(next).toBe(original.replace("송금 자료를 정리했다.", "확인된 송금일자를 직접 고쳤다."));
   expect(reportReviewSections(next)[0]?.text).toBe("확인된 송금일자를 직접 고쳤다.");
   expect(renderToStaticMarkup(<ReportReading content={next} editing />)).toContain(
-    'aria-label="사건 요약 수정"',
+    'aria-label="사건 개요 수정"',
   );
 });
 

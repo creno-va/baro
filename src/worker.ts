@@ -12,6 +12,7 @@ import { reconcileV2Deletion } from "./server/modules/deletion/v2-reconcile";
 import { reconcileDispatch } from "./server/modules/dispatch/service";
 import { reconcileFileUploads } from "./server/modules/files/reconcile";
 import { reconcileV2Dispatch } from "./server/runtime/dispatch";
+import { runScheduledTasks } from "./server/runtime/scheduled-tasks";
 
 export { AnalysisWorkflow } from "./workflows/analysis";
 export { AssetProcessingWorkflow } from "./workflows/asset-processing";
@@ -45,13 +46,15 @@ app.use(i18n());
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    await reconcileDeletion(env);
-    await cleanupAuthData(env.DB);
-    await cleanupExpiredDirectorySnapshots(env.DB);
-    await reconcileDispatch(env);
-    await reconcileAnalysisTimeouts(env);
-    await reconcileFileUploads(env);
-    await reconcileV2Dispatch(env);
-    await reconcileV2Deletion(env);
+    await runScheduledTasks([
+      { stage: "v2_dispatch", run: () => reconcileV2Dispatch(env) },
+      { stage: "legacy_deletion", run: () => reconcileDeletion(env) },
+      { stage: "auth_cleanup", run: () => cleanupAuthData(env.DB) },
+      { stage: "directory_cleanup", run: () => cleanupExpiredDirectorySnapshots(env.DB) },
+      { stage: "legacy_dispatch", run: () => reconcileDispatch(env) },
+      { stage: "legacy_timeouts", run: () => reconcileAnalysisTimeouts(env) },
+      { stage: "upload_cleanup", run: () => reconcileFileUploads(env) },
+      { stage: "v2_deletion", run: () => reconcileV2Deletion(env) },
+    ]);
   },
 };

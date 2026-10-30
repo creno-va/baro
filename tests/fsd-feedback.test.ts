@@ -93,7 +93,8 @@ test("profile contact whitespace is normalized and invalid fields explain why no
 test("selected photo captions keep the exact related text escaped and disappear under masking", () => {
   const report = {
     title: "합성 리포트",
-    content: "사건 요약\n합성 내용",
+    content:
+      "사건 요약\n합성 내용\n![확인 필요: <script>합성 관찰</script>](baro-photo:synthetic-photo)",
     revision: 1,
     updatedAt: "2026-10-28T00:00:00Z",
     stale: false,

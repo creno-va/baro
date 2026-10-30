@@ -45,6 +45,9 @@ export function createV2LegalRetrieval(
     /** Server-only research ranking. Never supplied by a model or wire request. */
     precedentDiscovery?: {
       rank: (rows: readonly PrecedentCandidate[], query: string) => readonly string[];
+      offset?: (query: string) => number;
+      exclude?: readonly string[];
+      onPage?: (query: string, nextOffset: number | null) => void;
     };
   },
 ) {
@@ -306,6 +309,8 @@ export function createV2LegalRetrieval(
                 };
               });
           } else if (plan.kind === "precedent") {
+            const position = options.precedentDiscovery?.offset?.(plan.query) ?? 0;
+            const offset = position % 40;
             // Research considers a wider title-first pool before spending any
             // detail requests. Ordinary chat retrieval keeps its original scope.
             // Official scope/display parameters: open.law.go.kr/LSO/openApi/guideResult.do?htmlName=precListGuide
@@ -317,7 +322,7 @@ export function createV2LegalRetrieval(
                     search,
                     datSrcNm: "대법원",
                     display: String(options.precedentDiscovery ? 40 : plan.limit),
-                    page: "1",
+                    page: String(Math.floor(position / 40) + 1),
                     sort: "ddes",
                     prncYd: `00010101~${body.asOfDate.replaceAll("-", "")}`,
                   }),
@@ -326,6 +331,7 @@ export function createV2LegalRetrieval(
                 ),
                 body.asOfDate,
                 options.precedentDiscovery ? 40 : plan.limit,
+                Math.floor(position / 40) * 40,
               );
             let candidates = await discover(options.precedentDiscovery ? "1" : "2");
             if (
@@ -340,15 +346,25 @@ export function createV2LegalRetrieval(
             // Resolve IDs back to the validated upstream rows. A ranking hook
             // cannot forge a candidate's identity or proof metadata.
             const byId = new Map(candidates.rows.map((row) => [row.판례일련번호, row]));
-            const selected = ranked
-              ? [...new Set(ranked)]
-                  .flatMap((id) => {
-                    const row = byId.get(id);
-                    return row ? [row] : [];
-                  })
-                  .slice(0, plan.limit)
+            const ordered = ranked
+              ? [...new Set(ranked)].flatMap((id) => {
+                  const row = byId.get(id);
+                  return row ? [row] : [];
+                })
               : candidates.rows;
-            searchTruncated = candidates.truncated || candidates.rows.length > selected.length;
+            const page = ordered.slice(offset, offset + plan.limit);
+            const selected = page.filter(
+              (row) => !options.precedentDiscovery?.exclude?.includes(row.판례일련번호),
+            );
+            searchTruncated = candidates.truncated || ordered.length > offset + page.length;
+            options.precedentDiscovery?.onPage?.(
+              plan.query,
+              ordered.length > offset + page.length
+                ? position + page.length
+                : candidates.truncated
+                  ? (Math.floor(position / 40) + 1) * 40
+                  : null,
+            );
             failures.push(...(candidates.failures ?? []));
             for (const candidate of selected)
               await collect(async () => {

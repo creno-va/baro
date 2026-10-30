@@ -10,6 +10,7 @@ import {
 } from "../../client/api/lawyers";
 import { sessionApi } from "../../client/api/session";
 import {
+  profileReady,
   selfAssetUrl,
   stripSelfPhotoMetadata,
 } from "../../server/modules/lawyers/self-profile-contract";
@@ -70,8 +71,6 @@ const busyLabels = {
   load: "내 프로필을 불러오고 있어요.",
   session: "로그인 상태를 확인하고 있어요.",
   save: "프로필을 저장하고 있어요.",
-  publish: "프로필을 공개하고 있어요.",
-  hide: "프로필을 비공개로 전환하고 있어요.",
   assets: "업로드 자료 상태를 확인하고 있어요.",
   remove: "자료 삭제를 접수하고 있어요.",
   uploadSession: "업로드 전 로그인 상태를 확인하고 있어요.",
@@ -92,11 +91,10 @@ export function Editor() {
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [confirmPublish, setConfirmPublish] = useState(false);
-  const [publicationConsent, setPublicationConsent] = useState(false);
   const [assets, setAssets] = useState<LawyerAssetView[]>([]);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const dirty = !!saved && !!draft && JSON.stringify(saved) !== JSON.stringify(draft);
+  const canSave = !!draft && profileReady(draft) && (dirty || !saved?.published);
   const fail = (cause: unknown) => {
     setError(lawyerErrorMessage(cause));
     setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
@@ -117,8 +115,6 @@ export function Editor() {
     setDraft(null);
     setPreview(false);
     setConfirmDiscard(false);
-    setConfirmPublish(false);
-    setPublicationConsent(false);
     setNotice("");
     setError("");
     setErrorCode("");
@@ -144,8 +140,6 @@ export function Editor() {
           setCanMutate(false);
           setPreview(false);
           setConfirmDiscard(false);
-          setConfirmPublish(false);
-          setPublicationConsent(false);
         }
         throw cause;
       }
@@ -297,11 +291,7 @@ export function Editor() {
       fail(sessionError);
     }
   };
-  const mutate = async (
-    operation: () => Promise<LawyerView>,
-    message: string,
-    action: "save" | "publish" | "hide",
-  ) => {
+  const mutate = async (operation: () => Promise<LawyerView>, message: string, action: "save") => {
     const startEpoch = epoch.current;
     setBusyAction(action);
     setError("");
@@ -323,8 +313,6 @@ export function Editor() {
       }
       setDraft(p);
       setSaved(p);
-      setConfirmPublish(false);
-      setPublicationConsent(false);
       setErrorCode("");
       setPhotoPreview(null);
       setNotice(message);
@@ -335,18 +323,8 @@ export function Editor() {
     }
   };
   const save = async () => {
-    if (!draft || busy || !canMutate) return;
+    if (!draft || busy || !canMutate || !canSave) return;
     await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.", "save");
-  };
-  const publish = async (published: boolean) => {
-    if (!saved || busy || !canMutate || (published && dirty)) return;
-    await mutate(
-      () => api.lawyers.publishMine(published, saved),
-      published
-        ? "프로필을 공개했어요. 변호사 찾기에서 확인할 수 있어요."
-        : "프로필을 비공개로 전환했어요.",
-      published ? "publish" : "hide",
-    );
   };
   const attach = (asset: LawyerAssetView) => {
     if (!draft || !canMutate || asset.status !== "ready") return;
@@ -495,7 +473,7 @@ export function Editor() {
     <div className="lawyer-editor">
       <PageHeader
         title="내 변호사 프로필"
-        description="소개와 연락처를 작성하고, 공개할 정보를 직접 관리하세요."
+        description="프로필을 저장하면 변호사 찾기에 공개돼요."
         action={
           draft && !accessUnknown && canMutate ? (
             <div className="lawyer-editor-actions">
@@ -511,7 +489,7 @@ export function Editor() {
                 <Button
                   type="submit"
                   form="lawyer-profile-form"
-                  disabled={busy || !canMutate || !dirty}
+                  disabled={busy || !canMutate || !canSave}
                 >
                   {busyAction === "save" ? "저장 중…" : "프로필 저장"}
                 </Button>
@@ -581,34 +559,6 @@ export function Editor() {
               }
             />
           )}
-          <div className="lawyer-editor-status">
-            <p>
-              <strong
-                className={`lawyer-visibility${saved?.published && canMutate ? " lawyer-visibility--public" : ""}`}
-              >
-                {saved?.published
-                  ? canMutate
-                    ? "공개 중"
-                    : "공개 일시 중지 · 재동의 필요"
-                  : "비공개"}
-              </strong>
-              <span>{dirty ? "저장하지 않은 변경이 있어요" : "저장된 프로필"}</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {saved?.published && canMutate && (
-                <a className="lawyer-public-link" href={`/lawyers/${encodeURIComponent(saved.id)}`}>
-                  내 공개 프로필 보기
-                </a>
-              )}
-              <Button
-                variant="ghost"
-                disabled={busy || !canMutate || !dirty}
-                onClick={() => setConfirmDiscard(true)}
-              >
-                변경 취소
-              </Button>
-            </div>
-          </div>
           {confirmDiscard && (
             <Card>
               <CardContent>
@@ -688,183 +638,225 @@ export function Editor() {
               }}
             >
               <fieldset disabled={busy || !canMutate} className="lawyer-editor-sections">
-                <Card className="profile-edit-section">
-                  <CardHeader>
-                    <CardTitle>사진과 기본 정보</CardTitle>
-                    <p>이름과 소개로 나를 알려주세요.</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="lawyer-photo-row">
-                      <AssetPhoto
-                        profileId={draft.id}
-                        assetId={photoPreview ? null : draft.photoAssetId}
-                        fallback={photoPreview ?? draft.photoUrl}
-                        alt="내 프로필 사진"
-                        size={100}
-                        privateRead
-                      />
-                      <div>
-                        <label className="lawyer-photo-upload">
-                          <ArrowUpFromLine size={16} aria-hidden="true" />
-                          사진 업로드
-                          <input
-                            aria-label="프로필 사진"
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            onChange={async (e) => {
-                              const file = e.currentTarget.files?.[0];
-                              e.currentTarget.value = "";
-                              if (!file) return;
-                              await upload(file, "profile_photo");
-                            }}
-                          />
-                        </label>
-                        <p className="text-sm text-muted-foreground">
-                          10MB 이하 · 정사각형 사진으로 저장돼요.
-                        </p>
-                        {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
-                          <Button
-                            variant="ghost"
-                            disabled={!draft.photoUrl || busy}
-                            onClick={() => {
-                              setDraft({ ...draft, photoUrl: null, photoAssetId: null });
-                              setPhotoPreview(null);
-                            }}
-                          >
-                            프로필에서 사진 제외
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="lawyer-fields mt-4">
-                      <label className="lawyer-field">
-                        이름
+                <div className="lawyer-photo-surface">
+                  <div className="lawyer-photo-row">
+                    <AssetPhoto
+                      profileId={draft.id}
+                      assetId={photoPreview ? null : draft.photoAssetId}
+                      fallback={photoPreview ?? draft.photoUrl}
+                      alt="내 프로필 사진"
+                      size={100}
+                      privateRead
+                    />
+                    <div>
+                      <h2>프로필 사진</h2>
+                      <p>얼굴이 잘 보이는 사진을 올려주세요.</p>
+                      <label className="lawyer-photo-upload">
+                        <ArrowUpFromLine size={16} aria-hidden="true" />
+                        사진 변경
                         <input
-                          value={draft.name}
-                          maxLength={100}
-                          onChange={(e) => patch("name", e.target.value)}
-                          autoComplete="name"
+                          aria-label="프로필 사진"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={async (e) => {
+                            const file = e.currentTarget.files?.[0];
+                            e.currentTarget.value = "";
+                            if (!file) return;
+                            await upload(file, "profile_photo");
+                          }}
                         />
                       </label>
-                      <label className="lawyer-field">
-                        사무실 이름
-                        <input
-                          value={draft.officeName}
-                          maxLength={200}
-                          onChange={(e) => patch("officeName", e.target.value)}
-                          autoComplete="organization"
-                        />
-                      </label>
+                      <p className="text-sm text-muted-foreground">
+                        10MB 이하 · 정사각형 사진으로 저장돼요.
+                      </p>
+                      {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
+                        <Button
+                          variant="ghost"
+                          disabled={!draft.photoUrl || busy}
+                          onClick={() => {
+                            setDraft({ ...draft, photoUrl: null, photoAssetId: null });
+                            setPhotoPreview(null);
+                          }}
+                        >
+                          프로필에서 사진 제외
+                        </Button>
+                      )}
                     </div>
-                    <label className="lawyer-field mt-4">
-                      소개
-                      <textarea
-                        value={draft.introduction}
-                        maxLength={5000}
-                        rows={5}
-                        onChange={(e) => patch("introduction", e.target.value)}
+                  </div>
+                </div>
+                <section className="profile-edit-section" aria-labelledby="profile-basic-heading">
+                  <header>
+                    <h2 id="profile-basic-heading">1. 기본 정보</h2>
+                  </header>
+                  <div className="lawyer-fields lawyer-fields--three">
+                    <label className="lawyer-field">
+                      <span>
+                        이름{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <input
+                        required
+                        aria-label="이름"
+                        value={draft.name}
+                        maxLength={100}
+                        onChange={(e) => patch("name", e.target.value)}
+                        autoComplete="name"
                       />
                     </label>
-                  </CardContent>
-                </Card>
-                <Card className="profile-edit-section">
-                  <CardHeader>
-                    <CardTitle>분야와 사무실</CardTitle>
-                    <p>다루는 분야와 사무실 위치를 입력하세요.</p>
-                  </CardHeader>
-                  <CardContent>
-                    <fieldset>
-                      <legend>분야 (복수 선택)</legend>
-                      <div className="lawyer-checkboxes">
-                        {Object.entries(FIELD_LABELS).map(([value, label]) => (
-                          <label key={value}>
-                            <input
-                              type="checkbox"
-                              checked={draft.practiceAreas.includes(value)}
-                              onChange={(e) =>
-                                patch(
-                                  "practiceAreas",
-                                  e.target.checked
-                                    ? [...draft.practiceAreas, value]
-                                    : draft.practiceAreas.filter((f) => f !== value),
-                                )
-                              }
-                            />
+                    <label className="lawyer-field">
+                      <span>
+                        사무실 이름{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <input
+                        required
+                        aria-label="사무실 이름"
+                        value={draft.officeName}
+                        maxLength={200}
+                        onChange={(e) => patch("officeName", e.target.value)}
+                        autoComplete="organization"
+                      />
+                    </label>
+                    <label className="lawyer-field">
+                      <span>
+                        지역{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <select
+                        required
+                        aria-label="지역"
+                        value={draft.region}
+                        onChange={(e) => patch("region", e.target.value)}
+                      >
+                        <option value="">지역 선택</option>
+                        {Object.entries(REGION_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>
                             {label}
-                          </label>
+                          </option>
                         ))}
-                      </div>
-                    </fieldset>
-                    <div className="lawyer-fields mt-4">
-                      <label className="lawyer-field">
-                        지역
-                        <select
-                          value={draft.region}
-                          onChange={(e) => patch("region", e.target.value)}
-                        >
-                          <option value="">지역 선택</option>
-                          {Object.entries(REGION_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="lawyer-field">
-                        사무실 주소
-                        <input
-                          value={draft.address}
-                          maxLength={500}
-                          onChange={(e) => patch("address", e.target.value)}
-                          autoComplete="street-address"
-                        />
-                      </label>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-intro-heading">
+                  <header>
+                    <h2 id="profile-intro-heading">
+                      2. 소개{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                    </h2>
+                  </header>
+                  <label className="lawyer-field">
+                    <span className="sr-only">소개</span>
+                    <textarea
+                      required
+                      value={draft.introduction}
+                      maxLength={5000}
+                      rows={5}
+                      placeholder="상담을 준비하는 의뢰인에게 활동과 경험을 소개해 주세요."
+                      onChange={(e) => patch("introduction", e.target.value)}
+                    />
+                  </label>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-fields-heading">
+                  <header>
+                    <h2 id="profile-fields-heading">
+                      3. 업무 분야{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                      <small>복수 선택</small>
+                    </h2>
+                  </header>
+                  <fieldset className="lawyer-practice-options">
+                    <legend className="sr-only">분야 (복수 선택)</legend>
+                    <div className="lawyer-checkboxes">
+                      {Object.entries(FIELD_LABELS).map(([value, label]) => (
+                        <label key={value}>
+                          <input
+                            type="checkbox"
+                            checked={draft.practiceAreas.includes(value)}
+                            onChange={(e) =>
+                              patch(
+                                "practiceAreas",
+                                e.target.checked
+                                  ? [...draft.practiceAreas, value]
+                                  : draft.practiceAreas.filter((field) => field !== value),
+                              )
+                            }
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
-                <Card className="profile-edit-section">
-                  <CardHeader>
-                    <CardTitle>직접 연락처</CardTitle>
+                  </fieldset>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-contact-heading">
+                  <header>
+                    <h2 id="profile-contact-heading">4. 사무실과 연락처</h2>
                     <p>연락받을 수단을 하나 이상 입력하세요.</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="lawyer-fields">
-                      <label className="lawyer-field">
-                        전화번호
-                        <input
-                          type="tel"
-                          value={draft.phone}
-                          maxLength={30}
-                          onChange={(e) => patch("phone", e.target.value)}
-                          autoComplete="tel"
-                        />
-                      </label>
-                      <label className="lawyer-field">
-                        이메일
-                        <input
-                          type="email"
-                          value={draft.email}
-                          maxLength={254}
-                          onChange={(e) => patch("email", e.target.value)}
-                          autoComplete="email"
-                        />
-                      </label>
-                      <label className="lawyer-field">
-                        웹사이트 / 외부 상담 URL
-                        <input
-                          type="url"
-                          placeholder="https://"
-                          value={draft.website}
-                          maxLength={2000}
-                          onChange={(e) => patch("website", e.target.value)}
-                        />
-                      </label>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </header>
+                  <label className="lawyer-field">
+                    <span>
+                      사무실 주소{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                    </span>
+                    <input
+                      required
+                      aria-label="사무실 주소"
+                      value={draft.address}
+                      maxLength={500}
+                      onChange={(e) => patch("address", e.target.value)}
+                      autoComplete="street-address"
+                    />
+                  </label>
+                  <div className="lawyer-fields lawyer-fields--three">
+                    <label className="lawyer-field">
+                      전화번호
+                      <input
+                        type="tel"
+                        value={draft.phone}
+                        maxLength={30}
+                        onChange={(e) => patch("phone", e.target.value)}
+                        autoComplete="tel"
+                      />
+                    </label>
+                    <label className="lawyer-field">
+                      이메일
+                      <input
+                        type="email"
+                        value={draft.email}
+                        maxLength={254}
+                        onChange={(e) => patch("email", e.target.value)}
+                        autoComplete="email"
+                      />
+                    </label>
+                    <label className="lawyer-field">
+                      웹사이트 / 외부 상담 URL
+                      <input
+                        type="url"
+                        placeholder="https://"
+                        value={draft.website}
+                        maxLength={2000}
+                        onChange={(e) => patch("website", e.target.value)}
+                      />
+                    </label>
+                  </div>
+                </section>
                 <Card className="profile-edit-section">
                   <CardHeader>
-                    <CardTitle>포트폴리오</CardTitle>
+                    <CardTitle>
+                      5. 포트폴리오 <small>선택</small>
+                    </CardTitle>
                     <p>활동과 경험을 소개하세요. 의뢰인 정보는 포함하지 마세요.</p>
                   </CardHeader>
                   <CardContent>
@@ -1028,66 +1020,17 @@ export function Editor() {
                   </CardContent>
                 </Card>
               </fieldset>
+              <footer className="lawyer-form-footer">
+                <Button
+                  type="submit"
+                  aria-label="작성한 프로필 저장"
+                  disabled={busy || !canMutate || !canSave}
+                >
+                  {busyAction === "save" ? "저장 중…" : "프로필 저장"}
+                </Button>
+              </footer>
             </form>
           )}
-          <Card className="profile-publication-section">
-            <CardHeader>
-              <CardTitle>공개 설정</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>
-                공개하면 작성한 프로필과 연락처가 변호사 찾기에 표시돼요. 비공개로 전환하면 목록과
-                상세에서 보이지 않아요.
-              </p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                공개 여부를 바꾸기 전에 변경 내용을 저장하세요.
-              </p>
-              <div className="mt-4">
-                <Button
-                  variant={saved?.published ? "outline" : "default"}
-                  disabled={busy || !canMutate || dirty}
-                  onClick={() => (saved?.published ? void publish(false) : setConfirmPublish(true))}
-                >
-                  {saved?.published ? "비공개로 전환" : "프로필 공개"}
-                </Button>
-              </div>
-              {confirmPublish && (
-                <div className="lawyer-publication-confirm">
-                  <p className="mb-3 text-sm">
-                    공개 정보는 누구나 보고 저장할 수 있어요. 비공개로 전환해도 제3자가 보관한
-                    사본은 삭제할 수 없어요. <a href="/policies/privacy">개인정보 처리방침 초안</a>
-                    에서 공개 범위를 확인하세요.
-                  </p>
-                  <label className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={publicationConsent}
-                      onChange={(e) => setPublicationConsent(e.target.checked)}
-                    />
-                    내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.
-                  </label>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button
-                      disabled={busy || !canMutate || !publicationConsent || dirty}
-                      onClick={() => void publish(true)}
-                    >
-                      동의하고 공개
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => {
-                        setConfirmPublish(false);
-                        setPublicationConsent(false);
-                      }}
-                    >
-                      취소
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
     </div>

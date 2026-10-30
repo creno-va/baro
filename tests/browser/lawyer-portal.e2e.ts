@@ -3,6 +3,20 @@ import { expect, test } from "@playwright/test";
 import { validateSelfPhoto } from "../../src/server/modules/lawyers/self-profile";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
 
+function readyProfile(id: string, name = "합성 변호사") {
+  return {
+    ...emptySelfProfile(id),
+    name,
+    introduction: "합성 소개",
+    officeName: "합성 사무실",
+    address: "합성 주소",
+    region: "seoul" as const,
+    practiceAreas: ["civil" as const],
+    email: "synthetic@example.invalid",
+    published: true,
+  };
+}
+
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.route(/\/api\/(v2\/)?cases\?/, (route) =>
@@ -18,7 +32,7 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test("portal saves photo and portfolio, previews, publishes to directory, refreshes and hides at 320px", async ({
+test("portal saves photo and portfolio, previews and publishes on save at 320px", async ({
   page,
 }) => {
   let profile = emptySelfProfile("synthetic-owner-profile");
@@ -71,7 +85,12 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
     if (body.profile?.photoUrl?.startsWith("data:")) validateSelfPhoto(body.profile.photoUrl);
     profile = request.url().endsWith("/publication")
       ? { ...profile, published: body.published, revision: profile.revision + 1 }
-      : { ...body.profile, revision: profile.revision + 1, verificationStatus: "self_declared" };
+      : {
+          ...body.profile,
+          revision: profile.revision + 1,
+          published: true,
+          verificationStatus: "self_declared",
+        };
     return route.fulfill({ json: profile });
   });
   await page.route("**/api/v2/lawyers**", (route) => {
@@ -126,6 +145,23 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await page.screenshot({ path: ".wrangler/lawyer-editor-1440.png", fullPage: true });
+  const fields = await page
+    .locator(".lawyer-fields--three")
+    .first()
+    .locator("label")
+    .evaluateAll((items) => items.map((item) => item.getBoundingClientRect().top));
+  expect(new Set(fields).size).toBe(1);
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await expect
+    .poll(() =>
+      page
+        .locator(".lawyer-editor .page-header")
+        .evaluate((el) => Math.round(el.getBoundingClientRect().top)),
+    )
+    .toBe(24);
+  await expect(page.locator(".lawyer-editor .page-header")).toHaveCSS("border-bottom-width", "1px");
+  await page.screenshot({ path: ".wrangler/lawyer-editor-sticky.png" });
+
   await expect(
     page.locator(".sidebar-desktop").getByRole("link", { name: "새 사건 입력", exact: true }),
   ).toBeVisible();
@@ -160,20 +196,28 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
     "https://example.com/portfolio",
   );
   await page.getByRole("button", { name: "편집으로 돌아가기" }).click();
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("합성 변호사");
-  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
-  await expect(page.getByRole("button", { name: "동의하고 공개" })).toBeDisabled();
-  await page.getByLabel("내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.").check();
-  await page.getByRole("button", { name: "동의하고 공개" }).click();
-  await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
+  expect(profile.published).toBe(true);
+  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "변경 취소", exact: true })).toHaveCount(0);
   expect(profile.photoUrl).toMatch(/self-service.*assets.*synthetic-photo/);
   expect(profile.photoAssetId).toBe("synthetic-photo");
   expect(profile.verificationStatus).toBe("self_declared");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: ".wrangler/lawyer-portal-320.png", fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await expect
+    .poll(() =>
+      page
+        .locator(".lawyer-editor .page-header")
+        .evaluate((el) => Math.round(el.getBoundingClientRect().top)),
+    )
+    .toBe(96);
+  await page.screenshot({ path: ".wrangler/lawyer-editor-mobile-sticky.png" });
+
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });
@@ -209,19 +253,12 @@ test("portal saves photo and portfolio, previews, publishes to directory, refres
     ),
   ).toBe(true);
   await page.goto("/lawyer");
-  await page.getByRole("button", { name: "비공개로 전환" }).click();
-  await expect(page.getByText("비공개", { exact: true })).toBeVisible();
-  await page.goto("/lawyers");
-  await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
-  await page.goto(`/lawyers/${profile.id}`);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("button", { name: "비공개로 전환" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test("keyboard cancel, save error/retry and stale revision preserve the user's draft", async ({
-  page,
-}) => {
-  let profile = emptySelfProfile("synthetic-retry-profile");
+test("keyboard save, error/retry and footer save preserve the user's draft", async ({ page }) => {
+  let profile = readyProfile("synthetic-retry-profile");
   let fail = true;
   await page.route("**/api/v2/me/lawyer/self-profile", (route) => {
     if (route.request().method() === "GET") return route.fulfill({ json: profile });
@@ -231,27 +268,25 @@ test("keyboard cancel, save error/retry and stale revision preserve the user's d
   });
   await page.goto("/lawyer");
   await page.getByLabel("이름", { exact: true }).fill("수정 중");
-  await page.getByRole("button", { name: "프로필 저장" }).focus();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("alert")).toContainText("다른 화면에서 변경됐어요.");
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("수정 중");
   fail = false;
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.getByLabel("이름", { exact: true }).fill("취소할 변경");
-  await page.getByRole("button", { name: "변경 취소", exact: true }).click();
-  await page.getByRole("button", { name: "계속 편집" }).click();
-  await expect(page.getByLabel("이름", { exact: true })).toHaveValue("취소할 변경");
-  await page.getByRole("button", { name: "변경 취소", exact: true }).click();
-  await page.getByRole("button", { name: "변경 버리기" }).click();
-  await expect(page.getByLabel("이름", { exact: true })).toHaveValue("수정 중");
+  await expect(page.getByRole("button", { name: "변경 취소", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "작성한 프로필 저장", exact: true }).click();
+  await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
+  expect(profile.name).toBe("취소할 변경");
 });
 
 test("peer-tab account switch removes old edits, preview and publication confirmation; stale saves are ignored", async ({
   page,
 }) => {
   let user = { id: "owner-A", name: "A", accountType: "lawyer" };
-  let profile = { ...emptySelfProfile("profile-A"), name: "A 저장 프로필" };
+  let profile = { ...readyProfile("profile-A"), name: "A 저장 프로필" };
   let releaseSave: () => void = () => {};
   const saveGate = new Promise<void>((resolve) => {
     releaseSave = resolve;
@@ -269,10 +304,10 @@ test("peer-tab account switch removes old edits, preview and publication confirm
   });
   await page.goto("/lawyer");
   await page.getByLabel("이름", { exact: true }).fill("A 비공개 초안");
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect.poll(() => saveStarted).toBe(true);
   user = { id: "owner-B", name: "B", accountType: "lawyer" };
-  profile = { ...emptySelfProfile("profile-B"), name: "B 저장 프로필" };
+  profile = { ...readyProfile("profile-B"), name: "B 저장 프로필" };
   await page.evaluate(() =>
     window.dispatchEvent(new StorageEvent("storage", { key: "baro-api-mock-v1:session" })),
   );
@@ -280,8 +315,6 @@ test("peer-tab account switch removes old edits, preview and publication confirm
   releaseSave();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("B 저장 프로필");
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
-  await page.getByLabel("내 사진과 연락처를 포함한 작성 정보의 공개에 동의합니다.").check();
   user = { id: "customer", name: "고객", accountType: "customer" };
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByLabel("이름", { exact: true })).toHaveCount(0);
@@ -300,16 +333,16 @@ test("a save checks the current account even without a focus/storage event", asy
   await page.route("**/api/v2/me/lawyer/self-profile", (route) => {
     if (route.request().method() !== "GET") {
       saves++;
-      return route.fulfill({ json: emptySelfProfile("profile-B") });
+      return route.fulfill({ json: readyProfile("profile-B") });
     }
     return route.fulfill({
-      json: { ...emptySelfProfile(owner === "owner-A" ? "profile-A" : "profile-B"), name: owner },
+      json: { ...readyProfile(owner === "owner-A" ? "profile-A" : "profile-B"), name: owner },
     });
   });
   await page.goto("/lawyer");
   await page.getByLabel("이름", { exact: true }).fill("旧 owner draft");
   owner = "owner-B";
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("owner-B");
   expect(saves).toBe(0);
 });
@@ -392,7 +425,7 @@ test("failed old-owner save cannot retain the draft after an account switch with
   );
   await page.route("**/api/v2/me/lawyer/self-profile", async (route) => {
     if (route.request().method() === "GET")
-      return route.fulfill({ json: emptySelfProfile(account, account) });
+      return route.fulfill({ json: readyProfile(account, account) });
     started = true;
     await pending;
     return route.fulfill({
@@ -402,13 +435,13 @@ test("failed old-owner save cannot retain the draft after an account switch with
   });
   await page.goto("/lawyer");
   await page.getByLabel("이름", { exact: true }).fill("이전 계정의 비공개 초안");
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect.poll(() => started).toBe(true);
   account = "synthetic-second";
   release();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("synthetic-second");
   await expect(page.getByText("합성 이전 요청 실패", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "프로필 저장" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toBeDisabled();
 });
 
 test("text body persists separately from its title, previews, publishes, edits and deletes", async ({
@@ -430,7 +463,7 @@ test("text body persists separately from its title, previews, publishes, edits a
       const body = req.postDataJSON();
       profile = req.url().endsWith("/publication")
         ? { ...profile, published: body.published, revision: profile.revision + 1 }
-        : { ...body.profile, revision: profile.revision + 1 };
+        : { ...body.profile, revision: profile.revision + 1, published: true };
     }
     return route.fulfill({ json: profile });
   });
@@ -449,10 +482,6 @@ test("text body persists separately from its title, previews, publishes, edits a
   await page.getByRole("button", { name: "미리보기", exact: true }).click();
   await expect(page.getByText(body, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => "untrusted" in window)).toBe(false);
-  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
-  await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
-  await page.getByRole("button", { name: "동의하고 공개" }).click();
-  await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
   await page.goto("/lawyers/text-portfolio");
   await expect(page.getByText(body, { exact: true })).toBeVisible();
   await page.goto("/lawyer");
@@ -516,7 +545,7 @@ test("renewal keeps existing profile and uploaded download available while edits
   ).toBeVisible();
   await expect(page.getByText("기존 본문", { exact: true })).toBeVisible();
   await expect(page.getByText("저장하지 않은 초안", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
   const download = page.waitForEvent("download");

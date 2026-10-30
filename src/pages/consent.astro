@@ -11,7 +11,7 @@ import "../styles/consent.css";
 <BaseLayout title="필수 확인 — BARO" description="BARO 이용 전 필수 정책과 연령을 확인합니다.">
   <main id="main-content" tabindex="-1" class="consent-page">
     <nav class="consent-navigation" aria-label="필수 확인 화면"><Brand /><a href="/help">도움말</a></nav>
-    <ConsentForm client:load />
+    <ConsentForm client:only="react"><p slot="fallback" class="consent-status" role="status">이용 상태를 확인하고 있어요.</p></ConsentForm>
     <noscript><p>동의 상태를 확인하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
   </main>
 </BaseLayout>

@@ -172,12 +172,6 @@ export function ConsentForm() {
         >
           {submitting ? "저장 중…" : "동의하고 계속하기"}
         </button>
-        <a
-          href={accessHref("login", returnPathFromLocation() ?? undefined)}
-          className="consent-cancel"
-        >
-          취소하고 돌아가기
-        </a>
         {error ? (
           <p className="form-error" role="alert">
             {error}

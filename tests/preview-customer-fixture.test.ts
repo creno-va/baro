@@ -17,6 +17,7 @@ import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
 import { workspaceCreationSourcePredicate } from "../src/server/db/v2-workspace-create-guard";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
+import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
 import { seedTestSession } from "./helpers/session";
 
 const NOW = "2026-10-15T01:00:00.000Z";
@@ -51,12 +52,11 @@ async function fixture(name = "합성검증 프로필 1014") {
     email: "synthetic@example.test",
   });
   const published = await profiles.publishMine(owner.userId, true, saved.revision, PROFILE);
-  const privateProfile = await profiles.publishMine(
-    owner.userId,
-    false,
-    published.revision,
-    PROFILE,
-  );
+  const privateProfile = await seedLegacySelfProfile(core, owner.userId, {
+    ...published,
+    published: false,
+    revision: published.revision + 1,
+  });
   await saveAccountType(db.binding, owner.userId, "customer");
   let probes = 0;
   const prepare = (overrides: Partial<Parameters<typeof preparePreviewCustomerFixture>[0]> = {}) =>
@@ -692,7 +692,7 @@ const releaseInput = () => ({
       service: "baro",
       environment: "preview",
       release: SHA,
-      schemaVersion: "0018_external_lookup_admission",
+      schemaVersion: "0019_self_profile_listing",
     });
   }) as typeof fetch,
 });
@@ -724,7 +724,7 @@ test("release gate requires exact main CI, preview live/ready and current schema
             service: "baro",
             environment: "preview",
             release: SHA,
-            schemaVersion: "0018_external_lookup_admission",
+            schemaVersion: "0019_self_profile_listing",
             ...override,
           })) as typeof fetch,
       }),

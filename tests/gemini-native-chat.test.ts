@@ -20,6 +20,7 @@ const draft = {
   timeline: [],
   requestedMaterials: [],
   requestedTools: [],
+  requestedCurrentTime: false,
 };
 test("compact chat definitions preserve required fields, closed objects and legacy server defaults", () => {
   const schema = prepareGatewayWireInput("workspace_chat", {}).response_format.json_schema.schema;

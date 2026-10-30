@@ -52,6 +52,7 @@ import {
   WORKSPACE_MODEL_TIMEOUT_MS,
 } from "../modules/llm-gateway/service";
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
+import { currentTime } from "../modules/workspace/current-time";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 import { executeWorkspace, type WorkspaceParams } from "../modules/workspace/execution";
 import { MATERIAL_CONTEXT_BYTES, readMaterialWindow } from "../modules/workspace/materials";
@@ -209,6 +210,7 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
       const invocationId = crypto.randomUUID(),
         phase = phaseFor(input.kind, !!context.precedentComparison);
       if (input.kind === "chat_response" && !context.precedentComparison) {
+        context.clockTool = { id: "current_time", timeZone: "Asia/Seoul" };
         context.lookupTools = lookupCatalog(lookupConfiguration(env));
         context.toolLookupPerformed = false;
         context.toolResults = [];
@@ -304,6 +306,7 @@ export async function runWorkspaceRuntime(
         };
       }
       if (job.kind === "chat_response" && !context.precedentComparison) {
+        context.clockTool = { id: "current_time", timeZone: "Asia/Seoul" };
         context.lookupTools = lookupCatalog(lookupConfiguration(env));
         context.toolLookupPerformed = false;
         context.toolResults = [];
@@ -413,6 +416,7 @@ export async function runWorkspaceRuntime(
         },
       };
       return createWorkspacePipeline(gateway, {
+        currentTime,
         reserve: async () => hasCustomerWorkspaceAccess(core, params.ownerId),
         invocation,
         ...(latest?.lookupRequests

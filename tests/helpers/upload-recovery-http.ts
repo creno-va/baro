@@ -17,10 +17,10 @@ const fingerprint = async (value: string) =>
     "hex",
   );
 export async function uploadRecoveryHttpFixture(
-  options: { onProbe?: () => void | Promise<void> } = {},
+  options: { onProbe?: () => void | Promise<void>; bytes?: Uint8Array<ArrayBuffer> } = {},
 ) {
   const f = await customerWorkspaceFixture(new Date().toISOString());
-  const bytes = new TextEncoder().encode("합성 비공개 원본 byte fixture"),
+  const bytes = options.bytes ?? new TextEncoder().encode("합성 비공개 원본 byte fixture"),
     objects = new Map<string, Uint8Array<ArrayBuffer>>();
   let now = f.now;
   const source: UploadMetadata = { name: "합성.txt", size: bytes.byteLength, type: "text/plain" };
@@ -108,11 +108,13 @@ export async function uploadRecoveryHttpFixture(
       ownerId?: string;
       onAcknowledged?: (id: string) => void;
       completionConsistency?: typeof FILE_TARGET_UPLOAD_CONSISTENCY;
+      uploadConcurrency?: 1 | 2 | 3;
     } = {},
   ) =>
     createFilesClient<UploadMetadata, PrivateDownload>({
       scope: createSessionScope(),
       request,
+      uploadConcurrency: options.uploadConcurrency ?? 1,
       ...(options.completionConsistency
         ? { completionConsistency: options.completionConsistency }
         : {}),

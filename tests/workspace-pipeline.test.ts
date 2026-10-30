@@ -3,6 +3,7 @@ import type { Question } from "../src/contracts";
 import type { V2Fact } from "../src/contracts/v2";
 import type { Phase } from "../src/server/modules/llm-gateway/prompts";
 import { ModelError } from "../src/server/modules/llm-gateway/service";
+import { currentTime } from "../src/server/modules/workspace/current-time";
 import {
   assertWorkspaceFacts,
   createWorkspacePipeline,
@@ -164,6 +165,51 @@ const chatText = (text: string) => ({
   timeline: [],
 });
 
+test("current-time tool is server-owned KST and a delayed job preserves its original date anchor through audit", async () => {
+  const saved = confirmedChatContext();
+  saved.calendar = { localDate: "2026-10-31", timeZone: "Asia/Seoul" };
+  saved.clockTool = { id: "current_time", timeZone: "Asia/Seoul" };
+  const observed = currentTime(() => "2026-10-31T15:00:01Z");
+  expect(observed).toMatchObject({
+    utc: "2026-10-31T15:00:01.000Z",
+    localDate: "2026-11-01",
+    localTime: "00:00:01",
+    timeZone: "Asia/Seoul",
+  });
+  let reads = 0;
+  const phases: Phase[] = [];
+  const value = createWorkspacePipeline(
+    {
+      call: async (phase, input) => {
+        phases.push(phase);
+        const context = input as WorkspaceContext & { context?: WorkspaceContext };
+        if (phase === "workspace_audit") {
+          expect(context.context).toMatchObject({
+            calendar: saved.calendar,
+            currentTime: observed,
+          });
+          return approved;
+        }
+        if (!context.currentTime)
+          return { ...chatText("요청 시점을 확인하고 있어요."), requestedCurrentTime: true };
+        expect(context.calendar?.localDate).toBe("2026-10-31");
+        return chatText("요청하신 시점과 자료에 기재된 날짜를 구분해 정리할 수 있어요.");
+      },
+    },
+    {
+      reserve: async () => true,
+      invocation: () => crypto.randomUUID(),
+      currentTime: () => {
+        reads++;
+        return observed;
+      },
+    },
+  );
+  await value.chat(saved, "synthetic_clock_request");
+  expect(reads).toBe(1);
+  expect(phases).toEqual(["workspace_chat", "workspace_chat", "workspace_audit"]);
+});
+
 test("exact standalone strategy refusal reaches audit with its full original text", async () => {
   const safe = "소송 전략은 제공하지 않으며 사실과 자료 정리를 돕겠습니다.";
   const { value, calls } = pipeline((phase) =>
@@ -229,7 +275,12 @@ test("a bounded chat audits the complete generation context without replacing it
   expect(calls[1]?.input).toEqual({
     phase: "workspace_chat",
     context: calls[0]?.input,
-    draft: { ...chatText(safe), requestedMaterials: [], requestedTools: [] },
+    draft: {
+      ...chatText(safe),
+      requestedMaterials: [],
+      requestedTools: [],
+      requestedCurrentTime: false,
+    },
   });
   expect(saved).toEqual(before);
 });

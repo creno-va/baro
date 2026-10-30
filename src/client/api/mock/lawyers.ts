@@ -209,10 +209,10 @@ export function createMockLawyers(context: LawyerMockContext) {
       const result = selfProfileSchema.safeParse({
         ...input,
         revision: profile.revision + 1,
-        published: profile.published,
+        published: true,
         verificationStatus: "self_declared",
       });
-      if (!result.success || (profile.published && !profileReady(result.data)))
+      if (!result.success || !profileReady(result.data))
         throw new LawyerApiError(
           "VALIDATION_ERROR",
           "입력 내용을 확인해 주세요. 공개 프로필의 필수 정보는 지울 수 없어요.",
@@ -226,6 +226,7 @@ export function createMockLawyers(context: LawyerMockContext) {
       current: { profileId: string; expectedRevision: number },
     ) {
       const owner = await own();
+      if (!published) throw new LawyerApiError("VALIDATION_ERROR", "프로필은 저장하면 공개돼요.");
       const store = state();
       const profile = store.profiles.find((p) => p.id === owner.profile.id);
       if (!profile) throw new LawyerApiError("NOT_FOUND", "프로필을 찾을 수 없어요.");
@@ -236,7 +237,8 @@ export function createMockLawyers(context: LawyerMockContext) {
         !(profile.revision === current.expectedRevision + 1 && profile.published === published)
       )
         throw new LawyerApiError("CONFLICT", "다른 화면에서 변경됐어요.");
-      if (profile.published === published) return clone(profile);
+      if (profile.revision === current.expectedRevision + 1 && profile.published === published)
+        return clone(profile);
       if (published && !profileReady(selfProfileSchema.parse(profile)))
         throw new LawyerApiError(
           "VALIDATION_ERROR",

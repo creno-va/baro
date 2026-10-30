@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema } from "../../../contracts";
 import { LEGAL_DIAGNOSTICS_HEADER } from "../../../contracts/v2/legal-availability";
@@ -9,6 +9,7 @@ import {
   createPrecedentResearchService,
   PrecedentResearchError,
 } from "../../modules/legal-retrieval/research/service";
+import { backgroundDispatch } from "../../modules/workspace/background-dispatch";
 import {
   createWorkspaceService,
   type WorkspaceDependencies,
@@ -99,12 +100,19 @@ export function createPrecedentsApi(
     return options.service?.(core, env) ?? createPrecedentResearchService(core, env);
   };
   const empty = z.strictObject({});
-  const comparisons = async (env: Env, ownerId: string) => {
+  const comparisons = async (c: Context<ApiEnvironment>, ownerId: string) => {
+    const env = c.env;
     const core = createV2Core(env.DB, await createCaseDataCipher(env), {
       applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
-    return createWorkspaceService(core, await options.workspaceDependencies?.(env, core, ownerId));
+    return createWorkspaceService(
+      core,
+      backgroundDispatch(
+        (await options.workspaceDependencies?.(env, core, ownerId)) ?? {},
+        (work) => c.executionCtx.waitUntil(work),
+      ),
+    );
   };
   app.post("/:id/precedents/compare", async (c) => {
     const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
@@ -113,7 +121,7 @@ export function createPrecedentsApi(
     if (!(await abuseAllowed(c, access.ownerId, false)))
       return c.json(errorBody(c, "RATE_LIMITED", "잠시 후 다시 시도해 주세요.", true), 429);
     const key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
-    const result = await (await comparisons(c.env, access.ownerId)).comparePrecedent(
+    const result = await (await comparisons(c, access.ownerId)).comparePrecedent(
       access.ownerId,
       c.req.param("id"),
       key,
@@ -125,7 +133,7 @@ export function createPrecedentsApi(
     const access = await caseAccess(c, false, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     empty.parse(c.req.query());
-    const result = await (await comparisons(c.env, access.ownerId)).precedentComparison(
+    const result = await (await comparisons(c, access.ownerId)).precedentComparison(
       access.ownerId,
       c.req.param("id"),
       c.req.param("jobId"),

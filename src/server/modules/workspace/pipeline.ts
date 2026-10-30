@@ -64,6 +64,8 @@ export type WorkspaceContext = {
   subjectContext?: "individual" | "company";
   /** Server clock only; never derived from user text or persisted event timestamps. */
   calendar?: { localDate: string; timeZone: "Asia/Seoul" };
+  clockTool?: { id: "current_time"; timeZone: "Asia/Seoul" };
+  currentTime?: ReturnType<typeof import("./current-time").currentTime>;
   intake: V2Intake;
   confirmedSummary: V2Summary | null;
   precedentComparison?: {
@@ -410,6 +412,7 @@ export function createWorkspacePipeline(
     /** Server-owned IDs from this operation's encrypted explicit consent.
      * Keep the initial model admission unchanged; execute before its final answer. */
     explicitLookupTools?: V2LookupToolId[];
+    currentTime?: () => ReturnType<typeof import("./current-time").currentTime>;
     readMaterials?: (
       context: WorkspaceContext,
       requests: MaterialWindowRequest[],
@@ -644,6 +647,12 @@ export function createWorkspacePipeline(
         ...(context.lookupTools ? { toolLookupPerformed: false, toolResults: [] } : {}),
       };
       let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+      const timeRequested = draft.requestedCurrentTime;
+      if (timeRequested) {
+        if (!context.clockTool || !deps.currentTime)
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
+        context = { ...context, currentTime: deps.currentTime() };
+      }
       const requestedTools = deps.explicitLookupTools?.length
         ? deps.explicitLookupTools
         : draft.requestedTools;
@@ -682,7 +691,7 @@ export function createWorkspacePipeline(
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
         if (draft.requestedMaterials.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
-      } else if (toolsRequested) {
+      } else if (toolsRequested || timeRequested) {
         draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
       }
       if (draft.requestedSources.length) {
@@ -695,7 +704,11 @@ export function createWorkspacePipeline(
         if (draft.requestedSources.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
-      if (draft.requestedMaterials.length || draft.requestedTools.length)
+      if (
+        draft.requestedMaterials.length ||
+        draft.requestedTools.length ||
+        draft.requestedCurrentTime
+      )
         throw new WorkspaceOutputPolicyError("unauthorized_reference");
       const finishDraft = async () => {
         for (const fact of draft.facts) {
@@ -1037,7 +1050,8 @@ export function createWorkspacePipeline(
         if (
           draft.requestedSources.length ||
           draft.requestedMaterials.length ||
-          draft.requestedTools.length
+          draft.requestedTools.length ||
+          draft.requestedCurrentTime
         )
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
         return finishDraft();

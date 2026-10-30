@@ -23,6 +23,7 @@ import type {
   WorkspaceView,
 } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
+import { startForegroundPolling } from "../../client/foreground-poll";
 import { accessHref } from "../../client/return-path";
 import { V2_LIMITS, type V2LookupRequest, type V2MessageRequest } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
@@ -314,20 +315,9 @@ export function Workspace({
           !file.uploadRejection && ["uploading", "processing", "waiting"].includes(file.status),
       );
     if (!pending) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try {
-        if (!document.hidden && !lock.current) await load();
-      } finally {
-        if (!cancelled) timer = setTimeout(() => void poll(), 1800);
-      }
-    };
-    timer = setTimeout(() => void poll(), 1800);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+    return startForegroundPolling(async () => {
+      if (!lock.current) await load();
+    }, 1800);
   }, [view, load]);
   useEffect(() => {
     if (tab !== "files" || !ready || !view) return;

@@ -75,46 +75,6 @@ async function savedHtml(page: import("@playwright/test").Page) {
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
-test("selected photos persist through download and masking without leaking image pixels", async ({
-  page,
-}) => {
-  await page.goto("/cases/case-demo/reports");
-  const photo = page.getByRole("checkbox", { name: "합성 자료.jpg", exact: true });
-  await expect(photo).toBeEnabled();
-  await photo.check();
-  await expect(page.getByText("1장 선택 · 최대 12장, 합계 8 MB", { exact: true })).toBeVisible();
-  let download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
-  await download;
-  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
-  const html = await savedHtml(page);
-  expect(html).toContain('class="evidence-photo"');
-  expect(html).toContain('src="data:image/jpeg;base64,');
-  expect(html).toContain("합성 자료.jpg");
-  await page.reload();
-  await expect(photo).toBeChecked();
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
-  await expect(photo).toBeDisabled();
-  download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
-  await download;
-  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
-  expect(await savedHtml(page)).not.toContain('class="evidence-photo"');
-  await page.reload();
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).uncheck();
-  await expect(photo).toBeChecked();
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-      .toBe(true);
-    await page.screenshot({
-      path: `.wrangler/report-photo-selection-${width}.png`,
-      fullPage: true,
-    });
-  }
-});
-
 test("report review edits in place and saves before a full-width PDF download", async ({
   page,
 }) => {
@@ -129,7 +89,7 @@ test("report review edits in place and saves before a full-width PDF download", 
   });
   await page.reload();
   const report = page.locator(".report-review");
-  await expect(report.getByRole("heading", { name: "미확인 사항", exact: true })).toBeVisible();
+  await expect(report.getByRole("heading", { name: "추가 확인 사항", exact: true })).toBeVisible();
   await expect(report.getByRole("heading", { name: "사실·주장·출처", exact: true })).toHaveCount(0);
   await expect(report.getByRole("heading", { name: "공식 출처", exact: true })).toHaveCount(0);
   await expect(
@@ -140,13 +100,13 @@ test("report review edits in place and saves before a full-width PDF download", 
   await expect(
     report.getByRole("button", { name: /전달 내용 미리보기|검토 내용 저장/ }),
   ).toHaveCount(0);
-  await expect(report.getByRole("checkbox", { name: "합성 자료.jpg", exact: true })).toBeVisible();
-  await expect(
-    report.getByRole("checkbox", { name: "식별정보 가리기", exact: true }),
-  ).toBeVisible();
+
+  await expect(report.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(
+    0,
+  );
   await openReportEditor(page);
   await report
-    .getByRole("textbox", { name: "사건 요약 수정", exact: true })
+    .getByRole("textbox", { name: "사건 개요 수정", exact: true })
     .fill("다운로드에 반영할 수정한 합성 요약");
   const download = page.waitForEvent("download");
   await report.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
@@ -200,7 +160,6 @@ test("peer account switch clears dirty report, selected originals, confirmation 
   await expect(editor).toBeVisible();
   await prepareSavedPdf(page);
   await editor.fill("이전 계정의 저장하지 않은 합성 편집");
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1",
       state = JSON.parse(localStorage.getItem(key) ?? "{}");
@@ -237,7 +196,6 @@ test("same owner selecting lawyer retains report editing and export access", asy
   await expect(editor).toBeVisible();
   await prepareSavedPdf(page);
   await editor.fill("역할 변경 전에 남겨진 합성 편집");
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
   const peer = await context.newPage();
   await peer.goto("/settings");
   await peer.evaluate(() => {
@@ -274,7 +232,7 @@ test("peer account switch clears settings usage and an account deletion confirma
   ).toBeDisabled();
   await expect(page.getByRole("alert")).toContainText("계정이 변경");
 });
-test("review masking and PDF-only download preserve exact saved content and cascading deletion", async ({
+test("manual review and PDF-only download preserve exact saved content and cascading deletion", async ({
   page,
 }) => {
   const external: string[] = [];
@@ -287,8 +245,7 @@ test("review masking and PDF-only download preserve exact saved content and casc
   await page
     .getByRole("textbox", { name: / 수정$/ })
     .first()
-    .fill("합성 검토 내용: 010-1234-5678 / demo@example.test. 반환 날짜는 미확인입니다.");
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
+    .fill("합성 검토 내용: [전화번호 직접 삭제] / [이메일 직접 삭제]. 반환 날짜는 미확인입니다.");
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdf = await downloading;
@@ -296,12 +253,12 @@ test("review masking and PDF-only download preserve exact saved content and casc
   const pdfPath = await pdf.path();
   expect((await readFile(pdfPath as string)).subarray(0, 5).toString()).toBe("%PDF-");
   const html = await savedHtml(page);
-  expect(html).toContain("[전화번호 가림]");
+  expect(html).toContain("[전화번호 직접 삭제]");
   expect(html).not.toContain("010-1234-5678");
   await page.reload();
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveValue(/합성 검토 내용/);
-  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(0);
   if (evidence) {
     await mkdir(evidence, { recursive: true });
     await pdf.saveAs(resolve(evidence, "synthetic-report.pdf"));
@@ -494,18 +451,22 @@ test("account deletion preserves signed session, OAuth callback and SQL revoke g
   }
 });
 
-test("saved photo selections survive reload and masking excludes them from the next saved export", async ({
+test("saved inline photos survive reload and deleting their token removes them from the next PDF", async ({
   page,
 }) => {
   await page.goto("/cases/case-demo/reports");
   await prepareSavedPdf(page);
   await page.reload();
-  expect(await savedHtml(page)).toContain('alt="선택 근거 사진 1"');
-  await page.getByRole("checkbox", { name: "식별정보 가리기", exact: true }).check();
+  expect(await savedHtml(page)).toContain('data-report-photo="file-demo"');
+  await openReportEditor(page);
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
+  await editor.fill(
+    (await editor.inputValue()).replace(/!\[[^\]]*\]\(baro-photo:file-demo\)/gu, ""),
+  );
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   await downloading;
-  expect(await savedHtml(page)).not.toContain('alt="선택 근거 사진 1"');
+  expect(await savedHtml(page)).not.toContain('data-report-photo="file-demo"');
   expect(
     await page.evaluate(
       () =>

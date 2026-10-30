@@ -2,7 +2,10 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema, timestampSchema } from "../../../contracts";
-import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../../contracts/consent";
 import {
   FILE_TARGET_UPLOAD_CONSISTENCY,
   V2_LIMITS,
@@ -168,7 +171,7 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
     const requestSession = requestSessionFence();
     const row = await core
       .statement(
-        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision,w.status AS workspace_status,w.current_job_id AS workspace_job_id,w.intake_revision AS workspace_intake_revision,w.confirmed_summary_revision AS workspace_summary_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? "AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version=?)" : ""} ${requestSession.sql}`,
+        `SELECT u.*,r.id AS reservation_id,f.operation_id,f.revision AS file_revision,o.revision AS operation_revision,(SELECT request_hash FROM v2_idempotency WHERE operation_id=o.id LIMIT 1) AS request_hash,w.revision AS workspace_revision,w.status AS workspace_status,w.current_job_id AS workspace_job_id,w.intake_revision AS workspace_intake_revision,w.confirmed_summary_revision AS workspace_summary_revision FROM v2_upload_sessions u JOIN v2_files f ON f.id=u.file_id JOIN v2_operations o ON o.id=f.operation_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_storage_reservations r ON r.entity_id=f.id AND r.kind='case_original' WHERE w.owner_id=? AND w.id=? AND f.id=? AND (? IS NULL OR u.id=?) AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${writing ? `AND u.state='open' AND u.expires_at>? AND w.status!='archived' AND r.state!='released' AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}'))` : ""} ${requestSession.sql}`,
         [
           ownerId,
           workspaceId,
@@ -503,8 +506,12 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       index: number,
       body: ReadableStream<Uint8Array> | null,
     ) {
-      await consent(ownerId);
-      const u = await session(ownerId, workspaceId, fileId, uploadId, true);
+      // Independent pre-body authority reads can overlap; neither result is
+      // cached and the body is not acquired until both have succeeded.
+      const [, u] = await Promise.all([
+        consent(ownerId),
+        session(ownerId, workspaceId, fileId, uploadId, true),
+      ]);
       if (
         !Number.isSafeInteger(index) ||
         index < 0 ||
@@ -655,24 +662,25 @@ export function createFilesService(core: V2Core, deps: FileServiceDependencies) 
       let recorded = false;
       const authorize = async () => {
         try {
-          await consent(ownerId);
-          const current = await session(ownerId, workspaceId, fileId, uploadId, true);
-          const pending =
+          const [, current, pending] = await Promise.all([
+            consent(ownerId),
+            session(ownerId, workspaceId, fileId, uploadId, true),
             pendingPayload &&
-            (await core
-              .statement(
-                "SELECT id FROM v2_blobs WHERE id=? AND state='pending' AND reservation_id=? AND encrypted_payload=? AND logical_bytes=? AND cipher_bytes=? AND cipher_hash=? AND key_version=?",
-                [
-                  blob.id,
-                  blob.reservationId,
-                  pendingPayload,
-                  blob.logicalBytes,
-                  blob.cipherBytes,
-                  blob.cipherHash,
-                  blob.keyVersion,
-                ],
-              )
-              .first());
+              core
+                .statement(
+                  "SELECT id FROM v2_blobs WHERE id=? AND state='pending' AND reservation_id=? AND encrypted_payload=? AND logical_bytes=? AND cipher_bytes=? AND cipher_hash=? AND key_version=?",
+                  [
+                    blob.id,
+                    blob.reservationId,
+                    pendingPayload,
+                    blob.logicalBytes,
+                    blob.cipherBytes,
+                    blob.cipherHash,
+                    blob.keyVersion,
+                  ],
+                )
+                .first(),
+          ]);
           return (
             !!pending &&
             current.revision === u.revision &&

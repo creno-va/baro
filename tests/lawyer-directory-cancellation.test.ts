@@ -24,7 +24,9 @@ test("directory fetches one page until the caller requests the next, propagating
   const controller = new AbortController();
   globalThis.fetch = (async (path, init) => {
     paths.push(String(path));
-    expect(init?.signal).toBe(controller.signal);
+    // The transport can combine caller cancellation with its request deadline.
+    expect(init?.signal).toBeDefined();
+    expect(init?.signal?.aborted).toBe(false);
     return new Promise<Response>((_, reject) => {
       init?.signal?.addEventListener(
         "abort",

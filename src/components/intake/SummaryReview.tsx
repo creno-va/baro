@@ -452,21 +452,20 @@ export function SummaryReview({ caseId }: { caseId: string }) {
                     : notice}
                 </p>
                 {editingActive ? (
-                  <div className="intake-actions">
-                    <Button
-                      loading={busy}
-                      disabled={
-                        locked ||
-                        (!dirty && item.stage !== "summary") ||
-                        !summary.trim() ||
-                        summaryTooLong
-                      }
-                      onClick={() => void (dirty ? save() : confirm())}
-                    >
-                      <Save size={16} aria-hidden="true" />
-                      {busy ? "저장 중…" : "수정 내용 저장"}
-                    </Button>
-                  </div>
+                  <Button
+                    className="intake-scene-primary"
+                    loading={busy}
+                    disabled={
+                      locked ||
+                      (!dirty && item.stage !== "summary") ||
+                      !summary.trim() ||
+                      summaryTooLong
+                    }
+                    onClick={() => void (dirty ? save() : confirm())}
+                  >
+                    <Save size={18} aria-hidden="true" />
+                    {busy ? "저장 중…" : "수정 내용 저장"}
+                  </Button>
                 ) : (
                   <>
                     <Button

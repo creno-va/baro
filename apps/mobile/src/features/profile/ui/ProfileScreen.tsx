@@ -125,11 +125,7 @@ export function ProfileScreen({
                 <Text variant="heading" accessibilityRole="header">
                   소개·사무소·연락처
                 </Text>
-                <Text>
-                  {profile.published
-                    ? "현재 저장된 프로필은 공개 중이에요."
-                    : "현재 저장된 프로필은 비공개예요."}
-                </Text>
+                <Text>저장하면 변호사 찾기에 공개돼요.</Text>
                 <Text variant="muted">
                   {profile.verificationStatus === "verified"
                     ? "서버에서 확인된 자격 상태예요."
@@ -363,20 +359,15 @@ export function ProfileScreen({
               <Button
                 variant="primary"
                 label="프로필 저장"
-                disabled={!editable || state.conflict || !profileDirty(state)}
+                disabled={
+                  !editable ||
+                  state.conflict ||
+                  !profileReady(draft) ||
+                  (!profileDirty(state) && profile.published)
+                }
                 onPress={() => {
                   void actions.save();
                 }}
-              />
-              <Button
-                label={profile.published ? "프로필 공개 철회" : "프로필 공개 준비"}
-                disabled={
-                  !editable ||
-                  profileDirty(state) ||
-                  state.conflict ||
-                  (!profile.published && !profileReady(profile))
-                }
-                onPress={() => actions.requestPublication(!profile.published)}
               />
               {profile.published ? (
                 <Button

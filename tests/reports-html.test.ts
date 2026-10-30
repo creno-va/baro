@@ -3,7 +3,7 @@ import { createReportHtml } from "../src/components/reports/document";
 import { reportHttpFixture } from "./helpers/report-http-fixture";
 import { seedTestSession } from "./helpers/session";
 
-test("standalone HTML escapes user markup, masks title/body, preserves sections, positions and historical basis without remote resources", () => {
+test("standalone HTML escapes user markup, masks title/body, preserves sections, positions and saved content without remote resources", () => {
   const html = createReportHtml({
     title: '자료 <img src=x onerror="alert(1)"> · 010-1234-5678',
     content:
@@ -21,16 +21,15 @@ test("standalone HTML escapes user markup, masks title/body, preserves sections,
   expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   expect(html).toContain("&lt;img src=x onerror=&quot;");
   expect(html).not.toContain("<script");
-  expect(html).toContain('alt="바로 로고"');
+  expect(html).toContain('alt="BARO"');
   expect(html).toContain('src="data:image/svg+xml;base64,');
   expect(html).not.toContain("010-1234-5678");
   expect(html).not.toContain("https://");
   expect(html).toContain("[전화번호 가림]");
   expect(html).toContain("2.25–8.75초");
   expect(html).toContain("12.5–19.25초 누락");
-  expect(html).toContain("이전 생성 기준");
-  expect(html).toContain("2026.10.08 · 01:02 UTC");
-  expect(html).toContain("2 · 8");
+  expect(html).not.toContain("이전 생성 기준");
+  expect(html).toContain("BARO · 리포트 2");
   expect(html).toContain("@media print");
 });
 test("HTML endpoint reads the exact saved masked report before re-consent; cross-owner and deleted reports remain inaccessible", async () => {

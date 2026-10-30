@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { CURRENT_POLICY_VERSIONS, opaqueIdSchema } from "../../contracts";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+  opaqueIdSchema,
+} from "../../contracts";
 import { usageDateKst } from "./repository";
 import { type Actor, actorSchema, parse, safe, sqlClaim, type V2Core } from "./v2-core";
 import { recordExecutionTransport, recordExecutionUsage } from "./v2-execution-runtime";
@@ -69,7 +73,7 @@ function sourceQuery(r: StoragePaidHoldRequest, actor: Actor, pending: boolean) 
   if (r.intent.kind === "case_original") {
     from =
       "v2_storage_reservations r JOIN v2_billing_principals principal ON principal.id=r.principal_id JOIN v2_files f ON f.id=r.entity_id JOIN v2_workspaces w ON w.id=f.workspace_id JOIN v2_upload_sessions u ON u.file_id=f.id JOIN v2_operations o ON o.id=f.operation_id";
-    guard = `r.kind='case_original' AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=o.id AND o.kind='file_extract' AND f.id=${req("targetId")} AND f.revision=${req("targetRevision")} AND w.owner_id=q.owner AND f.state IN ('reserved','uploading') AND f.current_job_id IS NULL AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.owner_id=q.owner AND c.file_id=f.id AND c.kind='auto_processing' AND c.version=json_extract(q.policy,'$.aiNoticeVersion')) AND u.id=${req("intent.uploadId")} AND u.revision=${req("intent.uploadRevision")} AND u.state='open' AND u.expires_at>q.now AND ${req("intent.ordinal")}<ceil(u.reserved_bytes/8388608.0) AND ${req("pending.logicalBytes")}=min(8388608,u.reserved_bytes-${req("intent.ordinal")}*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=${req("intent.ordinal")}) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='workspace' AND target_id=w.id) OR (target_kind='file' AND target_id=f.id))`;
+    guard = `r.kind='case_original' AND r.target_id=f.id AND r.workspace_id=w.id AND r.operation_id=o.id AND o.kind='file_extract' AND f.id=${req("targetId")} AND f.revision=${req("targetRevision")} AND w.owner_id=q.owner AND f.state IN ('reserved','uploading') AND f.current_job_id IS NULL AND w.status!='archived' AND EXISTS(SELECT 1 FROM v2_consents c WHERE c.owner_id=q.owner AND c.file_id=f.id AND c.kind='auto_processing' AND c.version IN (json_extract(q.policy,'$.aiNoticeVersion'), '${COMPATIBLE_FILE_AI_NOTICE_VERSION}')) AND u.id=${req("intent.uploadId")} AND u.revision=${req("intent.uploadRevision")} AND u.state='open' AND u.expires_at>q.now AND ${req("intent.ordinal")}<ceil(u.reserved_bytes/8388608.0) AND ${req("pending.logicalBytes")}=min(8388608,u.reserved_bytes-${req("intent.ordinal")}*8388608) AND NOT EXISTS(SELECT 1 FROM v2_upload_parts WHERE upload_id=u.id AND ordinal=${req("intent.ordinal")}) AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='workspace' AND target_id=w.id) OR (target_kind='file' AND target_id=f.id))`;
     fields =
       "'file',f.encrypted_payload,'fileRevision',f.revision,'workspace',w.id,'upload',u.id,'uploadRevision',u.revision,'uploadExpiry',u.expires_at";
     blobKind = "original";

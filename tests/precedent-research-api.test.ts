@@ -163,6 +163,7 @@ test("confirmed case searches only public concepts, deduplicates verified origin
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   const result = v2PrecedentSearchResponseSchema.parse(await response.json());
   expect(result.status).toBe("complete");
+  expect(Object.hasOwn(result, "nextCursor")).toBe(false);
   expect(result.items).toHaveLength(1);
   expect(result.items[0]?.matchedTopics).toEqual(["contract", "loan"]);
   expect(f.calls.filter((c) => c.query).map((c) => [c.query, c.corpus])).toEqual([
@@ -215,7 +216,7 @@ test("empty title discovery falls back once to the same public topic in body sea
   expect(f.calls).toHaveLength(3);
 });
 
-test("research reranks a wider validated pool before detail reads and retains at most three relevant originals per topic", async () => {
+test("research reranks a wider validated pool before detail reads and retains at most five relevant originals per request", async () => {
   const f = await fixture(),
     input = { ...(await f.searchInput()), topics: ["loan"] };
   const titles = [
@@ -251,10 +252,96 @@ test("research reranks a wider validated pool before detail reads and retains at
     });
   });
   const result = await searchBody(await f.request("/search", input));
-  expect(result.items.map((item) => item.citation.title)).toEqual(titles.slice(2, 5));
-  expect(f.calls.filter((c) => c.path.endsWith("lawService.do"))).toHaveLength(4);
-  expect(f.calls).toHaveLength(5);
+  expect(result.items.map((item) => item.citation.title)).toEqual(titles.slice(2, 6));
+  expect(f.calls.filter((c) => c.path.endsWith("lawService.do"))).toHaveLength(5);
+  expect(f.calls).toHaveLength(6);
   expect(result.searchTruncated).toBe(true);
+});
+
+test("signed pagination requests five new originals and advances the upstream page; reading returns the entire verified text", async () => {
+  const f = await fixture();
+  const input = { ...(await f.searchInput()), topics: ["loan"], pageSize: 5 };
+  const rows = Array.from({ length: 43 }, (_, index) => ({
+    ...list.PrecSearch.prec[0],
+    판례일련번호: String(90000000400 + index),
+    사건명: `대여금 반환 ${index + 1}`,
+    사건번호: `2026다${400 + index}`,
+    선고일자: "20260101",
+  }));
+  const requestedPages: number[] = [];
+  const text = `【판시사항】\n대여금 반환에 관한 합성 판례\n【판결요지】\n${"대여금 지급과 반환 약속을 확인한 합성 문장입니다.\n".repeat(250)}【주 문】\n전체 판결문의 마지막 합성 문장`;
+  f.upstream(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith("lawSearch.do")) {
+      const page = Number(parsed.searchParams.get("page"));
+      requestedPages.push(page);
+      return json({
+        PrecSearch: { totalCnt: rows.length, prec: rows.slice((page - 1) * 40, page * 40) },
+      });
+    }
+    const row = rows.find((candidate) => candidate.판례일련번호 === parsed.searchParams.get("ID"));
+    if (!row) throw new Error("Unexpected synthetic original");
+    return json({
+      PrecService: {
+        ...detail.PrecService,
+        판례정보일련번호: row.판례일련번호,
+        사건명: row.사건명,
+        사건번호: row.사건번호,
+        선고일자: row.선고일자,
+        판례내용: text,
+      },
+    });
+  });
+  let page = await searchBody(await f.request("/search", input));
+  expect(page.items).toHaveLength(5);
+  expect(page.nextCursor).toBeString();
+  const all = [...page.items];
+  for (let index = 0; index < 8; index++) {
+    page = await searchBody(await f.request("/search", { ...input, cursor: page.nextCursor }));
+    expect(page.items.length).toBeLessThanOrEqual(5);
+    all.push(...page.items);
+  }
+  expect(all).toHaveLength(43);
+  expect(new Set(all.map((item) => item.citation.officialId)).size).toBe(43);
+  expect(requestedPages).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 2]);
+  expect(page.nextCursor).toBeNull();
+  const original = all[0];
+  if (!original) throw new Error("Missing original");
+  const read = v2PrecedentReadResponseSchema.parse(
+    await (
+      await f.request("/read", {
+        expectedRevision: input.expectedRevision,
+        readToken: original.readToken,
+        includeFullText: true,
+      })
+    ).json(),
+  );
+  expect(read.fullText).toBe(text.trim());
+  expect(read.fullText).toContain("전체 판결문의 마지막 합성 문장");
+  expect(read.excerpt.text.length).toBeLessThanOrEqual(4000);
+  expect(read.fullText?.length).toBeGreaterThan(4000);
+});
+
+test("pagination rejects forged, expired and topic-rebound cursors before upstream requests", async () => {
+  const f = await fixture();
+  const input = { ...(await f.searchInput()), pageSize: 5 };
+  f.upstream(async (url) =>
+    new URL(url).pathname.endsWith("lawSearch.do")
+      ? json({ PrecSearch: { ...list.PrecSearch, totalCnt: "200" } })
+      : json(detail),
+  );
+  const first = await searchBody(await f.request("/search", input));
+  if (!first.nextCursor) throw new Error("Missing signed cursor");
+  const before = f.calls.length;
+  const cursor = first.nextCursor;
+  for (const body of [
+    { ...input, topics: ["loan"], cursor },
+    { ...input, cursor: `${cursor.slice(0, -2)}aa` },
+  ])
+    expect((await f.request("/search", body)).status).toBe(404);
+  f.clock(new Date(Date.parse(f.now) + 660000).toISOString());
+  expect((await f.request("/search", { ...input, cursor })).status).toBe(404);
+  expect(f.calls).toHaveLength(before);
 });
 
 test("origin, session, owner, revision, confirmed summary and strict inputs deny before official requests", async () => {

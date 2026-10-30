@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema, timestampSchema } from "../../../../contracts";
+import { v2PrecedentTopicSchema } from "../../../../contracts/v2/precedent-research";
 
 const claims = z.strictObject({
   ownerId: opaqueIdSchema,
@@ -77,6 +78,61 @@ export async function verifyResearchToken(secret: string, token: string, now: nu
     )
       return null;
     return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+const pageClaims = z
+  .strictObject({
+    ownerId: opaqueIdSchema,
+    workspaceId: opaqueIdSchema,
+    revision: revisionSchema,
+    summaryRevision: revisionSchema,
+    topics: z.array(v2PrecedentTopicSchema).min(1).max(2),
+    positions: z.array(z.number().int().min(0).max(4000).nullable()).min(1).max(2),
+    seen: z.array(z.string().regex(/^\d{1,12}$/)).max(500),
+    issuedAt: z.number().int(),
+    expiresAt: z.number().int(),
+  })
+  .refine((value) => value.positions.length === value.topics.length);
+const pagePrefix = "baro:precedent-research:page:v1:";
+export type ResearchPageClaims = z.infer<typeof pageClaims>;
+export async function signResearchPage(secret: string, value: ResearchPageClaims) {
+  const payload = encode(new TextEncoder().encode(JSON.stringify(pageClaims.parse(value))));
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    await key(secret),
+    new TextEncoder().encode(pagePrefix + payload),
+  );
+  return `${payload}.${encode(new Uint8Array(signature))}`;
+}
+export async function verifyResearchPage(secret: string, token: string, now: number) {
+  try {
+    if (token.length > 16384) return null;
+    const [payload, signature, extra] = token.split(".");
+    if (
+      !payload ||
+      !signature ||
+      extra ||
+      !(await crypto.subtle.verify(
+        "HMAC",
+        await key(secret),
+        decode(signature),
+        new TextEncoder().encode(pagePrefix + payload),
+      ))
+    )
+      return null;
+    const value = pageClaims.parse(
+      JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(decode(payload))),
+    );
+    if (
+      value.issuedAt > now ||
+      value.expiresAt <= now ||
+      value.expiresAt - value.issuedAt !== 600000
+    )
+      return null;
+    return value;
   } catch {
     return null;
   }

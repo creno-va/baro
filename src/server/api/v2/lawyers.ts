@@ -208,7 +208,7 @@ export function createLawyersApi(
     if (a.response) return a.response;
     const body = z
       .strictObject({
-        published: z.boolean(),
+        published: z.literal(true),
         profileId: opaqueIdSchema,
         expectedRevision: revisionSchema,
         consent: z.boolean(),

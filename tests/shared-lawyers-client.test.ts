@@ -507,8 +507,10 @@ test("native profile composition uses real Hono/SQL for save/publication/withdra
     const published = await api.lawyers.publishMine(true, saved);
     expect((await api.lawyers.get(saved.id)).verificationStatus).toBe("self_declared");
     expect((await api.lawyers.listPage()).items.some((p) => p.id === saved.id)).toBe(true);
-    await api.lawyers.publishMine(false, published);
-    await expect(api.lawyers.get(saved.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(api.lawyers.publishMine(false, published)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+    expect((await api.lawyers.get(saved.id)).published).toBe(true);
     cookie = b.cookie;
     await expect(api.lawyers.saveMine(saved)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await api.lawyers.getMine()).id).not.toBe(saved.id);

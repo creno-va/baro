@@ -978,9 +978,12 @@
   box-shadow: none;
 }
 .report-reading {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 32px;
+  border-radius: 20px;
+  background: #fff;
 }
 .report-reading-section {
   min-width: 0;
@@ -1036,27 +1039,6 @@
 .report-reading-section p:last-child {
   margin-bottom: 0;
 }
-.report-reading-section .report-reading-source {
-  color: #5b687b;
-  font-size: 11px;
-  margin-top: -6px;
-  line-height: 1.7;
-}
-.report-reading .report-reading-section--overview {
-  grid-column: 1 / -1;
-  padding: 28px;
-  border: 0;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--primary) 5%, transparent);
-}
-.report-reading-section--overview p {
-  max-width: 92ch;
-  font-size: 16px;
-  line-height: 1.95;
-}
-.report-reading-section--wide {
-  grid-column: 1 / -1;
-}
 @media (max-width: 640px) {
   .report-canvas {
     padding: 0;
@@ -1108,7 +1090,8 @@
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--card, #fff);
+  background: #f3f5f8;
+  resize: vertical;
 }
 .report-mask > .report-option-note {
   margin: 4px 0 0;
@@ -1236,13 +1219,147 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
-  .report-reading .report-reading-section--overview {
+  .report-reading {
     padding: 20px;
   }
   .report-reading-section {
     padding: 20px 0 0;
   }
-  .report-reading-section--overview p {
-    font-size: 15px;
+}
+
+.report-markdown {
+  font-size: 15px;
+  line-height: 1.85;
+  color: #303d50;
+  overflow-wrap: anywhere;
+}
+.report-markdown ul,
+.report-markdown ol {
+  padding-left: 24px;
+  margin: 12px 0;
+}
+.report-markdown ul {
+  list-style: disc;
+}
+.report-markdown ol {
+  list-style: decimal;
+}
+.report-markdown li + li {
+  margin-top: 10px;
+}
+.report-markdown h4 {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 18px 0 10px;
+}
+.report-markdown blockquote {
+  margin: 14px 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+.report-markdown code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--secondary);
+}
+.report-markdown pre {
+  white-space: pre-wrap;
+  padding: 14px;
+  background: var(--secondary);
+  border-radius: 10px;
+}
+.report-inline-photo {
+  margin: 24px 0;
+}
+.report-inline-photo img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+.report-inline-photo figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.report-format-toolbar {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.report-workspace .report-format-toolbar button {
+  min-height: 36px;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.report-photo-insert {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+.report-photo-insert select {
+  min-height: 36px;
+  max-width: min(260px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 10px;
+  background: #f3f5f8;
+  font-size: 13px;
+}
+.report-modal h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: -0.03em;
+}
+.report-modal .report-modal-description {
+  margin: 10px 0 0;
+  font-size: 15px;
+  color: var(--muted-foreground);
+  line-height: 1.55;
+}
+.report-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+.report-modal .report-modal-actions > button {
+  margin: 0;
+  width: auto;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+.report-modal .ui-button--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground, #fff);
+}
+@media (max-width: 640px) {
+  .report-photo-insert {
+    margin-left: 0;
+    width: 100%;
+  }
+  .report-photo-insert select {
+    flex: 1;
+    min-width: 0;
   }
 }

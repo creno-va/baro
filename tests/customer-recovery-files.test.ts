@@ -546,7 +546,7 @@ for (const timing of ["during-list", "after-revision"] as const)
           metadataOnly: true,
         });
         expect(result.status).toBe("waiting");
-        expect(calls).toHaveLength(8); // Same two revision reads and three metadata lists, no retry.
+        expect(calls).toHaveLength(7); // Two revision reads, two metadata lists, no duplicate list/retry.
         expect(await (await client.original(f.workspace.id, result.id)).text()).toBe(
           await source.text(),
         );

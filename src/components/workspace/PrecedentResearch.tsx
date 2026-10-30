@@ -1,9 +1,8 @@
-import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ExternalLink, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
 import { accessHref } from "../../client/return-path";
-import { legalFailureMessages } from "../../contracts/v2/legal-availability";
 import type {
   V2PrecedentReadResponse,
   V2PrecedentResearchContext,
@@ -14,6 +13,7 @@ import { PRECEDENT_TOPIC_LABELS } from "../../contracts/v2/precedent-topics";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { CaseNavigation } from "./CaseNavigation";
 import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
+import { PrecedentDocument } from "./PrecedentDocument";
 
 type Item = V2PrecedentSearchResponse["items"][number];
 const allTopics = Object.keys(PRECEDENT_TOPIC_LABELS) as V2PrecedentTopic[];
@@ -36,7 +36,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
   const detailView = useRef<HTMLElement>(null);
   const resultOpener = useRef<HTMLButtonElement | null>(null);
   const listScroll = useRef(0);
-  const restoreComparison = useRef(true);
   const requests = useRef<{
     context?: AbortController;
     search?: AbortController;
@@ -109,7 +108,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
   }, [selected]);
 
   function backToResults() {
-    restoreComparison.current = false;
     requests.current.read?.abort();
     setSelected(null);
     setDocument(null);
@@ -121,10 +119,9 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
     });
   }
 
-  async function search() {
+  async function search(more = false) {
     if (busy || !context || !topics.length) return;
-    restoreComparison.current = false;
-    clearResults();
+    if (!more) clearResults();
     setError(null);
     const controller = new AbortController();
     requests.current.search = controller;
@@ -137,11 +134,30 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
         {
           expectedRevision: context.workspaceRevision,
           summaryRevision: context.summaryRevision,
-          topics,
+          topics: more && result ? result.topics : topics,
+          pageSize: 5,
+          ...(more && result?.nextCursor ? { cursor: result.nextCursor } : {}),
         },
         controller.signal,
       );
-      if (!controller.signal.aborted && access.current(ticket)) setResult(next);
+      if (!controller.signal.aborted && access.current(ticket))
+        setResult((prior) => {
+          if (!more || !prior) return next;
+          const items = [
+            ...new Map(
+              [...prior.items, ...next.items].map((item) => [item.citation.sourceId, item]),
+            ).values(),
+          ];
+          return {
+            ...next,
+            items,
+            status: items.length
+              ? next.unavailableTopics.length
+                ? "partial"
+                : "complete"
+              : next.status,
+          };
+        });
     } catch (cause) {
       if (!controller.signal.aborted && access.alive(ticket)) {
         if (isAccessError(cause)) access.deny();
@@ -157,7 +173,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
   }
   async function read(item: Item) {
     if (!context) return;
-    restoreComparison.current = false;
     if (!selected) listScroll.current = window.scrollY;
     requests.current.read?.abort();
     const controller = new AbortController();
@@ -171,7 +186,11 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       if (!(await access.verify()) || controller.signal.aborted || !access.current(ticket)) return;
       const next = await precedentsApi.read(
         caseId,
-        { expectedRevision: context.workspaceRevision, readToken: item.readToken },
+        {
+          expectedRevision: context.workspaceRevision,
+          readToken: item.readToken,
+          includeFullText: true,
+        },
         controller.signal,
       );
       if (!controller.signal.aborted && access.current(ticket)) setDocument(next);
@@ -325,42 +344,19 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
             {result && (
               <>
                 <div className="precedent-result-heading" role="status">
-                  <div>
-                    <h3>
-                      검색 결과 <span>{result.items.length}건</span>
-                    </h3>
-                    <p>{result.topics.map((topic) => PRECEDENT_TOPIC_LABELS[topic]).join(" · ")}</p>
-                  </div>
+                  <h3>
+                    검색 결과 <span>{result.items.length}건</span>
+                  </h3>
                   <time dateTime={result.checkedAt}>
                     {new Date(result.checkedAt).toLocaleString("ko-KR")}
                   </time>
                 </div>
-                {result.status === "partial" && !result.availabilityIssues?.length && (
-                  <p className="precedent-notice" role="status">
-                    {result.unavailableTopics
-                      .map((topic) => PRECEDENT_TOPIC_LABELS[topic])
-                      .join(" · ")}{" "}
-                    주제를 일부 확인하지 못했어요. 확인된 판례만 표시해요.
-                  </p>
-                )}
-                {result.status === "unavailable" && !result.availabilityIssues?.length && (
-                  <p className="precedent-notice" role="alert">
-                    공식 판례를 지금 확인할 수 없어요. 잠시 후 다시 검색해 주세요.
-                  </p>
-                )}
-                {result.status === "empty" && (
+                {!result.items.length && (
                   <p className="precedent-notice">
-                    선택한 주제와 가까운 판례를 찾지 못했어요. 다른 주제로 다시 찾아보세요.
+                    {result.status === "unavailable"
+                      ? "판례를 확인하지 못했어요. 잠시 후 다시 검색해 주세요."
+                      : "선택한 주제와 가까운 판례를 찾지 못했어요. 다른 주제로 다시 찾아보세요."}
                   </p>
-                )}
-                {!!result.availabilityIssues?.length && (
-                  <ul className="precedent-notice" aria-label="공식 자료 확인 상태">
-                    {result.availabilityIssues.map(({ topic, reason }) => (
-                      <li key={`${topic}:${reason}`}>
-                        {PRECEDENT_TOPIC_LABELS[topic]} · {legalFailureMessages[reason]}
-                      </li>
-                    ))}
-                  </ul>
                 )}
                 {!sourceCurrent && (
                   <div className="precedent-notice" role="status">
@@ -374,146 +370,130 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                   <ul className="precedent-list" aria-label="관련 판례 목록">
                     {result.items.map((item) => (
                       <li key={item.id}>
-                        <article className="precedent-card">
+                        <button
+                          type="button"
+                          className="precedent-card"
+                          disabled={!sourceCurrent}
+                          onClick={(event) => {
+                            resultOpener.current = event.currentTarget;
+                            void read(item);
+                          }}
+                          aria-label={`${item.citation.title} · ${item.citation.caseNumber}`}
+                        >
                           <h4>{item.citation.title}</h4>
-                          <div className="precedent-card-footer">
-                            <div className="precedent-metadata">
-                              <span>{item.citation.court}</span>
-                              <span>{item.citation.decisionDate}</span>
-                              <span>{item.citation.caseNumber}</span>
-                              <span className="precedent-card-topics">
-                                관련 주제 ·{" "}
-                                {item.matchedTopics
-                                  .map((topic) => PRECEDENT_TOPIC_LABELS[topic])
-                                  .join(" · ")}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              disabled={!sourceCurrent}
-                              onClick={(event) => {
-                                resultOpener.current = event.currentTarget;
-                                void read(item);
-                              }}
-                            >
-                              판례 내용 보기
-                              <ArrowRight size={16} aria-hidden="true" />
-                              <span className="sr-only"> · {item.citation.caseNumber}</span>
-                            </button>
+                          <div className="precedent-metadata">
+                            <span>{item.citation.court}</span>
+                            <span>{item.citation.decisionDate}</span>
+                            <span>{item.citation.caseNumber}</span>
                           </div>
-                        </article>
+                          <div className="precedent-card-topics">
+                            {item.matchedTopics.map((topic) => (
+                              <span key={topic}>{PRECEDENT_TOPIC_LABELS[topic]}</span>
+                            ))}
+                          </div>
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
-                {result.searchTruncated && (
-                  <p className="precedent-result-note">
-                    관련성을 기준으로 주제별 최대 3건을 표시해요. 전체 판례를 조사한 결과는
-                    아니에요.
-                  </p>
+                {result.nextCursor && (
+                  <div className="precedent-more">
+                    <button
+                      type="button"
+                      disabled={busy || !sourceCurrent}
+                      onClick={() => void search(true)}
+                    >
+                      {busy ? "불러오는 중…" : "더보기"}
+                    </button>
+                  </div>
                 )}
               </>
             )}
           </div>
-          <section
-            ref={detailView}
-            className="precedent-detail-view"
-            hidden={selected === null}
-            aria-label="선택한 판례"
-          >
-            <h2 className="sr-only">판례 상세</h2>
-            <button className="precedent-back" type="button" onClick={backToResults}>
-              <ArrowLeft size={18} aria-hidden="true" />
-              검색 결과로
-            </button>
-            <PrecedentComparisonPanel
-              caseId={caseId}
-              context={context}
-              selected={
-                sourceCurrent && chosen && document?.citation.id === chosen.citation.id
-                  ? chosen
-                  : null
-              }
-              sourceId={selected}
-              sourceNeedsRefresh={!!document && (!sourceCurrent || !chosen)}
-              onRecovered={(comparison) => {
-                if (!restoreComparison.current || !comparison) return;
-                restoreComparison.current = false;
-                setSelected(comparison.source.citation.id);
-                setDocument({
-                  schemaVersion: "2",
-                  workspaceRevision: context.workspaceRevision,
-                  ...comparison.source,
-                });
-              }}
-              access={access}
-              onSettled={() => setReload((n) => n + 1)}
-              onRefreshSources={() => void search()}
-              heading={
-                <header className="precedent-document-heading">
-                  <h3 ref={documentHeading} tabIndex={-1}>
-                    {document?.citation.title ?? chosen?.citation.title ?? "판례 내용"}
-                  </h3>
-                  {document && (
-                    <div className="precedent-metadata">
-                      <span>{document.citation.court}</span>
-                      <span>{document.citation.decisionDate}</span>
-                      <span>{document.citation.caseNumber}</span>
-                    </div>
-                  )}
-                  {reading && <p role="status">선택한 판례를 불러오고 있어요.</p>}
-                  {!!readError && (
-                    <div role="alert">
-                      <p>판례를 다시 확인하지 못했어요. 잠시 후 다시 확인하거나 검색해 주세요.</p>
-                      {chosen && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void (readError instanceof ApiError && readError.code === "NOT_FOUND"
-                              ? search()
-                              : read(chosen))
-                          }
-                        >
-                          {readError instanceof ApiError && readError.code === "NOT_FOUND"
-                            ? "다시 검색"
-                            : "다시 확인"}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </header>
-              }
-              originalLink={
-                document && (
-                  <a
-                    className="precedent-original"
-                    href={document.citation.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="국가법령정보센터에서 전체 원문 보기 (새 창)"
-                  >
-                    공식 원문 보기
-                    <ExternalLink size={15} aria-hidden="true" />
-                  </a>
-                )
-              }
+          {selected !== null && (
+            <section
+              ref={detailView}
+              className="precedent-detail-view"
+              hidden={selected === null}
+              aria-label="선택한 판례"
             >
-              {document && (
-                <article className="precedent-document" aria-label="판례 본문">
-                  <header className="precedent-reading-heading">
-                    <h4>판결문</h4>
-                    {document.excerpt.truncated && <span>원문 일부</span>}
+              <h2 className="sr-only">판례 상세</h2>
+              <button className="precedent-back" type="button" onClick={backToResults}>
+                <ArrowLeft size={18} aria-hidden="true" />
+                검색 결과로
+              </button>
+              <PrecedentComparisonPanel
+                caseId={caseId}
+                context={context}
+                selected={
+                  sourceCurrent && chosen && document?.citation.id === chosen.citation.id
+                    ? chosen
+                    : null
+                }
+                key={chosen?.citation.sourceId ?? selected}
+                sourceId={document?.citation.sourceId ?? chosen?.citation.sourceId ?? null}
+                fullText={document?.fullText}
+                sourceNeedsRefresh={!!document && (!sourceCurrent || !chosen)}
+                access={access}
+                onSettled={() => setReload((n) => n + 1)}
+                onRefreshSources={() => void search()}
+                heading={
+                  <header className="precedent-document-heading">
+                    <h3 ref={documentHeading} tabIndex={-1}>
+                      {document?.citation.title ?? chosen?.citation.title ?? "판례 내용"}
+                    </h3>
+                    {document && (
+                      <div className="precedent-metadata">
+                        <span>{document.citation.court}</span>
+                        <span>{document.citation.decisionDate}</span>
+                        <span>{document.citation.caseNumber}</span>
+                      </div>
+                    )}
+                    {reading && <p role="status">선택한 판례를 불러오고 있어요.</p>}
+                    {!!readError && (
+                      <div role="alert">
+                        <p>판례를 다시 확인하지 못했어요. 잠시 후 다시 확인하거나 검색해 주세요.</p>
+                        {chosen && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void (readError instanceof ApiError && readError.code === "NOT_FOUND"
+                                ? search()
+                                : read(chosen))
+                            }
+                          >
+                            {readError instanceof ApiError && readError.code === "NOT_FOUND"
+                              ? "다시 검색"
+                              : "다시 확인"}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </header>
-                  <p className="precedent-body">{document.excerpt.text}</p>
-                  {document.excerpt.truncated && (
-                    <p className="precedent-scope">
-                      긴 원문 중 일부를 표시했어요. 전체 내용은 공식 원문에서 확인해 주세요.
-                    </p>
-                  )}
-                </article>
-              )}
-            </PrecedentComparisonPanel>
-          </section>
+                }
+                originalLink={
+                  document && (
+                    <a
+                      className="precedent-original"
+                      href={document.citation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="국가법령정보센터에서 전체 원문 보기 (새 창)"
+                    >
+                      공식 원문 보기
+                      <ExternalLink size={15} aria-hidden="true" />
+                    </a>
+                  )
+                }
+              >
+                {document && (
+                  <article className="precedent-document" aria-label="판례 본문">
+                    <PrecedentDocument text={document.fullText ?? document.excerpt.text} />
+                  </article>
+                )}
+              </PrecedentComparisonPanel>
+            </section>
+          )}
         </>
       )}
     </section>

@@ -440,20 +440,20 @@ export function AccountSettings() {
               <ChevronRight size={18} aria-hidden="true" />
             </a>
             <a href="/policies/terms">
-              <span>이용약관 초안</span>
+              <span>이용약관</span>
               <ChevronRight size={18} aria-hidden="true" />
             </a>
             <a href="/policies/privacy">
-              <span>개인정보 처리방침 초안</span>
+              <span>개인정보 처리방침</span>
               <ChevronRight size={18} aria-hidden="true" />
             </a>
             <a href="/policies/ai">
-              <span>AI 이용 고지 초안</span>
+              <span>AI 이용 고지</span>
               <ChevronRight size={18} aria-hidden="true" />
             </a>
           </nav>
           <p className="settings-policy-note">
-            정책은 검토 중인 초안이며 법률·사업자·게시 승인이 완료된 공개본이 아니에요.
+            서비스 이용 조건과 정보 처리 방식, AI의 한계를 확인할 수 있어요.
           </p>
         </section>
       </div>

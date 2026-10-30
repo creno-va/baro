@@ -199,7 +199,7 @@ test("files-page upload keeps reservation, original bytes and exact ACK readback
   expect((await client.upload(workspace.id, original, undefined, { metadataOnly: true })).id).toBe(
     "selected",
   );
-  expect([lists, reservations, parts, completes]).toEqual([3, 1, 1, 1]);
+  expect([lists, reservations, parts, completes]).toEqual([2, 1, 1, 1]);
 });
 
 test("explicit evidence view reads bounded references with the same final workspace fence", async () => {

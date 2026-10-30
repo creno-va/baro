@@ -287,7 +287,7 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
   await openReportEditor(page);
   await expect(editor).toHaveValue("저장된 합성 본문 2");
   await expect(page.locator(".report-material")).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(0);
 });
 
 test("initial report limit allows exclusions before any report exists", async ({ page }) => {

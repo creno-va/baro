@@ -103,6 +103,7 @@ test("explicit provider defaults remain compatible with server parsing and legac
     ],
     requestedMaterials: [],
     requestedTools: [],
+    requestedCurrentTime: false,
     sourceClaims: [],
     timeline: [],
   };

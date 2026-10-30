@@ -1,6 +1,96 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { emptySelfProfile } from "../src/contracts/v2/self-profile";
+import { createCaseDataCipher } from "../src/server/crypto";
+import { createV2Core } from "../src/server/db/v2-core";
+import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
+import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
+import { seedTestSession } from "./helpers/session";
+
+test("public-on-save upgrade preserves encrypted drafts, linked assets and reviewed history", async () => {
+  const db = await createTestDatabase({ throughMigration: "0018_external_lookup_admission" });
+  try {
+    const cipher = await createCaseDataCipher({
+      CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
+    });
+    const core = createV2Core(db.binding, cipher);
+    const service = createSelfProfileService(core);
+    const owners = await Promise.all(
+      [true, false, true].map(() => seedTestSession(db, { consent: true })),
+    );
+    for (const [index, owner] of owners.entries()) {
+      db.sqlite
+        .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+        .run(`account-type:${owner.userId}`);
+      const profile = await service.getMine(owner.userId);
+      await seedLegacySelfProfile(core, owner.userId, {
+        ...profile,
+        name: "합성 변호사",
+        introduction: "합성 소개",
+        officeName: "합성 사무실",
+        address: "합성 주소",
+        region: "seoul",
+        practiceAreas: ["civil"],
+        email: "synthetic@example.invalid",
+        published: index !== 1,
+      });
+      db.sqlite
+        .query(
+          "INSERT INTO v2_assets(id,owner_id,profile_id,revision,purpose,state,encrypted_payload,created_at) VALUES(?,?,?,1,'portfolio','reserved','opaque-asset','2026-10-14')",
+        )
+        .run(`asset-${index}`, owner.userId, profile.id);
+      db.sqlite
+        .query(
+          "INSERT INTO v2_profile_revisions(id,profile_id,revision,status,encrypted_payload,created_at) VALUES(?,?,1,'draft','opaque-reviewed-history','2026-10-14')",
+        )
+        .run(`review-${index}`, profile.id);
+      if (index === 2)
+        db.sqlite
+          .query("INSERT INTO v2_tombstones VALUES('profile',?,'2026-10-15')")
+          .run(profile.id);
+    }
+    const tables = [
+      "v2_private_snapshots",
+      "v2_private_parts",
+      "v2_consents",
+      "v2_assets",
+      "v2_profile_revisions",
+    ];
+    const before = tables.map((table) => db.sqlite.query(`SELECT * FROM ${table}`).all());
+    const migration = await Bun.file("drizzle/0019_self_profile_listing.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(migration))();
+    expect(tables.map((table) => db.sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(before);
+    for (const [index, owner] of owners.entries())
+      expect(
+        db.sqlite
+          .query("SELECT self_listing_state FROM v2_profiles WHERE owner_id=?")
+          .get(owner.userId),
+      ).toEqual({ self_listing_state: index === 0 ? "listed" : "unlisted" });
+    expect(() => db.sqlite.exec("UPDATE v2_profiles SET self_listing_state='private'")).toThrow();
+    expect(db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    const legacy = await service.getMine(owners[1]!.userId);
+    expect(legacy.published).toBe(false);
+    await expect(service.get(legacy.id)).rejects.toThrow();
+    const saved = await service.saveMine(owners[1]!.userId, legacy);
+    expect(saved.published).toBe(true);
+    expect(await service.get(saved.id)).toEqual(saved);
+    expect(
+      db.sqlite.query("SELECT self_listing_state FROM v2_profiles WHERE id=?").get(saved.id),
+    ).toEqual({ self_listing_state: "listed" });
+    const empty = await seedTestSession(db, { consent: true });
+    db.sqlite
+      .query("INSERT INTO app_metadata(key,value) VALUES(?,'lawyer')")
+      .run(`account-type:${empty.userId}`);
+    const blank = await service.getMine(empty.userId);
+    await expect(service.saveMine(empty.userId, emptySelfProfile(blank.id))).rejects.toThrow();
+    expect(
+      db.sqlite.query("SELECT self_listing_state FROM v2_profiles WHERE id=?").get(blank.id),
+    ).toEqual({ self_listing_state: "unlisted" });
+  } finally {
+    db.close();
+  }
+});
 
 test("cleanup upgrade preserves opaque journals and auth/domain data with safe scheduling defaults", async () => {
   const sqlite = new Database(":memory:");
@@ -53,7 +143,7 @@ test("fresh migrations enforce auth FK, cascade and consent age constraints", as
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0018_external_lookup_admission" },
+      { value: "0019_self_profile_listing" },
     );
   } finally {
     database.close();

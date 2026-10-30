@@ -12,7 +12,7 @@ import { remoteBudgetD1 } from "./remote-budget-d1";
 
 const ACCOUNT = "9e844969d0c44b2449f3951d1f301654";
 const DATABASE = "c1612b14-6ab1-4d2e-82dc-33e596b31337";
-const SCHEMA = "0018_external_lookup_admission";
+const SCHEMA = "0019_self_profile_listing";
 const KEY = "baro-test-fixture:legacy-analysis-v1";
 const MARKER = "one-fixed-synthetic-loan-v1";
 const NARRATIVE =

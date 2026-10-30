@@ -102,6 +102,29 @@ async function setup(page: Page, retryFailureStatus = 503, failRetryRead = false
   return state;
 }
 
+test("returning from a suspended tab immediately reads completed file work without another processing request", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await page.goto(`/cases/${id}/files`);
+  await expect(
+    page.getByRole("heading", { name: "accepted-video.pdf", exact: true }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  state.files = [metadata("private-ready"), metadata("accepted-video")];
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    window.dispatchEvent(new Event("online"));
+    window.dispatchEvent(new Event("pageshow"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2, { timeout: 1500 });
+  expect(state.retryCalls).toBe(0);
+});
+
 test("files route loads and polls while summary streams are unavailable, then reads coverage only in review", async ({
   page,
 }) => {

@@ -4,6 +4,7 @@ import { api } from "../../client/api";
 import type { QuestionsResult } from "../../client/api/cases";
 import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
+import { startForegroundPolling } from "../../client/foreground-poll";
 import { accessHref } from "../../client/return-path";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -360,22 +361,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
   }, [customQuestionId, question?.id]);
   useEffect(() => {
     if ((!result?.processing && !recovering) || busy) return;
-    let cancelled = false;
-    let timer: number;
-    const poll = async () => {
-      try {
-        await load(true);
-      } finally {
-        // Failed or superseded reads do not change result. Keep checking until
-        // a fresh snapshot finishes the job, or the owner/screen changes.
-        if (!cancelled) timer = window.setTimeout(() => void poll(), 2500);
-      }
-    };
-    timer = window.setTimeout(() => void poll(), 2500);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+    return startForegroundPolling(() => load(true), 2500);
   }, [result?.processing, recovering, busy, load]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {

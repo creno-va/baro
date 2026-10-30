@@ -150,10 +150,7 @@ test("required consent fits desktop and phone and policy links preserve the form
     await expect(links).toHaveCount(3);
     for (const link of await links.all()) await expect(link).toHaveAttribute("target", "_blank");
     await expect(page.getByRole("checkbox").first()).toBeChecked();
-    await expect(page.getByRole("link", { name: "취소하고 돌아가기" })).toHaveAttribute(
-      "href",
-      "/login?returnTo=%2Fsettings",
-    );
+    await expect(page.getByRole("link", { name: "취소하고 돌아가기" })).toHaveCount(0);
   }
 });
 

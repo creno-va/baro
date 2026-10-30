@@ -1,6 +1,14 @@
 import { observeD1Awaits } from "./observe-d1-awaits";
 
-const operations = ["workspace_read", "intake_read", "answers_save", "latest_job_read"] as const;
+const operations = [
+  "workspace_read",
+  "intake_read",
+  "answers_save",
+  "latest_job_read",
+  "file_reserve",
+  "file_part",
+  "file_complete",
+] as const;
 export type PreviewD1Operation = (typeof operations)[number];
 const regions = ["ENAM", "WNAM", "WEUR", "EEUR", "APAC", "OC"] as const;
 const maximum = 1_000_000_000;
@@ -140,7 +148,7 @@ export function createPreviewD1Timing(
               : "unknown";
         const header = [
           `operation;desc="${operation}"`,
-          'scope;desc="workspace_domain_auth_excluded"',
+          `scope;desc="${operation.startsWith("file_") ? "file" : "workspace"}_domain_auth_excluded"`,
           duration("domain", elapsed(started, now())),
           `d1_calls;desc="${count(work.calls)}"`,
           `d1_statements;desc="${count(work.statements)}"`,

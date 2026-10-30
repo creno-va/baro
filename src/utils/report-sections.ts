@@ -1,4 +1,11 @@
 const headings = new Set([
+  "사건 개요",
+  "당사자와 관계",
+  "주요 경위",
+  "주요 사실과 자료",
+  "주요 사실",
+  "증거 자료",
+  "추가 확인 사항",
   "사건 요약",
   "사건의 사실과 주장",
   "당사자",
@@ -16,8 +23,10 @@ const headings = new Set([
 export function reportSections(content: string) {
   const result: { title: string; lines: string[] }[] = [];
   let current = { title: "검토한 내용", lines: [] as string[] };
+  let fenced = false;
   for (const line of content.split(/\r?\n/)) {
-    if (headings.has(line.trim())) {
+    if (/^\s*```/u.test(line)) fenced = !fenced;
+    if (!fenced && !/^[ \t]/u.test(line) && headings.has(line.trim())) {
       if (headings.has(current.title) || current.lines.some((value) => value.trim()))
         result.push(current);
       current = { title: line.trim(), lines: [] };

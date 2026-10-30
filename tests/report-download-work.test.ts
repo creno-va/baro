@@ -633,7 +633,8 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
   try {
     const initial = await f.client.get(f.workspace.id);
     expect(initial.revision).toBe(1);
-    expect(initial.content).toContain("추가 자료 사본 보관");
+    expect(initial.content).not.toContain("추가 자료 사본 보관");
+    expect(initial.content).toContain("새로운 자료를 찾았습니다.");
     expect(initial.content).toContain("합성 두 쪽 자료.pdf");
     f.select("save_review");
     const reviewed = await f.client.save(f.workspace.id, {

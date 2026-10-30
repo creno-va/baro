@@ -168,7 +168,7 @@ export async function transitionFreshBinding(
     if (
       !health.ok ||
       ready.status !== "ready" ||
-      ready.schemaVersion !== "0018_external_lookup_admission"
+      ready.schemaVersion !== "0019_self_profile_listing"
     )
       throw new Error("FRESH_READINESS_FAILED");
     const directory = await fetcher(`${origin}/api/v2/lawyers/self-service`, {

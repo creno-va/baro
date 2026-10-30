@@ -1,7 +1,10 @@
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
 import { opaqueIdSchema, timestampSchema } from "../../../contracts";
-import { CURRENT_POLICY_VERSIONS } from "../../../contracts/consent";
+import {
+  COMPATIBLE_FILE_AI_NOTICE_VERSION,
+  CURRENT_POLICY_VERSIONS,
+} from "../../../contracts/consent";
 import {
   type V2Coverage,
   type V2Derivative,
@@ -175,7 +178,7 @@ export function createFileProcessingExecution(
     // Every transport, stream and publication caller keeps its existing check.
     const row = await core
       .statement(
-        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision,w.status AS workspace_status,w.intake_revision,w.confirmed_summary_revision,w.current_job_id,f.manifest_snapshot_id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND f.manifest_snapshot_id IS NOT NULL AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version=?) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
+        `SELECT j.lease_token,j.fencing,j.lease_until,j.status,w.revision,w.status AS workspace_status,w.intake_revision,w.confirmed_summary_revision,w.current_job_id,f.manifest_snapshot_id FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id JOIN v2_files f ON f.id=j.target_id JOIN v2_workspaces w ON w.id=f.workspace_id WHERE j.id=? AND o.owner_id=? AND j.runtime_instance_id=? AND j.target_kind='file' AND j.target_revision=? AND f.workspace_id=? AND f.manifest_snapshot_id IS NOT NULL AND o.state='admitted' AND w.status IN ('active','intake') AND j.status IN ('running','validating') AND j.lease_until>? AND ${jobAlive} AND EXISTS(SELECT 1 FROM v2_consents WHERE owner_id=o.owner_id AND file_id=f.id AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}')) AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)`,
         [
           params.jobId,
           params.ownerId,
