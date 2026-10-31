@@ -52,6 +52,14 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
     setReading(false);
     setReadError(null);
   }, []);
+  useEffect(() => {
+    const renamed = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === caseId)
+        setReload((value) => value + 1);
+    };
+    window.addEventListener("baro-case-title-changed", renamed);
+    return () => window.removeEventListener("baro-case-title-changed", renamed);
+  }, [caseId]);
   const access = useCustomerAccess(() => {
     requests.current.context?.abort();
     clearResults();

@@ -896,3 +896,42 @@ test("partial-source diagnostics stay out of verified results and an expired pro
     page.getByRole("list", { name: "관련 판례 목록" }).getByRole("listitem"),
   ).toHaveCount(1);
 });
+
+test("sidebar title modal cancels, saves and persists a renamed case", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page);
+  const oldTitle = "보증금 반환에 관한 합성 사건";
+  const newTitle = "직접 수정한 보증금 반환 사건";
+  const edit = page.getByRole("button", { name: `${oldTitle} 제목 수정`, exact: true }).first();
+  await page.locator(".sidebar-story").first().hover();
+  const editBox = await edit.boundingBox();
+  const deleteBox = await page
+    .getByRole("button", { name: `${oldTitle} 사건 삭제`, exact: true })
+    .first()
+    .boundingBox();
+  expect(editBox && deleteBox && editBox.x < deleteBox.x).toBeTruthy();
+  expect(editBox?.y).toBe(deleteBox?.y);
+  await edit.click();
+  const modal = page.getByRole("dialog", { name: "사건 제목 수정", exact: true });
+  await expect(modal.getByLabel("제목", { exact: true })).toHaveValue(oldTitle);
+  await modal.getByLabel("제목", { exact: true }).fill("취소할 제목");
+  await modal.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(modal).toBeHidden();
+  await page.locator(".sidebar-story").first().hover();
+  await edit.click();
+  await modal.getByLabel("제목", { exact: true }).fill("");
+  await expect(modal.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
+  await modal.getByLabel("제목", { exact: true }).fill(newTitle);
+  await modal.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(modal).toBeHidden();
+  await expect(
+    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: newTitle })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: newTitle })).toBeVisible();
+  await page.screenshot({ path: ".wrangler/sidebar-title-rename.png" });
+});

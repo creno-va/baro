@@ -218,10 +218,11 @@ export function createV2SummaryStagingRepository(core: V2Core) {
             row.encrypted_payload,
             intakeContentSchema,
           );
-          titlePayload = await core.encrypt("v2_intakes", g.workspaceId, g.ownerId, 1, {
-            ...content,
-            caseTitle,
-          });
+          if (!content.caseTitleEdited)
+            titlePayload = await core.encrypt("v2_intakes", g.workspaceId, g.ownerId, 1, {
+              ...content,
+              caseTitle,
+            });
         }
         const execution = leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now);
         const claimId = crypto.randomUUID();

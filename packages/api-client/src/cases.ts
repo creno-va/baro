@@ -12,6 +12,7 @@ import {
   caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2FailureCode,
+  v2CaseRenameRequestSchema,
   v2FailureCodeSchema,
   v2HashSchema,
   v2JobSchema,
@@ -456,6 +457,23 @@ export function createCasesClient(
 
   const pendingCreates = new Map<string, Promise<CaseView>>();
   const casesApi = {
+    async rename(id: string, raw: z.infer<typeof v2CaseRenameRequestSchema>): Promise<CaseView> {
+      const input = validate(v2CaseRenameRequestSchema, raw);
+      const key = await mutationKey(`cases.rename:${id}`, input);
+      try {
+        await request(
+          "cases.rename",
+          { id, ...input },
+          { path: path(id, "title"), method: "PUT", body: input, key },
+        );
+        const next = await casesApi.get(id);
+        await forgetMutation(key);
+        return next;
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.code === "CONFLICT") await forgetMutation(key);
+        throw cause;
+      }
+    },
     async list(): Promise<CaseView[]> {
       if (apiMode === "mock") return request("cases.list");
       const items: CaseView[] = [];
@@ -778,6 +796,7 @@ export function createCasesClient(
   };
 
   const mutationSchemas = new Map<string, z.ZodType>([
+    ["rename", v2CaseRenameRequestSchema],
     ["create", createInputSchema],
     ["saveAnswers", answersInputSchema],
     ["advance", revisionInputSchema],

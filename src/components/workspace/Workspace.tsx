@@ -307,6 +307,14 @@ export function Workspace({
     };
   }, [load, version]);
   useEffect(() => {
+    const renamed = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === caseId && !lock.current)
+        void load();
+    };
+    window.addEventListener("baro-case-title-changed", renamed);
+    return () => window.removeEventListener("baro-case-title-changed", renamed);
+  }, [caseId, load]);
+  useEffect(() => {
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
       view.messages.some((message) => message.status === "pending") ||

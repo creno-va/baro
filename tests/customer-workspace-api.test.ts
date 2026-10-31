@@ -727,3 +727,46 @@ test("real file deletion recovers a committed lost response only after authorizi
   );
   await expect(client.remove(id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
+
+test("title API enforces origin, current consent and ownership with replay-safe edits", async () => {
+  const f = await fixture();
+  const id = f.workspace.id,
+    owner = f.owner.userId;
+  const current = (await f.service.previews(owner, await f.service.list(owner)))[0];
+  if (!current) throw new Error("Missing synthetic case");
+  const path = `/api/v2/cases/${id}/title`;
+  const init = {
+    method: "PUT",
+    headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+    body: JSON.stringify({ title: "새로 지정한 합성 사건 제목", expectedTitle: current.title }),
+  };
+  const other = await seedTestSession(f.db, { consent: true });
+  expect((await f.transport(path, init, other.cookie)).status).toBe(404);
+  const unconsented = await seedTestSession(f.db, { consent: false });
+  expect((await f.transport(path, init, unconsented.cookie)).status).toBe(403);
+  expect(
+    (
+      await f.app.request(
+        path,
+        {
+          ...init,
+          headers: { ...init.headers, cookie: f.owner.cookie, origin: "https://foreign.invalid" },
+        },
+        f.env,
+      )
+    ).status,
+  ).toBe(403);
+  expect((await f.transport(path, init)).status).toBe(200);
+  const revision = (await f.service.find(owner, id)).workspaceRevision;
+  expect((await f.transport(path, init)).status).toBe(200);
+  expect((await f.service.find(owner, id)).workspaceRevision).toBe(revision);
+  expect(
+    (
+      await f.transport(path, {
+        ...init,
+        headers: { ...init.headers, "idempotency-key": crypto.randomUUID() },
+      })
+    ).status,
+  ).toBe(409);
+  expect((await f.service.intake(owner, id))?.caseTitle).toBe("새로 지정한 합성 사건 제목");
+});

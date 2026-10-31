@@ -460,3 +460,43 @@ test("closing a feature cancels its instance without changing the session or mak
   expect(scope.snapshot()).toBe(0);
   expect(calls).toBe(0);
 });
+
+test("rename recovers a lost response with the same durable key without storing the title", async () => {
+  const { records, storage } = memoryStorage();
+  let title = "계약 내용과 이행 문제",
+    lost = true;
+  const keys: string[] = [];
+  const request: OperationRequest = async <T>(
+    operation: string,
+    _input?: unknown,
+    options: OperationRequestOptions = {},
+  ) => {
+    if (operation === "cases.owner")
+      return { user: { id: "synthetic_owner", accountType: "customer" }, needsConsent: false } as T;
+    if (operation === "cases.rename") {
+      if (!options.key) throw new Error("Missing synthetic mutation key");
+      keys.push(options.key);
+      expect(options.path).toBe(`/api/v2/cases/${id}/title`);
+      expect(options.method).toBe("PUT");
+      title = "직접 바꾼 합성 제목";
+      if (lost) {
+        lost = false;
+        throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);
+      }
+      return workspace(2) as T;
+    }
+    if (operation === "cases.workspace") return workspace(2) as T;
+    if (operation === "cases.intake") return { ...metadata(), caseTitle: title } as T;
+    throw new Error("Unexpected synthetic operation");
+  };
+  const input = { title: "직접 바꾼 합성 제목", expectedTitle: title };
+  await expect(client(request, storage).rename(id, input)).rejects.toMatchObject({
+    code: "UNAVAILABLE",
+  });
+  expect(records.size).toBeGreaterThan(0);
+  expect(JSON.stringify([...records])).not.toContain(input.title);
+  expect((await client(request, storage).rename(id, input)).title).toBe(input.title);
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
+  expect(records.size).toBe(0);
+});

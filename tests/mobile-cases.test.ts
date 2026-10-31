@@ -86,6 +86,10 @@ function fixture() {
       };
     },
     createClient: (_signal, _owner, onDeleted) => ({
+      rename: async (_id, input) => {
+        item = { ...item, title: input.title, revision: item.revision + 1 };
+        return structuredClone(item);
+      },
       list: async () => {
         if (failList) throw new ApiError("UNAVAILABLE", "합성 목록 읽기 실패");
         return deleted ? [] : [structuredClone(item)];

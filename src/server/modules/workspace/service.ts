@@ -6,6 +6,7 @@ import {
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
+  v2CaseRenameRequestSchema,
   v2CreateCaseRequestSchema,
   v2IntakeAdvanceRequestSchema,
   v2MessageRequestSchema,
@@ -732,6 +733,15 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       )
         throw new WorkspaceError("STALE_REVISION");
       return { ...updated, committedWorkspaceRevision: g.expectedRevision + 1 };
+    },
+    async rename(ownerId: string, id: string, key: string, raw: unknown) {
+      const body = v2CaseRenameRequestSchema.parse(raw);
+      const m = await mutation(ownerId, id, key, "title", body, "chat");
+      if (m.replay) return find(ownerId, id);
+      const g = await guard(ownerId, id);
+      if (!(await workspace.rename(g, body.title, body.expectedTitle, m.receipt)))
+        throw new WorkspaceError("STALE_REVISION");
+      return find(ownerId, id);
     },
     async state(ownerId: string, id: string, key: string, raw: unknown) {
       const body = v2WorkspaceStateRequestSchema.parse(raw);

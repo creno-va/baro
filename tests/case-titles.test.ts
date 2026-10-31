@@ -63,3 +63,66 @@ for (const approved of [true, false])
       f.db.close();
     }
   });
+
+test("manual case titles persist encrypted, replay once, reject stale owners and survive AI summary publication", async () => {
+  const f = await customerWorkspaceFixture();
+  try {
+    let triedDuringJob = false;
+    await runCustomerJob(f, "intake_questions", true, async () => {
+      if (triedDuringJob) return;
+      triedDuringJob = true;
+      const current = await f.service.intake(f.owner.userId, f.workspace.id);
+      if (!current) throw new Error("Missing synthetic intake");
+      await expect(
+        f.service.rename(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+          title: "처리 중에는 바꾸지 않을 제목",
+          expectedTitle: caseDisplayTitle(current.narrative, current.caseTitle),
+        }),
+      ).rejects.toMatchObject({ code: "STALE_REVISION" });
+    });
+    const owner = f.owner.userId,
+      id = f.workspace.id;
+    const intake = await f.service.intake(owner, id);
+    if (!intake) throw new Error("Missing synthetic intake");
+    const title = "합성 계약 대금 반환 요청",
+      key = crypto.randomUUID();
+    const request = { title, expectedTitle: caseDisplayTitle(intake.narrative, intake.caseTitle) };
+    const renamed = await f.service.rename(owner, id, key, request);
+    expect((await f.service.intake(owner, id))?.caseTitle).toBe(title);
+    expect(await f.repository.metadata({ ownerId: owner, now: f.now }, id)).not.toHaveProperty(
+      "caseTitleEdited",
+    );
+    const encrypted = f.db.sqlite
+      .query("SELECT encrypted_payload FROM v2_intakes WHERE id=?")
+      .get(id);
+    expect(JSON.stringify(encrypted)).not.toContain(title);
+    expect((await f.service.rename(owner, id, key, request)).workspaceRevision).toBe(
+      renamed.workspaceRevision,
+    );
+    await expect(
+      f.service.rename(owner, id, key, { ...request, title: "다른 제목" }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    await expect(
+      f.service.rename(owner, id, crypto.randomUUID(), { ...request, title: "다른 제목" }),
+    ).rejects.toMatchObject({ code: "STALE_REVISION" });
+    await expect(
+      f.service.rename("another-owner", id, crypto.randomUUID(), {
+        title: "다른 제목",
+        expectedTitle: title,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    for (const invalid of ["", "가".repeat(41), "첫째\n둘째"])
+      await expect(
+        f.service.rename(owner, id, crypto.randomUUID(), { title: invalid, expectedTitle: title }),
+      ).rejects.toThrow();
+    await f.service.answers(owner, id, crypto.randomUUID(), {
+      expectedRevision: intake.revision,
+      answers: intake.batches[0]?.questions.map((q) => ({ questionId: q.id, status: "unknown" })),
+    });
+    await runCustomerJob(f, "intake_summary", true, undefined, 1, "AI가 새로 만든 합성 제목");
+    expect((await f.service.intake(owner, id))?.caseTitle).toBe(title);
+    expect((await f.service.previews(owner, await f.service.list(owner)))[0]?.title).toBe(title);
+  } finally {
+    f.db.close();
+  }
+});

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
 import {
+  caseDisplayTitle,
   caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2Action,
@@ -69,6 +70,7 @@ export const workspaceCreateDataSchema = v2CreateCaseRequestSchema.omit({ turnst
 export const intakeContentSchema = z.strictObject({
   narrative: v2CreateCaseRequestSchema.shape.narrative,
   caseTitle: caseTitleSchema.optional(),
+  caseTitleEdited: z.boolean().optional(),
 });
 export type WorkspaceCreateData = z.infer<typeof workspaceCreateDataSchema>;
 // Existing server callers may still supply the full validated HTTP input. The
@@ -669,6 +671,50 @@ export function createV2WorkspaceRepository(
             )) ?? { kind: "rejected" as const });
       });
     },
+    rename(g: WorkspaceGuard, title: string, expectedTitle: string, receipt: MutationReceipt) {
+      return safe(async () => {
+        g = parse(guardSchema, g);
+        title = parse(caseTitleSchema, title);
+        const row = await core
+          .statement(
+            `SELECT i.encrypted_payload FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+            [g.workspaceId, g.ownerId],
+          )
+          .first<{ encrypted_payload: string }>();
+        if (!row) return false;
+        const content = await core.decrypt(
+          "v2_intakes",
+          g.workspaceId,
+          g.ownerId,
+          1,
+          row.encrypted_payload,
+          intakeContentSchema,
+        );
+        if (caseDisplayTitle(content.narrative, content.caseTitle) !== expectedTitle) return false;
+        const payload = await core.encrypt("v2_intakes", g.workspaceId, g.ownerId, 1, {
+          ...content,
+          caseTitle: title,
+          caseTitleEdited: true,
+        });
+        const id = crypto.randomUUID(),
+          mutation = mutationTools(core, g, receipt);
+        return core.changed([
+          mutation.claim(
+            id,
+            "w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_intakes i WHERE i.id=w.id AND i.encrypted_payload=?)",
+            [row.encrypted_payload],
+          ),
+          core.statement(`UPDATE v2_intakes SET encrypted_payload=? WHERE id=? AND ${sqlClaim}`, [
+            payload,
+            g.workspaceId,
+            id,
+          ]),
+          ...mutation.complete(id),
+          core.bump(g, id),
+          core.finish(id),
+        ]);
+      });
+    },
     metadata(actor: Actor, id: string) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
@@ -752,7 +798,8 @@ export function createV2WorkspaceRepository(
               schemaVersion: "2" as const,
               revision: row.revision,
               status: row.status,
-              ...narrative,
+              narrative: narrative.narrative,
+              ...(narrative.caseTitle ? { caseTitle: narrative.caseTitle } : {}),
               batches,
               confirmedSummaryRevision: row.confirmed_summary_revision,
               currentJobId: row.current_job_id,

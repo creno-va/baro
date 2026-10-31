@@ -3,6 +3,7 @@ import {
   caseDisplayTitle,
   V2_INTAKE_POLICY,
   V2_LIMITS,
+  v2CaseRenameRequestSchema,
   v2SummarySchema,
 } from "../../../contracts/v2";
 import {
@@ -135,6 +136,21 @@ function makeDeeperQuestions(value: Intake): QuestionView[] {
   ];
 }
 export const casesMockHandlers = {
+  "cases.rename": (raw: unknown, context: { key: string }) =>
+    replay("title", raw, context.key, () => {
+      const input = parse(v2CaseRenameRequestSchema.extend({ id: z.string().min(1) }), raw);
+      const item = owned(input.id);
+      if (item.title !== input.expectedTitle)
+        throw new ApiError("CONFLICT", "사건 제목이 변경됐어요. 최신 제목을 확인해 주세요.");
+      const next = {
+        ...item,
+        title: input.title,
+        revision: item.revision + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      store(next);
+      return next;
+    }),
   "cases.list": () => {
     const user = owner(),
       owners = readStore<Record<string, string>>("caseOwners", {});
