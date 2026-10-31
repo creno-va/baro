@@ -1224,31 +1224,20 @@ export function Workspace({
                         {!!message.citations?.length && (
                           <SourceCards citations={message.citations} />
                         )}
-                        {message.references?.some(
-                          (ref) => ref.kind !== "user_message" && ref.kind !== "official_source",
-                        ) && (
+                        {message.references?.some((ref) => ref.kind === "user_material") && (
                           <ul
                             className="workspace-message-references"
                             aria-label="답변에 사용한 자료"
                           >
                             {message.references
-                              .filter(
-                                (ref) =>
-                                  ref.kind !== "user_message" && ref.kind !== "official_source",
-                              )
+                              .filter((ref) => ref.kind === "user_material")
                               .map((ref) => (
                                 <li key={JSON.stringify(ref)}>
-                                  {ref.kind === "user_material" ? (
-                                    <a
-                                      href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
-                                    >
-                                      {view.files.find((f) => f.id === ref.fileId)?.name ??
-                                        "참조 자료"}{" "}
-                                      · {referenceLabel(ref)}
-                                    </a>
-                                  ) : (
-                                    referenceLabel(ref)
-                                  )}
+                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
+                                    {view.files.find((f) => f.id === ref.fileId)?.name ??
+                                      "참조 자료"}{" "}
+                                    · {referenceLabel(ref)}
+                                  </a>
                                 </li>
                               ))}
                           </ul>
