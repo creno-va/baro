@@ -333,14 +333,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                 </button>
               </div>
             </form>
-            {busy && (
-              <div className="precedent-notice" role="status">
-                <p>공식 판례와 원문을 확인하고 있어요. 최대 2분 정도 걸릴 수 있어요.</p>
-                <button type="button" onClick={clearResults}>
-                  검색 취소
-                </button>
-              </div>
-            )}
             {result && (
               <>
                 <div className="precedent-result-heading" role="status">
