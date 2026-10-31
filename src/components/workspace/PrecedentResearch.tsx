@@ -11,6 +11,7 @@ import type {
 } from "../../contracts/v2/precedent-research";
 import { PRECEDENT_TOPIC_LABELS } from "../../contracts/v2/precedent-topics";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
+import { Spinner } from "../ui/loading";
 import { CaseNavigation } from "./CaseNavigation";
 import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
 import { PrecedentDocument } from "./PrecedentDocument";
@@ -327,8 +328,9 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                   className="precedent-primary"
                   type="submit"
                   disabled={!topics.length || busy}
+                  aria-busy={busy || undefined}
                 >
-                  <Search size={17} aria-hidden="true" />
+                  {busy ? <Spinner /> : <Search size={17} aria-hidden="true" />}
                   {busy ? "공식 원문 확인 중…" : "판례 찾기"}
                 </button>
               </div>

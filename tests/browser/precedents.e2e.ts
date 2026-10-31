@@ -296,6 +296,12 @@ test("peer sign-out removes case and rejects delayed search while focus preserve
   await expect(
     page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }),
   ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }),
+  ).toHaveAttribute("aria-busy", "true");
+  await expect(
+    page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }).locator(".ui-spinner"),
+  ).toHaveCount(1);
   await expect(page.getByRole("button", { name: "검색 취소" })).toHaveCount(0);
   await page.evaluate(
     ({ fixture }) => {
