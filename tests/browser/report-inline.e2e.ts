@@ -66,6 +66,19 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     .locator(".report-reading-section")
     .filter({ has: page.getByRole("heading", { name: "증거 자료", exact: true }) });
   const field = section.getByRole("textbox");
+  await expect(page.locator(".report-format-toolbar")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "굵게", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "불릿 목록", exact: true })).toHaveCount(0);
+  const checkPhotoInput = async () => {
+    const text = await field.boundingBox();
+    const select = await section.getByRole("combobox").boundingBox();
+    const insert = await section.getByRole("button", { name: "사진 넣기" }).boundingBox();
+    if (!text || !select || !insert) throw new Error("Missing synthetic report controls");
+    expect(select.x).toBe(text.x);
+    expect(select.y - text.y - text.height).toBe(12);
+    expect(select.height).toBe(insert.height);
+  };
+  await checkPhotoInput();
   await field.fill(
     "### 증거 1 · 합성 송금 확인서.jpg\n- **송금 확인**\n\n사진 뒤에 이어질 내용\n\n### 증거 2 · 합성 녹취.wav\n- 12.5–19.25초 · 확인 필요 · 반환일 언급\n\n### 증거 3 · 합성 영상.mp4\n- 24초 · 프레임 48 · 장면 전환 표본 · 자료 기재 · 서류 전달 장면",
   );
@@ -118,6 +131,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     await page.screenshot({ path: `.wrangler/report-inline-modal-${width}.png` });
     await modal.getByRole("button", { name: "취소" }).click();
     await openReportEditor(page);
+    await checkPhotoInput();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
