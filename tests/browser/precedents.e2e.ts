@@ -422,6 +422,14 @@ async function comparisonTransport(page: Page) {
     registerHttpMockHandler(async (request: Request) => {
       const path = new URL(request.url).pathname;
       const base = `/api/v2/cases/${id}`;
+      if (path === `${base}/precedents` && sessionStorage.getItem(`${storage}-revision`)) {
+        const context = await read("precedents.context", { id });
+        return Response.json({
+          ...context,
+          workspaceRevision: Number(sessionStorage.getItem(`${storage}-revision`)),
+          researchRevision: 1,
+        });
+      }
       if (path === `${base}/workspace-jobs/latest`)
         return Response.json(sessionStorage.getItem(storage) ? job() : null);
       if (path === `${base}/precedents/compare`) {
@@ -934,4 +942,30 @@ test("sidebar title modal cancels, saves and persists a renamed case", async ({ 
   ).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: newTitle })).toBeVisible();
   await page.screenshot({ path: ".wrangler/sidebar-title-rename.png" });
+});
+
+test("returning to results after comparison keeps cards usable without a case-changed notice", async ({
+  page,
+}) => {
+  await selectComparison(page);
+  await page.getByRole("button", { name: "내 사건과 유사도 비교" }).click();
+  await page.evaluate(() => {
+    sessionStorage.setItem("synthetic-comparison-done", "true");
+    sessionStorage.setItem("synthetic-comparison-revision", "3");
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
+  await expect(
+    page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요.", { exact: true }),
+  ).toHaveCount(0);
+  const cards = page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button");
+  await expect(cards.first()).toBeEnabled();
+  await cards.nth(1).click();
+  await expect(
+    page.getByRole("link", { name: /국가법령정보센터에서 전체 원문 보기/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
 });

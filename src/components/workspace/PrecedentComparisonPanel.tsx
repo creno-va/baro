@@ -235,12 +235,17 @@ export function PrecedentComparisonPanel({
       ? state.comparison
       : null;
   const refreshRequired = sourceExpired || (sourceNeedsRefresh && !comparison);
+  const comparisonRevisionCurrent =
+    !!comparison &&
+    (context.workspaceRevision === comparison.basedOnWorkspaceRevision ||
+      (context.workspaceRevision >= comparison.publishedWorkspaceRevision &&
+        comparison.basedOnWorkspaceRevision >=
+          (context.researchRevision ?? context.workspaceRevision - 2)));
   const comparisonStale =
     !!comparison &&
     (state?.stale ||
       comparison.summaryRevision !== context.summaryRevision ||
-      (context.workspaceRevision !== comparison.basedOnWorkspaceRevision &&
-        context.workspaceRevision !== comparison.publishedWorkspaceRevision));
+      !comparisonRevisionCurrent);
   const needsResearch = refreshRequired || comparisonStale;
   const incomplete = !!state && !pending && state.job.status !== "completed";
   const unreadable = !!error && !comparison;

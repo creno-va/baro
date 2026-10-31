@@ -141,7 +141,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       const next = await precedentsApi.search(
         caseId,
         {
-          expectedRevision: context.workspaceRevision,
+          expectedRevision: more && result ? result.workspaceRevision : context.workspaceRevision,
           summaryRevision: context.summaryRevision,
           topics: more && result ? result.topics : topics,
           pageSize: 5,
@@ -196,7 +196,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       const next = await precedentsApi.read(
         caseId,
         {
-          expectedRevision: context.workspaceRevision,
+          expectedRevision: result?.workspaceRevision ?? context.workspaceRevision,
           readToken: item.readToken,
           includeFullText: true,
         },
@@ -245,7 +245,10 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
   );
   const chosen = result?.items.find((item) => item.id === selected);
   const sourceCurrent =
-    result?.workspaceRevision === context?.workspaceRevision &&
+    !!result &&
+    !!context &&
+    result.workspaceRevision >= (context.researchRevision ?? context.workspaceRevision) &&
+    result.workspaceRevision <= context.workspaceRevision &&
     result?.summaryRevision === context?.summaryRevision;
   return (
     <section className="workspace precedent-workspace" aria-label="관련 판례 탐색">

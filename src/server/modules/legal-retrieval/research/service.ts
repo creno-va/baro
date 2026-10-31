@@ -17,6 +17,7 @@ import {
   decodeSource,
   type SourceRow,
 } from "../../../db/v2-official-sources";
+import { researchRevisionBase } from "../../../db/v2-research-revision";
 import { intakeContentSchema } from "../../../db/v2-workspace";
 import {
   reportLegalOutcome,
@@ -93,7 +94,10 @@ export function createPrecedentResearchService(
       )
       .first<Scope>();
     if (!row) throw new PrecedentResearchError("NOT_FOUND");
-    if (revision !== undefined && row.workspaceRevision !== revision)
+    const researchRevision = row.summaryRevision
+      ? await researchRevisionBase(core, ownerId, id, row.workspaceRevision, row.summaryRevision)
+      : row.workspaceRevision;
+    if (revision !== undefined && (revision < researchRevision || revision > row.workspaceRevision))
       throw new PrecedentResearchError("CONFLICT");
     if (
       row.status !== "active" ||
@@ -106,7 +110,22 @@ export function createPrecedentResearchService(
       throw new PrecedentResearchError("REVIEW_REQUIRED");
     if (summaryRevision !== undefined && row.summaryRevision !== summaryRevision)
       throw new PrecedentResearchError("CONFLICT");
-    return { ...row, summaryRevision: row.summaryRevision, snapshotId: row.snapshotId };
+    // Decrypting the comparison chain yields. Fence the exact live case again.
+    if (
+      !(await core
+        .statement(
+          `SELECT 1 FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace}`,
+          [id, ownerId, row.workspaceRevision],
+        )
+        .first())
+    )
+      throw new PrecedentResearchError("CONFLICT");
+    return {
+      ...row,
+      researchRevision,
+      summaryRevision: row.summaryRevision,
+      snapshotId: row.snapshotId,
+    };
   }
   async function readOriginal(
     ownerId: string,
@@ -116,7 +135,7 @@ export function createPrecedentResearchService(
     fullText = true,
   ) {
     const request = v2PrecedentReadRequestSchema.parse(raw);
-    await scope(ownerId, id, executionRevision ?? request.expectedRevision);
+    const current = await scope(ownerId, id, executionRevision ?? request.expectedRevision);
     const currentTime = now();
     const proof = await verifyResearchToken(
       env.BETTER_AUTH_SECRET,
@@ -127,7 +146,8 @@ export function createPrecedentResearchService(
       !proof ||
       proof.ownerId !== ownerId ||
       proof.workspaceId !== id ||
-      proof.revision !== request.expectedRevision
+      (proof.revision !== request.expectedRevision &&
+        (proof.revision < current.researchRevision || proof.revision > request.expectedRevision))
     )
       throw new PrecedentResearchError("NOT_FOUND");
     const load = () =>
@@ -203,6 +223,7 @@ export function createPrecedentResearchService(
       const value = v2PrecedentResearchContextSchema.parse({
         schemaVersion: "2",
         workspaceRevision: current.workspaceRevision,
+        researchRevision: current.researchRevision,
         summaryRevision: current.summaryRevision,
         caseTitle: caseDisplayTitle(metadata?.narrative ?? summary.overview, metadata?.caseTitle),
         recommendedTopics: recommendPrecedentTopics(summary),

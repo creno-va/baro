@@ -27,6 +27,7 @@ import { createV2JobsRepository } from "../../db/v2-jobs";
 import type { MutationReceipt } from "../../db/v2-mutation-receipts";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
+import { researchRevisionBase } from "../../db/v2-research-revision";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
 import { dependencyStep } from "../../dependency-diagnostics";
@@ -558,6 +559,13 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       if (stored.role !== "assistant" || !stored.precedentComparison)
         throw new WorkspaceError("NOT_FOUND");
       const comparison = stored.precedentComparison;
+      const researchRevision = await researchRevisionBase(
+        core,
+        ownerId,
+        id,
+        current.workspaceRevision,
+        current.confirmedSummaryRevision ?? 0,
+      );
       const source = await readBoundSource(
         core,
         id,
@@ -576,7 +584,8 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         job,
         comparison,
         stale:
-          current.workspaceRevision !== comparison.publishedWorkspaceRevision ||
+          comparison.publishedWorkspaceRevision < researchRevision ||
+          comparison.publishedWorkspaceRevision > current.workspaceRevision ||
           current.confirmedSummaryRevision !== comparison.summaryRevision ||
           !source,
       });
