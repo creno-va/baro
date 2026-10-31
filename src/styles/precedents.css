@@ -685,8 +685,11 @@
 }
 .comparison-method > summary {
   width: fit-content;
+  min-height: 0;
+  padding: 4px 0;
   color: var(--muted-foreground);
   font-size: 12px;
+  line-height: 20px;
 }
 .comparison-method > p {
   max-width: 84ch;
