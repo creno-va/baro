@@ -371,26 +371,50 @@ test("peer sign-out removes case and rejects delayed search while focus preserve
   );
 });
 
-test("changed case revision invalidates old result actions and exposes fresh search", async ({
+test("changed case content clears old results and selected detail without a change notice", async ({
   page,
 }) => {
   await seed(page);
+  for (const openDetail of [false, true]) {
+    await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+    const list = page.getByRole("list", { name: "관련 판례 목록" });
+    await expect(list).toBeVisible();
+    if (openDetail) {
+      await list.getByRole("button").first().click();
+      await expect(page.getByRole("region", { name: "선택한 판례" })).toBeVisible();
+    }
+    await page.evaluate((id) => {
+      const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+      cases[id].revision++;
+      localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+      window.dispatchEvent(new Event("focus"));
+    }, id);
+    await expect(list).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
+    await expect(page.locator(".precedent-result-heading")).toHaveCount(0);
+    await expect(
+      page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요."),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "판례 찾기", exact: true })).toBeEnabled();
+  }
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   await expect(page.getByRole("list", { name: "관련 판례 목록" })).toBeVisible();
-  await page.evaluate((id) => {
-    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
-    cases[id].revision++;
-    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
-    window.dispatchEvent(new Event("focus"));
-  }, id);
-  await expect(
-    page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first(),
-  ).toBeDisabled();
-  await expect(
-    page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요."),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
-  await expect(page.getByRole("list", { name: "관련 판례 목록" })).toBeVisible();
+  for (const action of ["read", "search"]) {
+    // No foreground event: the request itself discovers the newer revision.
+    await page.evaluate((id) => {
+      const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+      cases[id].revision++;
+      localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    }, id);
+    if (action === "read")
+      await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
+    else await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+    await expect(page.getByRole("list", { name: "관련 판례 목록" })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "판례 찾기", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
+    await expect(page.getByRole("list", { name: "관련 판례 목록" })).toBeVisible();
+  }
 });
 
 // Explicit browser-only synthetic transport. No provider, law or customer data is sent.

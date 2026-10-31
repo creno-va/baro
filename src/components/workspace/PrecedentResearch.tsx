@@ -84,10 +84,16 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       .then((next) => {
         if (controller.signal.aborted || !boundary.current.current(ticket)) return;
         const prior = currentContext.current;
-        if (prior && prior.summaryRevision !== next.summaryRevision) {
+        if (
+          prior &&
+          (prior.summaryRevision !== next.summaryRevision ||
+            prior.workspaceRevision < (next.researchRevision ?? next.workspaceRevision) ||
+            prior.workspaceRevision > next.workspaceRevision)
+        ) {
           clearResults();
+        }
+        if (!prior || prior.summaryRevision !== next.summaryRevision)
           setTopics(next.recommendedTopics.slice(0, 2));
-        } else if (!prior) setTopics(next.recommendedTopics.slice(0, 2));
         currentContext.current = next;
         setContext(next);
         setError(null);
@@ -171,8 +177,14 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       if (!controller.signal.aborted && access.alive(ticket)) {
         if (isAccessError(cause)) access.deny();
         if (cause instanceof ApiError && ["NOT_FOUND", "CONFLICT"].includes(cause.code)) {
+          clearResults();
           currentContext.current = null;
           setContext(null);
+          if (cause.code === "CONFLICT") {
+            setError(null);
+            setReload((n) => n + 1);
+            return;
+          }
         }
         setError(cause);
       }
@@ -210,7 +222,8 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
           clearResults();
           currentContext.current = null;
           setContext(null);
-          setError(cause);
+          setError(null);
+          setReload((n) => n + 1);
         } else {
           setReadError(cause);
           // A missing proof can also mean the case/role was revoked. Refresh
@@ -362,14 +375,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                       ? "판례를 확인하지 못했어요. 잠시 후 다시 검색해 주세요."
                       : "선택한 주제와 가까운 판례를 찾지 못했어요. 다른 주제로 다시 찾아보세요."}
                   </p>
-                )}
-                {!sourceCurrent && (
-                  <div className="precedent-notice" role="status">
-                    <p>사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요.</p>
-                    <button type="button" onClick={() => void search()}>
-                      다시 검색
-                    </button>
-                  </div>
                 )}
                 {!!result.items.length && (
                   <ul className="precedent-list" aria-label="관련 판례 목록">
