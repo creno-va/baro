@@ -597,8 +597,18 @@ test("topic suggestions exclude cited law text and excerpts preserve exact Unico
   );
 });
 
-async function comparisonFixture(mislocatedQuote = false) {
+async function comparisonFixture(mislocatedQuote = false, judgmentText?: string) {
   const f = await fixture();
+  if (judgmentText)
+    f.upstream(async (url) =>
+      json(
+        new URL(url).pathname.endsWith("lawSearch.do")
+          ? list
+          : {
+              PrecService: { ...detail.PrecService, 판례내용: judgmentText },
+            },
+      ),
+    );
   const other = await createTestDatabase();
   databases.push(other);
   const now = new Date().toISOString();
@@ -1202,4 +1212,33 @@ test("comparison-only revisions preserve research results and read proofs while 
       })
     ).status,
   ).toBe(404);
+});
+
+test("long judgments compare the main case facts and publish their exact full-original highlight coordinates", async () => {
+  const narrative = `【판시사항】\n${"계약의 해석에 관한 일반 법리이며 사건의 구체적 경위가 아닙니다. ".repeat(200)}\n【이유】\n1. 사안의 개요\n합성 원고는 피고의 요청을 받고 구두로 계약을 체결한 뒤 대금을 송금했다. 피고는 약속한 반환일 이후에도 대금을 지급하지 않았다.`;
+  const f = await comparisonFixture(false, narrative);
+  f.knownIndicators("yes");
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("completed");
+  const state = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  const comparison = state.comparison;
+  if (!comparison) throw new Error("Missing synthetic comparison");
+  expect(comparison.source.excerpt.startUtf16).toBeGreaterThan(4000);
+  expect(comparison.source.excerpt.text).toContain("구두로 계약을 체결한 뒤 대금을 송금했다");
+  expect(comparison.source.excerpt.text).not.toContain("일반 법리");
+  const read = v2PrecedentReadResponseSchema.parse(
+    await (
+      await f.request("/read", {
+        expectedRevision: f.body.expectedRevision,
+        readToken: f.body.readToken,
+        includeFullText: true,
+      })
+    ).json(),
+  );
+  const evidence = comparison.metrics[0]?.precedentEvidence[0];
+  if (!evidence || !read.fullText) throw new Error("Missing synthetic full original");
+  expect(read.fullText.slice(evidence.startUtf16, evidence.endUtf16)).toBe(evidence.text);
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
 });

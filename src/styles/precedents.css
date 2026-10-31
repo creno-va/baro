@@ -798,8 +798,8 @@
 }
 .comparison-reason blockquote {
   margin: 0 0 12px;
-  padding: 0 0 0 12px;
-  border-left: 2px solid #b8c9e0;
+  padding: 0;
+  border: 0;
   font-size: 14px;
   line-height: 1.8;
 }

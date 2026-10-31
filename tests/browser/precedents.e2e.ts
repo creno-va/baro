@@ -647,6 +647,12 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
   await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
   await expect(reason.locator(".comparison-reason")).toHaveCount(2);
+  const evidence = reason.locator(".comparison-evidence").first();
+  await expect(evidence.locator("blockquote")).toHaveCSS("border-left-width", "0px");
+  await expect(evidence.locator("blockquote")).toHaveCSS("padding-left", "0px");
+  expect((await evidence.locator("blockquote").boundingBox())?.x).toBe(
+    (await evidence.locator("h4").boundingBox())?.x,
+  );
   expect((await reason.boundingBox())?.width).toBeGreaterThan(700);
   await page.screenshot({ path: ".wrangler/comparison-reason-desktop.png" });
   await page.setViewportSize({ width: 390, height: 900 });

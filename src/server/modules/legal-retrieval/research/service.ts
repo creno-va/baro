@@ -32,6 +32,7 @@ import { makeChunk } from "../v2/source";
 import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../v2/source-authority";
 import type { Transport } from "../v2/transport";
 import { isWorkspacePublicQuery } from "../v2/workspace-plans";
+import { comparisonExcerpt } from "./comparison-excerpt";
 import { createPrecedentRelevance } from "./relevance";
 import {
   signResearchPage,
@@ -186,7 +187,8 @@ export function createPrecedentResearchService(
       schemaVersion: "2",
       workspaceRevision: request.expectedRevision,
       citation,
-      excerpt: researchExcerpt(source.body, [], 4000),
+      // Admission and execution must use the exact same bounded input window.
+      excerpt: comparisonExcerpt(source.body),
       ...(fullText && request.includeFullText ? { fullText: source.body } : {}),
     });
     // Source hashing yields: fence the exact current original and case again.
