@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, X } from "lucide-react";
+import { ArrowUpFromLine, ChevronDown, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -643,12 +643,14 @@ export function Editor() {
                       assetId={photoPreview ? null : draft.photoAssetId}
                       fallback={photoPreview ?? draft.photoUrl}
                       alt="내 프로필 사진"
-                      size={100}
+                      size={80}
                       privateRead
                     />
-                    <div>
+                    <div className="lawyer-photo-copy">
                       <h2>프로필 사진</h2>
-                      <p>얼굴이 잘 보이는 사진을 올려주세요.</p>
+                      <p>JPEG·PNG·WebP · 최대 10MB</p>
+                    </div>
+                    <div className="lawyer-photo-actions">
                       <label className="lawyer-photo-upload">
                         <ArrowUpFromLine size={16} aria-hidden="true" />
                         사진 변경
@@ -664,19 +666,19 @@ export function Editor() {
                           }}
                         />
                       </label>
-                      <p className="text-sm text-muted-foreground">
-                        10MB 이하 · 정사각형 사진으로 저장돼요.
-                      </p>
                       {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
                         <Button
                           variant="ghost"
+                          size="icon"
+                          aria-label="프로필에서 사진 제외"
+                          title="사진 제외"
                           disabled={!draft.photoUrl || busy}
                           onClick={() => {
                             setDraft({ ...draft, photoUrl: null, photoAssetId: null });
                             setPhotoPreview(null);
                           }}
                         >
-                          프로필에서 사진 제외
+                          <X size={18} aria-hidden="true" />
                         </Button>
                       )}
                     </div>
@@ -726,19 +728,22 @@ export function Editor() {
                           *
                         </span>
                       </span>
-                      <select
-                        required
-                        aria-label="지역"
-                        value={draft.region}
-                        onChange={(e) => patch("region", e.target.value)}
-                      >
-                        <option value="">지역 선택</option>
-                        {Object.entries(REGION_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="lawyer-select">
+                        <select
+                          required
+                          aria-label="지역"
+                          value={draft.region}
+                          onChange={(e) => patch("region", e.target.value)}
+                        >
+                          <option value="">지역 선택</option>
+                          {Object.entries(REGION_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={18} aria-hidden="true" />
+                      </span>
                     </label>
                   </div>
                 </section>

@@ -132,6 +132,42 @@ test("portal saves one portfolio file without header actions or a sticky divider
   await page.locator('astro-island[component-export="Editor"]:not([ssr])').waitFor();
   await expect(page.getByRole("heading", { name: "내 변호사 프로필" })).toBeVisible();
   await expect(page.getByLabel("이름", { exact: true })).toBeVisible();
+  const nameField = page.getByLabel("이름", { exact: true });
+  const checkFieldStyles = async () => {
+    const actual = await page.locator("#lawyer-profile-form").evaluate((form) => {
+      const name = form.querySelector('[aria-label="이름"]');
+      const intro = form.querySelector("textarea");
+      const select = form.querySelector("select");
+      const arrow = form.querySelector(".lawyer-select > svg");
+      if (!name || !intro || !select || !arrow) throw new Error("Missing synthetic profile inputs");
+      const properties = [
+        "background-color",
+        "border-radius",
+        "border-top-color",
+        "padding-left",
+        "font-size",
+      ];
+      const styles = [name, intro, select].map((node) =>
+        properties.map((property) => getComputedStyle(node).getPropertyValue(property)),
+      );
+      const rect = select.getBoundingClientRect(),
+        icon = arrow.getBoundingClientRect();
+      return {
+        styles,
+        appearance: getComputedStyle(select).appearance,
+        paddingRight: getComputedStyle(select).paddingRight,
+        rightGap: rect.right - icon.right,
+        centerDelta: rect.top + rect.height / 2 - icon.top - icon.height / 2,
+      };
+    });
+    expect(actual.styles[0]).toEqual(actual.styles[1]);
+    expect(actual.styles[2]).toEqual(actual.styles[1]);
+    expect(actual.appearance).toBe("none");
+    expect(actual.paddingRight).toBe("48px");
+    expect(actual.rightGap).toBe(16);
+    expect(Math.abs(actual.centerDelta)).toBeLessThan(1);
+  };
+  await checkFieldStyles();
   await page.getByLabel("이름", { exact: true }).fill("합성 변호사");
   await page.getByLabel("사무실 이름").fill("예시 사무실");
   await page.getByLabel("소개", { exact: true }).fill("사실관계 정리를 돕는 합성 소개");
@@ -141,7 +177,13 @@ test("portal saves one portfolio file without header actions or a sticky divider
   await page.getByLabel("이메일", { exact: true }).fill("lawyer@example.invalid");
   await page.getByLabel("전화번호").fill("02-000-0000");
   await page.getByLabel("웹사이트 / 외부 상담 URL").fill("https://example.com");
+  expect(errors).toEqual([]);
+  await expect(nameField).toHaveValue("합성 변호사");
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await checkFieldStyles();
+  expect((await page.locator(".lawyer-photo-surface").boundingBox())?.height).toBeLessThanOrEqual(
+    100,
+  );
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await page.screenshot({ path: ".wrangler/lawyer-editor-1440.png", fullPage: true });
