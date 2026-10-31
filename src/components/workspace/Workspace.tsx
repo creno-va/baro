@@ -685,7 +685,6 @@ export function Workspace({
       setDraft("");
       setSelected([]);
       setChatAttachments([]);
-      setNotice("메시지를 저장했어요.");
     });
   }
   async function sendLookup(request: V2LookupRequest) {
