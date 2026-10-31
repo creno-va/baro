@@ -1,5 +1,79 @@
 import { expect, test } from "@playwright/test";
 
+test("action check, preparation refresh and a second check wait for AI publication without a conflict", async ({
+  page,
+}) => {
+  await page.goto("/cases/synthetic-case?tab=actions");
+  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  const checkbox = page.getByRole("checkbox").first();
+  await checkbox.check();
+  await expect(checkbox).toBeEnabled();
+  await expect(checkbox).toBeChecked();
+  await page.evaluate(async () => {
+    const modulePath = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(
+      modulePath
+    )) as typeof import("../helpers/workspace-client-fixture");
+    const state = { pending: false, writes: 0 };
+    (window as unknown as { actionRefresh: typeof state }).actionRefresh = state;
+    const read = api.workspace.get;
+    const write = api.workspace.setAction;
+    const pending = (view: Awaited<ReturnType<typeof read>>) =>
+      state.pending
+        ? {
+            ...view,
+            messages: [
+              ...view.messages,
+              {
+                id: "synthetic-preparation-job",
+                role: "assistant" as const,
+                text: "자료와 행동을 확인하고 있어요.",
+                status: "pending" as const,
+                createdAt: "2026-10-31T00:00:00.000Z",
+              },
+            ],
+          }
+        : view;
+    api.workspace.get = async (...args) => pending(await read(...args));
+    api.workspace.sendMessage = async (caseId) => {
+      state.pending = true;
+      return pending(await read(caseId));
+    };
+    api.workspace.setAction = async (...args) => {
+      state.writes++;
+      if (state.pending)
+        throw Object.assign(new Error("Synthetic running-job conflict"), { code: "CONFLICT" });
+      return write(...args);
+    };
+  });
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await expect(page.locator(".workspace-action-list")).toHaveAttribute("aria-busy", "true");
+  await expect(checkbox).toBeDisabled();
+  await expect(checkbox).toBeChecked();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { actionRefresh: { writes: number } }).actionRefresh.writes,
+    ),
+  ).toBe(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.evaluate(() => {
+    (window as unknown as { actionRefresh: { pending: boolean } }).actionRefresh.pending = false;
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(checkbox).toBeEnabled();
+  await checkbox.uncheck();
+  await expect(checkbox).toBeEnabled();
+  await expect(checkbox).not.toBeChecked();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { actionRefresh: { writes: number } }).actionRefresh.writes,
+    ),
+  ).toBe(1);
+  await page.reload();
+  await expect(checkbox).not.toBeChecked();
+});
+
 for (const failSession of [false, true]) {
   test(`action optimistic UI with session preflight failure=${failSession}`, async ({ page }) => {
     await page.goto("/cases/synthetic-case?tab=actions");

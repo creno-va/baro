@@ -1780,17 +1780,17 @@ export function Workspace({
                     </div>
                   )}
                   {historyButton("actions", "행동 더 불러오기")}
-                  <ul className="workspace-action-list">
+                  <ul className="workspace-action-list" aria-busy={!!pendingResponse}>
                     {view.actions.map((action) => (
                       <li key={action.id} className={action.done ? "is-done" : ""}>
                         <label>
                           <input
                             type="checkbox"
                             checked={action.done}
-                            disabled={!!busy || readonly}
+                            disabled={!!busy || readonly || !!pendingResponse}
                             onChange={(event) => {
                               const done = event.target.checked;
-                              if (readonly || lock.current) return;
+                              if (readonly || lock.current || pendingResponse) return;
                               const previous = view;
                               void run(action.id, async (epoch) => {
                                 apply({
