@@ -166,6 +166,28 @@ test("portal saves one portfolio file without header actions or a sticky divider
     expect(actual.paddingRight).toBe("48px");
     expect(actual.rightGap).toBe(16);
     expect(Math.abs(actual.centerDelta)).toBeLessThan(1);
+    const layout = await page.locator("#lawyer-profile-form").evaluate((form) => {
+      const card = form.querySelector(".lawyer-editor-sections");
+      const footer = form.querySelector(".lawyer-form-footer");
+      const button = footer?.querySelector("button");
+      if (!card || !footer || !button) throw new Error("Missing synthetic profile save action");
+      const surface = card.getBoundingClientRect(),
+        action = button.getBoundingClientRect();
+      return {
+        x: surface.x,
+        width: surface.width,
+        actionX: action.x,
+        actionWidth: action.width,
+        gap: action.y - surface.bottom,
+        height: action.height,
+        divider: getComputedStyle(footer).borderTopWidth,
+      };
+    });
+    expect(layout.actionX).toBe(layout.x);
+    expect(layout.actionWidth).toBe(layout.width);
+    expect(layout.gap).toBe(24);
+    expect(layout.height).toBeGreaterThanOrEqual(56);
+    expect(layout.divider).toBe("0px");
   };
   await checkFieldStyles();
   await page.getByLabel("이름", { exact: true }).fill("합성 변호사");
@@ -253,6 +275,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
+  await page.locator('astro-island[component-export="Editor"]:not([ssr])').waitFor();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("합성 변호사");
   expect(profile.published).toBe(true);
   await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toHaveCount(0);
