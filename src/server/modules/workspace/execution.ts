@@ -296,6 +296,9 @@ export async function executeWorkspace(
           parties: response.parties,
           ...("unknowns" in response ? { unknowns: response.unknowns } : {}),
           actions: response.actions,
+          ...("actionCompletions" in response
+            ? { actionCompletions: response.actionCompletions }
+            : {}),
           timeline: response.timeline,
           toolResults: response.toolResults,
           ...("precedentComparison" in response

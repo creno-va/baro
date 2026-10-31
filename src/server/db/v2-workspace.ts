@@ -1348,7 +1348,13 @@ export function createV2WorkspaceRepository(
         ]);
       });
     },
-    readActions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+    readActions(
+      actor: Actor,
+      workspaceId: string,
+      afterId?: string,
+      limit = 4,
+      pendingFirst = false,
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(z.number().int().min(1).max(8), limit);
@@ -1356,7 +1362,7 @@ export function createV2WorkspaceRepository(
         if (!current) return null;
         const rows = await core
           .statement(
-            `SELECT * FROM v2_actions WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY entity_id LIMIT ?`,
+            `SELECT * FROM v2_actions WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY ${pendingFirst ? "CASE WHEN status='todo' THEN 0 ELSE 1 END," : ""} entity_id LIMIT ?`,
             [workspaceId, ...(afterId ? [afterId] : []), limit],
           )
           .all<{ id: string; revision: number; encrypted_payload: string }>();
@@ -1423,6 +1429,10 @@ export function createV2WorkspaceRepository(
     },
     async actions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return (await repository.readActions(actor, workspaceId, afterId, limit)) ?? [];
+    },
+    // Keep the model window bounded without closed items hiding pending work.
+    async preparationActions(actor: Actor, workspaceId: string) {
+      return (await repository.readActions(actor, workspaceId, undefined, 8, true)) ?? [];
     },
     async timeline(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return (await repository.readTimeline(actor, workspaceId, afterId, limit)) ?? [];

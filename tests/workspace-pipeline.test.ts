@@ -277,6 +277,7 @@ test("a bounded chat audits the complete generation context without replacing it
     context: calls[0]?.input,
     draft: {
       ...chatText(safe),
+      actionCompletions: [],
       requestedMaterials: [],
       requestedTools: [],
       requestedCurrentTime: false,

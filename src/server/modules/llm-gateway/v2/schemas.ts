@@ -3,6 +3,7 @@ import { displayText, hasUniqueIds, opaqueIdSchema } from "../../../../contracts
 import {
   caseTitleSchema,
   V2_INTAKE_POLICY,
+  v2ActionCompletionSchema,
   v2ActionSchema,
   v2FactReferenceSchema,
   v2FactSchema,
@@ -33,6 +34,7 @@ export const workspaceChatOutputSchema = z.strictObject({
   // Chat is a delta: conflicts may point to facts in the current summary.
   facts: z.array(v2FactSchema).max(5).refine(hasUniqueIds, "Duplicate fact IDs"),
   actions: z.array(v2ActionSchema).max(5),
+  actionCompletions: z.array(v2ActionCompletionSchema).max(5).default([]),
   parties: v2SummarySchema.shape.parties.max(5),
   // Null preserves earlier gaps on read-only replies and older adapters.
   unknowns: v2SummarySchema.shape.unknowns.nullable().default(null),

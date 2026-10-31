@@ -8,6 +8,7 @@ const fields = [
   "warnings",
   "facts",
   "actions",
+  "actionCompletions",
   "parties",
   "requestedSources",
   "requestedTools",

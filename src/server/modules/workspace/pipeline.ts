@@ -78,7 +78,7 @@ export type WorkspaceContext = {
   facts: V2Fact[];
   existingActions?: Pick<
     V2Action,
-    "id" | "kind" | "title" | "instructions" | "caution" | "status"
+    "id" | "revision" | "kind" | "title" | "instructions" | "caution" | "status"
   >[];
   existingTimeline?: Pick<
     V2TimelineEntry,
@@ -634,6 +634,7 @@ export function createWorkspacePipeline(
             facts: [],
             parties: [],
             actions: [],
+            actionCompletions: [],
             timeline: [],
             toolResults: [],
             sourceClaims: [],
@@ -747,8 +748,43 @@ export function createWorkspacePipeline(
         assertWorkspaceReferences(context, [
           ...draft.references,
           ...draft.actions.flatMap((a) => a.references),
+          ...draft.actionCompletions.map((completion) => completion.reference),
           ...draft.timeline.flatMap((t) => t.references),
         ]);
+        const completedIds = new Set<string>();
+        for (const completion of draft.actionCompletions) {
+          const action = context.existingActions?.find((entry) => entry.id === completion.actionId);
+          const supported = context.materials.some((material) => {
+            const coverage = material.coverage as {
+              observationCertainty?: string;
+              userEdited?: boolean;
+            } | null;
+            return (
+              JSON.stringify(material.reference) === JSON.stringify(completion.reference) &&
+              material.text.includes(completion.quote) &&
+              coverage?.observationCertainty === "observed" &&
+              coverage.userEdited === false
+            );
+          });
+          if (
+            completedIds.has(completion.actionId) ||
+            !action ||
+            action.status !== "todo" ||
+            action.revision !== completion.expectedRevision ||
+            !supported ||
+            prohibited(completion.quote)
+          )
+            throw new WorkspaceOutputPolicyError("unsupported_fact");
+          completedIds.add(completion.actionId);
+          if (
+            !draft.references.some(
+              (ref) => JSON.stringify(ref) === JSON.stringify(completion.reference),
+            )
+          )
+            draft.references.push(completion.reference);
+        }
+        if (draft.references.length > 100)
+          throw new WorkspaceOutputPolicyError("unauthorized_reference");
         const ids = new Set([...context.facts, ...draft.facts].map((fact) => fact.id));
         if (
           draft.facts.some(

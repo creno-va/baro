@@ -13,6 +13,7 @@ const draft = {
   warnings: [],
   facts: [],
   actions: [],
+  actionCompletions: [],
   parties: [],
   unknowns: null,
   requestedSources: [],

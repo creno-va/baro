@@ -535,7 +535,7 @@ export function Workspace({
           target,
           request: {
             expectedRevision: snapshot.case.revision,
-            text: `최근 대화와 처리된 자료를 반영해 ${label}을 업데이트해 주세요. 기존에 정리된 항목과 완료한 행동, 직접 수정한 내용은 유지하고, 중복 없이 새로 확인된 내용과 필요한 준비만 추가해 주세요. 근거가 부족한 날짜나 사실은 추측하지 마세요.`,
+            text: `최근 대화와 처리된 자료를 반영해 ${label}을 업데이트해 주세요. 기존에 정리된 항목과 완료한 행동, 직접 수정한 내용은 유지하고, 중복 없이 새로 확인된 내용과 필요한 준비만 추가해 주세요.${target === "actions" ? " 자료에서 수행 완료가 확인되는 기존 행동은 완료로 표시해 주세요. 단순 업로드나 예정·진행 중 상태는 완료로 판단하지 마세요." : ""} 근거가 부족한 날짜나 사실은 추측하지 마세요.`,
             selectedFileIds: snapshot.files
               .filter((file) => file.status === "ready")
               .map((file) => file.id),

@@ -45,6 +45,12 @@ export const v2SourcePositionSchema = z.discriminatedUnion("kind", [
     sampling: z.enum(["one_second", "scene_change"]),
   }),
 ]);
+export const v2MaterialReferenceSchema = z.strictObject({
+  kind: z.literal("user_material"),
+  fileId: opaqueIdSchema,
+  fileRevision: revisionSchema,
+  position: v2SourcePositionSchema,
+});
 export const v2FactReferenceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("intake_narrative"), intakeRevision: revisionSchema }),
   z.strictObject({
@@ -57,12 +63,7 @@ export const v2FactReferenceSchema = z.discriminatedUnion("kind", [
     messageId: opaqueIdSchema,
     workspaceRevision: revisionSchema,
   }),
-  z.strictObject({
-    kind: z.literal("user_material"),
-    fileId: opaqueIdSchema,
-    fileRevision: revisionSchema,
-    position: v2SourcePositionSchema,
-  }),
+  v2MaterialReferenceSchema,
   z.strictObject({ kind: z.literal("official_source"), citationId: opaqueIdSchema }),
 ]);
 export const v2FactSchema = z
