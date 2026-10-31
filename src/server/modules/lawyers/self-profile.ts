@@ -78,6 +78,15 @@ export function createSelfProfileService(core: V2Core, clock = () => new Date().
       if (current.id !== incoming.id) throw new LawyerError("NOT_FOUND");
       if (publish === undefined && isDuplicateProfileSave(current, incoming)) return current;
       if (current.revision !== incoming.revision) throw new LawyerError("STALE_REVISION");
+      // Historical snapshots may contain multiple entries. Preserve them on
+      // unrelated edits, but new selection/replacement is a single portfolio.
+      if (
+        incoming.portfolio.length > 1 &&
+        JSON.stringify(incoming.portfolio) !== JSON.stringify(current.portfolio)
+      )
+        throw new z.ZodError([
+          { code: "custom", path: ["portfolio"], message: "Only one portfolio may be selected" },
+        ]);
       const next = selfProfileSchema.parse({
         ...incoming,
         revision: current.revision + 1,

@@ -646,9 +646,7 @@
 
 /* Private profile editor: one clear action row and quiet, separated sections. */
 .app-frame.app-frame--product .lawyer-editor .page-header {
-  position: sticky;
-  top: 24px;
-  z-index: 4;
+  position: static;
   background: var(--app-canvas);
   align-items: flex-start;
   gap: 24px;
@@ -920,11 +918,6 @@
     gap: 22px;
   }
 }
-@media (max-width: 1100px), (max-height: 560px) {
-  .app-frame.app-frame--product .lawyer-editor .page-header {
-    top: 96px;
-  }
-}
 @media (max-width: 600px) {
   .lawyer-editor .page-header__action,
   .lawyer-editor-actions {
@@ -947,19 +940,10 @@
 }
 /* Numbered profile form: a quiet photo surface and full-width sections. */
 .app-frame.app-frame--product .lawyer-editor .page-header {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   margin-bottom: 32px;
 }
-.app-frame.app-frame--product .lawyer-editor .page-header::before {
-  content: "";
-  position: absolute;
-  height: 24px;
-  top: -24px;
-  left: 0;
-  right: 0;
-  background: var(--app-canvas, #f5f7fb);
-  pointer-events: none;
-}
+
 #lawyer-profile-form {
   padding: 32px;
   border-radius: 20px;
@@ -1096,4 +1080,20 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+.lawyer-portfolio-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lawyer-portfolio-input .lawyer-portfolio-upload {
+  flex: 1;
+  min-width: 0;
+}
+.lawyer-portfolio-upload span {
+  overflow-wrap: anywhere;
+}
+.lawyer-portfolio-input > button {
+  flex: none;
 }

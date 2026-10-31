@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Eye, Pencil, Plus, X } from "lucide-react";
+import { ArrowUpFromLine, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -9,6 +9,7 @@ import {
   lawyerErrorMessage,
 } from "../../client/api/lawyers";
 import { sessionApi } from "../../client/api/session";
+import { startForegroundPolling } from "../../client/foreground-poll";
 import {
   profileReady,
   selfAssetUrl,
@@ -89,16 +90,22 @@ export function Editor() {
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [notice, setNotice] = useState("");
-  const [preview, setPreview] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [assets, setAssets] = useState<LawyerAssetView[]>([]);
+  const [pendingUpload, setPendingUpload] = useState<{
+    id: string;
+    name: string;
+    purpose: "profile_photo" | "portfolio";
+    previewData: string | null;
+  } | null>(null);
+  const portfolioUpload = pendingUpload?.purpose === "portfolio" ? pendingUpload : null;
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const dirty = !!saved && !!draft && JSON.stringify(saved) !== JSON.stringify(draft);
-  const canSave = !!draft && profileReady(draft) && (dirty || !saved?.published);
-  const fail = (cause: unknown) => {
+  const canSave = !pendingUpload && !!draft && profileReady(draft) && (dirty || !saved?.published);
+  const fail = useCallback((cause: unknown) => {
     setError(lawyerErrorMessage(cause));
     setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
-  };
+  }, []);
   const owner = useRef<string | null>(null);
   const epoch = useRef(0);
   const sessionRequest = useRef(0);
@@ -110,10 +117,10 @@ export function Editor() {
     setCanMutate(false);
     setAccessUnknown(false);
     setAssets([]);
+    setPendingUpload(null);
     setPhotoPreview(null);
     setSaved(null);
     setDraft(null);
-    setPreview(false);
     setConfirmDiscard(false);
     setNotice("");
     setError("");
@@ -138,7 +145,6 @@ export function Editor() {
         } else {
           setAccessUnknown(true);
           setCanMutate(false);
-          setPreview(false);
           setConfirmDiscard(false);
         }
         throw cause;
@@ -326,27 +332,71 @@ export function Editor() {
     if (!draft || busy || !canMutate || !canSave) return;
     await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.", "save");
   };
-  const attach = (asset: LawyerAssetView) => {
-    if (!draft || !canMutate || asset.status !== "ready") return;
-    if (asset.purpose === "profile_photo") {
-      setPhotoPreview(null);
-      setDraft({ ...draft, photoAssetId: asset.id, photoUrl: selfAssetUrl(draft.id, asset.id) });
-    } else {
-      setDraft({
-        ...draft,
-        portfolio: [
-          ...draft.portfolio,
-          {
-            id: crypto.randomUUID(),
-            title: "공개 자료",
-            url: selfAssetUrl(draft.id, asset.id),
-            assetId: asset.id,
-          },
-        ],
-      });
-    }
-    setNotice("자료를 연결했어요. 프로필을 저장하면 반영돼요.");
-  };
+  const attach = useCallback(
+    (asset: LawyerAssetView, title = "포트폴리오 파일") => {
+      if (!canMutate || asset.status !== "ready") return;
+      if (asset.purpose === "profile_photo") setPhotoPreview(null);
+      setDraft((current) =>
+        current
+          ? asset.purpose === "profile_photo"
+            ? { ...current, photoAssetId: asset.id, photoUrl: selfAssetUrl(current.id, asset.id) }
+            : {
+                ...current,
+                portfolio: [
+                  {
+                    id: crypto.randomUUID(),
+                    title: title.slice(0, 300),
+                    url: selfAssetUrl(current.id, asset.id),
+                    assetId: asset.id,
+                  },
+                ],
+              }
+          : current,
+      );
+      setNotice("자료를 연결했어요. 프로필을 저장하면 반영돼요.");
+    },
+    [canMutate],
+  );
+  useEffect(() => {
+    if (!pendingUpload || busy || !canMutate) return;
+    const startEpoch = epoch.current;
+    let alive = true,
+      reads = 0;
+    const stop = startForegroundPolling(async () => {
+      try {
+        const checked = await verify();
+        if (!alive || !checked || checked.epoch !== startEpoch || !checked.canMutate) return;
+        const items = await lawyerAssets.list();
+        if (!alive || epoch.current !== startEpoch) return;
+        const after = await verify();
+        if (!alive || !after || after.epoch !== startEpoch || !after.canMutate) return;
+        setAssets(items);
+        const asset = items.find((item) => item.id === pendingUpload.id);
+        if (asset?.status === "ready") {
+          attach({ ...asset, purpose: asset.purpose ?? pendingUpload.purpose }, pendingUpload.name);
+          if (pendingUpload.previewData) setPhotoPreview(pendingUpload.previewData);
+          setPendingUpload(null);
+          stop();
+        } else if (asset?.status === "failed" || ++reads >= 45) {
+          throw new LawyerApiError(
+            "UNAVAILABLE",
+            asset?.status === "failed"
+              ? "자료를 처리하지 못했어요. 파일을 다시 선택해 주세요."
+              : "자료 처리가 계속되고 있어요. 잠시 후 파일을 다시 선택하면 상태를 확인할 수 있어요.",
+          );
+        }
+      } catch (cause) {
+        if (!alive || epoch.current !== startEpoch) return;
+        setPendingUpload(null);
+        fail(cause);
+        stop();
+      }
+    }, 4000);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [pendingUpload, busy, canMutate, verify, attach, fail]);
   const refreshAssets = async () => {
     if (busy) return;
     const startEpoch = epoch.current;
@@ -371,35 +421,10 @@ export function Editor() {
       if (epoch.current === startEpoch) setBusyAction(null);
     }
   };
-  const removeAsset = async (asset: LawyerAssetView) => {
-    const startEpoch = epoch.current;
-    setBusyAction("remove");
-    setError("");
-    try {
-      const checked = await verify();
-      if (!checked || checked.epoch !== startEpoch) return;
-      if (!checked.canMutate)
-        throw new LawyerApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
-      await lawyerAssets.remove(asset.id, asset.revision);
-      if (epoch.current !== startEpoch) return;
-      const after = await verify();
-      if (!after || after.epoch !== startEpoch) {
-        if (after?.changed) await load();
-        return;
-      }
-      if (epoch.current === startEpoch) {
-        setAssets((items) => items.filter((a) => a.id !== asset.id));
-        setNotice("자료 삭제를 접수했어요. 원격 정리는 별도 절차로 진행돼요.");
-      }
-    } catch (cause) {
-      await failForOwner(cause, startEpoch);
-    } finally {
-      if (epoch.current === startEpoch) setBusyAction(null);
-    }
-  };
   const upload = async (file: File, purpose: "profile_photo" | "portfolio") => {
     if (!draft || busy || !canMutate) return;
     const startEpoch = epoch.current;
+    setPendingUpload(null);
     setBusyAction("uploadSession");
     setError("");
     setNotice("");
@@ -431,12 +456,12 @@ export function Editor() {
       }
       setAssets((items) => [asset, ...items.filter((a) => a.id !== asset.id)]);
       if (asset.status === "ready") {
-        attach(asset);
+        attach({ ...asset, purpose: asset.purpose ?? purpose }, file.name);
         if (previewData) setPhotoPreview(previewData);
-      } else
-        setNotice(
-          "자료를 업로드했어요. 정제 완료 후 ‘자료 상태 확인’에서 연결해 주세요. 처리 대기는 공개 완료가 아니에요.",
-        );
+      } else {
+        setPendingUpload({ id: asset.id, name: file.name, purpose, previewData });
+        setNotice("자료를 처리하고 있어요. 완료되면 자동으로 연결해요.");
+      }
     } catch (cause) {
       await failForOwner(cause, startEpoch);
     } finally {
@@ -474,29 +499,6 @@ export function Editor() {
       <PageHeader
         title="내 변호사 프로필"
         description="프로필을 저장하면 변호사 찾기에 공개돼요."
-        action={
-          draft && !accessUnknown && canMutate ? (
-            <div className="lawyer-editor-actions">
-              <Button variant="outline" disabled={busy} onClick={() => setPreview(!preview)}>
-                {preview ? (
-                  <Pencil size={18} aria-hidden="true" />
-                ) : (
-                  <Eye size={18} aria-hidden="true" />
-                )}
-                {preview ? "편집으로 돌아가기" : "미리보기"}
-              </Button>
-              {!preview && (
-                <Button
-                  type="submit"
-                  form="lawyer-profile-form"
-                  disabled={busy || !canMutate || !canSave}
-                >
-                  {busyAction === "save" ? "저장 중…" : "프로필 저장"}
-                </Button>
-              )}
-            </div>
-          ) : undefined
-        }
       />
       {error && (
         <StatePanel
@@ -580,13 +582,9 @@ export function Editor() {
               </CardContent>
             </Card>
           )}
-          {preview || !canMutate ? (
+          {!canMutate ? (
             <>
-              <p className="lawyer-notice">
-                {canMutate
-                  ? "현재 작성 내용을 미리 보고 있어요. 미리보기는 저장하거나 공개하지 않아요."
-                  : "저장된 프로필을 보고 있어요."}
-              </p>
+              <p className="lawyer-notice">저장된 프로필을 보고 있어요.</p>
               <ProfileContent
                 lawyer={
                   photoPreview ? { ...draft, photoUrl: photoPreview, photoAssetId: null } : draft
@@ -860,172 +858,45 @@ export function Editor() {
                     <p>활동과 경험을 소개하세요. 의뢰인 정보는 포함하지 마세요.</p>
                   </CardHeader>
                   <CardContent>
-                    <label className="lawyer-portfolio-upload">
-                      <ArrowUpFromLine size={22} aria-hidden="true" />
-                      포트폴리오 파일 (이미지·PDF)
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        disabled={busy || draft.portfolio.length >= 30}
-                        onChange={async (event) => {
-                          const file = event.currentTarget.files?.[0];
-                          event.currentTarget.value = "";
-                          if (file) await upload(file, "portfolio");
-                        }}
-                      />
-                    </label>
-                    <Button
-                      variant="ghost"
-                      className="lawyer-assets-refresh"
-                      disabled={busy}
-                      onClick={() => void refreshAssets()}
-                    >
-                      자료 상태 확인
-                    </Button>
-                    {assets.length > 0 && (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        연결된 자료는 프로필에서 제외하고 저장한 뒤 삭제할 수 있어요.
-                      </p>
-                    )}
-                    {assets.length > 0 && (
-                      <ul className="lawyer-assets" aria-label="업로드 자료 상태">
-                        {assets.map((asset) => (
-                          <li key={asset.id}>
-                            <span>
-                              {asset.purpose === "profile_photo"
-                                ? "프로필 사진"
-                                : "포트폴리오 자료"}{" "}
-                              ·{" "}
-                              {asset.status === "ready"
-                                ? "연결 가능"
-                                : asset.status === "failed"
-                                  ? "처리 실패 · 업로드를 다시 시도할 수 있어요"
-                                  : "처리 대기 또는 진행 중"}
-                            </span>
-                            <Button
-                              variant="outline"
-                              disabled={
-                                busy ||
-                                asset.status !== "ready" ||
-                                draft.photoAssetId === asset.id ||
-                                draft.portfolio.some((p) => p.assetId === asset.id) ||
-                                (asset.purpose !== "profile_photo" && draft.portfolio.length >= 30)
-                              }
-                              onClick={() => attach(asset)}
-                            >
-                              프로필에 연결
-                            </Button>
-                            <Button
-                              variant="outline"
-                              disabled={
-                                busy ||
-                                saved?.photoAssetId === asset.id ||
-                                draft.photoAssetId === asset.id ||
-                                saved?.portfolio.some((p) => p.assetId === asset.id) ||
-                                draft.portfolio.some((p) => p.assetId === asset.id)
-                              }
-                              onClick={() => void removeAsset(asset)}
-                            >
-                              업로드 자료 삭제
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {draft.portfolio.length === 0 && (
-                      <p className="mb-3">등록된 포트폴리오가 없어요.</p>
-                    )}
-                    {draft.portfolio.map((item, index) => (
-                      <div className="lawyer-portfolio-row" key={item.id}>
-                        <label className="lawyer-field">
-                          활동 제목 {index + 1}
-                          <input
-                            value={item.title}
-                            maxLength={300}
-                            required
-                            onChange={(e) =>
-                              patch(
-                                "portfolio",
-                                draft.portfolio.map((i) =>
-                                  i.id === item.id ? { ...i, title: e.target.value } : i,
-                                ),
-                              )
-                            }
-                          />
-                        </label>
-                        <label className="lawyer-field">
-                          자료 URL {index + 1}
-                          <input
-                            type="url"
-                            maxLength={2000}
-                            value={item.assetId ? "" : (item.url ?? "")}
-                            disabled={!!item.assetId}
-                            placeholder={
-                              item.assetId ? "업로드 자료가 연결되어 있어요" : "https:// (선택)"
-                            }
-                            onChange={(e) =>
-                              patch(
-                                "portfolio",
-                                draft.portfolio.map((i) =>
-                                  i.id === item.id ? { ...i, url: e.target.value || null } : i,
-                                ),
-                              )
-                            }
-                          />
-                        </label>
+                    <div className="lawyer-portfolio-input">
+                      <label className="lawyer-portfolio-upload">
+                        <ArrowUpFromLine size={22} aria-hidden="true" />
+                        <span>
+                          {portfolioUpload
+                            ? `${portfolioUpload.name} · 처리 중…`
+                            : draft.portfolio[0]?.title || "포트폴리오 파일 (이미지·PDF)"}
+                        </span>
+                        <input
+                          type="file"
+                          aria-label="포트폴리오 파일"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          disabled={busy}
+                          onChange={async (event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = "";
+                            if (file) await upload(file, "portfolio");
+                          }}
+                        />
+                      </label>
+                      {(draft.portfolio.length > 0 || portfolioUpload) && (
                         <Button
                           variant="ghost"
-                          aria-label={`포트폴리오 ${index + 1} 삭제`}
-                          onClick={() =>
-                            patch(
-                              "portfolio",
-                              draft.portfolio.filter((i) => i.id !== item.id),
-                            )
-                          }
+                          aria-label="포트폴리오 파일 제거"
+                          disabled={busy}
+                          onClick={() => {
+                            setPendingUpload(null);
+                            patch("portfolio", []);
+                          }}
                         >
                           <X size={18} />
                         </Button>
-                        <label className="lawyer-field col-span-full">
-                          활동 본문 {index + 1}
-                          <textarea
-                            value={item.text ?? ""}
-                            maxLength={5000}
-                            rows={5}
-                            placeholder="활동과 경험을 글로 소개해 주세요. (최대 5,000자)"
-                            onChange={(e) =>
-                              patch(
-                                "portfolio",
-                                draft.portfolio.map((i) =>
-                                  i.id === item.id ? { ...i, text: e.target.value } : i,
-                                ),
-                              )
-                            }
-                          />
-                        </label>
-                      </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      disabled={draft.portfolio.length >= 30 || busy}
-                      onClick={() =>
-                        patch("portfolio", [
-                          ...draft.portfolio,
-                          { id: crypto.randomUUID(), title: "", text: "", url: null },
-                        ])
-                      }
-                    >
-                      <Plus size={16} />
-                      포트폴리오 추가
-                    </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </fieldset>
               <footer className="lawyer-form-footer">
-                <Button
-                  type="submit"
-                  aria-label="작성한 프로필 저장"
-                  disabled={busy || !canMutate || !canSave}
-                >
+                <Button type="submit" disabled={busy || !canMutate || !canSave}>
                   {busyAction === "save" ? "저장 중…" : "프로필 저장"}
                 </Button>
               </footer>
