@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
@@ -395,8 +395,10 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                     <button
                       type="button"
                       disabled={busy || !sourceCurrent}
+                      aria-busy={busy || undefined}
                       onClick={() => void search(true)}
                     >
+                      {busy ? <Spinner /> : <ChevronDown size={17} aria-hidden="true" />}
                       {busy ? "불러오는 중…" : "더보기"}
                     </button>
                   </div>

@@ -140,7 +140,10 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
           ...base.citation,
           id: `paged-citation-${index}`,
           sourceId: `paged-source-${index}`,
-          title: `합성 대여금 반환 판례 ${index + 1} · ${"긴 판례 제목의 두 줄 말줄임 검증 ".repeat(10)}`,
+          title:
+            index === 0
+              ? "대여금"
+              : `합성 대여금 반환 판례 ${index + 1} · ${"긴 판례 제목의 두 줄 말줄임 검증 ".repeat(10)}`,
           caseNumber: `2026다${700 + index}`,
           officialId: String(90000000700 + index),
           url: `https://www.law.go.kr/LSW/precInfoP.do?precSeq=${90000000700 + index}`,
@@ -207,12 +210,32 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
   await expect(list.getByRole("button", { name: /판례 내용 보기/ })).toHaveCount(0);
   await expect(list.locator("h4").first()).toHaveCSS("-webkit-line-clamp", "2");
   expect((await list.getByRole("button").first().boundingBox())?.height).toBeLessThan(240);
-  await page.getByRole("button", { name: "더보기", exact: true }).click();
+  const more = page.getByRole("button", { name: "더보기", exact: true });
+  await expect(more).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(more.locator("svg")).toHaveCount(1);
+  await more.click();
   await expect(list.getByRole("listitem")).toHaveCount(10);
   await expect(page.getByRole("button", { name: "더보기", exact: true })).toHaveCount(0);
   await expect(list.getByText(/관련 주제/)).toHaveCount(0);
-  for (const width of [1440, 390]) {
+  for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
+    const layout = await list.locator(".precedent-card").evaluateAll((cards) =>
+      cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return {
+          height: rect.height,
+          titleHeight: card.querySelector("h4")?.getBoundingClientRect().height ?? 0,
+          metadataTop:
+            (card.querySelector(".precedent-metadata")?.getBoundingClientRect().top ?? 0) -
+            rect.top,
+        };
+      }),
+    );
+    for (const property of ["height", "titleHeight", "metadataTop"] as const)
+      expect(
+        Math.max(...layout.map((item) => item[property])) -
+          Math.min(...layout.map((item) => item[property])),
+      ).toBeLessThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
