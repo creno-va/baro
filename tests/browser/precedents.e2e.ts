@@ -131,7 +131,7 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
       const { registerMockHandlers } = await import(`${location.origin}/src/client/api/core.ts`);
       const base = fixture.items[0];
       if (!base) throw new Error("Missing synthetic original");
-      const fullText = `【판시사항】\n[1] 계약 해석과 대여금 반환의 합성 쟁점\n【판결요지】\n${"대여금 지급과 반환 약속에 관한 합성 판례 문장입니다.\n".repeat(180)}【주 문】\n판결문 맨 끝의 합성 주문`;
+      const fullText = `【원고, 피상고인】\n\n합성 원고\n\n[피고, 상고인]\n\n합성 피고\n\n【원심판결】\n합성 원심판결\n\n【판시사항】\n[1] 계약 해석과 대여금 반환의 합성 쟁점\n【판결요지】\n${"대여금 지급과 반환 약속에 관한 합성 판례 문장입니다.\n".repeat(180)}【주 문】\n판결문 맨 끝의 합성 주문`;
       const excerptText = fullText.slice(0, 4000).trimEnd();
       const items = Array.from({ length: 10 }, (_, index) => ({
         ...base,
@@ -250,6 +250,27 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
   await expect(detail.getByRole("heading", { name: "【판결요지】" })).toBeVisible();
   await expect(detail.locator(".precedent-full-text")).toContainText("판결문 맨 끝의 합성 주문");
   await expect(detail.getByText("원문 일부", { exact: true })).toHaveCount(0);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const headings = detail.locator(".precedent-full-text > h4");
+    await expect(headings.filter({ hasText: "원고, 피상고인" })).toHaveCount(1);
+    await expect(headings.filter({ hasText: "피고, 상고인" })).toHaveCount(1);
+    const styles = await headings.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const style = getComputedStyle(node);
+        return [style.fontSize, style.fontWeight, style.lineHeight, style.color].join("/");
+      }),
+    );
+    expect(new Set(styles).size).toBe(1);
+    expect(
+      await detail
+        .locator(".precedent-body")
+        .evaluateAll((nodes) =>
+          nodes.every((node) => node.textContent === node.textContent?.trim()),
+        ),
+    ).toBe(true);
+    await page.screenshot({ path: `.wrangler/precedent-detail-typography-${width}.png` });
+  }
   await page.screenshot({ path: ".wrangler/precedent-feedback-full-text.png" });
 });
 
