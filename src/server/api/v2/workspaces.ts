@@ -195,8 +195,8 @@ export function createWorkspacesApi(
     if (a.response) return a.response;
     emptyQuery.parse(c.req.query());
     const s = await service(c, a.ownerId);
-    if (!(await s.summaryAvailable(a.ownerId, c.req.param("id"))))
-      throw new WorkspaceError("NOT_FOUND");
+    const workspaceRevision = await s.summaryReadRevision(a.ownerId, c.req.param("id"));
+    if (workspaceRevision === null) throw new WorkspaceError("NOT_FOUND");
     const fragments = s.summary(a.ownerId, c.req.param("id"))[Symbol.asyncIterator]();
     const encoder = new TextEncoder();
     let complete = false;
@@ -228,6 +228,7 @@ export function createWorkspacesApi(
           "content-type": "application/json; charset=utf-8",
           "cache-control": "private, no-store",
           "x-content-type-options": "nosniff",
+          "x-baro-summary-workspace-revision": String(workspaceRevision),
         },
       },
     );

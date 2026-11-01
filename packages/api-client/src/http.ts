@@ -1,6 +1,14 @@
 import type { SessionScope } from "@baro/client-core";
 import { EXPECTED_OWNER_HEADER } from "@baro/contracts/session";
+import { v2WorkspaceSchema } from "@baro/contracts/v2/workspace";
 import { ApiError, responseError } from "./errors";
+
+/** Internal read recovery evidence; ordinary HTTP 409s never create this marker. */
+export class SummarySourceChangedError extends ApiError {
+  constructor() {
+    super("CONFLICT", "내용이 변경됐어요. 다시 불러온 뒤 확인해 주세요.");
+  }
+}
 
 export type HttpTransport = (path: string, init: RequestInit) => Promise<Response>;
 export interface JsonRequestOptions {
@@ -101,6 +109,44 @@ export function createJsonRequester(dependencies: {
       result = await response.json();
     } catch {
       ensureCurrent();
+      // A lazy summary body can be fenced after its 200 headers were sent.
+      // Prove an actual source advance with a fresh owned read before calling
+      // this a conflict. Other malformed bodies and outages stay unavailable.
+      const summaryPath = /^\/api\/v2\/cases\/([^/?#]+)\/summary$/.exec(options.path);
+      const captured = response.headers.get("x-baro-summary-workspace-revision");
+      const revision = captured && /^[1-9][0-9]*$/.test(captured) ? Number(captured) : NaN;
+      if (method === "GET" && summaryPath && Number.isSafeInteger(revision)) {
+        let probe: Response | undefined;
+        try {
+          probe = await dependencies.transport(`/api/v2/cases/${summaryPath[1]}/workspace`, {
+            method: "GET",
+            headers,
+            ...(signal ? { signal } : {}),
+          });
+        } catch {
+          ensureCurrent();
+        }
+        ensureCurrent();
+        if (probe && !probe.ok) {
+          const error = await responseError(probe);
+          ensureCurrent();
+          throw error;
+        }
+        let current: unknown;
+        try {
+          current = await probe?.json();
+        } catch {
+          ensureCurrent();
+        }
+        ensureCurrent();
+        const parsed = v2WorkspaceSchema.safeParse(current);
+        if (
+          parsed.success &&
+          encodeURIComponent(parsed.data.id) === summaryPath[1] &&
+          parsed.data.workspaceRevision > revision
+        )
+          throw new SummarySourceChangedError();
+      }
       throw new ApiError("UNAVAILABLE", "서버 응답을 확인하지 못했어요. 다시 시도해 주세요.", true);
     }
     ensureCurrent();
