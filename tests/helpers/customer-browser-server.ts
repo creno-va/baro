@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ApiEnvironment } from "../../src/server/api/errors";
 import { meApi } from "../../src/server/api/me";
 import { createFilesApi } from "../../src/server/api/v2/files";
+import { createReworkApi } from "../../src/server/api/v2/rework";
 import { createWorkspacesApi } from "../../src/server/api/v2/workspaces";
 import {
   confirmCustomerSummary,
@@ -36,6 +37,7 @@ const env: Env = {
 };
 const app = new Hono<ApiEnvironment>()
   .route("/api/me", meApi)
+  .route("/api/v2/cases", createReworkApi())
   .route("/api/v2/cases", createWorkspacesApi())
   .route("/api/v2/cases", createFilesApi());
 const server = Bun.serve({
