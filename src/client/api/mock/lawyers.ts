@@ -129,6 +129,15 @@ export function createMockLawyers(context: LawyerMockContext) {
       const store = state();
       if (store.assets?.[input.assetId]?.profileId !== owner.profile.id)
         throw new LawyerApiError("NOT_FOUND", "본인 자료만 삭제할 수 있어요.");
+      const profile = store.profiles.find((profile) => profile.id === owner.profile.id);
+      if (
+        profile?.photoAssetId === input.assetId ||
+        profile?.portfolio.some((entry) => entry.assetId === input.assetId)
+      )
+        throw new LawyerApiError(
+          "CONFLICT",
+          "프로필에서 자료 연결을 해제하고 저장한 뒤 삭제해 주세요.",
+        );
       delete store.assets[input.assetId];
       context.write(store);
     },

@@ -197,7 +197,7 @@ report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용
 | intake understanding | broad category/당사자·목표·사건 경위·unknown | 모든 한국 법률 분야를 수용, 불명확한 taxonomy가 자동 범위 탈락을 만들지 않음 |
 | adaptive questions | 현재 facts/답변/누락 → 한 묶음 question IDs/types | unknown/skipped 유지, 이미 답한 질문 반복 제한, partial draft 재개 |
 | summary review | 사용자 진술·자료 관찰·추정·상충/불리한 사실 분리 | 최신 revision 사용자 확인 전 navigation 없음 |
-| chat/navigation | 확정 snapshot+새 message+선택자료 → facts/action diff+응답 | source attribution, 안전한 action catalog, 법률 결론·승패/협상/소송 전략 차단 |
+| chat/navigation | 확정 snapshot+새 message+선택자료 → facts/action diff+응답 | source attribution, 안전한 action catalog, 법적 결론·승패 보장과 근거 없는 지시 차단; ADR-0018 opt-in의 조건부 분석·검토 초안은 별도 검증 |
 | file interpretation | 추출 text/frame/ASR 구간 → 관찰·불확실성·source reference | 원본 진정성·모든frame완전판독·음성발화자 신원 확정 주장 금지 |
 | report assembly | 검증 snapshot+사용자 편집/선택 → factual report | 저장 결과를 재현, 법률 주장만 공식 source 검증, 실패 법률 문장 제거 |
 
@@ -205,6 +205,12 @@ report snapshot을 독립 versioned operation으로 나눈다. 2026-10-07 사용
 않고 진행할 수 있다. 공식 source 장애가 있는 법률 설명은 제외하거나 확인 불가로 표시한다.
 policy/citation/fact critical failure가 있는 초안을 채팅에 그대로 streaming하지 않는다.
 operation이 실패해도 사용자 message·원본 자료·이전 확정 결과는 보존하고 재시도/보완을 안내한다.
+
+[ADR-0018](../adr/0018-conversation-report-rework.md)의 명시적 개편 opt-in은 공식 원문·권한·
+citation binding·요건별 사실/증거·독립 audit를 통과한 조건부 법률 분석과 검토용 문서 초안을
+허용한다. 소송·협상·방어라는 단어만으로 거절하지 않는다. 결과 보장·대리 행세·사실/근거 조작·
+자동 제출은 계속 금지하며, 구형 사건의 미확정 입장·절차를 추정하지 않는다. 이 기능 방향의
+수용은 독립 법률 승인이나 공개 gate의 완료가 아니다.
 
 ## 구체적 확인 질문과 모델 전환 하네스
 

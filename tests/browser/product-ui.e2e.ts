@@ -26,6 +26,7 @@ test("lawyer workspace shares case AI and history with a profile navigation entr
   await expect(page.locator(".workspace-message--assistant")).toBeVisible();
   await page.screenshot({ path: ".wrangler/lawyer-workspace-1440.png" });
   await page.goto(`${base}/reports`);
+  await prepareReport(page);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
   await page.goto("/app");
   await expect(page).toHaveURL(/\/app$/);
@@ -69,7 +70,7 @@ test("sidebar cancellation clears pointer hover without losing keyboard focus re
   const link = row.locator(".sidebar-story");
   const remove = row.locator(".sidebar-story-delete");
   await page.mouse.move(1000, 400);
-  await expect(remove).toHaveCSS("opacity", "0");
+  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
   const rowColor = await row.evaluate((node) => getComputedStyle(node).backgroundColor);
   const linkColor = await link.evaluate((node) => getComputedStyle(node).backgroundColor);
   for (const action of ["취소", "닫기"]) {
@@ -81,7 +82,7 @@ test("sidebar cancellation clears pointer hover without losing keyboard focus re
     await expect(remove).toBeFocused();
     await expect(row).toHaveCSS("background-color", rowColor);
     await expect(link).toHaveCSS("background-color", linkColor);
-    await expect(remove).toHaveCSS("opacity", "0");
+    await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
   }
   await page
@@ -89,54 +90,64 @@ test("sidebar cancellation clears pointer hover without losing keyboard focus re
     .screenshot({ path: ".wrangler/sidebar-cancel-pointer.png" });
   await page.keyboard.press("Tab");
   await remove.focus();
-  await expect(remove).toHaveCSS("opacity", "1");
+  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(remove).toBeFocused();
-  await expect(remove).toHaveCSS("opacity", "1");
+  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
 });
 
-test("active summary has a primary save action that persists and applies changes", async ({
+test("active summary keeps its canonical text until an explicit change proposal is confirmed", async ({
   page,
 }) => {
   await seed(page);
   await page.goto(`${base}/summary?from=timeline`);
   await hydrated(page);
-  const save = page.getByRole("button", { name: "수정 내용 저장", exact: true });
-  const editor = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  await expect(save).toBeVisible();
-  await expect(save).toHaveClass(/ui-button--primary/);
-  await expect(save).toBeDisabled();
-  await expect(page.locator(".intake-actions a")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true })).toHaveCount(
-    1,
-  );
-  await editor.fill("수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.");
-  await expect(save).toBeEnabled();
-  await save.click();
-  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
-  await expect(save).toBeDisabled();
-  expect(
-    await page.evaluate(
-      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].stage,
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
+  const canonical = () =>
+    page.evaluate(
+      (caseId) =>
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[caseId].summaryDetails,
       id,
-    ),
-  ).toBe("active");
+    );
+  const before = await canonical();
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  const explanation = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+  const request = page.getByRole("button", { name: "변경안 요청하기", exact: true });
+  await explanation.fill("   ");
+  await expect(request).toBeDisabled();
+  const correction =
+    "반환 약속을 문자로 주고받았으며 정확한 날짜는 아직 확인하지 못한 합성 설명입니다.";
+  await explanation.fill(correction);
+  await expect(request).toHaveClass(/ui-button--primary/);
+  await expect(request).toBeEnabled();
+  await request.click();
+  const confirm = page.getByRole("button", { name: "변경안 확정하기", exact: true });
+  await expect(confirm).toBeVisible();
+  expect(await canonical()).toEqual(before);
   await page.reload();
-  await expect(editor).toHaveValue(
-    "수정한 보증금 반환 요약입니다. 날짜와 추가 자료를 확인했습니다.",
-  );
-  await editor.fill("   ");
-  await expect(save).toBeDisabled();
-  await editor.fill("긴".repeat(5001));
-  await expect(save).toBeDisabled();
+  await expect(confirm).toBeVisible();
+  expect(await canonical()).toEqual(before);
   await expect(
     page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }),
   ).toHaveAttribute("href", `${base}/timeline`);
+  await confirm.click();
+  await expect(page).toHaveURL(new RegExp(`${base}/timeline$`));
+  const after = await canonical();
+  expect(after.revision).toBe(before.revision + 1);
+  expect(after.overview).toContain(correction);
+  expect(after.facts.slice(0, before.facts.length)).toEqual(before.facts);
 });
+
+async function prepareReport(page: Page) {
+  const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
+  await expect(preparation).toBeVisible();
+  await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  await expect(page.getByRole("region", { name: "리포트 검토 본문", exact: true })).toBeVisible();
+}
 
 async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
@@ -266,7 +277,10 @@ for (const width of [1440, 390]) {
     ]) {
       await page.goto(route);
       await hydrated(page);
-      if (route === `${base}/reports`) await openReportEditor(page);
+      if (route === `${base}/reports`) {
+        await prepareReport(page);
+        await openReportEditor(page);
+      }
       if (route === `${base}/precedents`) {
         await page.locator(".precedent-search details > summary").click();
         for (const keyboard of [false, true]) {
@@ -278,7 +292,8 @@ for (const width of [1440, 390]) {
         }
         await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
         await page
-          .getByRole("button", { name: /판례 내용 보기/ })
+          .getByRole("list", { name: "관련 판례 목록", exact: true })
+          .getByRole("button")
           .first()
           .click();
       }
@@ -401,7 +416,7 @@ test("focus feedback restores modal focus after pointer and keyboard dismissal",
       await opener.focus();
       await page.keyboard.press("Enter");
     } else {
-      await opener.locator("..").hover();
+      await opener.locator("../..").hover();
       await opener.click();
     }
     const modal = page.getByRole("dialog", { name: "이 사건을 삭제할까요?" });
@@ -503,6 +518,13 @@ async function seed(
         },
         cases: { [id]: item },
         caseOwners: { [id]: "product-ui-owner" },
+        reworkContexts: {
+          [id]: {
+            casePurpose: "prepare_claim",
+            subjectContext: "individual",
+            procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+          },
+        },
         workspace: {
           [id]: {
             messages: messages
@@ -579,7 +601,9 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       if (route.startsWith(base))
         await expect(
           page.getByRole("heading", {
-            name: "돌려받지 못한 보증금, 함께 정리한 이야기",
+            name: route.endsWith("/reports")
+              ? "사건 정리"
+              : "돌려받지 못한 보증금, 함께 정리한 이야기",
             exact: true,
           }),
         ).toBeVisible();
@@ -647,7 +671,7 @@ test("mobile chat keeps the composer visible and every case destination reachabl
     exact: true,
   });
   await remove.focus();
-  await remove.click();
+  await page.keyboard.press("Enter");
   await page
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
     .getByRole("button", { name: "취소", exact: true })
@@ -775,6 +799,7 @@ test("mobile workspace dialogs return focus to their own opener", async ({ page 
 test("reports start in reading mode and retain editing through a focus check", async ({ page }) => {
   await seed(page);
   await page.goto(`${base}/reports`);
+  await prepareReport(page);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
   const heading = page.locator(".report-heading");
   await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
@@ -803,25 +828,17 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(editor).toHaveValue("수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.");
 });
 
-test("initial summary uses a single editor without fact controls, checkbox or previous-answer action", async ({
+test("initial summary is readonly and requires an explicit confirmation without raw fact controls", async ({
   page,
 }) => {
   await seed(page, false, "summary");
   await page.goto(`${base}/summary`);
-  const editor = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  const next = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
-  await expect(editor).toBeVisible();
-  await expect(page.locator(".summary-facts,.intake-confirm-check")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "이전 답변 수정하기", exact: true })).toHaveCount(0);
+  const next = page.getByRole("button", { name: "맞아요", exact: true });
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
+  await expect(page.locator(".intake-confirm-check")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "이전 답변 수정하기", exact: true })).toHaveCount(0);
   await expect(next).toBeEnabled();
-  await editor.fill("원본에서 다시 확인한 합성 내용을 요약에 추가합니다.");
-  await expect(next).toBeDisabled();
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(next).toBeEnabled();
-  await expect(next).toBeFocused();
-  await page.reload();
-  await expect(editor).toHaveValue("원본에서 다시 확인한 합성 내용을 요약에 추가합니다.");
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 960 });
     await expect
@@ -834,8 +851,13 @@ test("initial summary uses a single editor without fact controls, checkbox or pr
     });
   }
   await next.click();
-  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "취소", exact: true }).click();
   await expect(next).toBeFocused();
+  await next.click();
+  await confirmation.getByRole("button", { name: "확인하고 계속", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${base}$`));
 });
 
 test("product navigation and reading surfaces support keyboard access and enlarged text", async ({
