@@ -135,6 +135,9 @@ export async function loadAnalysisInput(
     if (bytes > MAX_REHYDRATE_BYTES) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
     text += part.text;
   }
+  // The stream stops when its owner/revision source fence changes. Never parse
+  // that interrupted (possibly empty) JSON as if it were a complete snapshot.
+  if (!(await current())) throw new ReworkError("STALE_REVISION");
   const original = v2SummarySchema.parse(JSON.parse(text));
   if (original.revision !== workspace.confirmedSummaryRevision)
     throw new ReworkError("STALE_REVISION");
