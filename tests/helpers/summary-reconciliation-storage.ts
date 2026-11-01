@@ -315,15 +315,34 @@ export function nativeReconciliationPorts(f: Fixture) {
           text: args.input.explanation,
           selectedFileIds: [],
         };
-        return commit({
+        const publication = {
           jobId,
           message,
+          admissionSource: {
+            ...source,
+            context: {
+              ...source.context,
+              latestMessage: message,
+              messages: [...source.context.messages, message],
+              references: {
+                ...source.context.references,
+                messages: [
+                  ...source.context.references.messages,
+                  { id: message.id, workspaceRevision: message.workspaceRevision },
+                ],
+              },
+            },
+          },
           authority: {
             sql: `(${plan.authority.sql}) AND (${r.plan.authority.sql})`,
             values: [...plan.authority.values, ...r.plan.authority.values],
           },
-          statements: (claim, id) => [...plan.statements(claim), ...r.plan.statements(claim, id)],
-        });
+          statements: (claim: string, id: string) => [
+            ...plan.statements(claim),
+            ...r.plan.statements(claim, id),
+          ],
+        };
+        return commit(publication);
       });
     },
     lease: async (a, jobId) => acquire(a.ownerId, jobId),

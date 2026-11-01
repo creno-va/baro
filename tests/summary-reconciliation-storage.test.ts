@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
 import { createSummaryReconciliationService } from "../src/server/modules/intake/summary-reconciliation";
 import {
   createSummaryReconciliationStorage,
@@ -72,6 +73,218 @@ async function fixture(confirmed = true) {
   };
   const request = (key = crypto.randomUUID()) => service.request(f.actor, key, input);
   return { ...f, ...harness, storage, service, original, input, request, harness };
+}
+
+for (const confirmed of [false, true]) {
+  test(`${confirmed ? "active" : "initial"} re-request admits its own later source basis after cancellation`, async () => {
+    const f = await nativeReconciliationFixture(confirmed);
+    try {
+      let bindingRevision: number | null = null;
+      const authorize = f.authorize;
+      f.authorize = async (actor, options) => {
+        const source = await authorize(actor, options);
+        // Synthetic source port: later official bindings belong to a new
+        // explanation's admission, while old receipts retain their cutoff.
+        const includesBinding =
+          bindingRevision !== null &&
+          (options.requestMessage?.workspaceRevision ?? Infinity) >= bindingRevision;
+        return { ...source, sourceDigest: (includesBinding ? "b" : "a").repeat(64) };
+      };
+      const harness = nativeReconciliationPorts(f);
+      const service = createSummaryReconciliationService(
+        createSummaryReconciliationStorage(f.core, harness.ports),
+      );
+      const original = await service.read(f.actor);
+      const firstInput = {
+        expectedRevision: original.state.workspaceRevision,
+        summaryRevision: original.summary.revision,
+        kind: "addition" as const,
+        explanation: "처음 확인하는 합성 진술입니다.",
+      };
+      const pending = await service.request(f.actor, crypto.randomUUID(), firstInput);
+      const firstProposal = await service.execute(f.actor, pending.request?.id ?? "missing");
+      bindingRevision = firstProposal.workspaceRevision;
+      const accounting = createV2AccountingRepository(f.core);
+      const usage = await accounting.usage(f.actor);
+      const jobs = f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get();
+      const head = await harness.records.head(
+        f.actor,
+        f.actor.caseId,
+        "reconciliation",
+        f.actor.caseId,
+      );
+      // Later derived bindings do not retire an existing proposal. A fresh
+      // source projection must not bypass its explicit cancellation boundary.
+      await expect(
+        service.request(f.actor, crypto.randomUUID(), {
+          ...firstInput,
+          expectedRevision: firstProposal.workspaceRevision,
+          explanation: "취소하지 않은 제안을 덮어쓰려는 합성 요청입니다.",
+        }),
+      ).rejects.toMatchObject({ code: "STALE_REVISION" });
+      expect((await service.read(f.actor)).state).toEqual(firstProposal);
+      expect(await accounting.usage(f.actor)).toEqual(usage);
+      expect(
+        await harness.records.head(f.actor, f.actor.caseId, "reconciliation", f.actor.caseId),
+      ).toEqual(head);
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual(jobs);
+      expect(harness.generateCalls).toBe(1);
+      const cancelKey = crypto.randomUUID();
+      const cancelInput = {
+        expectedRevision: firstProposal.workspaceRevision,
+        requestId: pending.request?.id,
+      };
+      const cancelled = await service.cancel(f.actor, cancelKey, cancelInput);
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.actor.caseId);
+      const current = await service.read(f.actor);
+      const input = {
+        ...firstInput,
+        expectedRevision: current.state.workspaceRevision,
+        explanation: "새 자료를 확인한 뒤 명시적으로 다시 요청합니다.",
+      };
+      const key = crypto.randomUUID();
+      const next = await service.request(f.actor, key, input);
+      expect(next.status).toBe("pending");
+      expect(next.request?.id).not.toBe(pending.request?.id);
+      expect((await service.read(f.actor)).state).toEqual(next);
+      expect(await service.request(f.actor, key, input)).toEqual(next);
+      expect(await service.cancel(f.actor, cancelKey, cancelInput)).toEqual(cancelled);
+      expect((await service.read(f.actor)).summary).toEqual(original.summary);
+      const proposed = await service.execute(f.actor, next.request?.id ?? "missing");
+      expect(proposed.status).toBe("proposed");
+      expect(proposed.proposal?.before).toEqual(original.summary);
+      expect(harness.generateCalls).toBe(2);
+      expect((await service.read(f.actor)).summary).toEqual(original.summary);
+    } finally {
+      f.db.close();
+    }
+  });
+}
+
+for (const fault of [
+  "missing",
+  "workspace",
+  "summary",
+  "summary-id",
+  "snapshot-id",
+  "canonical",
+  "intake",
+  "issued-id",
+  "issued-text",
+  "issued-operation",
+  "issued-references",
+  "message-operation",
+  "selected-files",
+  "digest",
+] as const) {
+  test(`invalid precomputed admission source fails closed without a job or quota write: ${fault}`, async () => {
+    const f = await nativeReconciliationFixture();
+    try {
+      const harness = nativeReconciliationPorts(f);
+      const admit = harness.ports.admitTask;
+      harness.ports.admitTask = (args, commit) =>
+        admit(args, (plan) => {
+          const source = structuredClone(plan.admissionSource);
+          const candidate = { ...plan, admissionSource: source, message: { ...plan.message } };
+          if (fault === "missing") delete (candidate as Partial<typeof candidate>).admissionSource;
+          else if (fault === "workspace") source.workspaceRevision++;
+          else if (fault === "summary") source.summary.revision++;
+          else if (fault === "summary-id") source.summaryId = "synthetic-foreign-summary";
+          else if (fault === "snapshot-id") source.summarySnapshotId = "synthetic-foreign-snapshot";
+          else if (fault === "canonical") source.summary.overview = "다른 합성 정리입니다.";
+          else if (fault === "intake") source.context.intake.revision++;
+          else if (fault === "issued-id")
+            source.context.latestMessage!.id = "synthetic-different-statement";
+          else if (fault === "issued-text")
+            source.context.latestMessage!.text = "원래 요청과 다른 합성 설명입니다.";
+          else if (fault === "issued-operation")
+            source.context.latestMessage!.operationId = "synthetic-foreign-operation";
+          else if (fault === "issued-references") source.context.references.messages = [];
+          else if (fault === "message-operation")
+            candidate.message.operationId = "synthetic-other-operation";
+          else if (fault === "selected-files")
+            candidate.message.selectedFileIds = ["synthetic-unadmitted-file"];
+          else if (fault === "digest") source.sourceDigest = "invalid-hash";
+          return commit(candidate);
+        });
+      const service = createSummaryReconciliationService(
+        createSummaryReconciliationStorage(f.core, harness.ports),
+      );
+      const original = await service.read(f.actor);
+      const accounting = createV2AccountingRepository(f.core);
+      const usage = await accounting.usage(f.actor);
+      const jobs = f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get();
+      await expect(
+        service.request(f.actor, crypto.randomUUID(), {
+          expectedRevision: original.state.workspaceRevision,
+          summaryRevision: original.summary.revision,
+          kind: "addition",
+          explanation: "검증된 새 출처에만 연결할 합성 요청입니다.",
+        }),
+      ).rejects.toThrow();
+      expect(await accounting.usage(f.actor)).toEqual(usage);
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual(jobs);
+      expect(
+        await harness.records.head(f.actor, f.actor.caseId, "reconciliation", f.actor.caseId),
+      ).toBeNull();
+      expect((await service.read(f.actor)).summary).toEqual(original.summary);
+      expect(harness.generateCalls).toBe(0);
+    } finally {
+      f.db.close();
+    }
+  });
+}
+
+for (const denied of ["old", "admitted", "plan"] as const) {
+  test(`final publication retains the ${denied} source authority alongside the others`, async () => {
+    const f = await nativeReconciliationFixture();
+    try {
+      const harness = nativeReconciliationPorts(f);
+      if (denied === "old") {
+        const authorize = harness.ports.authorize;
+        harness.ports.authorize = async (actor, options) => ({
+          ...(await authorize(actor, options)),
+          authority: { sql: "0", values: [] },
+        });
+      } else {
+        const admit = harness.ports.admitTask;
+        harness.ports.admitTask = (args, commit) =>
+          admit(args, (plan) =>
+            commit({
+              ...plan,
+              ...(denied === "admitted"
+                ? {
+                    admissionSource: {
+                      ...plan.admissionSource,
+                      authority: { sql: "0", values: [] },
+                    },
+                  }
+                : { authority: { sql: "0", values: [] } }),
+            }),
+          );
+      }
+      const service = createSummaryReconciliationService(
+        createSummaryReconciliationStorage(f.core, harness.ports),
+      );
+      const original = await service.read(f.actor);
+      const jobs = f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get();
+      await expect(
+        service.request(f.actor, crypto.randomUUID(), {
+          expectedRevision: original.state.workspaceRevision,
+          summaryRevision: original.summary.revision,
+          kind: "addition",
+          explanation: "모든 최종 권한 검사를 유지하는 합성 요청입니다.",
+        }),
+      ).rejects.toMatchObject({ code: "STALE_REVISION" });
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual(jobs);
+      expect((await service.read(f.actor)).summary).toEqual(original.summary);
+      expect(harness.generateCalls).toBe(0);
+    } finally {
+      f.db.close();
+    }
+  });
 }
 
 for (const confirmed of [false, true]) {
