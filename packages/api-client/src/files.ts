@@ -68,7 +68,7 @@ export const fileViewSchema = z.object({
   canStartProcessing: z.boolean().optional(),
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
-  uploadContentHash: z.string().optional(),
+  uploadContentHash: v2HashSchema.optional(),
   uploadRejection: z.literal("FILE_REJECTED").optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
@@ -79,7 +79,7 @@ const metadataSchema = z.object({
   name: z.string(),
   declaredMediaType: z.string(),
   byteLength: z.number(),
-  contentHash: z.string().optional(),
+  contentHash: v2HashSchema.optional(),
   uploadRejection: z.literal("FILE_REJECTED").optional(),
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
@@ -226,6 +226,7 @@ async function readFiles(
         name: row.name,
         mimeType: row.declaredMediaType,
         sizeBytes: row.byteLength,
+        ...(row.contentHash === undefined ? {} : { uploadContentHash: row.contentHash }),
         status:
           row.status === "ready"
             ? "ready"

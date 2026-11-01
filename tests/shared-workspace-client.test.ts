@@ -2,10 +2,11 @@ import { expect, test } from "bun:test";
 import {
   ApiError,
   type CaseOperationStorage,
+  createFileMetadataReader,
   createWorkspaceClient,
   type WorkspaceTransport,
 } from "@baro/api-client";
-import { createSessionBoundClient, createSessionScope } from "@baro/client-core";
+import { createSessionBoundClient, createSessionScope, type FileView } from "@baro/client-core";
 import {
   assistantMessage,
   citation,
@@ -45,7 +46,7 @@ function fixture(
   options: {
     scope?: ReturnType<typeof createSessionScope>;
     coalesceWrites?: "credential-scope";
-    listFiles?: () => Promise<[]>;
+    listFiles?: () => Promise<FileView[]>;
     jobStorage?: CaseOperationStorage;
     request?: WorkspaceTransport;
     messages?: unknown[];
@@ -242,4 +243,27 @@ test("a feature abort cancels the old view without changing the session", async 
   await expect(client.get(workspace.id)).rejects.toMatchObject({ name: "AbortError" });
   expect(calls).toBe(0);
   expect(scope.snapshot()).toBe(0);
+});
+
+test("the installed Workspace facade retains original hash from the shared metadata reader", async () => {
+  const hash = "c".repeat(64);
+  const files = await createFileMetadataReader(async () =>
+    Response.json([
+      {
+        id: "synthetic_projected_hash",
+        revision: 3,
+        name: "합성.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 3,
+        status: "ready",
+        contentHash: hash,
+      },
+    ]),
+  )(workspace.id);
+  const result = await fixture({ listFiles: async () => files }).client.get(workspace.id);
+  expect(result.files[0]).toMatchObject({
+    id: "synthetic_projected_hash",
+    revision: 3,
+    uploadContentHash: hash,
+  });
 });
