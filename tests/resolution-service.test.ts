@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2/legal-analysis";
 import { resolutionAnalysisIncluded } from "../src/server/modules/resolution/draft";
 import { createResolutionService } from "../src/server/modules/resolution/service";
-import { resolutionDraftIsCurrent, resolutionKindFits } from "../src/utils/resolution";
+import {
+  resolutionDraftIsCurrent,
+  resolutionGuideTextParts,
+  resolutionKindFits,
+} from "../src/utils/resolution";
 import scenarios from "./fixtures/resolution/scenarios.json";
 import {
   resolutionHarness,
@@ -10,6 +14,25 @@ import {
   resolutionNow,
   resolutionSource,
 } from "./helpers/resolution-fixture";
+
+test("official reading links preserve unverified status and reject arbitrary hosts/query/credentials", () => {
+  const valid =
+    "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=2&cnpClsNo=1";
+  const text = `공식 안내 확인 필요 ${valid} 확인 시점 그대로`;
+  const parts = resolutionGuideTextParts(text);
+  expect(parts.map((p) => p.text).join("")).toBe(text);
+  expect(parts.filter((p) => p.url).map((p) => p.url)).toEqual([valid]);
+  for (const value of [
+    valid.replace("www.easylaw.go.kr", "evil.example"),
+    `${valid}&redirect=https://evil.example`,
+    `${valid}&ccfNo=3`,
+    valid.replace("https://", "https://user@"),
+    valid.replace("CnpClsMain.laf", "Redirect.laf"),
+    valid.replace("https://", "http://"),
+    `${valid}#fake`,
+  ])
+    expect(resolutionGuideTextParts(value).some((p) => p.url !== null)).toBe(false);
+});
 
 async function self(h = resolutionHarness()) {
   const state = await h.service.get("owner", "case");
@@ -173,6 +196,39 @@ test("verified guide support permits the matching document but never a defense-i
   });
   expect(next.draft?.documentKind).toBe("civil_claim");
   expect(next.citations[0]?.verifiedAt).toBe(resolutionNow);
+  h.deps.auditedDraft = async ({ template }) => {
+    h.source = {
+      ...h.source,
+      documentSupport: [],
+      sourceClaims: [],
+      citations: [],
+      procedureChecks: [],
+    };
+    return template;
+  };
+  await expect(
+    h.service.prepareDraft("owner", "case", {
+      ...resolutionMutation(next),
+      documentKind: "civil_claim",
+      selectedFileIds: next.selectedFileIds,
+      maskIdentifiers: true,
+      factsConfirmed: true,
+    }),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  const lostProof = await h.service.get("owner", "case");
+  expect(lostProof.draft?.id).toBe(next.draft?.id);
+  expect(resolutionDraftIsCurrent(lostProof)).toBe(false);
+  if (!lostProof.draft) throw Error("fixture");
+  await expect(
+    h.service.update("owner", "case", {
+      ...resolutionMutation(lostProof),
+      action: "save_draft",
+      draftId: lostProof.draft.id,
+      draftRevision: lostProof.draft.revision,
+      content: lostProof.draft.content,
+      reviewed: true,
+    }),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
 });
 test("reviewed save, edits, pause, path switches and reconnect preserve the saved draft", async () => {
   const { h, state } = await draft();
@@ -379,7 +435,9 @@ test("each supported weakness connects its required facts/materials, and exclude
       additionalMaterials: [],
     },
     evidenceRequirements: [],
-    limitations: ["합성 자료이며 실제 법적 적용을 확인하지 않습니다."],
+    limitations: [
+      "합성 관찰의 글자를 확정하지 못했습니다. 원문과 사용자 교정 내용을 확인해 주세요.",
+    ],
     availability: [
       { kind: "statute", status: "verified", reason: null },
       { kind: "official_guide", status: "unavailable", reason: "configuration_missing" },
@@ -388,10 +446,19 @@ test("each supported weakness connects its required facts/materials, and exclude
   source.citations = source.analysis.citations;
   source.sourceClaims = source.analysis.sourceClaims;
   const { h, state } = await self(resolutionHarness(source));
+  expect(state.weaknessChecks.join("\n")).toContain("합성 관찰의 글자를 확정하지 못했습니다");
+  const prepared = await h.service.prepareDraft("owner", "case", {
+    ...resolutionMutation(state),
+    documentKind: "fact_statement",
+    selectedFileIds: state.selectedFileIds,
+    maskIdentifiers: true,
+    factsConfirmed: true,
+  });
+  expect(prepared.draft?.content).toContain("원문과 사용자 교정 내용을 확인해 주세요");
   expect(state.weaknessChecks.join(" ")).toContain("메시지 전후 대화와 실제 배송 기록");
   expect(state.weaknessChecks.join(" ")).toContain("수령 확인 메시지의 원문·작성 시점 확인");
   const narrowed = await h.service.update("owner", "case", {
-    ...resolutionMutation(state),
+    ...resolutionMutation(prepared),
     action: "select",
     choice: "self",
     selectedFileIds: [],
