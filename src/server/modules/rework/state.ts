@@ -22,7 +22,12 @@ import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import type { WorkspaceContext } from "../workspace/pipeline";
 import { type AnalysisScope, loadAnalysisInput, readAnalysisScope } from "./analysis-input";
 import { createReworkCaseService, ReworkError } from "./case-context";
-import { analysisTaskSchema, preparedAnalysisRecordSchema } from "./records";
+import {
+  analysisTaskSchema,
+  automaticPreparationRecordSchema,
+  preparedAnalysisRecordSchema,
+  reportContinuationSchema,
+} from "./records";
 
 /** Stable admission/execution projection for the incoming dialog turn. The new
  * message requires refreshing prior analysis; it never marks that analysis fresh. */
@@ -188,7 +193,7 @@ type ReportSummary = {
   id: string;
   revision: number;
   stale: boolean;
-  analysisReview?: { analysisId: string | null } | undefined;
+  analysisReview?: { analysisId: string | null; status?: string; userEdited?: boolean } | undefined;
 };
 const intentSchema = z.object({
   id: opaqueIdSchema,
@@ -287,14 +292,63 @@ export function createReworkStateService(
           failure: null,
           missingItems: [],
         };
+      const automatic = await records.read(
+        a,
+        id,
+        "checkpoint",
+        "automatic-preparation",
+        automaticPreparationRecordSchema,
+      );
+      if (
+        automatic?.value.status === "failed" &&
+        automatic.value.failure &&
+        loaded.input &&
+        !["pending", "running"].includes(analysis.status) &&
+        canonicalAnalysisJson(await analysisBasis(loaded.input)) ===
+          canonicalAnalysisJson(automatic.value.basis) &&
+        ["not_started", "stale"].includes(analysis.status)
+      ) {
+        analysis = {
+          status: "failed",
+          basis: automatic.value.basis,
+          currentJobId: null,
+          failure: automatic.value.failure,
+          missingItems: [
+            "분석 처리를 시작하지 못했어요. 저장된 사건과 자료는 보존돼요.",
+            ...loaded.limits,
+          ],
+        };
+      }
+      const reportPending =
+        !!task?.value.continueWithReport && ["pending", "running"].includes(analysis.status);
       const report = (await deps.peekReport?.(ownerId, id)) ?? null;
       const reportReady =
         !!report &&
         !report.stale &&
-        !!snapshot &&
-        report.analysisReview?.analysisId === snapshot.id &&
-        canonicalAnalysisJson(snapshot.basis) === canonicalAnalysisJson(analysis.basis) &&
-        !["pending", "running", "stale", "failed"].includes(analysis.status);
+        report.analysisReview?.userEdited !== true &&
+        analysis.basis !== null &&
+        ((!!snapshot &&
+          report.analysisReview?.analysisId === snapshot.id &&
+          report.analysisReview.status !== "review_required" &&
+          canonicalAnalysisJson(snapshot.basis) === canonicalAnalysisJson(analysis.basis) &&
+          !["pending", "running", "stale", "failed"].includes(analysis.status)) ||
+          (analysis.status === "failed" &&
+            report.analysisReview?.analysisId === null &&
+            report.analysisReview.status === "review_required"));
+      const continuation = await records.read(
+        a,
+        id,
+        "checkpoint",
+        "report-continuation",
+        reportContinuationSchema,
+      );
+      const reportFailure =
+        continuation?.value.status === "failed" &&
+        analysis.basis !== null &&
+        !["pending", "running", "stale"].includes(analysis.status) &&
+        canonicalAnalysisJson(continuation.value.basis) === canonicalAnalysisJson(analysis.basis)
+          ? continuation.value.failure
+          : null;
       const intents: V2ConversationState["intents"] = [];
       const messages = (
         await core
@@ -328,7 +382,15 @@ export function createReworkStateService(
             workspaceRevision: value.workspaceRevision,
           });
       }
-      const state = v2ConversationStateSchema(GUIDE_HOSTS).parse({
+      // A newly published intent may belong to a later revision than the first
+      // workspace read. Classify that race before validating one wire snapshot.
+      const final = await workspaces.findWorkspace({ ownerId, now: now() }, id);
+      if (
+        final?.workspaceRevision !== w.workspaceRevision ||
+        !(await reworkAccess(core, ownerId, id))
+      )
+        throw new ReworkError("STALE_REVISION");
+      return v2ConversationStateSchema(GUIDE_HOSTS).parse({
         contractVersion: v2ReworkVersionSchema.value,
         workspaceRevision: w.workspaceRevision,
         caseContext: context.context,
@@ -337,22 +399,23 @@ export function createReworkStateService(
         analysis,
         snapshot,
         report: {
-          status: report ? (reportReady ? "ready" : "stale") : "not_started",
+          status: reportPending
+            ? "pending"
+            : reportReady
+              ? "ready"
+              : reportFailure
+                ? "failed"
+                : report
+                  ? "stale"
+                  : "not_started",
           id: report?.id ?? null,
           revision: report?.revision ?? null,
-          basis: reportReady ? (snapshot?.basis ?? null) : null,
-          currentJobId: null,
-          failure: null,
+          basis: reportReady ? analysis.basis : null,
+          currentJobId: reportPending ? analysis.currentJobId : null,
+          failure: reportPending || reportReady ? null : reportFailure,
         },
         intents,
       });
-      const final = await workspaces.findWorkspace({ ownerId, now: now() }, id);
-      if (
-        final?.workspaceRevision !== w.workspaceRevision ||
-        !(await reworkAccess(core, ownerId, id))
-      )
-        throw new ReworkError("STALE_REVISION");
-      return state;
     },
   };
 }

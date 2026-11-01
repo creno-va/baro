@@ -7,13 +7,28 @@ export async function copySyntheticD1(
   sqlite: Database,
   throughMigration?: string,
 ) {
+  const sourceCursor = sqlite
+    .query("SELECT name FROM sqlite_master WHERE type='table' AND name='v2_storage_carryover'")
+    .get()
+    ? (sqlite.query("SELECT cursor_month FROM v2_storage_carryover WHERE id=1").get() as {
+        cursor_month: string;
+      } | null)
+    : null;
+  if (sourceCursor && !/^\d{4}-\d{2}$/.test(sourceCursor.cursor_month))
+    throw new Error("SYNTHETIC_CURSOR_INVALID");
   for (const name of (await readdir("drizzle"))
     .filter(
       (n) => /^\d{4}_.+\.sql$/.test(n) && (!throughMigration || n <= `${throughMigration}.sql`),
     )
     .sort())
     await binding.batch(
-      (await Bun.file(`drizzle/${name}`).text())
+      (name.startsWith("0010_") && sourceCursor
+        ? (await Bun.file(`drizzle/${name}`).text()).replace(
+            "SELECT strftime('%Y-%m','now','+9 hours') AS month",
+            `SELECT '${sourceCursor.cursor_month}' AS month`,
+          )
+        : await Bun.file(`drizzle/${name}`).text()
+      )
         .split("--> statement-breakpoint")
         .map((s) => s.trim())
         .filter(Boolean)
@@ -58,6 +73,14 @@ export async function copySyntheticD1(
             ([column]) => !historicalColumns || historicalColumns.has(column),
           ),
         ),
+        // Reconstruct only the retired age field of an explicitly synthetic
+        // historical fixture; consent versions/time and every actual source row
+        // stay unchanged. Current-schema copies never receive this column.
+        ...(name === "user_consents" &&
+        historicalColumns?.has("over_14_confirmed") &&
+        !("over_14_confirmed" in row)
+          ? { over_14_confirmed: 1 }
+          : {}),
         ...(name === "v2_runtime_controls" ? { phase: "frozen" } : {}),
         ...(name === "v2_physical_storage_capacity" ? { held_bytes: 0 } : {}),
       };

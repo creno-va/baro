@@ -3,6 +3,120 @@ import { expect, test } from "@playwright/test";
 test.beforeEach(async ({ request }) => {
   await request.post("/fixture/control", { data: { reset: true } });
 });
+for (const late of ["failure", "signed-out"] as const)
+  test(`a superseded ${late} session load cannot block fresh owner recovery`, async ({ page }) => {
+    let phase: "ready" | "old" | "fresh" = "ready";
+    let held = 0,
+      settled = 0,
+      fresh = 0;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/fixture/session", async (route) => {
+      if (phase === "old") {
+        held++;
+        await gate;
+        await route.fulfill(
+          late === "failure"
+            ? { status: 503, json: { code: "DEPENDENCY_UNAVAILABLE" } }
+            : { json: { ownerId: null, needsConsent: false } },
+        );
+        settled++;
+      } else {
+        if (phase === "fresh") fresh++;
+        await route.fulfill({ json: { ownerId: "owner", needsConsent: false } });
+      }
+    });
+    try {
+      await page.goto("/?default");
+      const parentControl = page.getByRole("button", { name: "대화·리포트 보기 전환" });
+      await expect(parentControl).toBeEnabled();
+      phase = "old";
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect.poll(() => held).toBeGreaterThan(0);
+      await expect(parentControl).toBeDisabled();
+      phase = "fresh";
+      await page.evaluate(() =>
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "baro-session-changed",
+            newValue: "fresh-owner-epoch",
+          }),
+        ),
+      );
+      await expect.poll(() => fresh).toBeGreaterThan(0);
+      await expect(parentControl).toBeEnabled();
+      expect(settled).toBe(0);
+      release();
+      await expect.poll(() => settled).toBe(held);
+      await expect(page.getByRole("alert")).toHaveCount(0);
+      await expect(parentControl).toBeEnabled();
+    } finally {
+      release();
+    }
+  });
+
+test("an obsolete load finally cannot clear a newer load's busy lock", async ({ page }) => {
+  let phase: "ready" | "old" | "fresh" = "ready";
+  let held = 0,
+    settled = 0,
+    freshReads = 0;
+  let releaseOld = () => {},
+    releaseFresh = () => {};
+  const oldGate = new Promise<void>((resolve) => {
+    releaseOld = resolve;
+  });
+  const freshGate = new Promise<void>((resolve) => {
+    releaseFresh = resolve;
+  });
+  await page.route("**/fixture/session", async (route) => {
+    if (phase === "old") {
+      held++;
+      await oldGate;
+      settled++;
+    }
+    await route.fulfill({ json: { ownerId: "owner", needsConsent: false } });
+  });
+  await page.route("**/api/v2/cases/case/rework/resolution", async (route) => {
+    if (phase === "fresh") {
+      freshReads++;
+      await freshGate;
+    }
+    await route.continue();
+  });
+  try {
+    await page.goto("/?default");
+    const parentControl = page.getByRole("button", { name: "대화·리포트 보기 전환" });
+    await expect(parentControl).toBeEnabled();
+    phase = "old";
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(() => held).toBeGreaterThan(0);
+    phase = "fresh";
+    await page.evaluate(() =>
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "baro-session-changed", newValue: "new-load-epoch" }),
+      ),
+    );
+    await expect.poll(() => freshReads).toBe(1);
+    releaseOld();
+    await expect.poll(() => settled).toBe(held);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await expect(parentControl).toBeDisabled();
+    expect(freshReads).toBe(1);
+    releaseFresh();
+    await expect(parentControl).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  } finally {
+    releaseOld();
+    releaseFresh();
+  }
+});
 test("limited official guide is a reading link without a verified claim; criminal defender guidance stays separate", async ({
   page,
   request,

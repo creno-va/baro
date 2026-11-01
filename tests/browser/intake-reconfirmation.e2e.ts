@@ -1,5 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
-import { reconfirmationCase } from "../helpers/intake-reconfirmation";
+import {
+  reconfirmationCandidate,
+  reconfirmationCase,
+  reconfirmationSummary,
+} from "../helpers/intake-reconfirmation";
 
 // Browser fixtures are local/synthetic and never call a model or legal provider.
 async function seed(page: Page, stage: "summary" | "active" = "summary") {
@@ -62,6 +66,147 @@ test("320px: read actions fit the page and keep touch targets", async ({ page })
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
 });
+
+test("keyboard submission and proposal cancellation keep focus in the current review controls", async ({
+  page,
+  browserName,
+}) => {
+  const item = await seed(page);
+  await page.goto(`/cases/${item.id}/summary`);
+  const trigger = page.getByRole("button", { name: "빠진 내용이 있어요", exact: true });
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
+    .fill("초점 복귀를 검증하는 합성 진술입니다. 일부 금액은 아직 모릅니다.");
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const review = page.getByRole("region", { name: "사건 정리 확인", exact: true });
+  // macOS WebKit uses Option+Tab to include buttons in native sequential navigation.
+  const nextControlKey =
+    browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+  await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+  await expect(review).toBeFocused();
+  await page.keyboard.press(nextControlKey);
+  await expect(page.getByText("변경 전 전체 내용", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "변경안 취소", exact: true }).click();
+  const agree = page.getByRole("button", { name: "맞아요", exact: true });
+  await expect(agree).toBeEnabled();
+  await expect(review).toBeFocused();
+  await page.keyboard.press(nextControlKey);
+  await expect(agree).toBeFocused();
+  // Ordinary dismissal after an earlier successful request still returns to its own opener.
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});
+
+for (const focusInside of [true, false]) {
+  test(`an async proposal ${focusInside ? "retains focus in review controls" : "does not steal focus from navigation"}`, async ({
+    page,
+  }) => {
+    const item = await seed(page, "active");
+    const before = reconfirmationSummary();
+    const pending = {
+      contractVersion: "conversation-report-v1",
+      workspaceRevision: 13,
+      status: "pending",
+      request: {
+        id: "synthetic-reconciliation-request",
+        input: {
+          expectedRevision: 12,
+          summaryRevision: 3,
+          kind: "addition",
+          explanation: "비동기 변경안의 초점을 확인하는 합성 설명입니다.",
+        },
+        createdAt: before.createdAt,
+      },
+      proposal: null,
+      currentJobId: "synthetic-focus-job",
+      failure: null,
+      confirmedSummaryRevision: null,
+      confirmedWorkspaceRevision: null,
+    };
+    await page.addInitScript(
+      ({ id, pending }) => {
+        if (localStorage.getItem("synthetic-focus-pending")) return;
+        const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        cases[id].revision = 13;
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+        localStorage.setItem(
+          "baro-api-mock-v1:summaryReconciliations",
+          JSON.stringify({ [id]: pending }),
+        );
+        localStorage.setItem("synthetic-focus-pending", "true");
+      },
+      { id: item.id, pending },
+    );
+    await page.goto(`/cases/${item.id}/summary`);
+    const cancel = page.getByRole("button", { name: "요청 취소", exact: true });
+    const navigation = page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true });
+    await expect(cancel).toBeVisible();
+    await (focusInside ? cancel : navigation).focus();
+    await page.evaluate(async () => {
+      const path = "/src/client/api/cases.ts";
+      const { casesApi } = await import(path);
+      const get = casesApi.get.bind(casesApi);
+      let first = true;
+      casesApi.get = async (id: string) => {
+        const snapshot = await get(id);
+        if (!first) return snapshot;
+        first = false;
+        return new Promise((resolve) => {
+          (window as unknown as { releaseFocusPoll?: () => void }).releaseFocusPoll = () =>
+            resolve(snapshot);
+        });
+      };
+    });
+    const proposed = {
+      ...pending,
+      workspaceRevision: 14,
+      status: "proposed",
+      currentJobId: null,
+      proposal: {
+        id: "synthetic-focus-proposal",
+        requestId: pending.request.id,
+        baseWorkspaceRevision: 12,
+        baseIntakeRevision: 7,
+        baseSummaryRevision: 3,
+        before,
+        after: reconfirmationCandidate(),
+        reasons: ["비동기 표시를 확인하는 합성 변경안입니다."],
+        createdAt: before.createdAt,
+      },
+    };
+    await page.evaluate(
+      ({ id, proposed }) => {
+        const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        cases[id].revision = 14;
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+        localStorage.setItem(
+          "baro-api-mock-v1:summaryReconciliations",
+          JSON.stringify({ [id]: proposed }),
+        );
+      },
+      { id: item.id, proposed },
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => !!(window as unknown as { releaseFocusPoll?: () => void }).releaseFocusPoll,
+        ),
+      )
+      .toBe(true);
+    await expect(focusInside ? cancel : navigation).toBeFocused();
+    await page.evaluate(() =>
+      (window as unknown as { releaseFocusPoll?: () => void }).releaseFocusPoll?.(),
+    );
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+    await expect(
+      focusInside ? page.getByRole("region", { name: "사건 정리 확인", exact: true }) : navigation,
+    ).toBeFocused();
+  });
+}
 
 for (const [purpose, subject] of [
   ["고소·청구를 준비하고 싶어요", "개인"],
@@ -128,6 +273,106 @@ test("proposal resume, cancel, explain again and confirm preserve canonical prov
   expect(saved.summaryDetails.facts.slice(0, 3)).toEqual(item.summaryDetails?.facts);
   expect(saved.summaryDetails.unknowns).toEqual(item.summaryDetails?.unknowns);
 });
+
+for (const [fault, errorPanelRetry] of [
+  [null, false],
+  ["cancel-fail-before", false],
+  ["cancel-lost-after", false],
+  ["cancel-peer-after", false],
+  ["cancel-fail-before", true],
+  ["cancel-lost-after", true],
+] as const) {
+  test(`terminal job: primary explain again retires the private request (${fault ?? "success"}${errorPanelRetry ? "/error-panel-retry" : ""})`, async ({
+    page,
+  }) => {
+    const item = await seed(page, "active");
+    const explanation = "종료된 합성 작업의 추가 설명입니다. 금액은 아직 모릅니다.";
+    await page.addInitScript(
+      ({ item, explanation }) => {
+        if (localStorage.getItem("synthetic-reconciliation-terminal-job")) return;
+        const values = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        values[item.id].revision = 13;
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(values));
+        localStorage.setItem(
+          "baro-api-mock-v1:summaryReconciliations",
+          JSON.stringify({
+            [item.id]: {
+              contractVersion: "conversation-report-v1",
+              workspaceRevision: 13,
+              status: "pending",
+              request: {
+                id: "synthetic-terminal-request",
+                input: { expectedRevision: 12, summaryRevision: 3, kind: "addition", explanation },
+                createdAt: item.updatedAt,
+              },
+              proposal: null,
+              currentJobId: "synthetic-terminal-job",
+              failure: null,
+              confirmedSummaryRevision: null,
+              confirmedWorkspaceRevision: null,
+            },
+          }),
+        );
+        localStorage.setItem("synthetic-reconciliation-terminal-job", "true");
+      },
+      { item, explanation },
+    );
+    await page.goto(`/cases/${item.id}/summary`);
+    const retry = page.getByRole("button", { name: "다시 설명하기", exact: true });
+    const input = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+    await expect(retry).toBeVisible();
+    if (fault)
+      await page.evaluate(
+        (fault) => localStorage.setItem("synthetic-reconciliation-fault", fault),
+        fault,
+      );
+    await retry.click();
+    if (fault === "cancel-peer-after") {
+      await expect(
+        page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+      ).toBeVisible();
+      await expect(input).toHaveCount(0);
+      const state = await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:summaryReconciliations") ?? "{}")[id],
+        item.id,
+      );
+      expect(state.request.id).not.toBe("synthetic-terminal-request");
+      expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+      return;
+    }
+    if (fault) {
+      await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
+      await expect(input).toHaveCount(0);
+      // Either retry control preserves the intent. Ambiguous cancellation reuses
+      // the shared client's persisted key instead of a second retirement.
+      await (errorPanelRetry
+        ? page.getByRole("button", { name: "다시 시도", exact: true })
+        : retry
+      ).click();
+    }
+    await expect(input).toHaveValue(explanation);
+    expect(
+      await page
+        .getByRole("dialog", { name: "어떤 내용이 빠졌나요?", exact: true })
+        .evaluate((dialog) => dialog.contains(document.activeElement)),
+    ).toBe(true);
+    const retired = await canonical(page, item.id);
+    expect(retired.revision).toBe(14);
+    expect(retired.summaryDetails).toEqual(item.summaryDetails);
+    const counts = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticReconciliationCounts") ?? "{}"),
+    );
+    expect(counts.cancel).toBe(fault ? 2 : 1);
+    expect(counts.request).toBeUndefined();
+    await input.fill(`${explanation} 새로운 합성 보완 진술입니다.`);
+    await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+    const proposed = await canonical(page, item.id);
+    expect(proposed.revision).toBe(15);
+    expect(proposed.summaryDetails).toEqual(item.summaryDetails);
+  });
+}
 
 test("a lost request response retries the same persisted proposal", async ({ page }) => {
   const item = await seed(page);
