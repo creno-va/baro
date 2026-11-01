@@ -101,28 +101,21 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
     buffer: Buffer.from(png ?? "", "base64"),
   });
   await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
-  await page.getByRole("button", { name: "포트폴리오 추가" }).click();
-  await page.getByLabel("활동 제목 1").fill("합성 포트폴리오");
-  await page.getByLabel("활동 본문 1").fill("제목과 별도로 저장되는 합성 활동 본문입니다.");
-  await page.getByLabel("자료 URL 1").fill("https://example.com/portfolio");
-  await page.getByLabel("포트폴리오 파일 (이미지·PDF)").setInputFiles({
-    name: "synthetic.pdf",
+  await expect(page.getByRole("button", { name: "포트폴리오 추가", exact: true })).toHaveCount(0);
+  await page.getByLabel("포트폴리오 파일", { exact: true }).setInputFiles({
+    name: "합성 PDF 포트폴리오.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4\nsynthetic offline adapter input\n%%EOF"),
   });
-  await page.getByLabel("활동 제목 2").fill("합성 PDF 포트폴리오");
+  await expect(page.getByText("합성 PDF 포트폴리오.pdf", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "프로필 저장" }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("E 통합 시연 변호사");
   await expect(page.getByRole("img", { name: "내 프로필 사진" })).toBeVisible();
-  await expect(page.getByLabel("활동 본문 1")).toHaveValue(
-    "제목과 별도로 저장되는 합성 활동 본문입니다.",
-  );
-  await page.getByRole("button", { name: "프로필 공개", exact: true }).click();
-  await page.getByRole("checkbox", { name: /내 사진과 연락처를 포함한/ }).check();
-  await page.getByRole("button", { name: "동의하고 공개" }).click();
-  await expect(page.getByText("공개 중", { exact: true })).toBeVisible();
+  await expect(page.getByText("합성 PDF 포트폴리오.pdf", { exact: true })).toBeVisible();
+  // Current profiles publish on save; there is no second publication toggle.
+  await expect(page.getByRole("button", { name: "프로필 공개", exact: true })).toHaveCount(0);
   await page.goto("/lawyers");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByLabel("이름 또는 사무실", { exact: true }).fill("E 통합 시연 변호사");
@@ -144,7 +137,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.getByText("본인 작성 정보입니다.", { exact: false })).toBeVisible();
   await expect(page.getByRole("img", { name: "E 통합 시연 변호사 프로필 사진" })).toBeVisible();
   const downloaded = page.waitForEvent("download");
-  await page.getByRole("link", { name: "합성 PDF 포트폴리오 자료 다운로드" }).click();
+  await page.getByRole("link", { name: "합성 PDF 포트폴리오.pdf 자료 다운로드" }).click();
   expect((await downloaded).suggestedFilename()).toContain("합성 PDF 포트폴리오");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }).click();
@@ -171,9 +164,10 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
     page.getByText("재동의 전에도 기존 프로필과 자료를 확인할 수 있어요.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("제목과 별도로 저장되는 합성 활동 본문입니다.", { exact: true }),
+    page.getByRole("link", { name: "합성 PDF 포트폴리오.pdf 자료 다운로드", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "비공개로 전환" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("포트폴리오 파일", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
   const renewalDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "업로드 자료 2 다운로드", exact: true }).click();
@@ -186,23 +180,43 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
     );
     window.dispatchEvent(new Event("focus"));
   });
-  await expect(page.getByLabel("활동 본문 1")).toHaveValue(
-    "제목과 별도로 저장되는 합성 활동 본문입니다.",
-  );
-  await page.getByRole("button", { name: "비공개로 전환" }).click();
-  await expect(page.getByText("프로필을 비공개로 전환했어요.", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("비공개", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "자료 상태 확인" }).click();
-  await expect(page.getByRole("button", { name: "업로드 자료 삭제" })).toHaveCount(2);
-  await expect(page.getByRole("button", { name: "업로드 자료 삭제" }).nth(1)).toBeDisabled();
-  await page.getByRole("button", { name: "포트폴리오 2 삭제" }).click();
-  await page.getByRole("button", { name: "프로필 저장" }).click();
+  await expect(page.getByLabel("포트폴리오 파일", { exact: true })).toBeEnabled();
+  await expect(page.getByText("합성 PDF 포트폴리오.pdf", { exact: true })).toBeVisible();
+  const blocked = await page.evaluate(async () => {
+    const modulePath = "/src/client/api/lawyers.ts";
+    const { lawyerAssets } = (await import(
+      modulePath
+    )) as typeof import("../../src/client/api/lawyers");
+    const portfolio = (await lawyerAssets.list()).find((asset) => asset.purpose === "portfolio");
+    if (!portfolio) throw new Error("Synthetic portfolio asset missing");
+    try {
+      await lawyerAssets.remove(portfolio.id, portfolio.revision);
+      return "REMOVED";
+    } catch (error) {
+      return (error as { code?: string }).code;
+    }
+  });
+  expect(blocked).toBe("CONFLICT");
+  await page.getByRole("button", { name: "포트폴리오 파일 제거", exact: true }).click();
+  await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "업로드 자료 삭제" }).nth(1).click();
-  await expect(page.getByText("자료 삭제를 접수했어요.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "업로드 자료 삭제" })).toHaveCount(1);
+  const remaining = await page.evaluate(async () => {
+    const modulePath = "/src/client/api/lawyers.ts";
+    const { lawyerAssets } = (await import(
+      modulePath
+    )) as typeof import("../../src/client/api/lawyers");
+    const portfolio = (await lawyerAssets.list()).find((asset) => asset.purpose === "portfolio");
+    if (!portfolio) throw new Error("Synthetic portfolio asset missing");
+    await lawyerAssets.remove(portfolio.id, portfolio.revision);
+    return (await lawyerAssets.list()).length;
+  });
+  expect(remaining).toBe(1);
   await page.goto(`/lawyers/${id}`);
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "E 통합 시연 변호사", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "합성 PDF 포트폴리오.pdf 자료 다운로드", exact: true }),
+  ).toHaveCount(0);
   expect(requests).toEqual([]);
 });
