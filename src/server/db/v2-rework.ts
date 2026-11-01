@@ -167,6 +167,13 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
     });
   return {
     read,
+    /** Opaque publication identity distinguishes no record from a read race. */
+    head: async (actor: Actor, workspaceId: string, kind: ReworkRecordKind, entityId: string) => {
+      const value = await row(actor, workspaceId, kind, entityId);
+      return value
+        ? { id: value.id, revision: value.revision, workspaceRevision: value.workspace_revision }
+        : null;
+    },
     /** Immutable history; staged rows never become visible without the final CAS/source fence. */
     write<T>(
       g: WorkspaceGuard,
