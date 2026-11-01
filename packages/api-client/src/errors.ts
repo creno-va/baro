@@ -36,6 +36,8 @@ export async function responseError(response: Response): Promise<ApiError> {
     VALIDATION_ERROR: "VALIDATION_ERROR",
     BUDGET_UNAVAILABLE: "UNAVAILABLE",
     UNAVAILABLE: "UNAVAILABLE",
+    EXPORT_LIMIT_EXCEEDED: "EXPORT_LIMIT_EXCEEDED",
+    EXPORT_RETRY_EXHAUSTED: "EXPORT_RETRY_EXHAUSTED",
   } as const;
   let raw: string | undefined;
   try {
@@ -58,6 +60,10 @@ export async function responseError(response: Response): Promise<ApiError> {
         : "요청한 내용을 찾지 못했어요.",
     CONFLICT: "내용이 변경됐어요. 다시 불러온 뒤 저장해 주세요.",
     QUOTA_EXCEEDED: "이용 한도에 도달했어요. 잠시 후 다시 시도해 주세요.",
+    EXPORT_LIMIT_EXCEEDED:
+      "리포트 또는 다운로드 처리 한도를 넘었어요. 포함할 자료나 사진을 줄여 주세요.",
+    EXPORT_RETRY_EXHAUSTED:
+      "이 다운로드의 재시도 횟수를 모두 사용했어요. 검토 내용을 새 버전으로 저장한 뒤 다시 다운로드해 주세요.",
     VALIDATION_ERROR:
       raw === "TURNSTILE_FAILED"
         ? "보안 확인을 다시 진행해 주세요."

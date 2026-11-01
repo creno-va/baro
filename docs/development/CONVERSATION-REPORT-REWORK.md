@@ -158,3 +158,15 @@ PR664 최종c594432ab511f3b091ee7a07242501ff6bfd03b0의 Quality41320545184/Legal
 사전 broad browser 검사에서 #619의 단일 동의 체크/공통 app 진입/변호사 사건 접근을 구형 기대값이 반영하지 못한 것을 확인했다.00은 tests/browser/auth.e2e.ts·session.e2e.ts·design-system.e2e.ts와 tests/security-browser/csp.e2e.ts를 단독 정비한다.01에는 tests/browser/cases.e2e.ts·public-preview.e2e.ts,05에는 tests/browser/report-draft-revision.e2e.ts·report-retained-pdf.e2e.ts를 단독 위임했다. 키보드·서명 SQL session·로그아웃·owner·CSP·PDF draft/시간/소스 fence 검사를 보존한다. 현재 built CSP는 수정 뒤8 pass/정상 bundle에서 explicit fixture1 skip이며, 나머지 browser는 실패 원인 확인/수정 중이다. 이 사전 검사를 최종 성공으로 표시하지 않는다.
 
 00 소유 인증/공통 shell 검사는 수정 뒤 Chromium27 tests 모두 통과했다. 실제 서명 SQL session의 동의 저장·로그아웃·쿠키 재사용 거절, 계정 역할 변경의 peer navigation, 단일 동의 체크의 on/off·실패 복구·keyboard, 허용된 복귀 경로와 부적절한 URL 거절을 유지한다.01에는 raw canonical 편집을 가정하던 tests/browser/customer-real.e2e.ts도 추가 단독 위임했다. 새 재조율 actual native/ACK 검증은04의 전체 fixture에서 수행하며 테스트를 위해 제품 원장을 대체하지 않는다.
+
+### 통합 회귀의 공통 경계 보강
+
+PR665 exacte517d146d82773b45bddba90ecd90460d95b8498의 Quality41321332843 성공 후 mainf2d2af8d31d7c64ab8a2d8414a9bbab87c09737a에 병합했다. PR666 exactfe7ec12d01b2fab497aa064fa118cb2339ef4ba3의 Quality41321903044 성공 후 main03cdd9dd36177ace7066fe3dc6e16b355c7654d3에 병합했다.666은 cases/public-preview 두 browser 파일만 변경하며 Chromium/WebKit 각7 검사를 통과했다.
+
+00은 별도 clean main worktree의 `codex/621-rework-response-errors`에서 실제 통합이 드러낸 공통 응답 경계를 수정한다. shared JSON requester가 EXPORT_LIMIT_EXCEEDED/EXPORT_RETRY_EXHAUSTED를 일반 입력 오류로 바꾸지 않게 하고, 서버도 크기413/저장503을 보존한다. 사용자 action이 필요한 이 오류를 자동 재요청하지 않는다. 동기 POST /reports 생성만 기존 binary transfer와 같은 최대300초 기술 deadline을 사용하며 passive metadata·job admission은30초, 취소 signal과 export 시도 제한은 유지한다.
+
+자동 게시 중 conversation GET의 source snapshot이 바뀌면 STALE_REVISION만 최대3회 fresh 읽기한다. 매회 signed session/owner와 실제 상태·출처 fence를 다시 확인하고 GET에서 admission/모델/법률 API를 실행하지 않는다. 새 암호화 assistant intent가 첫 workspace revision보다 앞서 게시될 때 기존 코드가 최종 revision fence 전에 wire schema를 검증해400을 반환하는 것을 deterministic actual Hono/DB/AES 회귀로 재현했다. fence를 schema parse 앞으로 옮겨 경합을409로 분류한 뒤 제한적으로 재조회한다. 영구 경합은409, 실제 저장/권한/입력 오류는 그대로 실패한다.
+
+공통 경계 focused29 tests249 assertions 통과: 두 번의 실제 revision 변경 뒤 fresh snapshot, 계속 바뀌는 상태의 최대3회 실패, 재조회 전 logout의401, actual encrypted intent publication의400→fresh200, 실제 저장503/크기413와 provider/job0을 확인했다.48초 리포트 생성·metadata/admission 만료·사용자 취소·300초 binary 한계를 controlled transport로 검증했다. production build/dry-run/actual local workerd 부팅도 통과했다. 초기 테스트 fixture의 잘못된 DB 컬럼/저장 메시지 필드와 타입/포맷 오류는 제품 보호 조건을 변경하지 않고 수정했다.
+
+추가 단독 test 소유권:01은 customer-real/recovery-real/human-review와 test-only customer-browser-server의 실제 createReworkApi mount 조립,03은 workspace-shared/customer-completion,05는 report-draft-revision/retained-PDF/real-download/account-session-recovery/reports-integrated다.04의 Workspace 및 workspace.e2e.ts는 계속04 소유다.00은 app-experience/product-ui/shell-integration 등 공통 browser corpus를 정비한다. broad 사전 검사 중 같은 구형 UI 전제로 반복 대기하는 customer-recovery-real/product-ui batch는 실패를 보존하고 중단했으며, 미실행·중단을 성공으로 기록하지 않는다. 최종 manual full은 모든 수정 병합 후 별도 실행한다.
