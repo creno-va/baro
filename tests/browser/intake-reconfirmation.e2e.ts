@@ -179,7 +179,7 @@ test("a peer tab's newer revision cannot be overwritten by a proposal", async ({
     localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(values));
   }, item.id);
   await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
-  await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "최신 내용 불러오기", exact: true })).toBeVisible();
   expect((await canonical(page, item.id)).summary).toBe("다른 탭에서 저장한 정리입니다.");
   expect((await canonical(page, item.id)).summaryDetails.facts).toEqual(item.summaryDetails?.facts);
 });
