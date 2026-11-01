@@ -1,5 +1,9 @@
 # BARO
 
+> 2026-11-01 사용자 요청으로 대화 중심 사건·법률 분석·리포트·후속 해결 개편을 진행합니다.
+> 이번 범위는 과거 신규 기능 중단·사실 준비 전용의 해당 부분을 대체합니다.
+> [ADR-0018](./docs/adr/0018-conversation-report-rework.md)과 [통합 기록](./docs/development/CONVERSATION-REPORT-REWORK.md)을 따르며 구현·실제 외부/법률 인수는 구분합니다. 이번 작업으로 production에 배포하지 않습니다.
+
 [![CI](https://github.com/creno-va/baro/actions/workflows/ci.yml/badge.svg)](https://github.com/creno-va/baro/actions/workflows/ci.yml)
 
 BARO는 사용자가 변호사의 프로필을 살펴보고 직접 연락하며, AI 와 사건의 사실관계·
