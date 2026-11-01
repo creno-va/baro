@@ -17,6 +17,7 @@ import {
   preparedAnalysisMatchesScope,
   readPreparedAnalysis,
 } from "../src/server/modules/rework/state";
+import { runWorkspaceRuntime } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
@@ -216,7 +217,9 @@ async function fixture(
     for (const [id, entry] of instances) {
       if (entry.status !== "queued") continue;
       entry.status = "running";
-      await runtime.analysis.execute(entry.params, id);
+      const settlement: Promise<void>[] = [];
+      await runWorkspaceRuntime(env, entry.params, id, (p) => settlement.push(p), options);
+      await Promise.all(settlement);
       entry.status = "complete";
     }
   };

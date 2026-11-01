@@ -37,7 +37,7 @@ import {
 import { projectWorkspaceSources } from "../modules/legal-retrieval/v2/workspace-sources";
 import type { Phase } from "../modules/llm-gateway/prompts";
 import { ModelError } from "../modules/llm-gateway/service";
-import { createReworkRuntime } from "../modules/rework/runtime";
+import { createReworkRuntime, type ReworkRuntimeOptions } from "../modules/rework/runtime";
 import { readConversationModelContext } from "../modules/rework/state";
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { currentTime } from "../modules/workspace/current-time";
@@ -200,6 +200,7 @@ export async function runWorkspaceRuntime(
   params: WorkspaceParams,
   instanceId: string,
   waitUntil: (work: Promise<void>) => void,
+  options: ReworkRuntimeOptions = {},
 ): Promise<
   { jobId: string; status: "completed" | "failed" | "stopped" } & Partial<
     Omit<
@@ -216,7 +217,7 @@ export async function runWorkspaceRuntime(
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
-  const rework = createReworkRuntime(core, env, { waitUntil });
+  const rework = createReworkRuntime(core, env, { ...options, waitUntil });
   const analysis = await rework.analysis.execute(params, instanceId);
   if (analysis) return analysis;
   const reconciliation = await rework.reconciliation.execute(params, instanceId);
@@ -418,6 +419,7 @@ export async function runWorkspaceRuntime(
               .first());
           };
           const retrieval = createV2LegalRetrieval(env, sourceRepository, {
+            ...(options.transport ? { transport: options.transport } : {}),
             observeRequest: reportLegalRequest,
             observeOutcome: reportLegalOutcome,
             observeUpstreamRejection: reportLegalRejection,
