@@ -135,6 +135,7 @@ test("reconciliation uses the exact issued user message and preserves adverse/un
   first.significance = "unfavorable";
   before.unknowns.push("반환 약속 날짜 미확인");
   input.intake.summary = before;
+  Object.assign(input.intake, { summarySnapshotId: "synthetic-private-metadata" });
   input.intake.status = "reviewing_summary";
   input.facts = before.facts;
   const id = crypto.randomUUID(),
