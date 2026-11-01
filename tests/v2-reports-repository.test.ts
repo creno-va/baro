@@ -19,6 +19,7 @@ import {
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
+import { researchRevisionBase } from "../src/server/db/v2-research-revision";
 import { createV2StagingRepository } from "../src/server/db/v2-staging";
 import {
   createV2StorageRepository,
@@ -262,6 +263,208 @@ async function artifact(
 function count(f: Fixture, table: string) {
   return (f.database.sqlite.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
 }
+
+async function reservedPdf(
+  f: Fixture,
+  r: Awaited<ReturnType<typeof create>>,
+  kind: "report_pdf" | "original_zip" = "report_pdf",
+) {
+  const id = crypto.randomUUID(),
+    reservationId = crypto.randomUUID();
+  expect(
+    await f.storage.reserveArtifact(guard(f), {
+      id: reservationId,
+      artifactId: id,
+      target: { kind: "report", id: r.value.id, revision: r.value.snapshotRevision },
+      operationId: r.input.operationId,
+      byteLength: 100,
+    }),
+  ).toBe(true);
+  expect(
+    await f.storage.registerBlob(f.actor, {
+      id,
+      reservationId,
+      kind,
+      visibility: "private",
+      logicalBytes: 100,
+      cipherBytes: 128,
+      cipherHash: HASH,
+      contentHash: HASH,
+      keyVersion: "1",
+    }),
+  ).toBe(true);
+  return { id, encryption: "chunk_aead_v1" as const, byteLength: 100, contentHash: HASH };
+}
+
+test("exact atomic export proofs preserve research across reservation/completion without changing report ciphertext", async () => {
+  const f = await fixture(),
+    before = guard(f).expectedRevision,
+    r = await create(f);
+  const envelope = () =>
+    f.database.sqlite.query("SELECT encrypted_payload FROM v2_reports WHERE id=?").get(r.value.id);
+  const original = envelope();
+  const base = () =>
+    researchRevisionBase(f.core, f.actor.ownerId, f.workspaceId, guard(f).expectedRevision, 1);
+  expect(await base()).toBe(before);
+  const pdf = await reservedPdf(f, r);
+  expect(await base()).toBe(before);
+  expect(await f.reports.complete(guard(f), r.value.id, r.lease, pdf, null)).toBe(true);
+  expect(await base()).toBe(before);
+  expect(guard(f).expectedRevision).toBe(before + 3);
+  expect(envelope()).toEqual(original);
+  expect((await f.reports.read(f.actor, r.value.id))?.request).toEqual(r.value.request);
+  expect(count(f, "v2_rework_records")).toBe(2);
+  expect(count(f, "v2_rework_parts")).toBe(2);
+  f.database.sqlite
+    .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+    .run(f.workspaceId);
+  expect(await base()).toBe(guard(f).expectedRevision);
+});
+
+for (const change of [
+  "missing_proof",
+  "reservation_target",
+  "reservation_operation",
+  "report_envelope",
+  "job_operation",
+  "blob_kind",
+  "summary_revision",
+  "foreign_owner",
+  "intervening_mutation",
+] as const)
+  test(`export proof cannot hide ${change}`, async () => {
+    const f = await fixture(),
+      r = await create(f);
+    const pdf = await reservedPdf(f, r);
+    if (change === "intervening_mutation")
+      f.database.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspaceId);
+    expect(await f.reports.complete(guard(f), r.value.id, r.lease, pdf, null)).toBe(true);
+    const end = guard(f).expectedRevision;
+    if (change === "missing_proof") f.database.sqlite.exec("DELETE FROM v2_rework_records");
+    if (change === "reservation_target")
+      f.database.sqlite
+        .query("UPDATE v2_storage_reservations SET target_id=?")
+        .run(crypto.randomUUID());
+    if (change === "reservation_operation")
+      f.database.sqlite
+        .query("UPDATE v2_storage_reservations SET entity_id=?")
+        .run(crypto.randomUUID());
+    if (change === "report_envelope") {
+      const cipher = await f.core.encrypt("v2_reports", r.value.id, f.actor.ownerId, 1, {
+        request: { ...r.value.request, maskingChoices: [] },
+      });
+      f.database.sqlite
+        .query("UPDATE v2_reports SET encrypted_payload=? WHERE id=?")
+        .run(cipher, r.value.id);
+    }
+    if (change === "job_operation")
+      f.database.sqlite
+        .query("UPDATE v2_jobs SET target_id=? WHERE id=?")
+        .run(crypto.randomUUID(), r.lease.jobId);
+    if (change === "blob_kind")
+      f.database.sqlite.query("UPDATE v2_blobs SET kind='derivative' WHERE id=?").run(pdf.id);
+    const actual = await researchRevisionBase(
+      f.core,
+      change === "foreign_owner" ? crypto.randomUUID() : f.actor.ownerId,
+      f.workspaceId,
+      end,
+      change === "summary_revision" ? 2 : 1,
+    );
+    // Completion may be neutral while the preceding reservation/gap is not.
+    expect(actual).toBe(change === "intervening_mutation" ? end - 1 : end);
+  });
+
+test("failed export claims and rollback leave no published revision proof", async () => {
+  const f = await fixture(),
+    r = await create(f),
+    pdf = await reservedPdf(f, r);
+  const before = guard(f).expectedRevision,
+    proofCount = count(f, "v2_rework_records");
+  expect(
+    await f.reports.complete(
+      { ...guard(f), expectedRevision: before - 1 },
+      r.value.id,
+      r.lease,
+      pdf,
+      null,
+    ),
+  ).toBe(false);
+  expect(count(f, "v2_rework_records")).toBe(proofCount);
+  f.database.sqlite.exec(
+    "CREATE TRIGGER reject_synthetic_proof BEFORE UPDATE OF state ON v2_rework_records WHEN NEW.state='published' BEGIN SELECT RAISE(ABORT,'synthetic proof rollback'); END",
+  );
+  await expect(f.reports.complete(guard(f), r.value.id, r.lease, pdf, null)).rejects.toThrow();
+  expect(guard(f).expectedRevision).toBe(before);
+  expect(count(f, "v2_rework_records")).toBe(proofCount);
+  expect((await f.reports.read(f.actor, r.value.id))?.status).toBe("queued");
+  expect(
+    f.database.sqlite.query("SELECT status FROM v2_jobs WHERE id=?").get(r.lease.jobId),
+  ).toEqual({ status: "running" });
+});
+
+test("PDF and ZIP each prove their own reservation CAS and completion preserves both source and original manifest", async () => {
+  const f = await fixture(),
+    selected = await readyFile(f),
+    before = guard(f).expectedRevision;
+  const r = await create(f, draft(f, [selected], [selected.id]));
+  const pdf = await reservedPdf(f, r),
+    zip = await reservedPdf(f, r, "original_zip");
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.actor.ownerId,
+      f.workspaceId,
+      guard(f).expectedRevision,
+      1,
+    ),
+  ).toBe(before);
+  expect(await f.reports.complete(guard(f), r.value.id, r.lease, pdf, zip)).toBe(true);
+  expect(guard(f).expectedRevision).toBe(before + 4);
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.actor.ownerId,
+      f.workspaceId,
+      guard(f).expectedRevision,
+      1,
+    ),
+  ).toBe(before);
+  expect((await f.reports.read(f.actor, r.value.id))?.originalManifest).toEqual([selected]);
+  expect(count(f, "v2_rework_records")).toBe(3);
+});
+
+test("abandoned artifact cleanup retains its already committed neutral reservation proof", async () => {
+  const f = await fixture(),
+    before = guard(f).expectedRevision,
+    r = await create(f);
+  const pdf = await reservedPdf(f, r);
+  f.database.sqlite
+    .query("UPDATE v2_blobs SET state='deleted',deleted_at=? WHERE id=?")
+    .run(NOW, pdf.id);
+  f.database.sqlite.exec("UPDATE v2_storage_reservations SET state='released'");
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.actor.ownerId,
+      f.workspaceId,
+      guard(f).expectedRevision,
+      1,
+    ),
+  ).toBe(before);
+  const retried = await reservedPdf(f, r);
+  expect(await f.reports.complete(guard(f), r.value.id, r.lease, retried, null)).toBe(true);
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.actor.ownerId,
+      f.workspaceId,
+      guard(f).expectedRevision,
+      1,
+    ),
+  ).toBe(before);
+});
 
 async function stageBody(f: Fixture, value: V2Report, fragmentBytes = 64 * 1024) {
   // Validate the complete producer output before the bounded encrypted write path.

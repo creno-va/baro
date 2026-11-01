@@ -31,6 +31,7 @@ import {
 import { storedFileMetadataSchema } from "./v2-file-metadata";
 import { jobInsertStatements } from "./v2-jobs";
 import { isPreparedPaidHold, type PreparedPaidHold } from "./v2-paid-statements";
+import { reportRevisionStatements } from "./v2-report-revision";
 import { createV2StagingRepository } from "./v2-staging";
 import {
   type Admission,
@@ -731,6 +732,18 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
           return false;
         const execution = leasePredicate(lease, id, row.workspace_revision, g.now);
         const claimId = crypto.randomUUID();
+        const proof = await reportRevisionStatements(
+          core,
+          g,
+          row,
+          {
+            kind: "completion",
+            jobId: lease.jobId,
+            pdfId: pdf.id,
+            zipId: zip?.id ?? null,
+          },
+          claimId,
+        );
         return core.changed([
           core.claim(
             g,
@@ -764,6 +777,7 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
             [pdf.id, zip?.id ?? null, id, claimId],
           ),
           ...completeLeaseStatements(core, lease, claimId, g.now),
+          ...proof,
           core.bump(g, claimId),
           core.finish(claimId),
         ]);
