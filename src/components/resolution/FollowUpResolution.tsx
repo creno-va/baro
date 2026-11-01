@@ -11,6 +11,8 @@ import {
   resolutionContextLabel,
   resolutionDocumentLabels,
   resolutionDraftIsCurrent,
+  resolutionGuideTextParts,
+  resolutionReadingLinks,
   sameResolutionFiles,
 } from "../../utils/resolution";
 import { downloadBlob } from "../reports/download";
@@ -568,7 +570,22 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
               .map((check) => (
                 <li key={check.id}>
                   <strong>{check.label}</strong>
-                  <span>{check.detail}</span>
+                  <span>
+                    {resolutionGuideTextParts(check.detail).map((part) =>
+                      part.url ? (
+                        <a
+                          key={`${part.start}-${part.url}`}
+                          href={part.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          공식 안내 원문에서 확인
+                        </a>
+                      ) : (
+                        part.text
+                      ),
+                    )}
+                  </span>
                   <small>
                     {check.status === "verified"
                       ? "공식 근거 확인 · 사건에 맞는지 검토 필요"
@@ -758,6 +775,27 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                 <p>
                   일반 변호사 찾기와 국선변호 절차는 별개예요. 자격·선정·선임을 보장하지 않아요.
                 </p>
+                <div className="resolution-actions">
+                  {state?.basis?.procedure.kind === "criminal" && (
+                    <ButtonLink
+                      variant="outline"
+                      href={resolutionReadingLinks.publicDefender}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      국선변호인제도 공식 안내
+                    </ButtonLink>
+                  )}
+                  <ButtonLink
+                    variant="outline"
+                    href={resolutionReadingLinks.legalAid}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    법률구조제도 공식 안내
+                  </ButtonLink>
+                </div>
+                <p>공식 원문의 최신 내용과 이 사건의 대상 여부·신청 절차는 기관에 확인해 주세요.</p>
                 {check.sourceClaimIds.map((id) => {
                   const claim = state.sourceClaims.find((c) => c.id === id);
                   const citation = state.citations.find((c) => c.id === claim?.citationId);

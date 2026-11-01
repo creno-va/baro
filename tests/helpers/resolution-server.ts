@@ -61,6 +61,8 @@ Bun.serve({
         delayDraft?: number;
         stale?: boolean;
         missingReport?: boolean;
+        criminal?: boolean;
+        limitedGuide?: boolean;
       };
       if (input.reset) {
         h = resolutionHarness();
@@ -86,6 +88,23 @@ Bun.serve({
         if (source.basis) source.basis.casePurpose = input.purpose;
         h = resolutionHarness(source);
       }
+      if (input.criminal && h.source.basis) {
+        h.source.context.procedure = {
+          kind: "criminal",
+          stage: "investigation",
+          description: null,
+        };
+        h.source.basis.procedure = h.source.context.procedure;
+      }
+      if (input.limitedGuide)
+        h.source.procedureChecks.push({
+          id: "limited-guide",
+          label: "공식 작성 안내 확인",
+          status: "needs_confirmation",
+          sourceClaimIds: [],
+          detail:
+            "공식 안내가 개정 검토 중입니다. https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=2&cnpClsNo=1 (확인 시점: 2026-11-01T10:00:00.000Z)",
+        });
       if (input.owner) {
         ownerId = input.owner;
         h.setAccess(ownerId === "owner");
