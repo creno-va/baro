@@ -334,7 +334,7 @@ test("the allowed ready-to-partial display never bypasses identity, current basi
       required(required(a.report).analysisReview).userEdited = true;
     },
     (a) => {
-      required(a.report).stale = true;
+      a.report = { ...required(a.report), stale: true };
     },
     (a) => {
       required(required(a.report).basis).summaryRevision++;
@@ -349,7 +349,7 @@ test("the allowed ready-to-partial display never bypasses identity, current basi
       required(a.input.facts[0]).text = "아직 확인하지 않은 새로운 설명";
     },
     (a) => {
-      required(a.report).maskIdentifiers = true;
+      a.report = { ...required(a.report), maskIdentifiers: true };
     },
   ];
   for (const mutate of mutations) {
