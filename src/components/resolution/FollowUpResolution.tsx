@@ -11,6 +11,8 @@ import {
   resolutionContextLabel,
   resolutionDocumentLabels,
   resolutionDraftIsCurrent,
+  resolutionGuideTextParts,
+  resolutionReadingLinks,
   sameResolutionFiles,
 } from "../../utils/resolution";
 import { downloadBlob } from "../reports/download";
@@ -334,15 +336,22 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       }, false);
       return;
     }
+    const readOnly = needsConsent;
     await run(async (options, epoch) => {
-      const [available, currentReport] = await Promise.all([
+      const [available, currentReport, historical] = await Promise.all([
         client.files(props.caseId),
         client.report(props.caseId, options),
+        readOnly ? client.getResolution(props.caseId, options) : Promise.resolve(null),
       ]);
       await verify(epoch);
       if (epoch !== sequence.current) return null;
       setFiles(available.filter((f) => !currentReport.excludedFileIds.includes(f.id)));
       setReport(currentReport);
+      if (historical) {
+        accept(historical);
+        setSelected(choice);
+        return null;
+      }
       if (!state) throw new Error("NOT_READY");
       const base = state.basis
         ? { reportId: state.basis.reportId, reportRevision: state.basis.reportRevision }
@@ -359,7 +368,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         },
         options,
       );
-    });
+    }, !readOnly);
   }
   function requestChoice(choice: NonNullable<typeof selected>) {
     if (dirty) {
@@ -410,7 +419,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         `${latest.draft.title}-검토용.txt`,
       );
       setNotice("초안 다운로드를 요청했어요. 저장 위치를 확인해 주세요.");
-      return latest;
+      return null;
     }, false);
   }
   const scope = (
@@ -515,7 +524,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       {needsConsent && (
         <p>
           새 초안 준비·수정은 현재 정책 동의 후 이용할 수 있어요. 저장된 내용 확인과 다운로드는 계속
-          이용할 수 있어요.
+          이용할 수 있어요. 동의 전에는 화면만 전환하며 선택을 저장하지 않아요.
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
@@ -568,7 +577,22 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
               .map((check) => (
                 <li key={check.id}>
                   <strong>{check.label}</strong>
-                  <span>{check.detail}</span>
+                  <span>
+                    {resolutionGuideTextParts(check.detail).map((part) =>
+                      part.url ? (
+                        <a
+                          key={`${part.start}-${part.url}`}
+                          href={part.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          공식 안내 원문에서 확인
+                        </a>
+                      ) : (
+                        part.text
+                      ),
+                    )}
+                  </span>
                   <small>
                     {check.status === "verified"
                       ? "공식 근거 확인 · 사건에 맞는지 검토 필요"
@@ -714,8 +738,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                         viewBlocked ||
                         dirty ||
                         state.draft.status !== "saved" ||
-                        !state.draft.reviewed ||
-                        state.status === "paused"
+                        !state.draft.reviewed
                       }
                       onClick={() => void exportDraft()}
                     >
@@ -758,6 +781,27 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                 <p>
                   일반 변호사 찾기와 국선변호 절차는 별개예요. 자격·선정·선임을 보장하지 않아요.
                 </p>
+                <div className="resolution-actions">
+                  {state?.basis?.procedure.kind === "criminal" && (
+                    <ButtonLink
+                      variant="outline"
+                      href={resolutionReadingLinks.publicDefender}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      국선변호인제도 공식 안내
+                    </ButtonLink>
+                  )}
+                  <ButtonLink
+                    variant="outline"
+                    href={resolutionReadingLinks.legalAid}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    법률구조제도 공식 안내
+                  </ButtonLink>
+                </div>
+                <p>공식 원문의 최신 내용과 이 사건의 대상 여부·신청 절차는 기관에 확인해 주세요.</p>
                 {check.sourceClaimIds.map((id) => {
                   const claim = state.sourceClaims.find((c) => c.id === id);
                   const citation = state.citations.find((c) => c.id === claim?.citationId);
@@ -775,7 +819,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         <div className="resolution-actions">
           <Button
             variant="ghost"
-            disabled={busy || !reference || dirty}
+            disabled={busy || blocked || !reference || dirty}
             onClick={() => {
               if (reference)
                 void run((options) =>
