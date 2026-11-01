@@ -27,6 +27,7 @@ import { createLawyersApi } from "./v2/lawyers";
 import { createModerationApi } from "./v2/moderation";
 import { createPrecedentsApi } from "./v2/precedents";
 import { createReportsApi } from "./v2/reports";
+import { createReworkApi } from "./v2/rework";
 import { usageApi } from "./v2/usage";
 import { createWorkspacesApi } from "./v2/workspaces";
 
@@ -97,6 +98,7 @@ export const api = new Hono<ApiEnvironment>()
   .route("/health", healthApi)
   .route("/v2/lawyers", createDirectoryApi())
   .route("/v2/me", usageApi)
+  .route("/v2/cases", createReworkApi())
   .route(
     "/v2/cases",
     createWorkspacesApi({
