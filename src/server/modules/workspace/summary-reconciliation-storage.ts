@@ -103,7 +103,11 @@ export type SummaryReconciliationStoragePorts = {
   admitTask(
     args: ReconciliationMutation<V2SummaryReconciliationRequest> & { requestId: string },
     commit: (
-      plan: ReconciliationWritePlan & { jobId: string; message: V2UserMessage },
+      plan: ReconciliationWritePlan & {
+        jobId: string;
+        message: V2UserMessage;
+        admissionSource: ReconciliationAuthority;
+      },
     ) => Promise<V2SummaryReconciliation>,
   ): Promise<V2SummaryReconciliation>;
   lease(
@@ -140,16 +144,21 @@ export type SummaryReconciliationStoragePorts = {
 };
 
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
-const together = (
+function together(left: ReworkWriteGuard, right: ReworkWriteGuard): ReworkWriteGuard;
+function together(
   left: ReworkWriteGuard,
   right: ReconciliationWritePlan["authority"],
-): ReconciliationWritePlan["authority"] => {
+): ReconciliationWritePlan["authority"];
+function together(
+  left: ReworkWriteGuard,
+  right: ReconciliationWritePlan["authority"],
+): ReconciliationWritePlan["authority"] {
   const combine = (proof: ReworkWriteGuard): ReworkWriteGuard => ({
     sql: `(${left.sql}) AND (${proof.sql})`,
     values: [...left.values, ...proof.values],
   });
   return typeof right === "function" ? (now) => combine(right(now)) : combine(right);
-};
+}
 const idle = (workspaceRevision: number): V2SummaryReconciliation => ({
   contractVersion: v2ReworkVersionSchema.value,
   workspaceRevision,
@@ -237,7 +246,10 @@ export function createSummaryReconciliationStorage(
     }
     return stale();
   }
-  const issuedSource = (source: ReconciliationAuthority, value: StoredSummaryReconciliation) => {
+  const issuedSource = (
+    source: ReconciliationAuthority,
+    value: Pick<StoredSummaryReconciliation, "requestMessage">,
+  ) => {
     const issued = value.requestMessage;
     // Existing model contexts redact event-like timestamps. Authorization binds
     // the issued statement, while its original timestamp stays in the encrypted record.
@@ -391,6 +403,27 @@ export function createSummaryReconciliationStorage(
         )
           stale();
         const message = v2UserMessageSchema.parse(plan.message);
+        const source = plan.admissionSource;
+        if (!source) return stale();
+        const summary = v2SummarySchema.parse(source.summary);
+        v2HashSchema.parse(source.sourceDigest);
+        // Keep the old request's active gate and authority above. A new explicit
+        // operation uses its own precomputed source cutoff, never the old receipt's.
+        if (
+          source.workspaceRevision !== input.expectedRevision ||
+          summary.revision !== input.summaryRevision ||
+          source.summaryId !== loaded.source.summaryId ||
+          source.summarySnapshotId !== loaded.source.summarySnapshotId ||
+          !same(summary, loaded.source.summary) ||
+          source.context.intake.revision !== summary.intakeRevision ||
+          !same(source.context.intake.summary, summary) ||
+          message.id !== requestId ||
+          message.workspaceRevision !== input.expectedRevision + 1 ||
+          message.text !== input.explanation ||
+          message.selectedFileIds.length !== 0
+        )
+          stale();
+        issuedSource(source, { requestMessage: message });
         const state = v2SummaryReconciliationSchema.parse({
           ...idle(input.expectedRevision + 1),
           status: "pending",
@@ -399,14 +432,18 @@ export function createSummaryReconciliationStorage(
         });
         return write(
           actor,
-          loaded.source,
+          {
+            ...source,
+            summary,
+            authority: together(loaded.source.authority, source.authority),
+          },
           loaded.record,
           summaryReconciliationRecordSchema.parse({
             format: "summary-reconciliation-v1",
             state,
-            baseSummary: loaded.source.summary,
-            baseSummaryId: loaded.source.summaryId,
-            sourceDigest: loaded.source.sourceDigest,
+            baseSummary: summary,
+            baseSummaryId: source.summaryId,
+            sourceDigest: source.sourceDigest,
             requestMessage: message,
           }),
           plan,
