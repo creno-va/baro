@@ -20,6 +20,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { reworkConsentGuard } from "./v2-rework";
 import {
   completeLeaseStatements,
   intakeContentSchema,
@@ -34,7 +35,7 @@ export function createV2SummaryStagingRepository(core: V2Core) {
       g: WorkspaceGuard,
       snapshotId: string,
       input: { facts: readonly V2Fact[]; parties: readonly V2Summary["parties"][number][] },
-      lease: JobLease,
+      lease?: JobLease,
     ) {
       return safe(async () => {
         g = parse(guardSchema, g);
@@ -58,7 +59,13 @@ export function createV2SummaryStagingRepository(core: V2Core) {
           )
           .first<{ revision: number }>();
         if (!header) return false;
-        const execution = leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now);
+        const consent = reworkConsentGuard(g.ownerId);
+        const execution = lease
+          ? leasePredicate(lease, g.workspaceId, g.expectedRevision, g.now)
+          : {
+              sql: `w.current_job_id IS NULL AND ${consent.sql}`,
+              values: consent.values,
+            };
         const claimId = crypto.randomUUID();
         const statements = [
           core.claim(
