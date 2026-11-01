@@ -9,9 +9,13 @@ import { textHash } from "../legal-retrieval/service";
 import { createCaseReportDependencies } from "../reports/runtime";
 import { createReportsService } from "../reports/service";
 import type { ReportDependencies } from "../reports/storage";
-import { loadAnalysisInput } from "./analysis-input";
+import { loadAnalysisInput, readAnalysisScope } from "./analysis-input";
 import { ReworkError } from "./case-context";
-import { preparedAnalysisRecordSchema, reportContinuationSchema } from "./records";
+import {
+  automaticPreparationRecordSchema,
+  preparedAnalysisRecordSchema,
+  reportContinuationSchema,
+} from "./records";
 import { readPreparedAnalysis, reworkAccess } from "./state";
 
 /** A durable, exactly-once registration precedes model-free report generation.
@@ -67,15 +71,34 @@ export function createReportContinuation(
           caseId,
           preparedAnalysisRecordSchema,
         );
-        if (!raw) throw new ReworkError("REVIEW_REQUIRED");
+        const automatic = await records.read(
+          actor(),
+          caseId,
+          "checkpoint",
+          "automatic-preparation",
+          automaticPreparationRecordSchema,
+        );
+        const useAutomatic =
+          automatic?.value.status === "failed" &&
+          (!raw ||
+            canonicalAnalysisJson(automatic.value.basis) !==
+              canonicalAnalysisJson(raw.value.basis));
+        const proofRecord = useAutomatic ? automatic : raw;
+        const basis = proofRecord?.value.basis;
+        if (!basis) throw new ReworkError("REVIEW_REQUIRED");
         const snapshot = await readPreparedAnalysis(core, actor(), caseId);
         if (!snapshot) {
-          const current = await loadAnalysisInput(core, actor(), caseId, raw.value.scope);
+          const current = await loadAnalysisInput(
+            core,
+            actor(),
+            caseId,
+            useAutomatic ? await readAnalysisScope(core, actor(), caseId) : raw?.value.scope,
+          );
           if (
-            !raw.value.failure ||
+            !(raw?.value.failure || automatic?.value.status === "failed") ||
             !current.input ||
             canonicalAnalysisJson(await analysisBasis(current.input)) !==
-              canonicalAnalysisJson(raw.value.basis)
+              canonicalAnalysisJson(basis)
           )
             throw new ReworkError("STALE_REVISION");
         }
@@ -92,7 +115,7 @@ export function createReportContinuation(
             format: "report-continuation-v1",
             requestId,
             requestHash: hash,
-            basis: raw.value.basis,
+            basis,
             expectedReportRevision: expectedRevision,
             status: "pending",
             failure: null,
@@ -101,8 +124,8 @@ export function createReportContinuation(
             reportRevision: null,
           },
           authority: {
-            sql: "EXISTS(SELECT 1 FROM v2_rework_records r WHERE r.id=? AND r.kind='analysis' AND r.workspace_id=w.id AND r.state='published' AND r.revision=(SELECT max(revision) FROM v2_rework_records WHERE workspace_id=w.id AND kind='analysis' AND entity_id=w.id AND state='published')) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)",
-            values: [raw.id, route, requestId, g.now],
+            sql: "EXISTS(SELECT 1 FROM v2_rework_records r WHERE r.id=? AND r.workspace_id=w.id AND r.state='published' AND r.revision=(SELECT max(revision) FROM v2_rework_records WHERE workspace_id=w.id AND kind=r.kind AND entity_id=r.entity_id AND state='published')) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)",
+            values: [proofRecord?.id, route, requestId, g.now],
           },
           statements: (claim, id) => [
             ...operationStatements(

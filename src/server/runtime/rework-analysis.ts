@@ -100,6 +100,7 @@ export function createLegalAnalysisJobs(
         requestId: string;
         expectedRevision: number;
         continueWithReport: boolean;
+        reportExpectedRevision?: number | null;
         actionRequest?: V2ConversationActionRequest;
       },
     ) {
@@ -212,7 +213,10 @@ export function createLegalAnalysisJobs(
         createdAt: admission.actor.now,
         invocationIds,
         continueWithReport: request.continueWithReport,
-        reportExpectedRevision: priorReport ?? null,
+        reportExpectedRevision:
+          request.reportExpectedRevision === undefined
+            ? (priorReport ?? null)
+            : request.reportExpectedRevision,
         limitations: loaded.limits,
       });
       const written = await records.write(guard, {

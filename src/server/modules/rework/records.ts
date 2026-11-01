@@ -99,3 +99,14 @@ export const reportContinuationSchema = z
       (r.reportId === null) === (r.reportRevision === null) &&
       (r.status !== "ready" || r.reportId !== null),
   );
+
+export const automaticPreparationRecordSchema = z.strictObject({
+  format: z.literal("automatic-preparation-v1"),
+  attemptDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  basis: v2AnalysisBasisSchema,
+  requestId: opaqueIdSchema,
+  expectedReportRevision: revisionSchema.nullable(),
+  status: z.enum(["registered", "analysis", "report", "complete", "failed"]),
+  failure: v2FailureCodeSchema.nullable(),
+});

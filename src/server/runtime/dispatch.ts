@@ -10,6 +10,7 @@ import {
 import { createProfilePublicationDispatcher } from "../modules/lawyers/publication-dispatch";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
 import { reconcileStoppedJobs } from "./job-recovery";
+import { reconcileReworkPreparation } from "./rework-recovery";
 
 /** Recover confirmed terminal instances, then dispatch admitted immutable IDs.
  * Funding policy applies only when application cost limits are enabled. */
@@ -63,10 +64,11 @@ export async function reconcileV2Dispatch(env: Env) {
     const profiles = await createProfilePublicationDispatcher(core, {
       binding: env.PROFILE_PUBLICATION,
     }).dispatch(4);
+    const preparation = await reconcileReworkPreparation(core, env);
     const workspaces = await createWorkspaceDispatcher(core, {
       binding: env.WORKSPACE_PROCESSING,
     }).dispatch(4);
-    return { available: true, files, assets, profiles, workspaces, stopped };
+    return { available: true, files, assets, profiles, workspaces, stopped, preparation };
   } catch {
     // Payloads, SQL and provider failures must not enter scheduled logs.
     return { available: false };
