@@ -358,12 +358,14 @@ export function createReconciliationRuntime(
         paid.paid,
       );
       if (!plan) throw new ReworkError("STALE_REVISION");
-      return commit({
+      const publication = {
         jobId,
         message,
+        admissionSource: modelSource,
         authority: plan.authority,
-        statements: (claim) => plan.statements(claim),
-      });
+        statements: (claim: string) => plan.statements(claim),
+      };
+      return commit(publication);
     },
     lease: async (actor, jobId) => {
       const initial = await readWorkspaceGatewayAdmission(
