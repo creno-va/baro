@@ -53,6 +53,13 @@ export type {
   ReportSave,
 } from "./reports";
 export { createReportsClient, reportSaveSchema } from "./reports";
+export type {
+  ReworkClient,
+  ReworkCreateInput,
+  ReworkReportView,
+  ReworkRequestOptions,
+} from "./rework";
+export { createReworkClient, reworkReportViewSchema } from "./rework";
 export { createSessionClient } from "./session";
 export type { UploadRecovery, UploadRecoveryRecord } from "./upload-recovery";
 export { uploadRecoveryRecordSchema } from "./upload-recovery";
