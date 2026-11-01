@@ -70,11 +70,18 @@ export function createReworkApi(
             ? 403
             : error.code === "USER_QUOTA_EXCEEDED" || error.code === "RATE_LIMITED"
               ? 429
-              : error.code === "VALIDATION_ERROR" || error.code === "RESOLUTION_TOO_LARGE"
-                ? 400
-                : error.code === "DEPENDENCY_UNAVAILABLE" || error.code === "STORAGE_UNAVAILABLE"
-                  ? 503
-                  : 409;
+              : error.code === "EXPORT_LIMIT_EXCEEDED"
+                ? 413
+                : error.code === "VALIDATION_ERROR" || error.code === "RESOLUTION_TOO_LARGE"
+                  ? 400
+                  : [
+                        "DEPENDENCY_UNAVAILABLE",
+                        "STORAGE_UNAVAILABLE",
+                        "BUDGET_UNAVAILABLE",
+                        "LEGAL_SOURCE_UNAVAILABLE",
+                      ].includes(error.code)
+                    ? 503
+                    : 409;
       return c.json(
         errorBody(
           c,
@@ -137,9 +144,9 @@ export function createReworkApi(
     const a = await access(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const core = await domainCore(c);
-    return c.json(
-      await createReworkStateService(
+    const core = await domainCore(c),
+      id = opaqueIdSchema.parse(c.req.param("id")),
+      state = createReworkStateService(
         core,
         (await options.stateDependencies?.(c.env, core, a.ownerId)) ?? {
           peekReport: async (ownerId, id) =>
@@ -148,8 +155,29 @@ export function createReworkApi(
               await createCaseReportDependencies(c.env, core, ownerId, id),
             ).peek(ownerId, id),
         },
-      ).get(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
-    );
+      );
+    // Publication can advance the case between the independently fenced reads.
+    // Re-read only this passive snapshot; never replay admission or a mutation.
+    for (let attempt = 0; ; attempt++) {
+      if (attempt) {
+        const fresh = await access(c);
+        if (fresh.response) return fresh.response;
+        if (fresh.ownerId !== a.ownerId || fresh.sessionId !== a.sessionId)
+          return c.json(errorBody(c, "UNAUTHENTICATED", "로그인 상태를 다시 확인해 주세요."), 401);
+      }
+      try {
+        return c.json(await state.get(a.ownerId, id));
+      } catch (error) {
+        if (
+          attempt >= 2 ||
+          !(
+            (error instanceof ReworkError || error instanceof ReportError) &&
+            error.code === "STALE_REVISION"
+          )
+        )
+          throw error;
+      }
+    }
   });
   app.get("/:id/rework/report", async (c) => {
     const a = await access(c);
