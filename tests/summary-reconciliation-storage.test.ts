@@ -215,6 +215,71 @@ test("source changes make a proposal stale without rewriting immutable history o
   }
 });
 
+for (const alreadyConfirmed of [false, true]) {
+  test(`stale ${alreadyConfirmed ? "confirmed receipt" : "proposal"} can be retired and re-explained without undoing canonical history`, async () => {
+    const f = await fixture();
+    try {
+      const pending = await f.request();
+      const proposed = await f.service.execute(f.actor, pending.request?.id ?? "missing");
+      if (alreadyConfirmed) {
+        await f.service.confirm(f.actor, crypto.randomUUID(), {
+          expectedRevision: proposed.workspaceRevision,
+          proposalId: proposed.proposal?.id,
+          summaryRevision: f.original.summary.revision,
+        });
+        // A fresh confirmation cannot be undone through the cancellation API.
+        const current = await f.service.read(f.actor);
+        await expect(
+          f.service.cancel(f.actor, crypto.randomUUID(), {
+            expectedRevision: current.state.workspaceRevision,
+            requestId: pending.request?.id,
+          }),
+        ).rejects.toMatchObject({ code: "STALE_REVISION" });
+      }
+      const originalRecord = await f.records.read(
+        f.actor,
+        f.actor.caseId,
+        "reconciliation",
+        f.actor.caseId,
+        summaryReconciliationRecordSchema,
+      );
+      const canonical = (await f.service.read(f.actor)).summary;
+      f.changeSources();
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.actor.caseId);
+      const stale = await f.service.read(f.actor);
+      expect(stale.state.status).toBe("stale");
+      const retired = await f.service.cancel(f.actor, crypto.randomUUID(), {
+        expectedRevision: stale.state.workspaceRevision,
+        requestId: pending.request?.id,
+      });
+      expect(retired.status).toBe("cancelled");
+      const current = await f.service.read(f.actor);
+      expect(current.state.status).toBe("cancelled");
+      expect(current.summary).toEqual(canonical);
+      const history = await f.records.read(
+        f.actor,
+        f.actor.caseId,
+        "reconciliation",
+        f.actor.caseId,
+        summaryReconciliationRecordSchema,
+        originalRecord?.id,
+      );
+      expect(history?.value.state.status).toBe(alreadyConfirmed ? "confirmed" : "proposed");
+      const next = await f.service.request(f.actor, crypto.randomUUID(), {
+        ...f.input,
+        expectedRevision: current.state.workspaceRevision,
+        summaryRevision: current.summary.revision,
+      });
+      expect(next.status).toBe("pending");
+      expect(next.request?.id).not.toBe(pending.request?.id);
+    } finally {
+      f.db.close();
+    }
+  });
+}
+
 test("post-staging account revocation and peer revision fail the atomic confirm and preserve old summary", async () => {
   for (const change of ["consent", "revision"]) {
     const f = await fixture();

@@ -209,7 +209,12 @@ export function createSummaryReconciliationStorage(
             ? source.summarySnapshotId === value.state.proposal?.id &&
               same(summary, value.state.proposal.after)
             : source.summaryId === value.baseSummaryId && same(summary, before);
-        if (!current || value.sourceDigest !== source.sourceDigest) {
+        // Retiring an obsolete request is final even when the case keeps changing.
+        // Its prior proposal/confirmation remains in immutable history.
+        if (
+          value.state.status !== "cancelled" &&
+          (!current || value.sourceDigest !== source.sourceDigest)
+        ) {
           state = {
             ...state,
             status: "stale",
@@ -465,6 +470,7 @@ export function createSummaryReconciliationStorage(
           "running",
           "proposed",
           "failed",
+          "stale",
         ]);
         if (loaded.source.workspaceRevision !== input.expectedRevision) stale();
         const { commit: _commit, ...prepared } = publication(actor, loaded, record, {
