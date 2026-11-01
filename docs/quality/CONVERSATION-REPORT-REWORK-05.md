@@ -18,7 +18,7 @@
 - `validate:quick`, `validate:build` 및 로컬 workerd의 실제 빌드 login HTML 검증.
 - `bun scripts/report-regressions.ts`: 39개 파일, 285 tests / 3449 assertions 통과. 암호화 저장소·권한·삭제·session·lease·HTML/PDF/ZIP·실패/재시도·선택 사진 및 새 분석 회귀 포함.
 - 실제 SQLite rework repository publish와 workerd D1에서 분석 원본 경합, 오래된 DI loader, 다른 entity, context 변경, legacy source bytes·digest·정렬을 확인했다.
-- 브라우저: rework read-only 진입, 명시적 생성과 실패/재시도, 실제 업로드 컴포넌트의 접수→처리→교정→사건 반영 요청→새 리포트, stale 편집 보관, 계정 전환, 웹/HTML 1440px·375px 줄바꿈, 기존 다운로드 상태와 inline 사진을 검사했다. #639 main(8a5e1711) 통합 후 실제 ReportReview→FollowUpResolution 조립에서 청구·방어 양쪽×3개 경로가 모두 통과했다. self/lawyer도 legacy report GET 0, save_report는 PDF 실패→완료 표시 없음→명시적 재시도 다운로드 성공이며 새 분석/초안/해결 변경 요청은 0이다. 결합 화면의 375px 가로 넘침 없음·44px 터치 영역·섹션 간격도 확인했다. API 응답은 합성 fixture이며 실제 외부 인수와 구분한다.
+- 브라우저: rework read-only 진입, 명시적 생성과 실패/재시도, 실제 업로드 컴포넌트의 접수→처리→교정→사건 반영 요청→새 리포트, stale 편집 보관, 계정 전환, 웹/HTML 1440px·375px 줄바꿈, 기존 다운로드 상태와 inline 사진을 검사했다. #639 main(8a5e1711) 통합 후 실제 ReportReview→FollowUpResolution 조립에서 청구·방어 양쪽×3개 경로가 모두 통과했다. self/lawyer도 legacy report GET 0, save_report는 PDF 실패→완료 표시 없음→명시적 재시도 다운로드 성공이며 새 분석/초안/해결 변경 요청은 0이다. 결합 화면의 375px 가로 넘침 없음·44px 터치 영역·섹션 간격도 확인했다. 실제 조립 11개 검사가 통과했다. 기존 리포트+ready 분석에서 새 리포트 조립만 실패하는 경우의 안내 누락과 영문 오류 코드 노출을 수정했다. 네트워크 응답 불명은 동일 request ID로 재확인하고, 접수된 작업의 확정 실패 후 명시적 재시도는 새 ID를 쓰는 것도 같은 브라우저에서 확인했다. API 응답은 합성 fixture이며 실제 외부 인수와 구분한다.
 
 ## 실제 PDF와 시각 검증
 

@@ -23,6 +23,22 @@ type ReportView = BaseReportView & {
   analysisReview?: ReworkReportView["analysisReview"];
 };
 
+function preparationFailureText(code: string) {
+  const messages: Record<string, string> = {
+    MODEL_UNAVAILABLE: "분석 서비스를 지금 이용할 수 없어요. 저장된 사건은 보존돼요.",
+    MODEL_SCHEMA_INVALID: "분석 결과가 검증을 통과하지 못했어요. 다시 준비해 주세요.",
+    LEGAL_SOURCE_UNAVAILABLE: "공식 법률 자료의 원문을 확인하지 못했어요.",
+    CITATION_INVALID: "법률 설명과 원문 인용이 일치하는지 확인하지 못했어요.",
+    JOB_TIMEOUT: "처리 시간이 초과됐어요. 현재 상태를 확인한 뒤 다시 시도해 주세요.",
+    STORAGE_UNAVAILABLE: "리포트 저장을 완료하지 못했어요. 기존 리포트는 보존돼요.",
+    CRYPTO_DECRYPT_FAILED: "저장한 자료를 확인하지 못했어요. 현재 상태를 다시 확인해 주세요.",
+    FILE_PROCESSING_FAILED: "자료 처리를 완료하지 못했어요. 자료 상태를 확인해 주세요.",
+    COVERAGE_INCOMPLETE: "자료의 처리 범위를 확인한 뒤 다시 준비해 주세요.",
+    USER_QUOTA_EXCEEDED: "오늘의 AI 이용 한도에 도달했어요. 저장된 내용은 확인할 수 있어요.",
+  };
+  return messages[code] ?? "처리를 완료하지 못했어요. 저장된 내용은 보존돼요. 다시 시도해 주세요.";
+}
+
 export type ReportReviewProps = {
   caseId: string;
   embedded?: boolean;
@@ -479,6 +495,9 @@ export function ReportReview({
         { expectedOwner: owner.current ?? "" },
       ),
     );
+    // A received receipt ends this attempt. Ambiguous request errors keep the
+    // same ID; a later explicit retry after an acknowledged job failure is new.
+    preparationAttempt.current = null;
     setActionMissing(result.missingItems);
     if (result.status === "blocked" || result.status === "require_confirmation") {
       setPreparation(await ownedResult(readPreparation()));
@@ -672,6 +691,7 @@ export function ReportReview({
           (!report ||
             preparation.analysis.status !== "ready" ||
             preparation.report.status === "pending" ||
+            preparation.report.status === "failed" ||
             actionMissing.length > 0) && (
             <section
               className="report-preparation"
@@ -681,22 +701,29 @@ export function ReportReview({
               <h3>
                 {preparation.report.status === "pending"
                   ? "리포트를 준비하고 있어요"
-                  : {
-                      not_started: "현재 사건의 법률 분석을 준비해요",
-                      pending: "법률 분석을 준비하고 있어요",
-                      running: "법 조항과 판례를 확인하고 있어요",
-                      ready: "검증한 분석으로 리포트를 준비할 수 있어요",
-                      partial: "확인된 분석과 보완할 항목이 있어요",
-                      empty: "조사한 범위에서 관련 결과를 찾지 못했어요",
-                      unavailable: "공식 자료를 확인하지 못했어요",
-                      failed: "분석을 완료하지 못했어요",
-                      stale: "사건과 자료 변경을 반영해야 해요",
-                    }[preparation.analysis.status]}
+                  : preparation.report.status === "failed"
+                    ? "새 리포트를 완성하지 못했어요"
+                    : {
+                        not_started: "현재 사건의 법률 분석을 준비해요",
+                        pending: "법률 분석을 준비하고 있어요",
+                        running: "법 조항과 판례를 확인하고 있어요",
+                        ready: "검증한 분석으로 리포트를 준비할 수 있어요",
+                        partial: "확인된 분석과 보완할 항목이 있어요",
+                        empty: "조사한 범위에서 관련 결과를 찾지 못했어요",
+                        unavailable: "공식 자료를 확인하지 못했어요",
+                        failed: "분석을 완료하지 못했어요",
+                        stale: "사건과 자료 변경을 반영해야 해요",
+                      }[preparation.analysis.status]}
               </h3>
               <p>
                 리포트는 준비된 검증 결과를 사용합니다. PDF를 저장할 때 새 분석을 요청하지 않습니다.
               </p>
-              {preparation.analysis.failure && <p>분석 실패 · {preparation.analysis.failure}</p>}
+              {preparation.report.failure && (
+                <p>리포트 준비 실패 · {preparationFailureText(preparation.report.failure)}</p>
+              )}
+              {preparation.analysis.failure && (
+                <p>분석 실패 · {preparationFailureText(preparation.analysis.failure)}</p>
+              )}
               {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].length >
                 0 && (
                 <ul>

@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import type { V2ConversationState, V2LegalAnalysisSnapshot } from "../../src/contracts/v2";
+import {
+  type V2ConversationState,
+  type V2LegalAnalysisSnapshot,
+  v2LegalAnalysisSnapshotSchema,
+} from "../../src/contracts/v2";
 import type { V2ResolutionState } from "../../src/contracts/v2/resolution";
 
 const basis = {
@@ -559,6 +563,7 @@ test("a failed preparation stays failed, retries only on request, and pending da
   };
   let owner = "synthetic-report-owner",
     requests = 0;
+  const requestIds: string[] = [];
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
@@ -571,6 +576,7 @@ test("a failed preparation stays failed, retries only on request, and pending da
     if (path.endsWith("/rework/report")) return route.fulfill({ json: null });
     if (path.endsWith("/rework/actions")) {
       requests++;
+      requestIds.push(route.request().postDataJSON().requestId);
       if (requests === 1)
         return route.fulfill({
           status: 503,
@@ -604,6 +610,8 @@ test("a failed preparation stays failed, retries only on request, and pending da
   });
   await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
   await expect(page.getByRole("heading", { name: "분석을 완료하지 못했어요" })).toBeVisible();
+  await expect(page.getByText(/분석 서비스를 지금 이용할 수 없어요/)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("MODEL_UNAVAILABLE");
   expect(requests).toBe(0);
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("요청을 완료하지 못했어요");
@@ -621,6 +629,22 @@ test("a failed preparation stays failed, retries only on request, and pending da
   );
   await expect(page.locator(".report-reading")).toHaveCount(0);
   expect(requests).toBe(2);
+  expect(requestIds[1]).toBe(requestIds[0]);
+  state.analysis = {
+    status: "failed",
+    basis,
+    currentJobId: null,
+    missingItems: [],
+    failure: "MODEL_UNAVAILABLE",
+  };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("heading", { name: "분석을 완료하지 못했어요" })).toBeVisible();
+  await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
+  ).toBeVisible();
+  expect(requests).toBe(3);
+  expect(requestIds[2]).not.toBe(requestIds[1]);
 });
 
 test("embedded report preserves stale edits before generating a new snapshot and clears all content on account change", async ({
@@ -787,3 +811,59 @@ for (const side of ["prepare_claim", "respond_to_claim"] as const)
       expect(analysisActions).toBe(0);
       expect(legacyReads).toBe(0);
     });
+
+test("report assembly failure remains visible over an existing report with ready analysis", async ({
+  page,
+}) => {
+  const snapshot = v2LegalAnalysisSnapshotSchema().parse(
+    JSON.parse(
+      readFileSync(new URL("../fixtures/reports/prepared-analysis.json", import.meta.url), "utf8"),
+    ),
+  );
+  const state = conversationState(),
+    report = preparedReport();
+  state.snapshot = snapshot;
+  state.caseContext = snapshot.context;
+  state.analysis = {
+    status: "ready",
+    basis: snapshot.basis,
+    currentJobId: null,
+    missingItems: [],
+    failure: null,
+  };
+  state.report = {
+    status: "failed",
+    id: report.id,
+    revision: report.revision,
+    basis: snapshot.basis,
+    currentJobId: null,
+    failure: "STORAGE_UNAVAILABLE",
+  };
+  let mutations = 0;
+  await page.route("**/api/**", async (route) => {
+    const request = route.request(),
+      path = new URL(request.url()).pathname;
+    if (request.method() !== "GET") mutations++;
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: "synthetic-report-owner", name: "합성", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+    if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
+    if (path.endsWith("/rework/resolution"))
+      return route.fulfill({ json: resolutionState(report) });
+    if (path.endsWith("/files")) return route.fulfill({ json: [] });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+  await expect(page.getByRole("heading", { name: "새 리포트를 완성하지 못했어요" })).toBeVisible();
+  await expect(
+    page.getByText(/리포트 저장을 완료하지 못했어요. 기존 리포트는 보존돼요/),
+  ).toBeVisible();
+  await expect(page.locator(".report-reading")).toContainText("제거할 파생 설명");
+  await expect(page.locator("body")).not.toContainText("STORAGE_UNAVAILABLE");
+  expect(mutations).toBe(0);
+});
