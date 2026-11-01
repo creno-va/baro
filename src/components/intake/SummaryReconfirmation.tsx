@@ -38,7 +38,7 @@ export type SummaryReconfirmationProps = {
 type Mutation =
   | { kind: "context"; input: V2CaseContextUpdate }
   | { kind: "request"; input: V2SummaryReconciliationRequest }
-  | { kind: "proposal"; input: V2SummaryReconciliationConfirm }
+  | { kind: "proposal"; input: V2SummaryReconciliationConfirm; requestId: string }
   | {
       kind: "cancel";
       input: V2SummaryReconciliationCancel;
@@ -51,7 +51,14 @@ type Mutation =
       alreadyConfirmed: boolean;
     };
 type Completion =
-  | { kind: "proposal"; proposalId: string; summaryRevision: number }
+  | {
+      kind: "proposal";
+      caseId: string;
+      proposalId: string;
+      requestId: string;
+      revision: number;
+      summaryRevision: number;
+    }
   | { kind: "initial"; revision: number; summaryRevision: number | null };
 function matches(item: CaseView, state: V2SummaryReconciliation | null, intent: Completion) {
   if (item.stage !== "active") return false;
@@ -61,11 +68,21 @@ function matches(item: CaseView, state: V2SummaryReconciliation | null, intent: 
       (item.summaryDetails?.revision ?? null) === intent.summaryRevision
     );
   return (
+    // The server keeps confirmed only while the exact snapshot and source
+    // basis still match. Automatic preparation may advance the current CAS.
+    item.id === intent.caseId &&
     state?.status === "confirmed" &&
     state.proposal?.id === intent.proposalId &&
-    state.confirmedWorkspaceRevision === item.revision &&
+    state.request?.id === intent.requestId &&
+    state.proposal.requestId === intent.requestId &&
+    state.confirmedWorkspaceRevision === intent.revision &&
+    state.workspaceRevision === item.revision &&
+    item.revision >= intent.revision &&
     state.confirmedSummaryRevision === intent.summaryRevision &&
-    item.summaryDetails?.revision === intent.summaryRevision
+    item.summaryDetails?.revision === intent.summaryRevision &&
+    item.summaryNeedsConfirmation !== true &&
+    JSON.stringify(v2SummarySchema.parse(item.summaryDetails)) ===
+      JSON.stringify(v2SummarySchema.parse(state.proposal.after))
   );
 }
 
@@ -204,7 +221,10 @@ function SummaryReconfirmationScene({
     [deny],
   );
   const readSnapshot = useCallback(async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // A just-confirmed case can advance through automatic preparation between
+    // these reads. Retry only mismatched fresh pairs, never mutations or errors.
+    const attempts = completion.current ? 4 : 2;
+    for (let attempt = 0; attempt < attempts; attempt++) {
       const next = await api.cases.get(caseId);
       // Legacy summary routes remain readable without requiring a v2 rework record.
       if (next.schemaVersion === "1" || !["summary", "active"].includes(next.stage))
@@ -392,7 +412,10 @@ function SummaryReconfirmationScene({
       } else if (operation.kind === "proposal") {
         completion.current = {
           kind: "proposal",
+          caseId,
           proposalId: operation.input.proposalId,
+          requestId: operation.requestId,
+          revision: operation.input.expectedRevision + 1,
           summaryRevision: operation.input.summaryRevision + 1,
         };
         await api.rework.confirmReconciliation(caseId, operation.input, { expectedOwner: owner });
@@ -645,6 +668,7 @@ function SummaryReconfirmationScene({
                           onClick={() =>
                             void mutate({
                               kind: "proposal",
+                              requestId: proposal.requestId,
                               input: {
                                 expectedRevision: item.revision,
                                 proposalId: proposal.id,

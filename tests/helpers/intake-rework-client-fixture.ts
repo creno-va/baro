@@ -67,6 +67,39 @@ const request: OperationRequest = async <T>(
   if (response) {
     if (!response.ok) throw await responseError(response);
     let value = v2SummaryReconciliationSchema.parse(await response.json());
+    if (suffix === "confirm" && fault?.startsWith("confirm-continuation-")) {
+      localStorage.removeItem("synthetic-reconciliation-fault");
+      // Synthetic HTTP boundary conditions; real automatic preparation is
+      // covered separately through the central signed Hono/runtime fixture.
+      mockRuntime.update((store) => {
+        const cases = store.cases;
+        const id = decodeURIComponent(path.split("/")[4] ?? "");
+        const item = cases[id];
+        if (!item) throw new Error("Missing synthetic confirmed case");
+        item.revision++;
+        const records = store.summaryReconciliations as Record<string, typeof value>;
+        const record = records[id];
+        if (!record?.request || !record.proposal) throw new Error("Missing synthetic receipt");
+        if (fault.endsWith("receipt")) record.confirmedWorkspaceRevision = item.revision;
+        if (fault.endsWith("request")) {
+          record.request.id = "different-confirmed-request";
+          record.proposal.requestId = record.request.id;
+        }
+        if (fault.endsWith("body") && item.summaryDetails?.facts[0])
+          item.summaryDetails.facts[0].text = "확정 변경안과 다른 합성 현재 사실입니다.";
+        if (fault.endsWith("stale")) {
+          record.status = "stale";
+          record.confirmedWorkspaceRevision = null;
+          record.confirmedSummaryRevision = null;
+        }
+        if (fault.endsWith("owner"))
+          store.session.user = {
+            id: "synthetic-other-owner",
+            name: "다른 합성 계정",
+            accountType: "customer",
+          };
+      });
+    }
     // Actual runtime can expose a terminal job as failed while the immutable
     // private request remains pending/running. Reads must not retire that record.
     if (

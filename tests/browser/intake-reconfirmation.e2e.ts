@@ -449,6 +449,38 @@ for (const difference of ["fact-text", "reference", "summary-revision", "fact-or
   });
 }
 
+for (const continuation of ["technical", "receipt", "request", "body", "stale", "owner"]) {
+  test(`confirmed proposal continuation: ${continuation}`, async ({ page }) => {
+    const item = await seed(page);
+    await page.goto(`/cases/${item.id}/summary`);
+    await propose(page);
+    await page.evaluate((mode) => {
+      localStorage.setItem("synthetic-reconciliation-fault", `confirm-continuation-${mode}`);
+    }, continuation);
+    await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+    if (continuation === "technical") {
+      await expect(page).toHaveURL(new RegExp(`/cases/${item.id}$`));
+      expect((await canonical(page, item.id)).revision).toBe(15);
+      expect((await canonical(page, item.id)).summaryDetails.revision).toBe(4);
+      return;
+    }
+    if (continuation === "owner") {
+      await expect(page.getByText(item.summary, { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toHaveCount(
+        0,
+      );
+    } else {
+      await expect(
+        page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("alert").filter({ hasText: "사건 내용이 바뀌었어요." }),
+      ).toBeVisible();
+    }
+    await expect(page).toHaveURL(new RegExp(`/cases/${item.id}/summary$`));
+  });
+}
+
 test("a lost request response retries the same persisted proposal", async ({ page }) => {
   const item = await seed(page);
   await page.goto(`/cases/${item.id}/summary`);
