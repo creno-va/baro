@@ -65,7 +65,7 @@ export async function verifyFreshState(db: D1Database, allowLiveActivity = false
   if (
     (await db
       .prepare("SELECT value FROM app_metadata WHERE key='schema_version'")
-      .first("value")) !== "0021_drop_consent_age"
+      .first("value")) !== "0022_conversation_rework"
   )
     throw new Error("FRESH_SCHEMA_INVALID");
   return state;
