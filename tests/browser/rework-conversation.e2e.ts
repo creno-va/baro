@@ -17,6 +17,7 @@ async function openAction(page: Page, name: string) {
   await button.click();
 }
 type Fixture = Awaited<ReturnType<typeof openReworkBrowserFixture>>;
+const materialText = "합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다.";
 async function counters(f: Fixture) {
   const response = await f.control("stats");
   expect(response.ok()).toBe(true);
@@ -47,7 +48,7 @@ async function addMaterial(page: Page) {
   await (await chooser).setFiles({
     name: "synthetic-conversation-contract.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다."),
+    buffer: Buffer.from(materialText),
   });
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
     "synthetic-conversation-contract.txt",
@@ -147,6 +148,13 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("처리 실패", { exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: /원본/ }).first()).toBeEnabled();
+    const download = page.waitForEvent("download");
+    await dialog.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
+    const artifact = await download;
+    const file = await artifact.path();
+    if (!file) throw new Error("MISSING_FAILED_MATERIAL_ORIGINAL");
+    expect(await readFile(file, "utf8")).toBe(materialText);
+    await artifact.delete();
     expect((await counters(f)).native?.failed).toBeGreaterThan(0);
     await page.keyboard.press("Escape");
     expect(new URL(page.url()).pathname).toBe(`/cases/${f.info.caseId}`);
