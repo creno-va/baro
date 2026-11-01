@@ -190,3 +190,16 @@ export function v2LegalAnalysisSnapshotSchema(guideHosts: readonly string[] = []
 export type V2SourceClaim = z.infer<typeof v2SourceClaimSchema>;
 export type V2LegalAnalysisDraft = z.infer<typeof v2LegalAnalysisDraftSchema>;
 export type V2LegalAnalysisSnapshot = z.infer<ReturnType<typeof v2LegalAnalysisSnapshotSchema>>;
+
+/** Presentation only. This grants no owner, source, audit or currentness authority.
+ * A prepared result still needs a limited report while its procedure is unknown. */
+export function v2ReportAnalysisStatus(
+  snapshot: Pick<V2LegalAnalysisSnapshot, "status" | "context">,
+): V2LegalAnalysisSnapshot["status"] {
+  return snapshot.status === "ready" &&
+    (snapshot.context.casePurpose === "unconfirmed" ||
+      snapshot.context.procedure.kind === "unconfirmed" ||
+      snapshot.context.procedure.stage === "unconfirmed")
+    ? "partial"
+    : snapshot.status;
+}
