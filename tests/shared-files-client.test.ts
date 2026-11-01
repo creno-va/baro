@@ -271,3 +271,43 @@ test("omitting the native port preserves the web original GET/status and respons
     code: "NOT_FOUND",
   });
 });
+
+test("metadata-only projection retains the server original hash and does not invent one for legacy rows", async () => {
+  let reads = 0;
+  const reader = createFileMetadataReader(async (_path, init) => {
+    expect(init?.method ?? "GET").toBe("GET");
+    reads++;
+    return Response.json(
+      [hash, undefined].map((contentHash, i) => ({
+        id: `synthetic_hash_${i}`,
+        revision: 2,
+        name: "합성.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 3,
+        status: "ready",
+        ...(contentHash ? { contentHash } : {}),
+      })),
+    );
+  });
+  const [current, legacy] = await reader("synthetic_case");
+  expect(current?.uploadContentHash).toBe(hash);
+  expect(legacy).not.toHaveProperty("uploadContentHash");
+  expect(reads).toBe(1);
+});
+
+test("malformed original metadata hashes remain errors instead of becoming upload identity", async () => {
+  const reader = createFileMetadataReader(async () =>
+    Response.json([
+      {
+        id: "synthetic_bad_hash",
+        revision: 2,
+        name: "합성.txt",
+        declaredMediaType: "text/plain",
+        byteLength: 3,
+        status: "ready",
+        contentHash: "not-a-content-digest",
+      },
+    ]),
+  );
+  await expect(reader("synthetic_case")).rejects.toThrow();
+});

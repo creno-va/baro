@@ -20,6 +20,7 @@ import {
   v2FactReferenceSchema,
   v2FailureCodeSchema,
   v2FileProcessingSchema,
+  v2HashSchema,
   v2JobSchema,
   v2LookupToolIdSchema,
   v2QuestionBatchSchema,
@@ -86,6 +87,7 @@ const fileViewSchema = z.object({
   uploadRejection: z.literal("FILE_REJECTED").optional(),
   canRetry: z.boolean().optional(),
   processing: v2FileProcessingSchema.optional(),
+  uploadContentHash: v2HashSchema.optional(),
   createdAt: z.iso.datetime({ offset: true }).optional(),
   failure: v2FailureCodeSchema.nullable().optional(),
 });
