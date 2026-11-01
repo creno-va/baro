@@ -1,0 +1,126 @@
+{
+  "notice": "Synthetic acceptance scenarios. No official procedure, deadline, jurisdiction or legal applicability is established by these fixtures.",
+  "purposes": ["prepare_claim", "respond_to_claim"],
+  "paths": ["self", "lawyer", "save_report"],
+  "scenarios": [
+    {
+      "id": "criminal-claim",
+      "purpose": "prepare_claim",
+      "area": "criminal",
+      "stage": "before_filing",
+      "document": "complaint",
+      "mustNot": ["civil_claim", "appeal"]
+    },
+    {
+      "id": "civil-claim",
+      "purpose": "prepare_claim",
+      "area": "civil",
+      "stage": "before_filing",
+      "document": "civil_claim",
+      "mustNot": ["complaint", "appeal"]
+    },
+    {
+      "id": "criminal-response-investigation",
+      "purpose": "respond_to_claim",
+      "area": "criminal",
+      "stage": "investigation",
+      "document": "statement",
+      "mustNot": ["appeal", "guaranteed_public_defender"]
+    },
+    {
+      "id": "civil-response",
+      "purpose": "respond_to_claim",
+      "area": "civil",
+      "stage": "first_instance",
+      "document": "answer",
+      "mustNot": ["complaint", "appeal"]
+    },
+    {
+      "id": "criminal-response-trial",
+      "purpose": "respond_to_claim",
+      "area": "criminal",
+      "stage": "first_instance",
+      "document": "opinion",
+      "mustNot": ["appeal"]
+    },
+    {
+      "id": "actual-appeal",
+      "purpose": "respond_to_claim",
+      "area": "civil",
+      "stage": "appeal",
+      "document": "appeal",
+      "mustNot": ["inferred_deadline"]
+    },
+    {
+      "id": "unknown-purpose",
+      "purpose": "unconfirmed",
+      "area": "civil",
+      "stage": "unknown",
+      "document": null,
+      "mustNot": ["inferred_purpose", "appeal"]
+    },
+    {
+      "id": "unknown-area",
+      "purpose": "prepare_claim",
+      "area": "unknown",
+      "stage": "unknown",
+      "document": null,
+      "mustNot": ["complaint", "inferred_jurisdiction"]
+    },
+    {
+      "id": "no-official-guide",
+      "expect": ["confirmation_actions", "source_absence_visible"],
+      "mustNot": ["invented_institution", "invented_form", "invented_department"]
+    },
+    {
+      "id": "unknown-deadline-jurisdiction",
+      "expect": ["explicit_missing_fields", "confirmation_actions"],
+      "mustNot": ["calculated_deadline", "assigned_court"]
+    },
+    {
+      "id": "unentered-person-date",
+      "expect": ["explicit_missing_fields"],
+      "mustNot": ["invented_name", "invented_date", "invented_allegation"]
+    },
+    {
+      "id": "weakness-evidence",
+      "expect": ["weakness_to_required_fact_or_material"],
+      "mustNot": ["evidence_fabrication", "conceal_unfavorable_facts"]
+    },
+    {
+      "id": "excluded-material",
+      "expect": ["excluded_material_absent", "dependent_analysis_invalidated"],
+      "mustNot": ["automatic_sharing"]
+    },
+    {
+      "id": "masked-sharing",
+      "expect": ["masked_preview_and_draft", "originals_not_attached"],
+      "mustNot": ["raw_identifier_in_download"]
+    },
+    {
+      "id": "stale-revision",
+      "expect": ["old_draft_label", "new_generation_requires_current_basis"],
+      "mustNot": ["old_draft_as_current"]
+    },
+    {
+      "id": "path-switch-pause-resume",
+      "expect": ["explicit_path_change", "saved_work_preserved", "no_automatic_generation"]
+    },
+    { "id": "reconnect", "expect": ["server_saved_state_restored", "no_private_browser_storage"] },
+    {
+      "id": "account-switch",
+      "expect": ["private_state_cleared", "late_result_discarded", "pending_download_cancelled"]
+    },
+    { "id": "consent-revocation-deletion", "expect": ["mutation_denied", "late_result_discarded"] },
+    {
+      "id": "download-failure",
+      "expect": ["saved_draft_preserved", "explicit_retry"],
+      "mustNot": ["false_success", "automatic_model_retry"]
+    },
+    {
+      "id": "save-report-only",
+      "expect": ["existing_report_save_called_once"],
+      "mustNot": ["question", "new_analysis", "draft_generation", "source_lookup"]
+    }
+  ]
+}
