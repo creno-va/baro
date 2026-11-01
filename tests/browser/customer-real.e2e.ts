@@ -49,10 +49,12 @@ for (const viewport of [
   test(`real readonly summary/timeline lost responses, keyboard/reload and account purge at ${viewport.width}px`, async ({
     page,
     context,
+    browserName,
   }, testInfo) => {
     const browserOrigin = new URL(String(testInfo.project.use.baseURL ?? "http://127.0.0.1:4355"))
       .origin;
     const { server, info } = await startCustomerServer(browserOrigin);
+    let releasePendingSession: (() => void) | undefined;
     try {
       // 640x450 is the CSS viewport of a 1280x900 window at 200% browser zoom.
       // Also stress CSS zoom separately; unlike browser zoom it retains media queries.
@@ -88,6 +90,7 @@ for (const viewport of [
         releaseSession?.();
         releaseSession = undefined;
       };
+      releasePendingSession = releaseHeldSession;
       const mutations: { path: string; body: string | null; key: string | undefined }[] = [];
       await context.route("**/api/**", async (route) => {
         const request = route.request();
@@ -384,7 +387,9 @@ for (const viewport of [
           await links.first().focus();
           await expect(links.first()).toBeFocused();
           for (let index = 1; index < (await links.count()); index++) {
-            await page.keyboard.press("Tab");
+            const nextLinkKey =
+              browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+            await page.keyboard.press(nextLinkKey);
             await expect(links.nth(index)).toBeFocused();
             await expect(links.nth(index)).toBeInViewport({ ratio: 1 });
           }
@@ -415,7 +420,14 @@ for (const viewport of [
       );
       expect(saved.timeline).toHaveLength(1);
     } finally {
-      server.stdin.end();
+      releasePendingSession?.();
+      try {
+        await page.close();
+        await context.unrouteAll({ behavior: "wait" });
+      } finally {
+        server.stdin.end();
+        server.kill();
+      }
     }
   });
 }
@@ -501,7 +513,13 @@ for (const [action, outcome] of [
       }
     } finally {
       releaseRead?.();
-      server.stdin.end();
+      try {
+        await page.close();
+        await context.unrouteAll({ behavior: "wait" });
+      } finally {
+        server.stdin.end();
+        server.kill();
+      }
     }
   });
 }
