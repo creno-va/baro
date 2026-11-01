@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
 
@@ -13,6 +14,30 @@ async function openAction(page: Page, name: string) {
   const button = group.getByRole("button", { name, exact: true });
   if (!(await button.isVisible())) await group.getByText("다른 작업", { exact: true }).click();
   await button.click();
+}
+
+/** The central fixture starts a real new case, not a pre-confirmed report. */
+async function enterWorkspace(page: Page, caseId: string) {
+  const path = `/cases/${encodeURIComponent(caseId)}`;
+  await page.goto(`${path}/intake`);
+  for (let index = 0; index < 6; index++) {
+    await expect(
+      page.getByText(`${Math.floor(index / 3) + 1}차 질문 · ${(index % 3) + 1} / 3`, {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "모름", exact: true }).click();
+  }
+  await expect(page).toHaveURL(new RegExp(`${path}/summary$`));
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).toBeEnabled();
+  expect(new URL(page.url()).pathname).toBe(path);
 }
 
 test("an actual action ACK lost after commit replays the identical input and idempotency key", async ({
@@ -40,7 +65,7 @@ test("an actual action ACK lost after commit replays the identical input and ide
     },
   );
   try {
-    await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}`);
+    await enterWorkspace(page, f.info.caseId);
     await openAction(page, "법률·판례와 현재 약점 확인");
     const retry = page.getByRole("button", { name: "같은 요청 결과 확인", exact: true });
     await expect(retry).toBeVisible();
@@ -50,6 +75,53 @@ test("an actual action ACK lost after commit replays the identical input and ide
     ).toBeVisible();
     expect(f.actions).toHaveLength(2);
     expect(f.actions[1]).toEqual(f.actions[0]);
+  } finally {
+    await f.close();
+  }
+});
+
+test("the report's own prepare button recovers an actual committed response loss without duplicate work", async ({
+  page,
+  context,
+}, testInfo) => {
+  let dropped = false;
+  const f = await openReworkBrowserFixture(
+    context,
+    new URL(String(testInfo.project.use.baseURL)).origin,
+    "prepare_claim",
+    {
+      dropResponse: (request, response) => {
+        if (
+          !dropped &&
+          request.method() === "POST" &&
+          new URL(request.url()).pathname.endsWith("/rework/actions") &&
+          request.postDataJSON()?.action === "prepare_report" &&
+          response.ok()
+        ) {
+          dropped = true;
+          return true;
+        }
+        return false;
+      },
+    },
+  );
+  try {
+    await enterWorkspace(page, f.info.caseId);
+    await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}/reports`);
+    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+    const ready = page.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true });
+    const failure = page.locator(".report-error");
+    await expect
+      .poll(async () => (await ready.isVisible()) || (await failure.isVisible()))
+      .toBe(true);
+    expect(dropped).toBe(true);
+    if (await failure.isVisible())
+      await failure.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(ready).toBeVisible();
+    // A completed result may be recovered by GET alone. If the client retries
+    // the POST, it must preserve the committed operation's entire identity.
+    expect(f.actions.length).toBeGreaterThan(0);
+    for (const action of f.actions) expect(action).toEqual(f.actions[0]);
   } finally {
     await f.close();
   }
@@ -66,7 +138,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       try {
         await page.setViewportSize({ width: 320, height: 844 });
         const path = `/cases/${encodeURIComponent(f.info.caseId)}`;
-        await page.goto(path);
+        await enterWorkspace(page, f.info.caseId);
         const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
         await expect(composer).toBeEnabled();
         await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
@@ -175,6 +247,18 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           true,
         );
         await expect(composer).toBeInViewport();
+        if (purpose === "prepare_claim" && followup === "직접 해결") {
+          expect(
+            (await new AxeBuilder({ page }).include(".workspace").analyze()).violations.filter(
+              (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
+            ),
+          ).toEqual([]);
+          await page.keyboard.press("Escape");
+          await expect(report).not.toBeVisible();
+          expect(
+            await page.evaluate(() => !!document.activeElement?.closest(".workspace-composer")),
+          ).toBe(true);
+        }
       } finally {
         await f.close();
       }

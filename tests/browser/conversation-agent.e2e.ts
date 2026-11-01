@@ -176,3 +176,24 @@ test("consent withdrawal preserves authorized stored views without posting an ac
   await expect(panel.getByLabel("검토 중인 입력")).toBeDisabled();
   expect(await page.evaluate(() => window.conversationFixture.calls)).toEqual([]);
 });
+
+test("an earlier report request resumes only its view after server completion, preserving dirty material review", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.conversationFixture.reportBlocked = true;
+  });
+  await page.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
+  const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+  await materials.getByLabel("검토 중인 입력").fill("저장 전 검토 의견");
+  await page.evaluate(() => window.conversationFixture.finishReport());
+  await expect(materials.getByLabel("검토 중인 입력")).toHaveValue("저장 전 검토 의견");
+  await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toHaveCount(
+    0,
+  );
+  await materials.getByRole("button", { name: "합성 입력 저장", exact: true }).click();
+  await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(1);
+});

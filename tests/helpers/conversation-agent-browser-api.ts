@@ -10,6 +10,8 @@ export type ConversationFixtureControl = {
   aborted: boolean;
   needsConsent: boolean;
   advanceAfterIntentRead: boolean;
+  reportBlocked: boolean;
+  finishReport: () => void;
   withdrawConsent: () => void;
   emitIntent: (intent: V2ConversationIntent, revision?: number) => void;
   advanceWorkspace: () => void;

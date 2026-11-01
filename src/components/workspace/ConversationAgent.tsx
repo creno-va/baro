@@ -54,11 +54,12 @@ export type ConversationPaneProps = {
   state: V2ConversationState;
   disabled: boolean;
   readDisabled: boolean;
-  onChanged: () => Promise<unknown>;
+  onChanged: () => Promise<V2ConversationState | null>;
   onCancel: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
   onOpenPane: (pane: ConversationPane) => void;
+  onReportViewed: (identity: { id: string; revision: number }) => void;
 };
 
 /** Actual domain actions use the shared authenticated client. Pane content is
@@ -103,6 +104,9 @@ export function ConversationAgent({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [paneBusy, setPaneBusy] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const [reportRequested, setReportRequested] = useState(false);
+  const [viewedReport, setViewedReport] = useState<string | null>(null);
   const dirty = useRef(false);
   const paneLocked = useRef(false);
   const locked = useRef(false);
@@ -127,6 +131,7 @@ export function ConversationAgent({
   }, []);
   const changeDirty = useCallback((value: boolean) => {
     dirty.current = value;
+    setHasDraft(value);
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -210,6 +215,8 @@ export function ConversationAgent({
     )
       return;
     dirty.current = false;
+    setHasDraft(false);
+    setReportRequested(false);
     setPane(null);
     setResult(null);
   }, []);
@@ -266,6 +273,7 @@ export function ConversationAgent({
           return;
         }
         const effective = action === "save_report" && !fresh.report.id ? "prepare_report" : action;
+        if (effective === "prepare_report" || effective === "save_report") setReportRequested(true);
         // Preserve the reviewed identity, rather than silently saving a newer report.
         const reviewedReport = state?.report ?? fresh.report;
         const identity = JSON.stringify([
@@ -299,6 +307,7 @@ export function ConversationAgent({
         if (!(await verify(false, false)) || !current(epoch) || !mounted.current) return;
         attempt.current = null;
         dirty.current = false;
+        setHasDraft(false);
         setResult(next);
         setPane(next.pane);
         await changed();
@@ -395,7 +404,52 @@ export function ConversationAgent({
     processed.current.add(requestedAction.id);
     void execute(requestedAction.action, requestedAction.id);
   }, [requestedAction, ready, canMutate, stateIsCurrent, disabled, busy, paneBusy, state, execute]);
-  const next = state ? nextConversationAction(state) : null;
+  const reportIdentity =
+    state?.report.id && state.report.revision !== null
+      ? `${state.report.id}:${state.report.revision}`
+      : null;
+  useEffect(() => {
+    if (
+      !reportRequested ||
+      !state ||
+      !ready ||
+      !stateIsCurrent ||
+      disabled ||
+      busy ||
+      paneBusy ||
+      hasDraft ||
+      !mounted.current ||
+      abort.current.signal.aborted ||
+      !current(paneEpoch.current)
+    )
+      return;
+    if (pane === "report") {
+      setReportRequested(false);
+      return;
+    }
+    if (["pending", "ready", "failed"].includes(state.report.status)) {
+      // Resume the requested view from a freshly authorized server state only.
+      // The server owns admission/continuation; no POST or model call occurs.
+      setResult(null);
+      setPane("report");
+    }
+  }, [
+    reportRequested,
+    state,
+    ready,
+    stateIsCurrent,
+    disabled,
+    busy,
+    paneBusy,
+    hasDraft,
+    current,
+    pane,
+  ]);
+  const next = state
+    ? state.report.status === "ready" && reportIdentity !== viewedReport
+      ? "prepare_report"
+      : nextConversationAction(state)
+    : null;
   const waiting =
     state &&
     (["pending", "running"].includes(state.analysis.status) ||
@@ -542,9 +596,24 @@ export function ConversationAgent({
               onCancel: close,
               onDirtyChange: changeDirty,
               onBusyChange: changePaneBusy,
+              onReportViewed: (identity) => {
+                if (
+                  pane !== "report" ||
+                  !stateIsCurrent ||
+                  state.report.status !== "ready" ||
+                  state.report.id !== identity.id ||
+                  state.report.revision !== identity.revision ||
+                  !mounted.current ||
+                  !current(paneEpoch.current) ||
+                  abort.current.signal.aborted
+                )
+                  return;
+                setViewedReport(`${identity.id}:${identity.revision}`);
+              },
               onOpenPane: (nextPane) => {
                 if (!mounted.current || !current(paneEpoch.current)) return;
                 dirty.current = false;
+                setHasDraft(false);
                 setResult(null);
                 setPane(nextPane);
               },

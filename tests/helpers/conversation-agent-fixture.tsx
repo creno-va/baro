@@ -27,6 +27,8 @@ export function ConversationAgentFixture() {
     aborted: false,
     needsConsent: false,
     advanceAfterIntentRead: false,
+    reportBlocked: false,
+    finishReport: () => {},
     withdrawConsent: () => {},
     emitIntent: () => {},
     advanceWorkspace: () => {},
@@ -41,6 +43,19 @@ export function ConversationAgentFixture() {
     value.advanceWorkspace = () => setWorkspaceRevision(9);
     value.catchUpState = () => {
       state.current.workspaceRevision = 9;
+    };
+    value.finishReport = () => {
+      value.reportBlocked = false;
+      state.current.workspaceRevision = 9;
+      state.current.report = {
+        status: "ready",
+        id: "report",
+        revision: 1,
+        basis: state.current.analysis.basis,
+        currentJobId: null,
+        failure: null,
+      };
+      setWorkspaceRevision(9);
     };
     value.emitIntent = (intent, revision = state.current.workspaceRevision) => {
       const id = crypto.randomUUID();
@@ -97,7 +112,7 @@ export function ConversationAgentFixture() {
             code: value.failureCode,
           },
         );
-      if (request.action === "prepare_report")
+      if (request.action === "prepare_report" && !value.reportBlocked)
         state.current.report = {
           status: "ready",
           id: "report",
@@ -120,8 +135,11 @@ export function ConversationAgentFixture() {
         contractVersion: "conversation-report-v1",
         requestId: request.requestId,
         workspaceRevision: state.current.workspaceRevision,
-        pane: panes[request.action],
-        status: "require_confirmation",
+        pane:
+          request.action === "prepare_report" && value.reportBlocked
+            ? "materials"
+            : panes[request.action],
+        status: value.reportBlocked ? "blocked" : "require_confirmation",
         operationId: null,
         missingItems: [],
       };
@@ -190,6 +208,16 @@ export function ConversationAgentFixture() {
                     <textarea
                       disabled={props.disabled}
                       value={text}
+                      onFocus={() => {
+                        const report = props.state.report;
+                        if (
+                          pane === "report" &&
+                          report.status === "ready" &&
+                          report.id &&
+                          report.revision !== null
+                        )
+                          props.onReportViewed({ id: report.id, revision: report.revision });
+                      }}
                       onChange={(event) => {
                         setText(event.target.value);
                         props.onDirtyChange(true);

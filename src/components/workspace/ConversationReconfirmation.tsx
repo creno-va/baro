@@ -41,7 +41,10 @@ export function ConversationReconfirmation({
   );
   async function afterConfirmation() {
     const fresh = await callbacks.current.onChanged();
-    if (fresh) callbacks.current.onOpenPane("analysis");
+    if (fresh)
+      callbacks.current.onOpenPane(
+        ["pending", "ready"].includes(fresh.report.status) ? "report" : "analysis",
+      );
   }
   return (
     <>
