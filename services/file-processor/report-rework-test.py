@@ -44,7 +44,8 @@ for name in ("claim", "response", "claim-masked", "response-masked"):
         assert re.sub(r"\s+", "", phrase) in compact, (name, phrase)
     assert ("인정하는사실과다투는사실" in compact) == name.startswith("response")
     images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
-    assert any(" jpeg " in line for line in images.splitlines()) == ("masked" not in name)
+    photo_count = sum(" jpeg " in line for line in images.splitlines())
+    assert photo_count >= 2 if "masked" not in name else photo_count == 0
     subprocess.run([
         "pdftoppm", "-scale-to", "1600", "-png", str(output), str(root / f"{name}-page")
     ], check=True)

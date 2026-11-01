@@ -27,6 +27,9 @@ export function reportReworkLayoutFixture(side: "claim" | "response", long = fal
     "### 증거 1 · 당사자가 작성했다고 설명한 매우 긴 제목의 합성 송금 확인서와 반환 약정 대화 기록.jpg",
     "- 자료 기재 · 1쪽 · 송금 기록과 반환에 관한 대화의 연결은 확인 필요",
     "![합성 송금 확인서 · 촬영일과 사건 관련성은 사용자 확인 필요](baro-photo:synthetic-rework-photo)",
+    ...(long
+      ? ["![세로 비율의 합성 문서 · 읽히는 기재만 대조](baro-photo:synthetic-rework-portrait)"]
+      : []),
     "",
     "법적 쟁점과 법 조항",
     "### 반환 약정의 성립과 이행 조건 · 합성 법령 제1조",
@@ -68,6 +71,11 @@ export function reportReworkLayoutFixture(side: "claim" | "response", long = fal
     "",
     "출처와 분석 기준",
     "- 합성 검증 전용 · 분석 기준 2026-11-01T01:00:00Z · 사건 버전 7 · 확인 요약 버전 2",
+    ...(long
+      ? [
+          `- 원문 위치 검증 · https://example.invalid/synthetic-official-source/${"long-source-identity".repeat(12)}`,
+        ]
+      : []),
     "- 이 fixture는 실제 공급자 호출이나 법률 검토 승인을 나타내지 않습니다.",
   ].join("\n");
   return {
