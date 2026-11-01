@@ -33,7 +33,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const policyOpened = context.waitForEvent("page");
   await page.getByRole("link", { name: /^AI 이용 고지/ }).click();
   const policy = await policyOpened;
-  await expect(policy.getByRole("heading", { name: "AI 이용 고지 초안" })).toBeVisible();
+  await expect(policy.getByRole("heading", { name: "AI 이용 고지", exact: true })).toBeVisible();
   await policy.close();
   await page
     .getByRole("checkbox", {
@@ -48,11 +48,21 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
     await page.getByRole("button", { name: "저장하고 계속" }).click();
-    for (let index = 0; index < 6; index++)
+    for (let index = 1; index <= 6; index++) {
+      await expect(
+        page.getByText(`${Math.ceil(index / 3)}차 질문 · ${((index - 1) % 3) + 1} / 3`, {
+          exact: true,
+        }),
+      ).toBeVisible();
       await page.getByRole("button", { name: "모름", exact: true }).click();
+    }
     await expect(page).toHaveURL(/\/summary$/);
-    await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-    await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+    await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole("button", { name: "확인하고 계속", exact: true }).click();
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     return new URL(page.url()).pathname;
   }
@@ -71,6 +81,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   }
   await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
+  await page
+    .getByRole("region", { name: "리포트 준비 상태", exact: true })
+    .getByRole("button", { name: "리포트 준비", exact: true })
+    .click();
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
@@ -151,6 +165,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   expect(await originalCount()).toBeGreaterThan(0);
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
+  await peer
+    .getByRole("region", { name: "리포트 준비 상태", exact: true })
+    .getByRole("button", { name: "리포트 준비", exact: true })
+    .click();
   await openReportEditor(peer);
   await expect(peer.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   const previousMarker = await page.evaluate(() => localStorage.getItem("baro-session-changed"));
@@ -207,6 +225,13 @@ test("oversized mock source shows first-report recovery and preserves the full o
       needsConsent: false,
     });
     put("caseOwners", { "synthetic-overflow-case": "synthetic-overflow-owner" });
+    put("reworkContexts", {
+      "synthetic-overflow-case": {
+        casePurpose: "prepare_claim",
+        subjectContext: "individual",
+        procedure: { kind: "civil", stage: "before_filing", description: null },
+      },
+    });
     put("cases", {
       "synthetic-overflow-case": {
         id: "synthetic-overflow-case",
@@ -234,6 +259,10 @@ test("oversized mock source shows first-report recovery and preserves the full o
     put("reports", {});
   });
   await page.goto("/cases/synthetic-overflow-case/reports");
+  await page
+    .getByRole("region", { name: "리포트 준비 상태", exact: true })
+    .getByRole("button", { name: "리포트 준비", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "자료를 줄여 첫 리포트를 만들어요" }),
   ).toBeVisible();
@@ -273,6 +302,13 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
       needsConsent: false,
     });
     put("caseOwners", { "synthetic-generation-case": "synthetic-generation-owner" });
+    put("reworkContexts", {
+      "synthetic-generation-case": {
+        casePurpose: "prepare_claim",
+        subjectContext: "individual",
+        procedure: { kind: "civil", stage: "before_filing", description: null },
+      },
+    });
     put("cases", {
       "synthetic-generation-case": {
         id: "synthetic-generation-case",
@@ -288,6 +324,10 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     put("reports", {});
   });
   await page.goto("/cases/synthetic-generation-case/reports");
+  await page
+    .getByRole("region", { name: "리포트 준비 상태", exact: true })
+    .getByRole("button", { name: "리포트 준비", exact: true })
+    .click();
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
