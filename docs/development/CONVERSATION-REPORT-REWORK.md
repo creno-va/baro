@@ -169,4 +169,6 @@ PR665 exacte517d146d82773b45bddba90ecd90460d95b8498의 Quality41321332843 성공
 
 공통 경계 focused29 tests249 assertions 통과: 두 번의 실제 revision 변경 뒤 fresh snapshot, 계속 바뀌는 상태의 최대3회 실패, 재조회 전 logout의401, actual encrypted intent publication의400→fresh200, 실제 저장503/크기413와 provider/job0을 확인했다.48초 리포트 생성·metadata/admission 만료·사용자 취소·300초 binary 한계를 controlled transport로 검증했다. production build/dry-run/actual local workerd 부팅도 통과했다. 초기 테스트 fixture의 잘못된 DB 컬럼/저장 메시지 필드와 타입/포맷 오류는 제품 보호 조건을 변경하지 않고 수정했다.
 
+05의 shared mock 통합에서 ReportMockError가 generic WorkspaceMockError 경계에서 UNAVAILABLE로 바뀌는 추가 문제를 확인했다. 정식 typed export 두 code만413/409로 보존하며 arbitrary 오류를 공식 성공/실패 코드로 승격하지 않는다. 실제 explicit mock의 초과 자료→명시 report 준비에서 크기 오류 전달·빈 report 저장 없음·원본 내용 보존을 포함해 공통 focused38 tests333 assertions를 통과했다. mock에서도 분석 unavailable 고지는 유지한다.
+
 추가 단독 test 소유권:01은 customer-real/recovery-real/human-review와 test-only customer-browser-server의 실제 createReworkApi mount 조립,03은 workspace-shared/customer-completion,05는 report-draft-revision/retained-PDF/real-download/account-session-recovery/reports-integrated다.04의 Workspace 및 workspace.e2e.ts는 계속04 소유다.00은 app-experience/product-ui/shell-integration 등 공통 browser corpus를 정비한다. broad 사전 검사 중 같은 구형 UI 전제로 반복 대기하는 customer-recovery-real/product-ui batch는 실패를 보존하고 중단했으며, 미실행·중단을 성공으로 기록하지 않는다. 최종 manual full은 모든 수정 병합 후 별도 실행한다.
