@@ -1,4 +1,5 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
@@ -105,6 +106,38 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await (await pdfEvent).saveAs(pdfPath);
   expect((await readFile(pdfPath)).subarray(0, 5).toString()).toBe("%PDF-");
   await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
+  // The installed original/ZIP API contract remains available alongside the
+  // PDF-only web save UI. Exercise its real shared facade and IndexedDB bytes.
+  const archive = await page.evaluate(async (path) => {
+    const modulePath = "/src/client/api/index.ts";
+    const { api } = (await import(modulePath)) as typeof import("../../src/client/api");
+    const caseId = path.split("/")[2] ?? "";
+    const materials = await api.files.list(caseId);
+    const selected = materials.find((file) => file.name === "선택 원본.txt");
+    const report = await api.rework.peekReport(caseId);
+    if (!selected || !report) throw new Error("Synthetic reviewed selection missing");
+    const original = await api.files.original(caseId, selected.id);
+    const zip = await api.reports.zip(report.id, [selected.id]);
+    return {
+      original: [...new Uint8Array(await original.arrayBuffer())],
+      zip: [...new Uint8Array(await zip.arrayBuffer())],
+    };
+  }, casePath);
+  expect(archive.original).toEqual([...Buffer.from(originalText)]);
+  const zipPath = resolve(artifacts, "integrated-originals.zip");
+  await writeFile(zipPath, new Uint8Array(archive.zip));
+  const entries: { name: string; text: string }[] = JSON.parse(
+    execFileSync(
+      process.platform === "win32" ? "python" : "python3",
+      [
+        "-c",
+        "import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); print(json.dumps([{'name':n,'text':z.read(n).decode('utf-8')} for n in z.namelist()]))",
+        zipPath,
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+  expect(entries).toEqual([{ name: "001-선택 원본.txt", text: originalText }]);
   expect((await new AxeBuilder({ page }).include(".report-review").analyze()).violations).toEqual(
     [],
   );

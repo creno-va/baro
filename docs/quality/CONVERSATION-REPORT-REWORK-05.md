@@ -64,3 +64,17 @@
 `codex/626-report-scoped-read`는 optional private `readPreparedAnalysisForScope` 포트를 제공한다. current owner·감사된 결과·정확한 공식 원문·현재 및 요청 scope를 한 번의 authoritative read로 증명하는 포트다. 기존 read와 scope proof가 동일한 전체 분석을 두 번 읽는 부분만 통합하며, export 전과 비동기 렌더 후의 각각 새로운 검증은 유지한다. 기존 DI는 두 단계 검증을 그대로 사용한다. masked/excluded 범위의 이전 파생 설명을 제거하고 과거 본문을 보존하는 회귀, 렌더 중 새 분석으로 바뀌면 실제 PDF가 생성됐어도 저장 전에 거절하는 회귀를 추가했다. 새 proof 조회 실패 때 이전 unscoped 결과로 fallback하지 않는 검사도 포함해 reports 288 tests/3504 assertions가 통과했다.
 
 포트 제공만으로 실제 PDF 문제가 해결됐다고 표시하지 않는다. 00이 current `readAnalysisScope`의 전후 동일성과 전체 owner/source 검증을 구현하고 runtime factory를 연결하는 후속 PR의 CI/main 뒤 실제 metered 여정을 다시 검증한다. snapshot과 scope를 오래 캐시하거나 검증을 삭제하지 않는다.
+
+## 공유 예시 여정의 최종 UI 계약 정렬
+
+`codex/626-report-shared-flow`는 00이 위임한 `tests/browser/reports-integrated.e2e.ts`만 정비한다. 실제 제품 페이지와 공유 facade의 mock 모드를 사용하며 API alias/대체 component/검증 성공 seed를 넣지 않는다. 초기 2×3 질문의 각 순서를 확인한 뒤 readonly 요약의 ‘맞아요’→명시 확인, 리포트 준비 상태의 명시 ‘리포트 준비’로 진행한다. 법률 공급자 미실행·unavailable 상태는 그대로 보존한다.
+
+PR676 main a86862e0의 정확한 source identity 대물림을 소비한 뒤, 편집 저장→새로고침→PDF 다운로드·접근성·모바일/desktop 캡처→사건 삭제와 원본 저장소 비움→두 번째 사건/자료→계정 삭제 및 peer 본문/PDF 제거를 검증했다. 원본은 공유 Files API에서 실제 IndexedDB bytes를 읽어 전부 비교하고, 기존 ZIP API로 선택한 원본만 묶어 표준 zipfile의 CRC·UTF-8 파일명·전체 내용 검사를 수행한다. 삭제 후 archive를 포함한 original inventory도 0이다. 화면에는 기존 PDF 저장 UI만 표시한다.
+
+초과 자료의 29,999자+emoji+TAIL을 잘라내지 않고 제외 선택으로 복구하며 저장된 원본·제외 id·본문 well-formed 여부·reload를 검사한다. 다른 화면에서 생성한 아직 보지 않은 리포트는 기존 화면의 재생성으로 덮어쓰지 못한다. 삭제된 사건은 safe NOT_FOUND alert와 편집/PDF 없음, 계정 삭제는 peer의 본문·다운로드 제거와 로그인 안내를 함께 확인한다.
+
+Chromium 3/3 및 WebKit 3/3이 실제 공유 페이지에서 통과했다. 원본 bytearray 동등 검사를 강화한 뒤 변경된 전체 여정도 양 브라우저 각1회 추가 통과했다. 합성 PDF·ZIP·화면은 `.wrangler/report-shared/{chromium,webkit}/`에 보존한다. 이 예시 모드의 canvas PDF/IndexedDB archive 검증은 실제 Docker PDF와 외부 로그인·공급자 인수를 대신하지 않는다. 실제 metered PDF는 00의 scoped helper/runtime binding CI/main 후 별도로 확인한다.
+
+677 main ec292cbb의 실제 scoped authoritative binding을 소비한 별도 signed runtime fixture에서도 TXT 업로드·처리·R2 원본 동일성→Docker native PDF→실제 저장·다운로드가 성공했다. 동일 limits 함수에 위임하는 readonly 계측에서 기존 계획 queries320/rowsRead979200/writes1000은 그대로이며, 계획 적용 시 누적 작업은 253→165(88회 감소), 저장된 다운로드 진입은 237회였다. 이 값은 로컬 실제 SQL adapter의 관측이며 원격 Cloudflare 과금/플랫폼 인수는 아니다.
+
+실제 수신한 WeasyPrint62.3 PDF는 52,070 bytes, SHA-256 `8370d7d64957b536f9c944d9462447a7a42a4c7056a9abc665b747c50b81cea4`, A4 4쪽이다. 각 페이지 추출 본문은 559/961/997/534자로 비어 있지 않다. 전 페이지를 100dpi PNG로 렌더링해 합성 법 조항·판례 원문과 인용의 일치, 증거 위치, 입장·미확인 요건·보완·다음 행동·분석 기준·합성 고지와 한글 glyph/줄바꿈을 육안 검토했다. 잘림·겹침·빈 페이지가 없다. 현물과 추출/전 페이지 PNG는 `.wrangler/report-runtime-main-ec292cbb/`에 보존한다. provider/model 전송은 합성 transport이며 실제 외부 법률·모델 품질 승인과 구분한다.
