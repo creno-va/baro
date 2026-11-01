@@ -41,7 +41,15 @@ export async function loadReconciliationSource(
       messages: string;
       sources: string;
     }>();
-  if (!row) throw new ReworkError("REVIEW_REQUIRED");
+  if (!row) {
+    const owned = await core
+      .statement(
+        `SELECT w.id FROM v2_workspaces w JOIN user u ON u.id=w.owner_id WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+        [actor.caseId, actor.ownerId],
+      )
+      .first();
+    throw new ReworkError(owned ? "REVIEW_REQUIRED" : "NOT_FOUND");
+  }
   const workspace = createV2WorkspaceRepository(core.binding, core.cipher, GUIDE_HOSTS);
   let text = "",
     bytes = 0;
