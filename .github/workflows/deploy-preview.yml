@@ -53,6 +53,30 @@ jobs:
       - name: Verify successful main CI
         run: bun scripts/verify-release.ts "$TARGET_SHA" --ci-only
 
+      - name: Record preview D1 recovery bookmark
+        run: |
+          bunx wrangler d1 time-travel info DB --env preview --json > "$RUNNER_TEMP/baro-preview-bookmark.json"
+          bun -e '
+            const value = await Bun.file(process.env.RUNNER_TEMP + "/baro-preview-bookmark.json").json();
+            if (!value || typeof value.bookmark !== "string" || !/^[a-zA-Z0-9_-]{1,500}$/.test(value.bookmark))
+              throw new Error("PREVIEW_RECOVERY_BOOKMARK_INVALID");
+            await Bun.write(".wrangler/release/preview-recovery.json", JSON.stringify({
+              releaseSha: process.env.TARGET_SHA,
+              environment: "preview",
+              databaseBinding: "DB",
+              bookmark: value.bookmark,
+              observedAt: new Date().toISOString()
+            }, null, 2));
+          '
+
+      - name: Retain preview recovery bookmark before migration
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-recovery-${{ inputs.target_sha }}
+          path: .wrangler/release/preview-recovery.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Build and deploy verified release
         uses: ./.github/actions/deploy-worker
         with:
