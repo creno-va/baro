@@ -375,6 +375,10 @@ for (const scenario of [
       expect(currentState.intents.map((value) => value.intent)).toEqual(
         scenario.intent ? [scenario.intent] : [],
       );
+      if (scenario.intent) {
+        expect(currentState.intents[0]?.workspaceRevision).toBe(currentState.workspaceRevision);
+        expect(currentState.intents[0]?.workspaceRevision).toBe(current.workspaceRevision + 2);
+      }
     } finally {
       await f.close();
     }
