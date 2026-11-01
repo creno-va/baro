@@ -107,7 +107,9 @@ function SummaryReconfirmationScene({
   const requestIntent = useRef<V2SummaryReconciliationRequest | null>(null);
   const draft = useRef("");
   draft.current = explanation;
-  const focusTarget = useRef<HTMLButtonElement>(null);
+  const focusTarget = useRef<HTMLElement>(null);
+  const dialogReturnFocus = useRef<HTMLElement | null>(null);
+  const focusPhase = useRef<string | null>(null);
   const callbacks = useRef({ onConfirmed, onChanged, onDirtyChange, onBusyChange });
   callbacks.current = { onConfirmed, onChanged, onDirtyChange, onBusyChange };
   const dirty = useRef(false);
@@ -126,6 +128,8 @@ function SummaryReconfirmationScene({
       setPurposeOpen(false);
       setPurposeDraft(null);
       revision.current = null;
+      focusPhase.current = null;
+      dialogReturnFocus.current = null;
       draft.current = "";
       setItem(null);
       setState(null);
@@ -151,6 +155,11 @@ function SummaryReconfirmationScene({
   useEffect(() => {
     callbacks.current.onDirtyChange?.(isDirty);
   }, [isDirty]);
+  useEffect(() => {
+    // Ordinary dismissal restores the opener; a successful submission selects
+    // the persistent review group because the old trigger is then removed.
+    if (kind !== null) dialogReturnFocus.current = null;
+  }, [kind]);
   useEffect(() => {
     callbacks.current.onBusyChange?.(busy);
   }, [busy]);
@@ -223,6 +232,23 @@ function SummaryReconfirmationScene({
     );
   }, [caseId, access.ownerId]);
   const accept = useCallback((snapshot: Awaited<ReturnType<typeof readSnapshot>>) => {
+    const status = snapshot.reconciliation?.status;
+    const phase =
+      status === "pending" || status === "running"
+        ? "working"
+        : status === "proposed"
+          ? "proposal"
+          : status === "failed" || status === "stale"
+            ? "problem"
+            : "reading";
+    if (
+      phase !== focusPhase.current &&
+      snapshot.next.schemaVersion !== "1" &&
+      ["summary", "active"].includes(snapshot.next.stage) &&
+      focusTarget.current?.contains(document.activeElement)
+    )
+      focusTarget.current.focus();
+    focusPhase.current = phase;
     revision.current = snapshot.next;
     setItem(snapshot.next);
     setState(snapshot.reconciliation);
@@ -234,6 +260,7 @@ function SummaryReconfirmationScene({
       snapshot.reconciliation.request.input.kind === saved.kind &&
       snapshot.reconciliation.request.input.expectedRevision === saved.expectedRevision
     ) {
+      dialogReturnFocus.current = focusTarget.current;
       requestIntent.current = null;
       setExplanation("");
       setKind(null);
@@ -447,7 +474,9 @@ function SummaryReconfirmationScene({
   }
   const activeRequest =
     !!state && ["pending", "running", "proposed", "failed", "stale"].includes(state.status);
-  const locked = busy || loading || !canMutate || (error as { code?: string })?.code === "CONFLICT";
+  // Writes reverify access/revision and supersede older reads. A background
+  // refresh keeps the current control focusable while its snapshot is checked.
+  const locked = busy || !canMutate || (error as { code?: string })?.code === "CONFLICT";
   const proposal = state?.status === "proposed" ? state.proposal : null;
   const requestChange = () => {
     if (!item || !kind || !explanation.trim() || [...explanation.trim()].length > 5000) return;
@@ -592,110 +621,115 @@ function SummaryReconfirmationScene({
                     <a href={accessHref("consent")}>최신 동의 확인</a>이 필요해요.
                   </p>
                 )}
-                {proposal && (
-                  <>
-                    <SummaryChanges
-                      proposal={proposal}
-                      base={base}
-                      context={item.intakeQuestions}
-                      files={files}
-                    />
-                    <div className="summary-review-actions">
-                      <Button
-                        loading={busy}
-                        disabled={locked}
-                        onClick={() =>
-                          void mutate({
-                            kind: "proposal",
-                            input: {
-                              expectedRevision: item.revision,
-                              proposalId: proposal.id,
-                              summaryRevision: proposal.baseSummaryRevision,
-                            },
-                          })
-                        }
-                      >
-                        <Check size={18} aria-hidden="true" />
-                        변경안 확정하기
-                      </Button>
-                      <Button variant="outline" disabled={locked} onClick={() => void cancel()}>
-                        변경안 취소
-                      </Button>
-                      <Button variant="ghost" disabled={locked} onClick={() => void explainAgain()}>
-                        다시 설명하기
-                      </Button>
-                    </div>
-                  </>
-                )}
-                {state && ["pending", "running"].includes(state.status) && (
-                  <StatePanel
-                    variant="pending"
-                    title="변경안을 준비하고 있어요"
-                    description="기존 정리는 그대로예요. 이 화면을 닫았다가 다시 와도 이어서 확인할 수 있어요."
-                    action={
-                      <Button variant="outline" disabled={locked} onClick={() => void cancel()}>
-                        요청 취소
-                      </Button>
-                    }
-                  />
-                )}
-                {state && ["failed", "stale"].includes(state.status) && (
-                  <StatePanel
-                    variant="error"
-                    title={
-                      state.status === "stale"
-                        ? "사건 내용이 바뀌어 변경안을 다시 확인해야 해요."
-                        : "변경안을 준비하지 못했어요."
-                    }
-                    description="기존 정리와 요청한 설명은 남아 있어요."
-                    action={
+                <section ref={focusTarget} aria-label="사건 정리 확인" tabIndex={-1}>
+                  {proposal && (
+                    <>
+                      <SummaryChanges
+                        proposal={proposal}
+                        base={base}
+                        context={item.intakeQuestions}
+                        files={files}
+                      />
                       <div className="summary-review-actions">
-                        <Button disabled={locked} onClick={() => void explainAgain()}>
+                        <Button
+                          loading={busy}
+                          disabled={locked}
+                          onClick={() =>
+                            void mutate({
+                              kind: "proposal",
+                              input: {
+                                expectedRevision: item.revision,
+                                proposalId: proposal.id,
+                                summaryRevision: proposal.baseSummaryRevision,
+                              },
+                            })
+                          }
+                        >
+                          <Check size={18} aria-hidden="true" />
+                          변경안 확정하기
+                        </Button>
+                        <Button variant="outline" disabled={locked} onClick={() => void cancel()}>
+                          변경안 취소
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          disabled={locked}
+                          onClick={() => void explainAgain()}
+                        >
                           다시 설명하기
                         </Button>
+                      </div>
+                    </>
+                  )}
+                  {state && ["pending", "running"].includes(state.status) && (
+                    <StatePanel
+                      variant="pending"
+                      title="변경안을 준비하고 있어요"
+                      description="기존 정리는 그대로예요. 이 화면을 닫았다가 다시 와도 이어서 확인할 수 있어요."
+                      action={
                         <Button variant="outline" disabled={locked} onClick={() => void cancel()}>
                           요청 취소
                         </Button>
-                      </div>
-                    }
-                  />
-                )}
-                {!activeRequest && (
-                  <div className="summary-review-actions">
-                    <Button
-                      ref={focusTarget}
-                      disabled={locked || !item.summary.trim()}
-                      aria-haspopup="dialog"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        setConfirming(true);
-                      }}
-                    >
-                      맞아요
-                      <ArrowRight size={18} aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={locked}
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        setKind("correction");
-                      }}
-                    >
-                      다른 부분이 있어요
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={locked}
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        setKind("addition");
-                      }}
-                    >
-                      빠진 내용이 있어요
-                    </Button>
-                  </div>
-                )}
+                      }
+                    />
+                  )}
+                  {state && ["failed", "stale"].includes(state.status) && (
+                    <StatePanel
+                      variant="error"
+                      title={
+                        state.status === "stale"
+                          ? "사건 내용이 바뀌어 변경안을 다시 확인해야 해요."
+                          : "변경안을 준비하지 못했어요."
+                      }
+                      description="기존 정리와 요청한 설명은 남아 있어요."
+                      action={
+                        <div className="summary-review-actions">
+                          <Button disabled={locked} onClick={() => void explainAgain()}>
+                            다시 설명하기
+                          </Button>
+                          <Button variant="outline" disabled={locked} onClick={() => void cancel()}>
+                            요청 취소
+                          </Button>
+                        </div>
+                      }
+                    />
+                  )}
+                  {!activeRequest && (
+                    <div className="summary-review-actions">
+                      <Button
+                        disabled={locked || !item.summary.trim()}
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          setConfirming(true);
+                        }}
+                      >
+                        맞아요
+                        <ArrowRight size={18} aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={locked}
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          setKind("correction");
+                        }}
+                      >
+                        다른 부분이 있어요
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={locked}
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          setKind("addition");
+                        }}
+                      >
+                        빠진 내용이 있어요
+                      </Button>
+                    </div>
+                  )}
+                </section>
                 <p className="intake-scene-notice" role="status">
                   {notice}
                 </p>
@@ -773,6 +807,7 @@ function SummaryReconfirmationScene({
       </Dialog>
       <Dialog
         open={kind !== null}
+        returnFocusRef={dialogReturnFocus}
         onOpenChange={(open) => {
           if (!open && !busy) {
             setKind(null);
