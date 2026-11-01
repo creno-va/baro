@@ -1,0 +1,155 @@
+{
+  "contractVersion": "conversation-report-v1",
+  "id": "245e237c-85e7-4dea-bed3-99d1ee174d7d",
+  "basis": {
+    "researchRevision": 3,
+    "summaryRevision": 2,
+    "evidenceHash": "f91b6c3bac86aef63724555ccc145392badd7b252c95249d9926a07c6c3d585f",
+    "casePurpose": "prepare_claim"
+  },
+  "context": {
+    "casePurpose": "prepare_claim",
+    "subjectContext": "individual",
+    "procedure": {
+      "kind": "civil",
+      "stage": "before_filing",
+      "description": "사용자가 확인한 합성 절차"
+    }
+  },
+  "basedOnFactIds": ["synthetic-rework-material-fact"],
+  "includedEvidence": [
+    {
+      "fileId": "a1e94a38-402e-4135-804b-b82e47592818",
+      "fileRevision": 2,
+      "contentHash": "f91b6c3bac86aef63724555ccc145392badd7b252c95249d9926a07c6c3d585f"
+    }
+  ],
+  "asOfDate": "2026-10-06",
+  "checkedAt": "2026-10-06T00:00:00.000Z",
+  "status": "ready",
+  "citations": [
+    {
+      "id": "cite_5ca20ec6_2bef_4a3c_a2cc_8bd0d53cca0a",
+      "sourceId": "source_d41f29d6ebcd64cf292478fa2ead1745dda35ed9e15e75bc3fdc88285a7175d3",
+      "title": "합성 원문 검증 전용",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "bbbe79517ce6ad7b6c8002b49b484dcd1a8f2a5535f946d5f8413dc3e62e2757",
+      "kind": "statute",
+      "officialId": "1706",
+      "article": "제1조",
+      "effectiveDate": "2026-10-01",
+      "url": "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415"
+    },
+    {
+      "id": "cite_9dac65db_7c60_406d_851a_f582e31014cf",
+      "sourceId": "source_a5a5075a41baddc1b2450e9549d8d1531485387766e1b11a3109f6d92ad739dd",
+      "title": "합성 원문 검증 전용",
+      "verifiedAt": "2026-10-06T00:00:00.000Z",
+      "contentHash": "8d5648b99a670c042bf40b7b55ef2c95f2c5eeaaeff57e65251f6c1cd6f50803",
+      "kind": "precedent",
+      "officialId": "900001",
+      "court": "합성 법원",
+      "caseNumber": "2026가합00000",
+      "decisionDate": "2026-10-01",
+      "url": "https://www.law.go.kr/LSW/precInfoP.do?precSeq=900001"
+    }
+  ],
+  "retrievalHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "availability": [
+    {
+      "kind": "statute",
+      "status": "verified",
+      "reason": null
+    },
+    {
+      "kind": "precedent",
+      "status": "verified",
+      "reason": null
+    }
+  ],
+  "issues": [
+    {
+      "id": "synthetic-rework-issue",
+      "title": "반환 약정의 성립",
+      "requirements": [
+        {
+          "id": "synthetic-rework-requirement",
+          "label": "반환 약정과 이행 조건",
+          "assessment": "insufficient",
+          "sourceClaimIds": ["synthetic-rework-claim-0"],
+          "factIds": ["synthetic-rework-material-fact"],
+          "conflictingFactIds": [],
+          "evidence": [
+            {
+              "kind": "user_material",
+              "fileId": "a1e94a38-402e-4135-804b-b82e47592818",
+              "fileRevision": 2,
+              "position": {
+                "kind": "document",
+                "page": 1,
+                "paragraph": null,
+                "table": null
+              }
+            }
+          ],
+          "gaps": ["합성 자료 관찰용 비공개 표식의 원본 대화 확인 필요"]
+        }
+      ]
+    }
+  ],
+  "precedents": [
+    {
+      "citationId": "cite_9dac65db_7c60_406d_851a_f582e31014cf",
+      "commonalities": [
+        {
+          "text": "합성 자료 관찰용 비공개 표식의 송금 경위가 공통입니다.",
+          "factIds": ["synthetic-rework-material-fact"],
+          "sourceClaimIds": ["synthetic-rework-claim-1"]
+        }
+      ],
+      "differences": [
+        {
+          "text": "판례에는 서명 원본이 있으나 사건에는 원본을 확인하지 못했습니다.",
+          "factIds": ["synthetic-rework-material-fact"],
+          "sourceClaimIds": ["synthetic-rework-claim-1"]
+        }
+      ],
+      "preparationMeaning": "서명과 대화 원본을 추가로 확인해야 합니다."
+    }
+  ],
+  "perspective": {
+    "casePurpose": "prepare_claim",
+    "weaknesses": ["합성 자료 관찰용 비공개 표식만으로 반환 약정 전체를 확인하기 어렵습니다."],
+    "claimGaps": ["청구할 반환 조건과 이행기를 확인합니다."],
+    "responsePoints": [],
+    "additionalMaterials": ["반환 약정의 전체 대화 원본"]
+  },
+  "evidenceRequirements": [
+    {
+      "id": "synthetic-rework-evidence-request",
+      "kind": "conversation",
+      "label": "반환 조건 원본 대화",
+      "reason": "청구할 약정 내용을 확인하기 위해 필요합니다.",
+      "fileIds": ["a1e94a38-402e-4135-804b-b82e47592818"]
+    }
+  ],
+  "sourceClaims": [
+    {
+      "id": "synthetic-rework-claim-0",
+      "kind": "quotation",
+      "text": "합성 조항 원문: 반환 조건의 **원문 기호**와 `코드 기호`를 그대로 확인한다.",
+      "citationId": "cite_5ca20ec6_2bef_4a3c_a2cc_8bd0d53cca0a",
+      "startUtf16": 0,
+      "endUtf16": 46
+    },
+    {
+      "id": "synthetic-rework-claim-1",
+      "kind": "quotation",
+      "text": "합성 판례 원문: 송금 기록과 반환 약정은 ~~서로 구별~~하여 확인한다.",
+      "citationId": "cite_9dac65db_7c60_406d_851a_f582e31014cf",
+      "startUtf16": 0,
+      "endUtf16": 41
+    }
+  ],
+  "limitations": ["합성 검증 전용이며 실제 공급자 인수가 아닙니다."]
+}

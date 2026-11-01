@@ -42,6 +42,8 @@ const css =
   globalCss +
   (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
+  (await Bun.file(`${root}/src/styles/evidence.css`).text()) +
+  (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
   (await Bun.file(`${root}/src/styles/settings.css`).text()) +
   "body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
 const server = Bun.serve({
@@ -66,7 +68,7 @@ const server = Bun.serve({
         headers: {
           "content-type": "text/html;charset=utf-8",
           "content-security-policy":
-            "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
+            "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
         },
       },
     );

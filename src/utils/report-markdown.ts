@@ -7,7 +7,7 @@ export const escapeReportHtml = (value: string) =>
   );
 export type ReportPhoto = { id: string; name: string; url: string };
 export type MarkdownBlock =
-  | { kind: "paragraph" | "heading" | "quote" | "code"; text: string }
+  | { kind: "paragraph" | "heading" | "quote" | "source_quote" | "code"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "photo"; id: string; caption: string };
 export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
@@ -45,6 +45,10 @@ export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
     const heading = /^#{1,6}\s+(.+)$/u.exec(line);
     if (heading) {
       blocks.push({ kind: "heading", text: heading[1] ?? "" });
+      continue;
+    }
+    if (/^> \[원문\] /u.test(line)) {
+      blocks.push({ kind: "source_quote", text: line.slice(7) });
       continue;
     }
     if (/^>\s?/u.test(line)) {
@@ -98,6 +102,8 @@ export function reportMarkdownHtml(text: string, photos: readonly ReportPhoto[] 
         return `<figure class="report-inline-photo" data-report-photo="${escapeReportHtml(photo.id)}"><img src="${escapeReportHtml(photo.url)}" alt="${escapeReportHtml(block.caption || photo.name)}"/><figcaption>${escapeReportHtml(block.caption || photo.name)}</figcaption></figure>`;
       }
       if (block.kind === "code") return `<pre><code>${escapeReportHtml(block.text)}</code></pre>`;
+      if (block.kind === "source_quote")
+        return `<blockquote class="report-source-quote">${escapeReportHtml(block.text)}</blockquote>`;
       const tag = block.kind === "heading" ? "h4" : block.kind === "quote" ? "blockquote" : "p";
       return `<${tag}>${inline(block.text)}</${tag}>`;
     })
