@@ -13,6 +13,7 @@ import type {
   V2SummaryReconciliationConfirm,
   V2SummaryReconciliationRequest,
 } from "../../contracts/v2";
+import { v2SummarySchema } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -217,7 +218,8 @@ function SummaryReconfirmationScene({
           reconciliation.status === "proposed" &&
           reconciliation.proposal &&
           next.summaryDetails &&
-          JSON.stringify(reconciliation.proposal.before) !== JSON.stringify(next.summaryDetails)
+          JSON.stringify(v2SummarySchema.parse(reconciliation.proposal.before)) !==
+            JSON.stringify(v2SummarySchema.parse(next.summaryDetails))
         )
           throw new ApiError(
             "CONFLICT",

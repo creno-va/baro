@@ -243,4 +243,4 @@ export function createReconciliationMock(
   };
 }
 const sameSummary = (left: V2Summary, right: V2Summary) =>
-  JSON.stringify(left) === JSON.stringify(right);
+  JSON.stringify(v2SummarySchema.parse(left)) === JSON.stringify(v2SummarySchema.parse(right));

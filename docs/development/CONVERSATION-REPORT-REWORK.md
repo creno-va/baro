@@ -184,3 +184,11 @@ PR667 exact9661c52adb44542a9074efa63983324eb2eff94c의 Quality41322634194 성공
 새 deterministic 회귀4개는 실제 암호화 요약 stream의 첫 fragment 전/중간에 SQLite revision을 변경한다. 수정 전 SyntaxError를 재현했고 수정 뒤 STALE_REVISION과 최신 상태 재읽기를 확인했다. 관련 source/state/actual Hono/runtime44 tests363 assertions, bun ci/validate:quick과 production build/dry-run/local workerd 부팅이 통과했다. 테스트 binding proxy의 타입 오류는 수정했고 검사 기대나 제품 보호를 완화하지 않았다.672의 실제 정상/검색실패 반복 안정성 검사는 이 변경의 CI/main 뒤 다시 수행한다.
 
 01의 key-order 동등 DTO와 실제 값/출처/revision 차이 거절 PR674,03의 shared originals/customer-completion corpus PR671,05의 scoped read PR673은 각각 최신 main CI 뒤 순차 통합한다. 최종 전체14 실제 브라우저 경로·actual PDF 전 페이지·exact main manual full은 계속 미완료로 보존한다.
+
+PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal41324914750/nativePDF41324914761 성공 후 main26427659ac8a386334a545e0bf32b4cd3ba1073c에 병합했다. 실제 fixture의 Syntax400은 반복 검사에서0으로 해소됐지만 재조율 context read의 별도503은 남았다.04가 임시 enum 진단으로 readWorkspaceContext의 readIntake→summary unavailable 경합까지 좁혔으며 원복 완료했다.00은 실제 source proof가 바뀐 경우만 stale로 분류하고 unchanged source의 실제 오류는 보존하는 후속을 진행한다. DB corruption 거절을 완화하거나 unknown503을 반복해 성공으로 만들지 않는다.
+
+PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/nativePDF41325273571 성공 후 main32abc5f79bf04fede1dfdce19c13f967e90c92a3에 병합했다. private scoped read 포트만 추가됐으며00의 실제 current-scope 전후 확인/runtime binding은 아직 남아 있다.
+
+00의 `codex/621-rework-report-edit-binding`은 explicit mock에서 본문 편집 후 새 report ID가 기존 정확한 parent analysis identity를 잃어 PDF를 불필요하게 stale로 막던 문제를 수정한다. 동일 case source revision·제외 목록·mask scope의 parent만 identity를 이어받고, userEdited=true/review_required를 별도 보존해 검증된 새 분석으로 승격하지 않는다. source/context/evidence 변경은 기존 전체 source hash 검사에서 stale이며, scope 변경은 binding을 이어받지 않는다. 최초 canonical 준비는 사용자 편집 표시를 붙이지 않는다. 원래 analysis.checkedAt와 이전 immutable 본문은 그대로 보존하고 사건 삭제 시 두 private map도 지운다.
+
+관련 mock/overflow/shared reports27 tests177 assertions, bun ci/validate:quick·production build/dry-run/local workerd 부팅 통과. 처음 추가 테스트의 넓은 fixture callback 타입을 실제 intersection으로 좁혀 타입 오류를 수정했다. 이 검증은 실제 provider/PDF native 인수와 구분하며05의 shared browser 전체는 이 후속의 CI/main 뒤 다시 검증한다.
