@@ -495,6 +495,31 @@ test("actual model failure propagates, and a late revoked audit cannot publish a
   }
 });
 
+test.each(["analysis", "audit"])(
+  "%s schema errors expose a finite code, never model output keys",
+  async (phase) => {
+    const marker = "synthetic_private_model_key";
+    const f = await setup("prepare_claim", {
+      ...(phase === "analysis"
+        ? {
+            draft: (draft: V2LegalAnalysisDraft) => {
+              Object.assign(draft, { [marker]: true });
+            },
+          }
+        : {}),
+      audit: () => (phase === "audit" ? { ...approved, [marker]: true } : approved),
+    });
+    try {
+      await expect(f.service.prepare(f.input)).rejects.toMatchObject({
+        code: "MODEL_SCHEMA_INVALID",
+        message: "MODEL_SCHEMA_INVALID",
+      });
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
 test("technical retries share twelve actual attempts and a fifth distinct plan is rejected", async () => {
   const requests = ["민법", "형법", "근로기준법", "상법"].map((lawTitle) => ({
     kind: "statute",

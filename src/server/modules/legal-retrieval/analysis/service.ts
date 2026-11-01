@@ -58,6 +58,7 @@ export class LegalAnalysisError extends Error {
       | "CANCELLED"
       | "INVALID_INPUT"
       | "INVALID_PLAN"
+      | "MODEL_SCHEMA_INVALID"
       | "POLICY_REJECTED"
       | "SOURCE_UNAVAILABLE"
       | "STALE_REVISION",
@@ -280,22 +281,26 @@ export function createAutomaticLegalAnalysis(deps: {
       sourceCoverage: projection.sourceCoverage,
     };
     await authorize();
-    const draft = legalAnalysisOutputSchema.parse(
+    const draftParsed = legalAnalysisOutputSchema.safeParse(
       await deps.model.analyze(structuredClone(modelInput)),
     );
+    if (!draftParsed.success) throw new LegalAnalysisError("MODEL_SCHEMA_INVALID");
+    const draft = draftParsed.data;
     if (
       !analysisDraftGrounded(draft, input, plan, retrieval.chunks) ||
       !instrumentNumbersGrounded(draft, draft.sourceClaims, projection.sourceTexts)
     )
       throw new LegalAnalysisError("POLICY_REJECTED");
     await authorize();
-    const audit = legalAnalysisAuditSchema.parse(
+    const auditParsed = legalAnalysisAuditSchema.safeParse(
       await deps.model.audit({
         phase: "legal_analysis",
         context: structuredClone(modelInput),
         draft: structuredClone(draft),
       }),
     );
+    if (!auditParsed.success) throw new LegalAnalysisError("MODEL_SCHEMA_INVALID");
+    const audit = auditParsed.data;
     if (
       !audit.pass ||
       !audit.legalClaimsSupported ||
