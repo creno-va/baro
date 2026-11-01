@@ -8,6 +8,7 @@ import {
   type WorkspaceMockState,
 } from "../../src/client/api/mock/workspace";
 import { createWorkspaceApi } from "../../src/client/api/workspace";
+import { v2SummarySchema } from "../../src/contracts/v2";
 import { workspaceConversationFixture } from "./workspace-conversation-client-fixture";
 
 const key = "baro-c-contract-test-state";
@@ -50,9 +51,17 @@ async function request(path: string, init?: RequestInit) {
   }
   return Response.json({ error: { code: "NOT_FOUND", retryable: false } }, { status: 404 });
 }
+const workspaceClient = createWorkspaceApi(request);
 export const api = {
   session: { get: async () => runtime.read().session },
-  workspace: createWorkspaceApi(request),
+  workspace: workspaceClient,
   files: createFilesApi(request),
   rework: workspaceConversationFixture(runtime),
+  cases: {
+    get: async (id: string) => {
+      const view = await workspaceClient.get(id);
+      const response = await request(`/api/v2/cases/${encodeURIComponent(id)}/summary`);
+      return { ...view.case, summaryDetails: v2SummarySchema.parse(await response.json()) };
+    },
+  },
 };

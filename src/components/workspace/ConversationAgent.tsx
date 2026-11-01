@@ -99,6 +99,13 @@ export function ConversationAgent({
   const { ready, canMutate, ticket, current, verify } = access;
   const [state, setState] = useState<V2ConversationState | null>(null);
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
+  const backgroundBusy =
+    !stateIsCurrent ||
+    (!!state &&
+      (["pending", "running"].includes(state.analysis.status) ||
+        state.report.status === "pending"));
+  const background = useRef(backgroundBusy);
+  background.current = backgroundBusy;
   const [result, setResult] = useState<V2ConversationActionResult | null>(null);
   const [pane, setPane] = useState<ConversationPane | null>(null);
   const [error, setError] = useState("");
@@ -122,12 +129,15 @@ export function ConversationAgent({
   const callbacks = useRef({ onChanged, onBusyChange });
   callbacks.current = { onChanged, onBusyChange };
   useEffect(() => {
+    callbacks.current.onBusyChange(busy || paneBusy || backgroundBusy);
+  }, [busy, paneBusy, backgroundBusy]);
+  useEffect(() => {
     if (pane) onPaneOpen?.();
   }, [pane, onPaneOpen]);
   const changePaneBusy = useCallback((value: boolean) => {
     paneLocked.current = value;
     setPaneBusy(value);
-    callbacks.current.onBusyChange(value || locked.current);
+    callbacks.current.onBusyChange(value || locked.current || background.current);
   }, []);
   const changeDirty = useCallback((value: boolean) => {
     dirty.current = value;
@@ -336,7 +346,7 @@ export function ConversationAgent({
         if (mounted.current && current(epoch)) {
           locked.current = false;
           setBusy(false);
-          callbacks.current.onBusyChange(paneLocked.current);
+          callbacks.current.onBusyChange(paneLocked.current || background.current);
         }
       }
     },

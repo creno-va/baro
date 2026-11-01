@@ -37,7 +37,7 @@ async function reportReady(page: Page) {
       .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
   ).toBeVisible();
 }
-async function addMaterial(page: Page) {
+async function addMaterial(page: Page, expectProcessingFailure = false) {
   const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
   await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -55,6 +55,16 @@ async function addMaterial(page: Page) {
   );
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
+  if (expectProcessingFailure) {
+    await expect(materials.getByText("처리 실패 · 확인 필요", { exact: true })).toBeVisible();
+    await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
+    const original = materials.getByRole("button", {
+      name: "synthetic-conversation-contract.txt",
+      exact: true,
+    });
+    await expect(original).toBeVisible();
+    return original;
+  }
   const attachment = page
     .locator(".workspace-message-attachments")
     .getByRole("link", { name: "synthetic-conversation-contract.txt", exact: true })
@@ -183,10 +193,12 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
-    const attachment = await addMaterial(page);
+    const attachment = await addMaterial(page, true);
     await attachment.click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("처리 실패", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("status")).toContainText(
+      "자료 처리를 완료하지 못했어요. 원본은 보관돼요.",
+    );
     await expect(dialog.getByRole("button", { name: /원본/ }).first()).toBeEnabled();
     const download = page.waitForEvent("download");
     await dialog.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();

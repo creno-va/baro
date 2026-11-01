@@ -49,6 +49,12 @@ import {
 } from "./ConversationAgent";
 import { ConversationPreparation } from "./ConversationPreparation";
 import { ConversationReconfirmation } from "./ConversationReconfirmation";
+import {
+  beginConversationUpload,
+  type ConversationUpload,
+  queuedConversationUpload,
+  uploadCanonical,
+} from "./conversation-upload";
 import { ElapsedTime } from "./ElapsedTime";
 import { EvidencePicker } from "./EvidencePicker";
 import { EvidenceRequirements } from "./EvidenceRequirements";
@@ -141,6 +147,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   const [localAttachments, setLocalAttachments] = useState<File[]>([]);
   const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
   const [queuedSend, setQueuedSend] = useState(false);
+  const queuedUpload = useRef<ConversationUpload | null>(null);
   const [notice, setNotice] = useState("");
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
@@ -218,6 +225,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setLocalAttachments([]);
     setChatAttachments([]);
     setQueuedSend(false);
+    queuedUpload.current = null;
     setPreview(null);
     setDeleteFile(null);
     setEntry(null);
@@ -468,7 +476,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   }, [preview, deleteFile, entry]);
 
   useEffect(() => {
-    if (!queuedSend || busy || !ready || !view || localAttachments.length) return;
+    if (!queuedSend || busy || agentBusy || !ready || !view || localAttachments.length) return;
     if (
       !canMutate ||
       view.case.stage !== "active" ||
@@ -481,6 +489,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       )
     ) {
       setQueuedSend(false);
+      queuedUpload.current = null;
       setNotice("첨부 파일을 확인해 주세요. 입력은 보존됐으며 메시지는 보내지 않았어요.");
       return;
     }
@@ -489,7 +498,17 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       !view.messages.some((message) => message.status === "pending")
     )
       draftInput.current?.form?.requestSubmit();
-  }, [queuedSend, busy, ready, canMutate, view, error, chatAttachments, localAttachments.length]);
+  }, [
+    queuedSend,
+    busy,
+    agentBusy,
+    ready,
+    canMutate,
+    view,
+    error,
+    chatAttachments,
+    localAttachments.length,
+  ]);
 
   async function run(key: string, action: (epoch: number) => Promise<void>) {
     const readOrDelete = ["refresh", "history", "original", "delete", "file-preview"].includes(key);
@@ -552,6 +571,10 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       if (!readOrDelete && alive(epoch)) operationError.current = nextError;
       if (nextError.code === "CONFLICT") {
         sendAttempt.current = null;
+        if (key === "send") {
+          queuedUpload.current = null;
+          setQueuedSend(false);
+        }
         await load();
         if (alive(epoch)) setError(nextError);
       }
@@ -867,9 +890,33 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       return;
     if (localAttachments.length) {
       if (!uploadConsent) return;
-      setQueuedSend(true);
+      if (!queuedUpload.current) {
+        let prepared = false;
+        await run("queue-prepare", async (epoch) => {
+          const [item, state] = await Promise.all([
+            api.cases.get(caseId),
+            api.rework.getConversation(caseId),
+          ]);
+          if (!(await verify(false, true)) || !current(epoch)) return;
+          queuedUpload.current = beginConversationUpload(
+            view,
+            item,
+            state,
+            epoch,
+            draft.trim() || materialReflectionRequest,
+            [...new Set([...selected, ...chatAttachments.map((f) => f.id)])],
+          );
+          prepared = true;
+        });
+        if (!prepared) return;
+      }
+      setQueuedSend(!!queuedUpload.current);
       const complete = await upload(localAttachments);
       if (!complete) setQueuedSend(false);
+      else if (!queuedUpload.current)
+        setNotice(
+          "자료는 저장했어요. 불러온 사건 범위를 확인한 뒤 보존한 입력을 직접 보내 주세요.",
+        );
       return;
     }
     if (
@@ -882,18 +929,66 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       setQueuedSend(true);
       return;
     }
-    setQueuedSend(false);
     const text = draft.trim() || materialReflectionRequest;
     const fileIds = [...new Set([...selected, ...chatAttachments.map((file) => file.id)])];
     followingChat.current = true;
     await run("send", async (epoch) => {
+      let revision = view.case.revision;
+      if (queuedUpload.current && !sendAttempt.current) {
+        const queue = queuedUpload.current;
+        const [fresh, item, state] = await Promise.all([
+          api.workspace.get(caseId),
+          api.cases.get(caseId),
+          api.rework.getConversation(caseId),
+        ]);
+        if (!(await verify(false, true)) || !current(epoch)) return;
+        const processed = new Set<string>();
+        for (const id of fileIds) {
+          if (queue.files.get(id)?.status === "ready") continue;
+          const review = await api.files.review(caseId, id);
+          if (!(await verify(false, true)) || !current(epoch)) return;
+          if (
+            review.file.revision === fresh.files.find((f) => f.id === id)?.revision &&
+            !review.pendingReview &&
+            review.nextAfterOrdinal === null &&
+            review.observations.every(
+              (o) => uploadCanonical(o.value) === uploadCanonical(o.original),
+            )
+          )
+            processed.add(id);
+        }
+        const decision = queuedConversationUpload(
+          queue,
+          fresh,
+          item,
+          state,
+          epoch,
+          text,
+          fileIds,
+          processed,
+          false,
+        );
+        if (decision === "changed")
+          throw new ApiError(
+            "CONFLICT",
+            "자료를 준비하는 동안 사건이나 입력이 바뀌었어요. 최신 내용과 보존한 입력을 확인해 주세요.",
+          );
+        apply(fresh);
+        if (decision === "waiting") {
+          setAgentBusy(true);
+          setNotice("자료는 보존돼요. 현재 사건 준비가 끝나면 같은 입력을 이어 보낼게요.");
+          return;
+        }
+        revision = fresh.case.revision;
+      }
+      setQueuedSend(false);
       if (
         !sendAttempt.current ||
         sendAttempt.current.text !== text ||
         JSON.stringify(sendAttempt.current.selectedFileIds) !== JSON.stringify(fileIds)
       )
         sendAttempt.current = {
-          expectedRevision: view.case.revision,
+          expectedRevision: revision,
           text,
           selectedFileIds: fileIds,
         };
@@ -901,6 +996,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       if (!(await verify()) || !current(epoch)) return;
       apply(next);
       sendAttempt.current = null;
+      queuedUpload.current = null;
       setDraft("");
       setSelected([]);
       setChatAttachments([]);
@@ -1011,6 +1107,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           if (!alive(epoch)) return;
           completed++;
           if (tab === "chat") {
+            if (queuedUpload.current) {
+              if (!queuedUpload.current.ids.includes(uploaded.id))
+                queuedUpload.current.ids.push(uploaded.id);
+              queuedUpload.current.files.set(uploaded.id, { ...uploaded });
+            }
             setChatAttachments((items) => [
               ...items.filter((item) => item.id !== uploaded.id),
               uploaded,
@@ -1622,7 +1723,10 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                               type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => setQueuedSend(false)}
+                              onClick={() => {
+                                queuedUpload.current = null;
+                                setQueuedSend(false);
+                              }}
                             >
                               전송 대기 취소
                             </Button>
