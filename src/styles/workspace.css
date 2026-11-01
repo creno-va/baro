@@ -1700,6 +1700,44 @@
   min-width: 0;
   margin: 0;
 }
+.conversation-context-review {
+  margin-bottom: 16px;
+}
+.workspace .conversation-context-fields {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.conversation-context-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+.workspace .conversation-context-form .workspace-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.conversation-context-form :is(select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 16px;
+}
+.conversation-context-form textarea {
+  min-height: 88px;
+}
 
 @media (max-width: 640px) {
   .workspace-section-heading:has(.workspace-section-actions) {

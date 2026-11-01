@@ -21,5 +21,5 @@ test("trusted conversation selects the grounded scope for generation and its ind
   expect(
     promptFor("workspace_audit", { phase: "workspace_questions", context: { conversation: {} } }),
   ).not.toBe(conversationPrompts.audit);
-  expect(WORKSPACE_PROMPT_VERSION).toBe("2.11.0");
+  expect(WORKSPACE_PROMPT_VERSION).toBe("2.12.0");
 });

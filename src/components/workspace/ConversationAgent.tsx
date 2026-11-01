@@ -33,6 +33,10 @@ function failureMessage(cause: unknown) {
     "VALIDATION_ERROR",
     "UNAVAILABLE",
     "IDEMPOTENCY_CONFLICT",
+    "RATE_LIMITED",
+    "INVALID_STATE",
+    "ROLE_REQUIRED",
+    "REVIEW_REQUIRED",
   ].includes(value?.code ?? "")
     ? (value.message ?? "요청을 완료하지 못했어요.")
     : "요청 결과를 확인하지 못했어요. 같은 요청으로 다시 확인할 수 있어요.";
@@ -291,9 +295,19 @@ export function ConversationAgent({
         if (!current(epoch) || !mounted.current) return;
         const problem = cause as { code?: string; message?: string };
         if (
-          ["CONFLICT", "STALE_REVISION", "VALIDATION_ERROR", "IDEMPOTENCY_CONFLICT"].includes(
-            problem.code ?? "",
-          )
+          [
+            "CONFLICT",
+            "STALE_REVISION",
+            "VALIDATION_ERROR",
+            "IDEMPOTENCY_CONFLICT",
+            "CONSENT_REQUIRED",
+            "QUOTA_EXCEEDED",
+            "USER_QUOTA_EXCEEDED",
+            "RATE_LIMITED",
+            "INVALID_STATE",
+            "ROLE_REQUIRED",
+            "REVIEW_REQUIRED",
+          ].includes(problem.code ?? "")
         )
           attempt.current = null;
         setError(failureMessage(cause));
@@ -376,6 +390,14 @@ export function ConversationAgent({
     (["pending", "running"].includes(state.analysis.status) ||
       state.report.status === "pending" ||
       workspace.messages.some((message) => message.status === "pending"));
+  const missingItems =
+    result?.workspaceRevision === state?.workspaceRevision
+      ? [...new Set(result?.missingItems ?? [])].filter(
+          (item) =>
+            !["analysis", "report"].includes(pane ?? "") ||
+            !state?.analysis.missingItems.includes(item),
+        )
+      : [];
   return (
     <div className="conversation-agent">
       {error && (
@@ -484,14 +506,13 @@ export function ConversationAgent({
               아니에요.
             </p>
           )}
-          {result?.workspaceRevision === state.workspaceRevision &&
-            !!result.missingItems.length && (
-              <ul aria-label="작업에 필요한 확인 사항">
-                {[...new Set(result.missingItems)].map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
+          {!!missingItems.length && (
+            <ul aria-label="작업에 필요한 확인 사항">
+              {missingItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
           {pane === "analysis" ? (
             stateIsCurrent ? (
               <ConversationAnalysis

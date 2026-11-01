@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { BrowserContext } from "@playwright/test";
+import type { APIResponse, BrowserContext, Request as BrowserRequest } from "@playwright/test";
 import type { ReworkBrowserInfo } from "./rework-browser-server";
 
 /** Forwards actual browser fetches to the real loopback Hono server, including
@@ -8,6 +8,10 @@ export async function openReworkBrowserFixture(
   context: BrowserContext,
   browserOrigin: string,
   purpose: ReworkBrowserInfo["purpose"],
+  options: {
+    /** Lose an actual committed response; never manufacture a result DTO. */
+    dropResponse?: (request: BrowserRequest, response: APIResponse) => boolean | Promise<boolean>;
+  } = {},
 ) {
   const child = spawn("bun", ["tests/helpers/rework-browser-server.ts", browserOrigin, purpose], {
     env: { ...process.env, BARO_SYNTHETIC_REWORK_SERVER: "true" },
@@ -57,6 +61,7 @@ export async function openReworkBrowserFixture(
     )
       throw new Error("REWORK_BROWSER_SCOPE_MISMATCH");
     await context.addCookies([info.ownerCookie]);
+    const actions: { body: string | null; key: string | undefined }[] = [];
     await context.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
@@ -69,10 +74,14 @@ export async function openReworkBrowserFixture(
           data: request.postDataBuffer() ?? undefined,
         },
       );
+      if (request.method() === "POST" && url.pathname.endsWith("/rework/actions"))
+        actions.push({ body: request.postData(), key: request.headers()["idempotency-key"] });
+      if (await options.dropResponse?.(request, response)) return route.abort("failed");
       await route.fulfill({ response });
     });
     return {
       info,
+      actions,
       control: async (path: string, input?: unknown) => {
         if (!/^[-a-z]+$/.test(path)) throw new Error("INVALID_REWORK_TEST_CONTROL");
         return context.request.fetch(`${info.origin}/__rework-test/${path}`, {

@@ -33,7 +33,6 @@ import {
   type V2MessageRequest,
 } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
-import { SummaryReconfirmation } from "../intake/SummaryReconfirmation";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
 import { ReportReview } from "../reports/ReportReview";
@@ -49,6 +48,7 @@ import {
   type ConversationPaneProps,
 } from "./ConversationAgent";
 import { ConversationPreparation } from "./ConversationPreparation";
+import { ConversationReconfirmation } from "./ConversationReconfirmation";
 import { ElapsedTime } from "./ElapsedTime";
 import { EvidencePicker } from "./EvidencePicker";
 import { EvidenceRequirements } from "./EvidenceRequirements";
@@ -638,23 +638,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     if (!view) return null;
     if (pane === "reconfirmation")
       return (
-        <div inert={props.readDisabled}>
-          <SummaryReconfirmation
-            caseId={caseId}
-            embedded
-            onConfirmed={() => {
-              // Confirmation owns automatic research on the server. This only
-              // refreshes its receipt and opens the shared analysis read model.
-              void props.onChanged().then((fresh) => {
-                if (fresh) props.onOpenPane("analysis");
-              });
-            }}
-            onChanged={() => void props.onChanged()}
-            onCancel={props.onCancel}
-            onDirtyChange={props.onDirtyChange}
-            onBusyChange={props.onBusyChange}
-          />
-        </div>
+        <ConversationReconfirmation
+          caseId={caseId}
+          pane={props}
+          access={{ ticket, current, verify }}
+        />
       );
     if (pane === "report")
       return (

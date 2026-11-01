@@ -81,6 +81,31 @@ test("a newly received intent from a previous revision cannot execute", async ({
   ).toEqual(["show_preparation"]);
 });
 
+test("a definitive quota rejection ends the attempt; explicit retry after recovery uses a new request", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  const primary = page.getByRole("button", { name: "리포트 준비·검토", exact: true });
+  await expect(primary).toBeVisible();
+  await page.evaluate(() => {
+    window.conversationFixture.fail = true;
+    window.conversationFixture.failureCode = "USER_QUOTA_EXCEEDED";
+  });
+  await primary.click();
+  await expect(page.getByRole("alert")).toContainText("합성 이용 한도");
+  await expect(page.getByRole("button", { name: "같은 요청 결과 확인", exact: true })).toHaveCount(
+    0,
+  );
+  await page.evaluate(() => {
+    window.conversationFixture.fail = false;
+  });
+  await primary.click();
+  await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toBeVisible();
+  const calls = await page.evaluate(() => window.conversationFixture.calls);
+  expect(calls).toHaveLength(2);
+  expect(calls[1]?.requestId).not.toBe(calls[0]?.requestId);
+});
+
 test("scope revocation aborts pending actions and discards the late result", async ({ page }) => {
   await page.goto("/__conversation-agent");
   const primary = page.getByRole("button", { name: "리포트 준비·검토", exact: true });

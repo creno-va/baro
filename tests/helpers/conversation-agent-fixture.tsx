@@ -22,6 +22,7 @@ export function ConversationAgentFixture() {
     calls: [],
     delay: false,
     fail: false,
+    failureCode: "UNAVAILABLE",
     resolve: null,
     aborted: false,
     needsConsent: false,
@@ -78,9 +79,16 @@ export function ConversationAgentFixture() {
           value.resolve = resolve;
         });
       if (value.fail)
-        throw Object.assign(new Error("합성 timeout: 접수 여부를 확인해 주세요."), {
-          code: "UNAVAILABLE",
-        });
+        throw Object.assign(
+          new Error(
+            value.failureCode === "USER_QUOTA_EXCEEDED"
+              ? "합성 이용 한도에 도달했어요."
+              : "합성 timeout: 접수 여부를 확인해 주세요.",
+          ),
+          {
+            code: value.failureCode,
+          },
+        );
       if (request.action === "prepare_report")
         state.current.report = {
           status: "ready",

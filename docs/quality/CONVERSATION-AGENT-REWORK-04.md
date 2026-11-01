@@ -146,3 +146,33 @@ owner 검증과 conversation GET으로만 열며 action POST/admission을 만들
 회귀를 추가해 격리 대화 UI는 **7개 통과**했다. 05가 조립을 재검토해 수정 사항을 수용했다.
 법률 관찰 자격 보존 PR644의 정확 head `41a2e9b0` Quality41304742070/Legal41304742069
 성공과 main `93131b4f`를 확인해 통합했다.
+
+## 2026-11-01 실행 기록: 명시적 맥락 확인과 공통 mock
+
+00이 명시 배정한 Workspace 대화 범위에서 `ConversationContextReview`를 추가했다.
+실제 `getContext/updateContext`로 입장·사건 분야·진행 단계·사용자가 확인한 설명을
+읽고 저장한다. 기존 값을 기본으로 표시하며 분야나 입장으로 단계를 추정하지 않는다.
+개인/기업 맥락은 기존 값을 보존한다. 모르는 단계는 그대로 남겨 제한 결과로 이어갈 수 있다.
+01의 SummaryReconfirmation을 감싼 조립 컴포넌트가 두 편집의 dirty/busy를 합친다.
+
+- 저장 전후 fresh owner 검사, 현재 revision CAS와 readback을 적용한다. 409에서는 선택과
+  설명을 보존하고 최신 GET/명시 비교 후 새 기준으로만 다시 저장한다. ACK 유실은 동일
+  입력으로 결과를 확인하며 ACK 이후 readback 실패는 GET만 재실행한다.
+- 00과 합의해 소유 `conversation-prompts.ts`를 2.12.0으로 갱신했다. 절차 설명과 자료는
+  사용자 데이터이며 명령 권한이나 공식 확인이 아님을 generation/독립 audit 양쪽에
+  전달한다. 설명에 삽입한 리포트 실행 지시를 audit가 거절하면 게시하지 않는 검사를 추가했다.
+  중앙 registration 테스트의 기대 version 한 줄만 00의 명시 배정으로 함께 변경했다.
+- 실제 공통 mock/실제 Astro 앱에서 양 입장 각각 초기 질문2×3→사건 확인→자료 추가/검토→
+  명시적 절차 확인→제한 리포트/후속 UI를 같은 URL로 검증했다. 분야 선택 뒤 단계가
+  미확인인지, Escape 취소/초점 복귀, peer 수정으로 실제 CAS409, 초안 보존/최신 비교,
+  320px dialog/composer와 serious/critical axe0을 검사했다. Chromium2/WebKit2 통과했다.
+  이 mock은 법률 서비스를 실제 unavailable로 표시하며 구조화 NLP 성공을 대신하지 않는다.
+- 공통 원본 저장소 PR647의 ArrayBuffer 호환 구현을 사용하고 임시 byte store helper/DI를
+  제거했다. 공통 원본 저장소로 WebKit 자료·사진·동의·원본 바이트·삭제 관련3개가 통과했다.
+- 격리 대화 UI는 quota 거절 이후 새 요청 ID와 동의 철회 후 GET-only 읽기 검사를 포함해
+  8개 통과했다. 코어/게시/pipeline/분석/검토 다운로드 관련153개, `validate:quick`674개와
+  `validate:build`(production workerd 실제 부팅)가 통과했다.
+
+중앙 실제 Hono/D1/AES/서명 세션 조립의 양 입장×후속3경로는 별도 미실행 상태다.
+준비된 브라우저 진입점은 중앙 factory가 CI/main을 통과한 뒤 연결한다. 처리/검색/모델은
+합성 외부 포트만 사용하며, 앱 서비스·영속 저장·권한 검사는 실제 구현을 사용한다.

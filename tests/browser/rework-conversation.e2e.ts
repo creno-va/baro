@@ -15,6 +15,46 @@ async function openAction(page: Page, name: string) {
   await button.click();
 }
 
+test("an actual action ACK lost after commit replays the identical input and idempotency key", async ({
+  page,
+  context,
+}, testInfo) => {
+  let dropped = false;
+  const f = await openReworkBrowserFixture(
+    context,
+    new URL(String(testInfo.project.use.baseURL)).origin,
+    "prepare_claim",
+    {
+      dropResponse: (request, response) => {
+        if (
+          !dropped &&
+          request.method() === "POST" &&
+          new URL(request.url()).pathname.endsWith("/rework/actions") &&
+          response.ok()
+        ) {
+          dropped = true;
+          return true;
+        }
+        return false;
+      },
+    },
+  );
+  try {
+    await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}`);
+    await openAction(page, "법률·판례와 현재 약점 확인");
+    const retry = page.getByRole("button", { name: "같은 요청 결과 확인", exact: true });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(
+      page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true }),
+    ).toBeVisible();
+    expect(f.actions).toHaveLength(2);
+    expect(f.actions[1]).toEqual(f.actions[0]);
+  } finally {
+    await f.close();
+  }
+});
+
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   for (const followup of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
     test(`${purpose}: material → confirmation → automatic law/precedent → report → ${followup}, one conversation URL`, async ({
