@@ -186,3 +186,32 @@ owner 검증과 conversation GET으로만 열며 action POST/admission을 만들
 최신 확인을 안내하도록 고쳤다. 이미 보낸 요청의 ACK 유실은 revision이 바뀌어도 원래
 request ID/expectedRevision/전체 본문으로만 결과를 확인한다. 격리 대화 UI **9개**가 통과했다.
 공통 mock WebKit 양 입장에서는 context 저장 후 새 분석 heading으로 초점 이동도 통과했다.
+
+## 2026-11-02 통합 중 검증 기록
+
+PR655~669의 CI 성공과 main `929297bb`, PR668의 CI 성공과 main `864f7994`를 확인해
+통합했다. 현재 Workspace Chromium **90개**, 격리 ConversationAgent Chromium **11개**와
+WebKit **11개**, 코어/실제 암호화 게시/pipeline/분석 표시 **148개**, 검토 다운로드 **5개**,
+`bun ci`, `validate:quick` **674개/6291 assertions**가 통과했다. production build의 로컬
+workerd 부팅도 통과했으며 최종 통합 뒤 다시 필요한 변경 검증을 수행한다.
+
+리포트 요청 후 서버가 준비를 끝내면 현재 권한 상태로 검토 화면만 이어서 연다. dirty 초안,
+busy, scope 변경, 명시 닫기를 보존하며 이 효과는 POST나 모델 호출을 하지 않는다.
+ReportReview의 검증된 본문 `onViewed({id,revision})`만 검토 사실로 받는다. 패널을 여는
+동작이나 새 metadata만으로 검토 완료를 인정하지 않고 현재 리포트와 같은 identity일 때만
+후속 해결을 주 행동으로 제시한다. metadata가 늦게 반영돼도 이미 검증해 표시한 본문의
+identity를 유지한다.
+
+00이 별도 배정한 실제 runtime fixture PR672는 signed Hono/API·SQLite/AES·현재 시각·
+실제 dispatcher·원장/용량/CAS와 외부 합성 transport를 조합한다. 정상 양 입장과 검색
+실패의 제한 리포트, passive read 추가 모델/검색0, 실제 SQL AI200 admission, 다른 계정과
+동의 경계를 검사한다. native opt-in은 실제 SDK upload→03 processor→R2 원본 바이트를
+통과했다. PDF는 실제 Docker에서 52KB 렌더 후 저장의 321번째 쿼리가 계획320을 넘는
+413을 재현해05/00이 중복 검증 조회를 개선 중이다. 읽는 중 revision이 바뀌면 요약 fragment
+읽기가 중단돼 JSON parse400이 될 수 있는 경합도 발견해00에 전달했다. 두 실패를 성공으로
+표시하거나 테스트에서 숨기지 않으며 PR672의 실패 CI는 수정 뒤 갱신한다.
+
+실제 브라우저 통합 **14개는 작성·typecheck 완료, 아직 미실행**이다. 양 입장×후속3경로6,
+실제 응답 유실2, 검색 실패·처리 실패/원본 바이트 보존·AI200·동의 철회·foreign 계정·
+peer context 수정6을 포함한다. 중앙 factory와 위 수정의 CI/main 후 CLI를 연결해 실행한다.
+이는 실제 외부 모델/법률 API/OAuth/운영 인수 완료를 의미하지 않는다.
