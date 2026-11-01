@@ -78,7 +78,7 @@ export default defineConfig({
         "form-action 'self'",
         "connect-src 'self' https://challenges.cloudflare.com",
         "frame-src https://challenges.cloudflare.com",
-        "img-src 'self' data:",
+        "img-src 'self' data: blob:",
         "font-src 'self'",
       ],
       scriptDirective: { resources: ["'self'", "https://challenges.cloudflare.com"] },
