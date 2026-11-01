@@ -422,6 +422,7 @@ async function comparisonTransport(page: Page) {
   await page.evaluate(async (id) => {
     const {
       registerHttpMockHandler,
+      registerMockHandlers,
       request: read,
       ApiError,
     } = await import(`${location.origin}/src/client/api/core.ts`);
@@ -429,6 +430,17 @@ async function comparisonTransport(page: Page) {
       `${location.origin}/src/contracts/v2/precedent-comparison.ts`
     );
     const storage = "synthetic-comparison";
+    const initialContext = await read("precedents.context", { id });
+    registerMockHandlers({
+      "precedents.context": () => {
+        const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        return {
+          ...initialContext,
+          workspaceRevision: cases[id].revision,
+          ...(sessionStorage.getItem(`${storage}-revision`) ? { researchRevision: 1 } : {}),
+        };
+      },
+    });
     const job = (status = "running") => ({
       schemaVersion: "2",
       id: "synthetic-comparison-job",
@@ -446,14 +458,6 @@ async function comparisonTransport(page: Page) {
     registerHttpMockHandler(async (request: Request) => {
       const path = new URL(request.url).pathname;
       const base = `/api/v2/cases/${id}`;
-      if (path === `${base}/precedents` && sessionStorage.getItem(`${storage}-revision`)) {
-        const context = await read("precedents.context", { id });
-        return Response.json({
-          ...context,
-          workspaceRevision: Number(sessionStorage.getItem(`${storage}-revision`)),
-          researchRevision: 1,
-        });
-      }
       if (path === `${base}/workspace-jobs/latest`)
         return Response.json(sessionStorage.getItem(storage) ? job() : null);
       if (path === `${base}/precedents/compare`) {
@@ -582,6 +586,7 @@ test("a completed comparison survives its own revision and does not leak onto an
     const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
     cases[caseId].revision = 3;
     localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    sessionStorage.setItem("synthetic-comparison-revision", "3");
     window.dispatchEvent(new Event("focus"));
   }, id);
   await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
@@ -627,10 +632,10 @@ test("failed comparison uses one recovery card and keeps the original readable",
     localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
     window.dispatchEvent(new Event("focus"));
   }, id);
-  await expect(card.getByRole("heading", { name: "판례를 다시 확인해 주세요" })).toBeVisible();
-  await expect(region.locator(".precedent-state-card")).toHaveCount(1);
-  await expect(region.getByText("비교를 완료하지 못했어요", { exact: true })).toHaveCount(0);
-  await expect(card.getByRole("button", { name: "판례 다시 검색", exact: true })).toBeEnabled();
+  await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
+  await expect(page.getByRole("list", { name: "관련 판례 목록" })).toHaveCount(0);
+  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "판례 찾기", exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ path: ".wrangler/precedent-refresh-failed-390.png", fullPage: true });
 });

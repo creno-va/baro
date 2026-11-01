@@ -137,7 +137,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
     const actual = await page.locator("#lawyer-profile-form").evaluate((form) => {
       const name = form.querySelector('[aria-label="이름"]');
       const intro = form.querySelector("textarea");
-      const select = form.querySelector("select");
+      const select = form.querySelector(".lawyer-select select");
       const arrow = form.querySelector(".lawyer-select > svg");
       if (!name || !intro || !select || !arrow) throw new Error("Missing synthetic profile inputs");
       const properties = [
