@@ -1085,6 +1085,7 @@
   margin-left: 0;
 }
 .report-workspace .report-reading-section textarea {
+  display: block;
   min-height: 110px;
   margin: 0;
   padding: 14px 16px;
@@ -1285,35 +1286,23 @@
   font-size: 13px;
   color: var(--muted-foreground);
 }
-.report-format-toolbar {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.report-workspace .report-format-toolbar button {
-  min-height: 36px;
-  padding: 8px 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
 .report-photo-insert {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin: 12px 0 0;
   min-width: 0;
+  max-width: 100%;
+}
+.report-workspace .report-photo-insert button {
+  min-height: 44px;
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 13px;
 }
 .report-photo-insert select {
-  min-height: 36px;
+  min-height: 44px;
   max-width: min(260px, 100%);
   border: 1px solid var(--border);
   border-radius: 9px;

@@ -13,6 +13,7 @@ import {
   selfProfileSchema,
 } from "../src/server/modules/lawyers/self-profile-contract";
 import { createTestDatabase } from "./helpers/d1";
+import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
 import { seedTestSession } from "./helpers/session";
 
 const complete = {
@@ -25,6 +26,37 @@ const complete = {
   email: "lawyer@example.invalid",
   portfolio: [{ id: "activity-1", title: "합성 공개 활동", url: "https://example.com/portfolio" }],
 };
+
+test("new portfolio selection has one slot while unchanged historical entries remain readable", async () => {
+  const f = await fixture();
+  const service = createSelfProfileService(f.core);
+  const blank = await service.getMine(f.owner.userId);
+  const first = complete.portfolio[0];
+  if (!first) throw new Error("Synthetic portfolio missing");
+  const portfolio = [first, { ...first, id: "second", title: "Second legacy item" }];
+  await expect(
+    service.saveMine(f.owner.userId, { ...blank, ...complete, portfolio }),
+  ).rejects.toThrow();
+  const legacy = selfProfileSchema.parse({
+    ...blank,
+    ...complete,
+    revision: 2,
+    published: true,
+    portfolio,
+  });
+  await seedLegacySelfProfile(f.core, f.owner.userId, legacy);
+  expect((await service.getMine(f.owner.userId)).portfolio).toEqual(portfolio);
+  const edited = await service.saveMine(f.owner.userId, {
+    ...legacy,
+    introduction: "Unrelated introduction edit",
+  });
+  expect(edited.portfolio).toEqual(portfolio);
+  const replaced = await service.saveMine(f.owner.userId, { ...edited, portfolio: [portfolio[0]] });
+  expect(replaced.portfolio).toHaveLength(1);
+  expect(
+    (await service.saveMine(f.owner.userId, { ...replaced, portfolio: [] })).portfolio,
+  ).toEqual([]);
+});
 test("text portfolio keeps its own body through encrypted save, reconnect, publication, edit and removal", async () => {
   const f = await fixture();
   const service = createSelfProfileService(f.core);

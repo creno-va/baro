@@ -252,11 +252,10 @@ export async function readWorkspaceContext(
   }
   const workspace = await repo.findWorkspace(actor, id);
   if (!workspace) throw new Error("Workspace unavailable");
-  // Existing entries are read-only context for incremental updates. Keep the
-  // same bounded read surface, and never overwrite completion or manual edits.
+  // Existing action revisions also fence evidence-backed completion proposals.
   const [existingActions, existingTimeline] = latest
     ? await Promise.all([
-        repo.actions(actor, id, undefined, 8),
+        repo.preparationActions(actor, id),
         repo.timeline(actor, id, undefined, 8),
       ])
     : ([[], []] as const);
@@ -269,14 +268,17 @@ export async function readWorkspaceContext(
     intake,
     confirmedSummary: intake.status === "confirmed" ? summary : null,
     facts: factPage.facts,
-    existingActions: existingActions.map(({ id, kind, title, instructions, caution, status }) => ({
-      id,
-      kind,
-      title,
-      instructions,
-      caution,
-      status,
-    })),
+    existingActions: existingActions.map(
+      ({ id, revision, kind, title, instructions, caution, status }) => ({
+        id,
+        revision,
+        kind,
+        title,
+        instructions,
+        caution,
+        status,
+      }),
+    ),
     existingTimeline: existingTimeline.map(({ id, date, datePrecision, event, userEdited }) => ({
       id,
       date,

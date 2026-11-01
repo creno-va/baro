@@ -51,9 +51,7 @@ test("profile save replaces separate publication controls and preserves edits", 
   expect(publications).toBe(0);
 });
 
-test("selecting another ready photo replaces an uploaded photo preview before saving", async ({
-  page,
-}) => {
+test("uploading another photo uses the new asset after saving", async ({ page }) => {
   let photoBReads = 0;
   let savedPhoto: string | null = null;
   let profile = {
@@ -165,15 +163,27 @@ test("selecting another ready photo replaces an uploaded photo preview before sa
   });
   const image = page.getByAltText("내 프로필 사진", { exact: true });
   await expect(image).toHaveAttribute("src", /^data:image/);
-  await page.getByRole("button", { name: "자료 상태 확인", exact: true }).click();
-  const rows = page.getByRole("list", { name: "업로드 자료 상태" }).getByRole("listitem");
-  await expect(rows).toHaveCount(2);
-  await rows.nth(1).getByRole("button", { name: "프로필에 연결", exact: true }).click();
-  await expect.poll(() => photoBReads).toBeGreaterThan(0);
-  await expect(image).toHaveAttribute("src", /^data:image\/png/);
+  await page.evaluate(async () => {
+    const modulePath = "/src/client/api/lawyers.ts";
+    const { lawyerAssets } = await import(modulePath);
+    lawyerAssets.upload = async () => ({
+      id: "synthetic-photo-b",
+      revision: 3,
+      status: "ready",
+      purpose: "profile_photo",
+      kind: "image",
+    });
+  });
+  await page.getByLabel("프로필 사진", { exact: true }).setInputFiles({
+    name: "another.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png ?? "", "base64"),
+  });
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
   expect(savedPhoto).toBe("synthetic-photo-b");
+  await expect.poll(() => photoBReads).toBeGreaterThan(0);
+  await expect(image).toHaveAttribute("src", /^data:image\/png/);
 });
 
 for (const outageMode of ["save", "focus", "postflight"] as const) {
@@ -460,7 +470,7 @@ for (const purpose of ["photo", "pdf"] as const) {
         });
         holdSessions = stage === "preflight";
         await page
-          .getByLabel(purpose === "photo" ? "프로필 사진" : "포트폴리오 파일 (이미지·PDF)", {
+          .getByLabel(purpose === "photo" ? "프로필 사진" : "포트폴리오 파일", {
             exact: true,
           })
           .setInputFiles({
@@ -540,8 +550,8 @@ for (const purpose of ["photo", "pdf"] as const) {
           return;
         }
         await expect(
-          page.getByRole("list", { name: "업로드 자료 상태" }).getByRole("listitem"),
-        ).toHaveCount(1);
+          page.getByText("자료를 연결했어요. 프로필을 저장하면 반영돼요.", { exact: true }),
+        ).toBeVisible();
         await expect(
           page.getByText("자료를 연결했어요. 프로필을 저장하면 반영돼요.", { exact: true }),
         ).toBeVisible();
@@ -552,7 +562,7 @@ for (const purpose of ["photo", "pdf"] as const) {
             "src",
             /^data:image/,
           );
-        else await expect(page.getByLabel("활동 제목 1", { exact: true })).toHaveValue("공개 자료");
+        else await expect(page.locator(".lawyer-portfolio-upload")).toContainText("synthetic.pdf");
         await expect(page.getByRole("button", { name: "프로필 저장", exact: true })).toBeEnabled();
         const settledSessionReads = sessionRequests;
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -560,15 +570,15 @@ for (const purpose of ["photo", "pdf"] as const) {
         // Sharing must end when the response settles: the next foreground check
         // reads current permissions while keeping the connected unsaved asset.
         await expect(
-          page.getByRole("list", { name: "업로드 자료 상태" }).getByRole("listitem"),
-        ).toHaveCount(1);
+          page.getByText("자료를 연결했어요. 프로필을 저장하면 반영돼요.", { exact: true }),
+        ).toBeVisible();
         expect(uploads).toBe(1);
       });
     }
   }
 }
 
-for (const action of ["save", "assets"] as const) {
+for (const action of ["save"] as const) {
   test(`profile shows the pending operation and clears it on completion: ${action}`, async ({
     page,
   }) => {

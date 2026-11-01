@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
 import {
+  caseDisplayTitle,
   caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2Action,
@@ -69,6 +70,7 @@ export const workspaceCreateDataSchema = v2CreateCaseRequestSchema.omit({ turnst
 export const intakeContentSchema = z.strictObject({
   narrative: v2CreateCaseRequestSchema.shape.narrative,
   caseTitle: caseTitleSchema.optional(),
+  caseTitleEdited: z.boolean().optional(),
 });
 export type WorkspaceCreateData = z.infer<typeof workspaceCreateDataSchema>;
 // Existing server callers may still supply the full validated HTTP input. The
@@ -669,6 +671,50 @@ export function createV2WorkspaceRepository(
             )) ?? { kind: "rejected" as const });
       });
     },
+    rename(g: WorkspaceGuard, title: string, expectedTitle: string, receipt: MutationReceipt) {
+      return safe(async () => {
+        g = parse(guardSchema, g);
+        title = parse(caseTitleSchema, title);
+        const row = await core
+          .statement(
+            `SELECT i.encrypted_payload FROM v2_intakes i JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+            [g.workspaceId, g.ownerId],
+          )
+          .first<{ encrypted_payload: string }>();
+        if (!row) return false;
+        const content = await core.decrypt(
+          "v2_intakes",
+          g.workspaceId,
+          g.ownerId,
+          1,
+          row.encrypted_payload,
+          intakeContentSchema,
+        );
+        if (caseDisplayTitle(content.narrative, content.caseTitle) !== expectedTitle) return false;
+        const payload = await core.encrypt("v2_intakes", g.workspaceId, g.ownerId, 1, {
+          ...content,
+          caseTitle: title,
+          caseTitleEdited: true,
+        });
+        const id = crypto.randomUUID(),
+          mutation = mutationTools(core, g, receipt);
+        return core.changed([
+          mutation.claim(
+            id,
+            "w.current_job_id IS NULL AND EXISTS(SELECT 1 FROM v2_intakes i WHERE i.id=w.id AND i.encrypted_payload=?)",
+            [row.encrypted_payload],
+          ),
+          core.statement(`UPDATE v2_intakes SET encrypted_payload=? WHERE id=? AND ${sqlClaim}`, [
+            payload,
+            g.workspaceId,
+            id,
+          ]),
+          ...mutation.complete(id),
+          core.bump(g, id),
+          core.finish(id),
+        ]);
+      });
+    },
     metadata(actor: Actor, id: string) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
@@ -752,7 +798,8 @@ export function createV2WorkspaceRepository(
               schemaVersion: "2" as const,
               revision: row.revision,
               status: row.status,
-              ...narrative,
+              narrative: narrative.narrative,
+              ...(narrative.caseTitle ? { caseTitle: narrative.caseTitle } : {}),
               batches,
               confirmedSummaryRevision: row.confirmed_summary_revision,
               currentJobId: row.current_job_id,
@@ -1348,7 +1395,13 @@ export function createV2WorkspaceRepository(
         ]);
       });
     },
-    readActions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
+    readActions(
+      actor: Actor,
+      workspaceId: string,
+      afterId?: string,
+      limit = 4,
+      pendingFirst = false,
+    ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(z.number().int().min(1).max(8), limit);
@@ -1356,7 +1409,7 @@ export function createV2WorkspaceRepository(
         if (!current) return null;
         const rows = await core
           .statement(
-            `SELECT * FROM v2_actions WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY entity_id LIMIT ?`,
+            `SELECT * FROM v2_actions WHERE workspace_id=? ${afterId ? "AND entity_id>?" : ""} ORDER BY ${pendingFirst ? "CASE WHEN status='todo' THEN 0 ELSE 1 END," : ""} entity_id LIMIT ?`,
             [workspaceId, ...(afterId ? [afterId] : []), limit],
           )
           .all<{ id: string; revision: number; encrypted_payload: string }>();
@@ -1423,6 +1476,10 @@ export function createV2WorkspaceRepository(
     },
     async actions(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return (await repository.readActions(actor, workspaceId, afterId, limit)) ?? [];
+    },
+    // Keep the model window bounded without closed items hiding pending work.
+    async preparationActions(actor: Actor, workspaceId: string) {
+      return (await repository.readActions(actor, workspaceId, undefined, 8, true)) ?? [];
     },
     async timeline(actor: Actor, workspaceId: string, afterId?: string, limit = 4) {
       return (await repository.readTimeline(actor, workspaceId, afterId, limit)) ?? [];

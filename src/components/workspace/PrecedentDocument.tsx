@@ -1,6 +1,6 @@
 import { precedentHighlights } from "../../client/precedent-highlights";
 import type { V2PrecedentComparison } from "../../contracts/v2/precedent-comparison";
-import { precedentDocumentParts } from "../../utils/precedent-document";
+import { precedentDisplayParts } from "../../utils/precedent-document";
 
 export function PrecedentDocument({
   text,
@@ -15,7 +15,7 @@ export function PrecedentDocument({
 }) {
   return (
     <div className="precedent-full-text">
-      {precedentDocumentParts(text).map((part) => {
+      {precedentDisplayParts(text).map((part) => {
         const content = comparison
           ? precedentHighlights(comparison, {
               text: part.text,
@@ -36,15 +36,8 @@ export function PrecedentDocument({
               ),
             )
           : part.text;
-        const major = /^(판시사항|판결요지|참조조문|참조판례|전문|주문|이유)$/u.test(
-          part.text.replace(/[【】[\]\s]/gu, ""),
-        );
         return part.kind === "heading" ? (
-          major ? (
-            <h4 key={part.start}>{content}</h4>
-          ) : (
-            <h5 key={part.start}>{content}</h5>
-          )
+          <h4 key={part.start}>{content}</h4>
         ) : (
           <p className="precedent-body" key={part.start}>
             {content}

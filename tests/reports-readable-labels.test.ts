@@ -115,6 +115,9 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
   for (const question of f.questions) {
     expect(report.content).toContain(`- 이용자 진술 · ${question.text}`);
+    expect(report.content).toContain(
+      `### 합성 ${question.round}차 ${question.number}번 질문\n- 이용자 진술 · ${question.text}`,
+    );
     expect(report.content).not.toContain(question.id);
   }
   for (const label of [
@@ -126,14 +129,7 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
     "추가 확인 사항",
   ])
     expect(report.content).toContain(label);
-  for (const omitted of [
-    "준비할 행동",
-    "자료 처리 범위",
-    "주의:",
-    "출처:",
-    "합성 행동 todo",
-    "질문: 합성",
-  ])
+  for (const omitted of ["준비할 행동", "자료 처리 범위", "주의:", "출처:", "합성 행동 todo"])
     expect(report.content).not.toContain(omitted);
   expect(await sourceDigest(f.core, f.actor, f.workspaceId)).toBe(beforeDigest);
   const stored = await createV2ReportsRepository(f.core).read(f.actor, report.id);
@@ -141,6 +137,7 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
   expect(stored?.body.actions).toHaveLength(3);
   const html = await f.reports.html(f.actor.ownerId, report.id);
   expect(html).toContain("<li>이용자 진술 · 합성 답변");
+  expect(html).toContain("<h4>합성 1차 1번 질문</h4><ul><li>이용자 진술 · 합성 답변 1-1</li></ul>");
   const manual = "사건 개요\n**직접 검토한 본문**\n- 첫 확인\n- 두 번째 확인";
   const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
     expectedRevision: report.revision,
@@ -293,4 +290,73 @@ test("source display never invents question positions or exposes internal IDs, a
   expect(text).not.toContain("차 질문");
   expect(text).toContain("이용자 진술 · 합성 답변");
   expect(body).toEqual(original);
+});
+
+test("short answers retain question context in canonical order and share one heading without altering evidence", async () => {
+  const f = await fixture();
+  const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
+  const first = source.display.questions.find(
+    (question) => question.round === 1 && question.number === 1,
+  );
+  const second = source.display.questions.find(
+    (question) => question.round === 1 && question.number === 2,
+  );
+  const base = source.body.facts[0];
+  if (!first || !second || !base) throw new Error("Synthetic question context missing");
+  const reference = (questionId: string) => ({
+    kind: "intake_answer" as const,
+    intakeRevision: source.display.intakeRevision,
+    questionId,
+  });
+  const body = {
+    ...source.body,
+    facts: [
+      { ...base, id: "second", text: "300만원", references: [reference(second.id)] },
+      {
+        ...base,
+        id: "first",
+        text: "없어요",
+        references: [reference(first.id)],
+        certainty: "uncertain" as const,
+      },
+      {
+        ...base,
+        id: "more",
+        text: "문자 기록은 있습니다.",
+        references: [reference(first.id)],
+        userEdited: true,
+      },
+    ],
+  };
+  const original = structuredClone(body);
+  const text = reportText(body, [], source.display);
+  expect(text).toContain(
+    `### ${first.prompt}\n- 확인 필요 · 이용자 진술 · 없어요\n- 직접 수정 · 문자 기록은 있습니다.`,
+  );
+  expect(text.split(`### ${first.prompt}`)).toHaveLength(2);
+  expect(text.indexOf(`### ${first.prompt}`)).toBeLessThan(text.indexOf(`### ${second.prompt}`));
+  expect(text).toContain(`### ${second.prompt}\n- 이용자 진술 · 300만원`);
+  expect(body).toEqual(original);
+  const mixed = reportText(
+    {
+      ...body,
+      facts: [...body.facts, { ...base, id: "unlinked", text: "추가로 전한 내용", references: [] }],
+    },
+    [],
+    source.display,
+  );
+  expect(mixed).toContain("### 그 밖의 사실\n- 이용자 진술 · 추가로 전한 내용");
+  const outdated = {
+    ...body,
+    facts: body.facts.map((fact) => ({
+      ...fact,
+      references: [
+        { ...reference("missing-question"), intakeRevision: source.display.intakeRevision + 1 },
+      ],
+    })),
+  };
+  const fallback = reportText(outdated, [], source.display);
+  expect(fallback).not.toContain("### 합성");
+  expect(fallback).not.toContain("missing-question");
+  expect(fallback).toContain("이용자 진술 · 300만원");
 });

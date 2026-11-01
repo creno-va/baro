@@ -5,6 +5,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  Pencil,
   Plus,
   Settings,
   ShieldCheck,
@@ -79,6 +80,11 @@ export function AppNavigation({
   const [signingOut, setSigningOut] = useState(false);
   const [deletion, setDeletion] = useState<{ item: CaseView; ownerId: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState<{ item: CaseView; ownerId: string } | null>(null);
+  const [caseTitle, setCaseTitle] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const renameLock = useRef(false);
   const deleteLock = useRef(false);
   const sessionRequest = useRef(0);
   const signingOutRef = useRef(false);
@@ -97,6 +103,7 @@ export function AppNavigation({
           setRecent([]);
           setRecentState("loading");
           setDeletion(null);
+          setEditing(null);
         }
         owner = next.user?.id;
         setSession(next);
@@ -118,6 +125,7 @@ export function AppNavigation({
         owner = undefined;
         setRecent([]);
         setDeletion(null);
+        setEditing(null);
         setSession({ user: null, needsConsent: false });
       }
     }
@@ -173,6 +181,7 @@ export function AppNavigation({
     ++sessionRequest.current;
     setRecent([]);
     setDeletion(null);
+    setEditing(null);
     setSigningOut(true);
     setError("");
     try {
@@ -213,6 +222,49 @@ export function AppNavigation({
     } finally {
       deleteLock.current = false;
       setDeleting(false);
+    }
+  }
+  async function renameRecent() {
+    if (!editing || renameLock.current || !caseTitle.trim()) return;
+    const target = editing;
+    renameLock.current = true;
+    setRenaming(true);
+    setRenameError("");
+    const sameOwner = async () => {
+      const fresh = await api.session.get();
+      if (fresh.user?.id !== target.ownerId || fresh.needsConsent) {
+        setEditing(null);
+        setRecent([]);
+        throw new Error("현재 계정의 사건을 다시 확인해 주세요.");
+      }
+    };
+    try {
+      await sameOwner();
+      const next = await api.cases.rename(target.item.id, {
+        title: caseTitle,
+        expectedTitle: target.item.title,
+      });
+      await sameOwner();
+      setRecent((items) => items.map((item) => (item.id === next.id ? next : item)));
+      setEditing(null);
+      window.dispatchEvent(new CustomEvent("baro-case-title-changed", { detail: { id: next.id } }));
+    } catch (cause) {
+      setRenameError(
+        cause instanceof Error ? cause.message : "제목을 저장하지 못했어요. 다시 시도해 주세요.",
+      );
+      if ((cause as { code?: string })?.code === "CONFLICT") {
+        try {
+          await sameOwner();
+          const next = await api.cases.get(target.item.id);
+          await sameOwner();
+          setEditing((value) => (value?.item.id === next.id ? { ...value, item: next } : value));
+        } catch {
+          /* Keep the entered title for an explicit retry. */
+        }
+      }
+    } finally {
+      renameLock.current = false;
+      setRenaming(false);
     }
   }
   const renderLinks = () =>
@@ -272,21 +324,42 @@ export function AppNavigation({
                       <strong>{item.title}</strong>
                     </span>
                   </a>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="sidebar-story-delete"
-                    aria-label={`${item.title} 사건 삭제`}
-                    title="사건 삭제"
-                    disabled={deleting || signingOut}
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      setError("");
-                      if (session?.user) setDeletion({ item, ownerId: session.user.id });
-                    }}
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </Button>
+                  <div className="sidebar-story-actions">
+                    {item.schemaVersion !== "1" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="sidebar-story-edit"
+                        aria-label={`${item.title} 제목 수정`}
+                        title="제목 수정"
+                        disabled={deleting || renaming || signingOut}
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          if (!session?.user) return;
+                          setRenameError("");
+                          setCaseTitle(item.title);
+                          setEditing({ item, ownerId: session.user.id });
+                        }}
+                      >
+                        <Pencil size={15} aria-hidden="true" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="sidebar-story-delete"
+                      aria-label={`${item.title} 사건 삭제`}
+                      title="사건 삭제"
+                      disabled={deleting || renaming || signingOut}
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        setError("");
+                        if (session?.user) setDeletion({ item, ownerId: session.user.id });
+                      }}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </nav>
@@ -398,6 +471,51 @@ export function AppNavigation({
         {renderRecent()}
         {renderAccount()}
       </Sheet>
+      <Dialog
+        open={!!editing}
+        onOpenChange={(value) => {
+          if (!value && !renaming) setEditing(null);
+        }}
+        title="사건 제목 수정"
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void renameRecent();
+          }}
+        >
+          <label className="sidebar-title-field">
+            제목
+            <input
+              autoFocus
+              value={caseTitle}
+              maxLength={40}
+              required
+              disabled={renaming}
+              onChange={(event) => setCaseTitle(event.target.value)}
+            />
+          </label>
+          {renameError && (
+            <p className="sidebar-title-error" role="alert">
+              {renameError}
+            </p>
+          )}
+          <div className="sidebar-title-actions">
+            <Button variant="outline" disabled={renaming} onClick={() => setEditing(null)}>
+              취소
+            </Button>
+            <Button
+              type="submit"
+              loading={renaming}
+              disabled={
+                !editing || renaming || !caseTitle.trim() || caseTitle.trim() === editing.item.title
+              }
+            >
+              저장
+            </Button>
+          </div>
+        </form>
+      </Dialog>
       <Dialog
         open={Boolean(deletion)}
         onOpenChange={(value) => {

@@ -520,6 +520,57 @@ export function reportText(
           : "AI 정리 · ";
     return bullet(`${qualification}${basis}${fact.text}${evidenceReferences(fact.references)}`);
   };
+  // Answer excerpts such as "300만원" or "기록이 없어요" need their actual
+  // question. Match exact provenance, never fact order or a guessed category.
+  const questions = [...(display?.questions ?? [])].sort(
+    (a, b) => a.round - b.round || a.number - b.number,
+  );
+  const factGroups = new Map<
+    string,
+    {
+      prompts: string[];
+      order: number;
+      facts: V2ReportBody["facts"];
+    }
+  >();
+  for (const fact of body.facts.filter((fact) => fact.attribution !== "official_source")) {
+    const matched = questions.filter(
+      (question) =>
+        question.prompt?.trim() &&
+        fact.references.some(
+          (ref) =>
+            ref.kind === "intake_answer" &&
+            ref.intakeRevision === display?.intakeRevision &&
+            ref.questionId === question.id,
+        ),
+    );
+    const key = JSON.stringify(matched.map((question) => question.id));
+    let group = factGroups.get(key);
+    if (!group) {
+      const first = matched[0];
+      group = {
+        prompts: matched.flatMap((question) =>
+          question.prompt ? [question.prompt.replace(/\r?\n/gu, " ")] : [],
+        ),
+        order: first ? questions.indexOf(first) : questions.length,
+        facts: [],
+      };
+      factGroups.set(key, group);
+    }
+    group.facts.push(fact);
+  }
+  const hasQuestionContext = [...factGroups.values()].some((group) => group.prompts.length);
+  const contextualFacts = [...factGroups.values()]
+    .sort((a, b) => a.order - b.order)
+    .flatMap((group) => [
+      ...(group.prompts.length
+        ? [`### ${group.prompts.join(" / ")}`]
+        : hasQuestionContext
+          ? ["### 그 밖의 사실"]
+          : []),
+      ...group.facts.map(factLabel),
+      "",
+    ]);
   const text = [
     "사건 개요",
     body.overview,
@@ -551,7 +602,7 @@ export function reportText(
     }),
     "",
     "주요 사실",
-    ...body.facts.filter((fact) => fact.attribution !== "official_source").map(factLabel),
+    ...contextualFacts,
     "",
     "증거 자료",
     ...(body.selectedFiles.length ? [] : ["처리 완료된 증거 자료가 없습니다."]),

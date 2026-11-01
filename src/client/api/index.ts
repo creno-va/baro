@@ -119,6 +119,10 @@ export const api = {
       turnstileToken?: string;
     }): Promise<CaseView>;
     get(id: string): Promise<CaseView>;
+    rename(
+      id: string,
+      input: import("zod").infer<typeof import("../../contracts/v2").v2CaseRenameRequestSchema>,
+    ): Promise<CaseView>;
     getQuestions(id: string): Promise<QuestionsResult>;
     saveAnswers(id: string, input: Answers): Promise<QuestionsResult>;
     advance(id: string, input: { expectedRevision: number }): Promise<QuestionsResult>;

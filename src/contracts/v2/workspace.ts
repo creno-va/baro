@@ -10,7 +10,11 @@ import {
   timestampSchema,
 } from "../common";
 import { v2FailureCodeSchema, v2IdListSchema, v2JobPhaseSchema, v2VersionSchema } from "./common";
-import { v2FactReferenceSchema, v2OfficialCitationSchema } from "./sources";
+import {
+  v2FactReferenceSchema,
+  v2MaterialReferenceSchema,
+  v2OfficialCitationSchema,
+} from "./sources";
 import { v2LookupRequestsSchema } from "./tools";
 
 export const v2CreateCaseRequestSchema = z.strictObject({
@@ -174,6 +178,14 @@ export const v2ActionUpdateRequestSchema = z.strictObject({
   expectedRevision: revisionSchema,
   status: z.enum(["todo", "done", "skipped"]),
 });
+/** A proposed completion can only target an existing revision with material evidence. */
+export const v2ActionCompletionSchema = z.strictObject({
+  actionId: opaqueIdSchema,
+  expectedRevision: revisionSchema,
+  reference: v2MaterialReferenceSchema,
+  quote: displayText(1000),
+});
+export type V2ActionCompletion = z.infer<typeof v2ActionCompletionSchema>;
 export const v2JobTargetSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("workspace"),

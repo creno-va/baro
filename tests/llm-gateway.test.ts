@@ -92,6 +92,7 @@ test("explicit provider defaults remain compatible with server parsing and legac
     warnings: [],
     facts: [],
     actions: [],
+    actionCompletions: [],
     parties: [],
     unknowns: null,
     requestedSources: [

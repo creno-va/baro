@@ -73,6 +73,7 @@ export type V2PrecedentSearchRequest = z.infer<typeof v2PrecedentSearchRequestSc
 export const v2PrecedentResearchContextSchema = z.strictObject({
   schemaVersion: z.literal("2"),
   workspaceRevision: revisionSchema,
+  researchRevision: revisionSchema.optional(),
   summaryRevision: revisionSchema,
   caseTitle: displayText(200),
   recommendedTopics: z

@@ -307,6 +307,14 @@ export function Workspace({
     };
   }, [load, version]);
   useEffect(() => {
+    const renamed = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === caseId && !lock.current)
+        void load();
+    };
+    window.addEventListener("baro-case-title-changed", renamed);
+    return () => window.removeEventListener("baro-case-title-changed", renamed);
+  }, [caseId, load]);
+  useEffect(() => {
     if (!view || view.case.schemaVersion === "1") return;
     const pending =
       view.messages.some((message) => message.status === "pending") ||
@@ -535,7 +543,7 @@ export function Workspace({
           target,
           request: {
             expectedRevision: snapshot.case.revision,
-            text: `최근 대화와 처리된 자료를 반영해 ${label}을 업데이트해 주세요. 기존에 정리된 항목과 완료한 행동, 직접 수정한 내용은 유지하고, 중복 없이 새로 확인된 내용과 필요한 준비만 추가해 주세요. 근거가 부족한 날짜나 사실은 추측하지 마세요.`,
+            text: `최근 대화와 처리된 자료를 반영해 ${label}을 업데이트해 주세요. 기존에 정리된 항목과 완료한 행동, 직접 수정한 내용은 유지하고, 중복 없이 새로 확인된 내용과 필요한 준비만 추가해 주세요.${target === "actions" ? " 자료에서 수행 완료가 확인되는 기존 행동은 완료로 표시해 주세요. 단순 업로드나 예정·진행 중 상태는 완료로 판단하지 마세요." : ""} 근거가 부족한 날짜나 사실은 추측하지 마세요.`,
             selectedFileIds: snapshot.files
               .filter((file) => file.status === "ready")
               .map((file) => file.id),
@@ -677,7 +685,6 @@ export function Workspace({
       setDraft("");
       setSelected([]);
       setChatAttachments([]);
-      setNotice("메시지를 저장했어요.");
     });
   }
   async function sendLookup(request: V2LookupRequest) {
@@ -1217,31 +1224,20 @@ export function Workspace({
                         {!!message.citations?.length && (
                           <SourceCards citations={message.citations} />
                         )}
-                        {message.references?.some(
-                          (ref) => ref.kind !== "user_message" && ref.kind !== "official_source",
-                        ) && (
+                        {message.references?.some((ref) => ref.kind === "user_material") && (
                           <ul
                             className="workspace-message-references"
                             aria-label="답변에 사용한 자료"
                           >
                             {message.references
-                              .filter(
-                                (ref) =>
-                                  ref.kind !== "user_message" && ref.kind !== "official_source",
-                              )
+                              .filter((ref) => ref.kind === "user_material")
                               .map((ref) => (
                                 <li key={JSON.stringify(ref)}>
-                                  {ref.kind === "user_material" ? (
-                                    <a
-                                      href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
-                                    >
-                                      {view.files.find((f) => f.id === ref.fileId)?.name ??
-                                        "참조 자료"}{" "}
-                                      · {referenceLabel(ref)}
-                                    </a>
-                                  ) : (
-                                    referenceLabel(ref)
-                                  )}
+                                  <a href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}>
+                                    {view.files.find((f) => f.id === ref.fileId)?.name ??
+                                      "참조 자료"}{" "}
+                                    · {referenceLabel(ref)}
+                                  </a>
                                 </li>
                               ))}
                           </ul>
@@ -1780,17 +1776,17 @@ export function Workspace({
                     </div>
                   )}
                   {historyButton("actions", "행동 더 불러오기")}
-                  <ul className="workspace-action-list">
+                  <ul className="workspace-action-list" aria-busy={!!pendingResponse}>
                     {view.actions.map((action) => (
                       <li key={action.id} className={action.done ? "is-done" : ""}>
                         <label>
                           <input
                             type="checkbox"
                             checked={action.done}
-                            disabled={!!busy || readonly}
+                            disabled={!!busy || readonly || !!pendingResponse}
                             onChange={(event) => {
                               const done = event.target.checked;
-                              if (readonly || lock.current) return;
+                              if (readonly || lock.current || pendingResponse) return;
                               const previous = view;
                               void run(action.id, async (epoch) => {
                                 apply({

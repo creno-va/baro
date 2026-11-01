@@ -902,23 +902,24 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                     </div>
                   </div>
                   <div className="intake-scene-action intake-scene-navigation">
-                    <Button
-                      className="intake-scene-back"
-                      variant="outline"
-                      disabled={
-                        busy ||
-                        autoSaving ||
-                        waiting ||
-                        leaving ||
-                        index === 0 ||
-                        (error as { code?: string })?.code === "CONFLICT" ||
-                        (!!error && failedOperation.current?.kind === "save")
-                      }
-                      onClick={() => void navigateQuestion(index - 1)}
-                    >
-                      <ArrowLeft size={18} aria-hidden="true" />
-                      이전으로
-                    </Button>
+                    {index > 0 && (
+                      <Button
+                        className="intake-scene-back"
+                        variant="outline"
+                        disabled={
+                          busy ||
+                          autoSaving ||
+                          waiting ||
+                          leaving ||
+                          (error as { code?: string })?.code === "CONFLICT" ||
+                          (!!error && failedOperation.current?.kind === "save")
+                        }
+                        onClick={() => void navigateQuestion(index - 1)}
+                      >
+                        <ArrowLeft size={18} aria-hidden="true" />
+                        이전으로
+                      </Button>
+                    )}
                     {waiting ? (
                       <PreparationStatus title={statusTitle} />
                     ) : !canMutate ? (

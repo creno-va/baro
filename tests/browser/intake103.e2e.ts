@@ -754,7 +754,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(page.getByRole("button", { name: "답변 저장", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "나중에 이어하기" })).toBeHidden();
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 9월");
-  await expectAnswerNavigation(page);
+  await expect(page.getByRole("button", { name: "이전으로", exact: true })).toHaveCount(0);
   await settleIntakeSave(page);
   await expect(page.getByRole("status").filter({ hasText: /저장됐어요/ })).toBeVisible();
   await page.reload();

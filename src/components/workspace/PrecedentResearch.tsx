@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ChevronDown, ExternalLink, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, errorMessage } from "../../client/api/core";
 import { precedentsApi } from "../../client/api/precedents";
@@ -11,6 +11,7 @@ import type {
 } from "../../contracts/v2/precedent-research";
 import { PRECEDENT_TOPIC_LABELS } from "../../contracts/v2/precedent-topics";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
+import { Spinner } from "../ui/loading";
 import { CaseNavigation } from "./CaseNavigation";
 import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
 import { PrecedentDocument } from "./PrecedentDocument";
@@ -51,6 +52,14 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
     setReading(false);
     setReadError(null);
   }, []);
+  useEffect(() => {
+    const renamed = (event: Event) => {
+      if ((event as CustomEvent<{ id?: string }>).detail?.id === caseId)
+        setReload((value) => value + 1);
+    };
+    window.addEventListener("baro-case-title-changed", renamed);
+    return () => window.removeEventListener("baro-case-title-changed", renamed);
+  }, [caseId]);
   const access = useCustomerAccess(() => {
     requests.current.context?.abort();
     clearResults();
@@ -75,10 +84,16 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       .then((next) => {
         if (controller.signal.aborted || !boundary.current.current(ticket)) return;
         const prior = currentContext.current;
-        if (prior && prior.summaryRevision !== next.summaryRevision) {
+        if (
+          prior &&
+          (prior.summaryRevision !== next.summaryRevision ||
+            prior.workspaceRevision < (next.researchRevision ?? next.workspaceRevision) ||
+            prior.workspaceRevision > next.workspaceRevision)
+        ) {
           clearResults();
+        }
+        if (!prior || prior.summaryRevision !== next.summaryRevision)
           setTopics(next.recommendedTopics.slice(0, 2));
-        } else if (!prior) setTopics(next.recommendedTopics.slice(0, 2));
         currentContext.current = next;
         setContext(next);
         setError(null);
@@ -132,7 +147,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       const next = await precedentsApi.search(
         caseId,
         {
-          expectedRevision: context.workspaceRevision,
+          expectedRevision: more && result ? result.workspaceRevision : context.workspaceRevision,
           summaryRevision: context.summaryRevision,
           topics: more && result ? result.topics : topics,
           pageSize: 5,
@@ -162,8 +177,14 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       if (!controller.signal.aborted && access.alive(ticket)) {
         if (isAccessError(cause)) access.deny();
         if (cause instanceof ApiError && ["NOT_FOUND", "CONFLICT"].includes(cause.code)) {
+          clearResults();
           currentContext.current = null;
           setContext(null);
+          if (cause.code === "CONFLICT") {
+            setError(null);
+            setReload((n) => n + 1);
+            return;
+          }
         }
         setError(cause);
       }
@@ -187,7 +208,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
       const next = await precedentsApi.read(
         caseId,
         {
-          expectedRevision: context.workspaceRevision,
+          expectedRevision: result?.workspaceRevision ?? context.workspaceRevision,
           readToken: item.readToken,
           includeFullText: true,
         },
@@ -201,7 +222,8 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
           clearResults();
           currentContext.current = null;
           setContext(null);
-          setError(cause);
+          setError(null);
+          setReload((n) => n + 1);
         } else {
           setReadError(cause);
           // A missing proof can also mean the case/role was revoked. Refresh
@@ -236,7 +258,10 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
   );
   const chosen = result?.items.find((item) => item.id === selected);
   const sourceCurrent =
-    result?.workspaceRevision === context?.workspaceRevision &&
+    !!result &&
+    !!context &&
+    result.workspaceRevision >= (context.researchRevision ?? context.workspaceRevision) &&
+    result.workspaceRevision <= context.workspaceRevision &&
     result?.summaryRevision === context?.summaryRevision;
   return (
     <section className="workspace precedent-workspace" aria-label="관련 판례 탐색">
@@ -327,20 +352,13 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                   className="precedent-primary"
                   type="submit"
                   disabled={!topics.length || busy}
+                  aria-busy={busy || undefined}
                 >
-                  <Search size={17} aria-hidden="true" />
+                  {busy ? <Spinner /> : <Search size={17} aria-hidden="true" />}
                   {busy ? "공식 원문 확인 중…" : "판례 찾기"}
                 </button>
               </div>
             </form>
-            {busy && (
-              <div className="precedent-notice" role="status">
-                <p>공식 판례와 원문을 확인하고 있어요. 최대 2분 정도 걸릴 수 있어요.</p>
-                <button type="button" onClick={clearResults}>
-                  검색 취소
-                </button>
-              </div>
-            )}
             {result && (
               <>
                 <div className="precedent-result-heading" role="status">
@@ -357,14 +375,6 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                       ? "판례를 확인하지 못했어요. 잠시 후 다시 검색해 주세요."
                       : "선택한 주제와 가까운 판례를 찾지 못했어요. 다른 주제로 다시 찾아보세요."}
                   </p>
-                )}
-                {!sourceCurrent && (
-                  <div className="precedent-notice" role="status">
-                    <p>사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요.</p>
-                    <button type="button" onClick={() => void search()}>
-                      다시 검색
-                    </button>
-                  </div>
                 )}
                 {!!result.items.length && (
                   <ul className="precedent-list" aria-label="관련 판례 목록">
@@ -401,8 +411,10 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
                     <button
                       type="button"
                       disabled={busy || !sourceCurrent}
+                      aria-busy={busy || undefined}
                       onClick={() => void search(true)}
                     >
+                      {busy ? <Spinner /> : <ChevronDown size={17} aria-hidden="true" />}
                       {busy ? "불러오는 중…" : "더보기"}
                     </button>
                   </div>

@@ -1,6 +1,11 @@
+import { z } from "zod";
 import { displayText } from "../common";
 
 export const caseTitleSchema = displayText(40).refine((value) => !/[\r\n]/.test(value));
+export const v2CaseRenameRequestSchema = z.strictObject({
+  title: caseTitleSchema,
+  expectedTitle: caseTitleSchema,
+});
 
 /** Old cases remain readable without reprocessing their private narrative. */
 export function caseDisplayTitle(narrative: string, generated?: string | null): string {

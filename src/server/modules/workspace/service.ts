@@ -6,6 +6,7 @@ import {
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
+  v2CaseRenameRequestSchema,
   v2CreateCaseRequestSchema,
   v2IntakeAdvanceRequestSchema,
   v2MessageRequestSchema,
@@ -26,6 +27,7 @@ import { createV2JobsRepository } from "../../db/v2-jobs";
 import type { MutationReceipt } from "../../db/v2-mutation-receipts";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
+import { researchRevisionBase } from "../../db/v2-research-revision";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
 import { dependencyStep } from "../../dependency-diagnostics";
@@ -557,6 +559,13 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       if (stored.role !== "assistant" || !stored.precedentComparison)
         throw new WorkspaceError("NOT_FOUND");
       const comparison = stored.precedentComparison;
+      const researchRevision = await researchRevisionBase(
+        core,
+        ownerId,
+        id,
+        current.workspaceRevision,
+        current.confirmedSummaryRevision ?? 0,
+      );
       const source = await readBoundSource(
         core,
         id,
@@ -575,7 +584,8 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
         job,
         comparison,
         stale:
-          current.workspaceRevision !== comparison.publishedWorkspaceRevision ||
+          comparison.publishedWorkspaceRevision < researchRevision ||
+          comparison.publishedWorkspaceRevision > current.workspaceRevision ||
           current.confirmedSummaryRevision !== comparison.summaryRevision ||
           !source,
       });
@@ -732,6 +742,15 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
       )
         throw new WorkspaceError("STALE_REVISION");
       return { ...updated, committedWorkspaceRevision: g.expectedRevision + 1 };
+    },
+    async rename(ownerId: string, id: string, key: string, raw: unknown) {
+      const body = v2CaseRenameRequestSchema.parse(raw);
+      const m = await mutation(ownerId, id, key, "title", body, "chat");
+      if (m.replay) return find(ownerId, id);
+      const g = await guard(ownerId, id);
+      if (!(await workspace.rename(g, body.title, body.expectedTitle, m.receipt)))
+        throw new WorkspaceError("STALE_REVISION");
+      return find(ownerId, id);
     },
     async state(ownerId: string, id: string, key: string, raw: unknown) {
       const body = v2WorkspaceStateRequestSchema.parse(raw);

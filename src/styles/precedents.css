@@ -200,7 +200,8 @@
   margin: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
+  align-items: stretch;
+  grid-auto-rows: 1fr;
   gap: 12px;
   min-width: 0;
 }
@@ -223,6 +224,8 @@
   font-size: 19px;
   font-weight: 650;
   line-height: 1.6;
+  height: 3.2em;
+  flex-shrink: 0;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -682,8 +685,11 @@
 }
 .comparison-method > summary {
   width: fit-content;
+  min-height: 0;
+  padding: 4px 0;
   color: var(--muted-foreground);
   font-size: 12px;
+  line-height: 20px;
 }
 .comparison-method > p {
   max-width: 84ch;
@@ -795,8 +801,8 @@
 }
 .comparison-reason blockquote {
   margin: 0 0 12px;
-  padding: 0 0 0 12px;
-  border-left: 2px solid #b8c9e0;
+  padding: 0;
+  border: 0;
   font-size: 14px;
   line-height: 1.8;
 }
@@ -847,9 +853,11 @@
   text-overflow: ellipsis;
 }
 .precedent-workspace button.precedent-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   width: 100%;
-  height: auto;
+  height: 100%;
   min-height: 0;
   padding: 24px;
   border-radius: 14px;
@@ -884,31 +892,35 @@
   justify-content: center;
   margin-top: 24px;
 }
-.precedent-more > button {
-  min-width: 160px;
+.precedent-workspace .precedent-more > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.precedent-workspace .precedent-more > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--muted-foreground) 8%, transparent);
 }
 .precedent-full-text {
   min-width: 0;
   padding-top: 8px;
 }
 .precedent-full-text > h4 {
-  margin: 36px 0 18px;
-  color: #203b62;
-  font-size: 20px;
-  font-weight: 700;
+  margin: 28px 0 12px;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 650;
   line-height: 1.6;
 }
 .precedent-full-text > h4:first-child {
   margin-top: 0;
 }
-.precedent-full-text > h5 {
-  margin: 24px 0 12px;
-  font-size: 16px;
-  line-height: 1.7;
-  font-weight: 650;
-}
 .precedent-full-text > .precedent-body {
-  margin: 0 0 24px;
+  margin: 0;
   font-size: 15px;
   line-height: 1.95;
   white-space: pre-wrap;

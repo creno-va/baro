@@ -1,11 +1,13 @@
 import { z } from "zod";
 import {
   type V2Action,
+  type V2ActionCompletion,
   type V2AssistantMessage,
   type V2Fact,
   type V2Summary,
   type V2TimelineEntry,
   type V2ToolResult,
+  v2ActionCompletionSchema,
   v2ActionSchema,
   v2FactSchema,
   v2MessageSchema,
@@ -22,6 +24,7 @@ import {
   createWorkspacePublicationDiagnostics,
   type WorkspacePublicationFailure,
 } from "../workspace-publication-diagnostics";
+import { prepareActionCompletions } from "./v2-action-completions";
 import { prepareChatSummary } from "./v2-chat-summary";
 import { guardSchema, parse, safe, sqlClaim, type V2Core, type WorkspaceGuard } from "./v2-core";
 import {
@@ -47,6 +50,7 @@ export function createV2WorkspaceResponseRepository(
         parties: V2Summary["parties"];
         unknowns?: V2Summary["unknowns"] | null;
         actions: V2Action[];
+        actionCompletions?: V2ActionCompletion[];
         timeline: V2TimelineEntry[];
         toolResults?: V2ToolResult[];
         precedentComparison?: V2PrecedentComparison;
@@ -65,6 +69,15 @@ export function createV2WorkspaceResponseRepository(
         const unknowns =
           input.unknowns == null ? null : parse(v2SummarySchema.shape.unknowns, input.unknowns);
         const actions = parse(z.array(v2ActionSchema).max(5), input.actions);
+        const completions = parse(
+          z
+            .array(v2ActionCompletionSchema)
+            .max(5)
+            .refine(
+              (values) => new Set(values.map((value) => value.actionId)).size === values.length,
+            ),
+          input.actionCompletions ?? [],
+        );
         const timeline = parse(z.array(v2TimelineEntrySchema).max(5), input.timeline);
         const toolResults = parse(v2ToolResultsSchema, input.toolResults ?? []);
         const comparison = input.precedentComparison
@@ -87,6 +100,7 @@ export function createV2WorkspaceResponseRepository(
             parties.length ||
             unknowns !== null ||
             actions.length ||
+            completions.length ||
             timeline.length ||
             !message.citations.some(
               (citation) =>
@@ -99,6 +113,7 @@ export function createV2WorkspaceResponseRepository(
           ...message.references,
           ...facts.flatMap((f) => f.references),
           ...actions.flatMap((a) => a.references),
+          ...completions.map((completion) => completion.reference),
           ...timeline.flatMap((t) => t.references),
         ];
         diagnostics.at("references");
@@ -128,6 +143,14 @@ export function createV2WorkspaceResponseRepository(
         if (facts.some((f) => f.userEdited)) return diagnostics.reject("fact_user_edited");
         for (const fact of facts) ids.add(fact.id);
         diagnostics.at("relations");
+        if (
+          completions.some((completion) =>
+            actions.some((action) => action.id === completion.actionId),
+          )
+        )
+          return diagnostics.reject("action_invalid");
+        const completedActions = await prepareActionCompletions(core, g, completions);
+        if (!completedActions) return diagnostics.reject("action_invalid");
         if (facts.some((f) => f.conflictingFactIds.some((id) => !ids.has(id))))
           return diagnostics.reject("unknown_conflicting_fact");
         if (
@@ -179,7 +202,8 @@ export function createV2WorkspaceResponseRepository(
           AND (SELECT count(*) FROM v2_facts WHERE workspace_id=w.id AND summary_revision=?) + ? <= 300
           AND NOT EXISTS(SELECT 1 FROM v2_facts WHERE workspace_id=w.id AND summary_revision=? AND entity_id IN (SELECT value FROM json_each(?)))
           AND NOT EXISTS(SELECT 1 FROM v2_actions WHERE workspace_id=w.id AND entity_id IN (SELECT value FROM json_each(?)))
-          AND NOT EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id IN (SELECT value FROM json_each(?)))`,
+          AND NOT EXISTS(SELECT 1 FROM v2_timeline WHERE workspace_id=w.id AND entity_id IN (SELECT value FROM json_each(?)))
+          ${completedActions.map(() => "AND EXISTS(SELECT 1 FROM v2_actions a WHERE a.workspace_id=w.id AND a.id=? AND a.revision=? AND a.status='todo' AND a.encrypted_payload=?)").join(" ")}`,
             [
               ...execution.values,
               lease.jobId,
@@ -208,10 +232,22 @@ export function createV2WorkspaceResponseRepository(
               JSON.stringify(facts.map((f) => f.id)),
               JSON.stringify(actions.map((a) => a.id)),
               JSON.stringify(timeline.map((t) => t.id)),
+              ...completedActions.flatMap(({ row }) => [
+                row.id,
+                row.revision,
+                row.encrypted_payload,
+              ]),
             ],
           );
         const statements: D1PreparedStatement[] = [];
         diagnostics.at("action_encryption");
+        for (const { row, value, payload } of completedActions)
+          statements.push(
+            core.statement(
+              `UPDATE v2_actions SET revision=?,status='done',encrypted_payload=? WHERE id=? AND workspace_id=? AND revision=? AND status='todo' AND ${sqlClaim}`,
+              [value.revision, payload, row.id, g.workspaceId, row.revision, claimId],
+            ),
+          );
         for (const action of actions) {
           const id = crypto.randomUUID(),
             payload = await core.encrypt("v2_actions", id, g.ownerId, 1, action);

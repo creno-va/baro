@@ -597,8 +597,18 @@ test("topic suggestions exclude cited law text and excerpts preserve exact Unico
   );
 });
 
-async function comparisonFixture(mislocatedQuote = false) {
+async function comparisonFixture(mislocatedQuote = false, judgmentText?: string) {
   const f = await fixture();
+  if (judgmentText)
+    f.upstream(async (url) =>
+      json(
+        new URL(url).pathname.endsWith("lawSearch.do")
+          ? list
+          : {
+              PrecService: { ...detail.PrecService, 판례내용: judgmentText },
+            },
+      ),
+    );
   const other = await createTestDatabase();
   databases.push(other);
   const now = new Date().toISOString();
@@ -841,6 +851,16 @@ test("failed independent comparison audit never publishes a result or exposes a 
   f.rejectAudit();
   const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
   expect((await f.execute()).status).toBe("failed");
+  const context = v2PrecedentResearchContextSchema.parse(await (await f.request()).json());
+  expect(context.researchRevision).toBe(f.body.expectedRevision);
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: f.body.expectedRevision,
+        readToken: f.body.readToken,
+      })
+    ).status,
+  ).toBe(200);
   const response = await f.request(`/comparisons/${accepted.jobId}`);
   const state = v2PrecedentComparisonStateSchema.parse(await response.json());
   expect(state.comparison).toBeNull();
@@ -1106,4 +1126,119 @@ test("an expired read proof fails closed while a fresh explicit search restores 
       })
     ).status,
   ).toBe(200);
+});
+
+test("comparison-only revisions preserve research results and read proofs while real case edits invalidate them", async () => {
+  const f = await comparisonFixture();
+  const before = await f.service.intake(f.owner.userId, f.workspace.id);
+  const source = await searchBody(
+    await f.request("/search", { ...(await f.searchInput()), pageSize: 5 }),
+  );
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  const pending = v2PrecedentResearchContextSchema.parse(await (await f.request()).json());
+  expect(pending.researchRevision).toBe(source.workspaceRevision);
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: source.workspaceRevision,
+        readToken: source.items[0]?.readToken,
+      })
+    ).status,
+  ).toBe(200);
+  expect((await f.execute()).status).toBe("completed");
+  const context = v2PrecedentResearchContextSchema.parse(await (await f.request()).json());
+  expect(context.workspaceRevision).toBe(source.workspaceRevision + 2);
+  expect(context.researchRevision).toBe(source.workspaceRevision);
+  expect(await f.service.intake(f.owner.userId, f.workspace.id)).toEqual(before);
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: source.workspaceRevision,
+        readToken: source.items[0]?.readToken,
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await f.request("/search", {
+        expectedRevision: source.workspaceRevision,
+        summaryRevision: source.summaryRevision,
+        topics: source.topics,
+        pageSize: 5,
+        ...(source.nextCursor ? { cursor: source.nextCursor } : {}),
+      })
+    ).status,
+  ).toBe(200);
+  // Recompare an old selected original with a fresh CAS admission; its old proof remains scoped.
+  const again = await f.submit(undefined, {
+    ...f.body,
+    expectedRevision: context.workspaceRevision,
+  });
+  expect(again.status).toBe(202);
+  expect((await f.execute()).status).toBe("completed");
+  expect(
+    v2PrecedentComparisonStateSchema.parse(
+      await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+    ).stale,
+  ).toBe(false);
+  const caseView = (
+    await f.service.previews(f.owner.userId, await f.service.list(f.owner.userId))
+  )[0];
+  if (!caseView) throw new Error("Missing synthetic case");
+  await f.service.rename(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedTitle: caseView.title,
+    title: "직접 수정한 실제 사건 제목",
+  });
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: source.workspaceRevision,
+        readToken: source.items[0]?.readToken,
+      })
+    ).status,
+  ).toBe(409);
+  expect(
+    v2PrecedentComparisonStateSchema.parse(
+      await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+    ).stale,
+  ).toBe(true);
+  const changed = v2PrecedentResearchContextSchema.parse(await (await f.request()).json());
+  expect(changed.researchRevision).toBe(changed.workspaceRevision);
+  expect(
+    (
+      await f.request("/read", {
+        expectedRevision: changed.workspaceRevision,
+        readToken: source.items[0]?.readToken,
+      })
+    ).status,
+  ).toBe(404);
+});
+
+test("long judgments compare the main case facts and publish their exact full-original highlight coordinates", async () => {
+  const narrative = `【판시사항】\n${"계약의 해석에 관한 일반 법리이며 사건의 구체적 경위가 아닙니다. ".repeat(200)}\n【이유】\n1. 사안의 개요\n합성 원고는 피고의 요청을 받고 구두로 계약을 체결한 뒤 대금을 송금했다. 피고는 약속한 반환일 이후에도 대금을 지급하지 않았다.`;
+  const f = await comparisonFixture(false, narrative);
+  f.knownIndicators("yes");
+  const accepted = v2AcceptedOperationSchema.parse(await (await f.submit()).json());
+  expect((await f.execute()).status).toBe("completed");
+  const state = v2PrecedentComparisonStateSchema.parse(
+    await (await f.request(`/comparisons/${accepted.jobId}`)).json(),
+  );
+  const comparison = state.comparison;
+  if (!comparison) throw new Error("Missing synthetic comparison");
+  expect(comparison.source.excerpt.startUtf16).toBeGreaterThan(4000);
+  expect(comparison.source.excerpt.text).toContain("구두로 계약을 체결한 뒤 대금을 송금했다");
+  expect(comparison.source.excerpt.text).not.toContain("일반 법리");
+  const read = v2PrecedentReadResponseSchema.parse(
+    await (
+      await f.request("/read", {
+        expectedRevision: f.body.expectedRevision,
+        readToken: f.body.readToken,
+        includeFullText: true,
+      })
+    ).json(),
+  );
+  const evidence = comparison.metrics[0]?.precedentEvidence[0];
+  if (!evidence || !read.fullText) throw new Error("Missing synthetic full original");
+  expect(read.fullText.slice(evidence.startUtf16, evidence.endUtf16)).toBe(evidence.text);
+  expect(f.phases).toEqual(["workspace_precedent_compare", "workspace_audit"]);
 });

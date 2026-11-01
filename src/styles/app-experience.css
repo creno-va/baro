@@ -564,24 +564,37 @@
 :root[data-focus-input="keyboard"] .app-frame .sidebar-story-row:focus-within .sidebar-story {
   background: var(--muted);
 }
-.app-frame .sidebar-story-delete {
+.app-frame .sidebar-story-actions {
   position: absolute;
   z-index: 1;
   right: 0;
   inset-block: 0;
   margin-block: auto;
-  display: grid;
-  place-items: center;
-  width: 44px;
+  display: flex;
+  align-items: center;
   height: 44px;
-  min-height: 44px;
-  max-height: 44px;
-  padding: 0;
   background: var(--muted);
   opacity: 0;
   pointer-events: none;
 }
-.app-frame .sidebar-story-delete::before {
+.app-frame :is(.sidebar-story-delete, .sidebar-story-edit) {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.app-frame .sidebar-story-delete:hover {
+  color: var(--destructive);
+}
+.app-frame .sidebar-story-edit:hover {
+  color: var(--foreground);
+}
+.app-frame .sidebar-story-actions::before {
   content: "";
   position: absolute;
   inset-block: 0;
@@ -590,11 +603,11 @@
   background: linear-gradient(to right, transparent, var(--muted));
   pointer-events: none;
 }
-.app-frame .sidebar-story-row:hover .sidebar-story-delete,
+.app-frame .sidebar-story-row:hover .sidebar-story-actions,
 :root[data-focus-input="keyboard"]
   .app-frame
   .sidebar-story-row:focus-within
-  .sidebar-story-delete {
+  .sidebar-story-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -605,8 +618,35 @@
   line-height: 1.7;
 }
 @media (hover: none) {
-  .app-frame .sidebar-story-delete {
+  .app-frame .sidebar-story-actions {
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+.sidebar-title-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+  font-size: 14px;
+}
+.sidebar-title-field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+  font: inherit;
+}
+.sidebar-title-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}
+.sidebar-title-error {
+  margin: 12px 0 0;
+  color: var(--destructive);
+  font-size: 14px;
 }

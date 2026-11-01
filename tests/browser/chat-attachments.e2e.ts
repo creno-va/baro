@@ -408,6 +408,12 @@ test("materials retain every attachment and mark actual evidence without filter 
               status: "complete",
               createdAt: new Date().toISOString(),
               references: [
+                { kind: "intake_narrative", intakeRevision: 1 },
+                ...[1, 2, 3].map((number) => ({
+                  kind: "intake_answer",
+                  questionId: `synthetic-question-${number}`,
+                  intakeRevision: 1,
+                })),
                 {
                   kind: "user_material",
                   fileId: "synthetic-used",
@@ -422,6 +428,18 @@ test("materials retain every attachment and mark actual evidence without filter 
     );
   }, id);
   await page.reload();
+  const sources = page.getByRole("list", { name: "답변에 사용한 자료", exact: true });
+  await expect(sources.getByRole("listitem")).toHaveCount(1);
+  await expect(sources.getByRole("link", { name: "used.txt · 1쪽", exact: true })).toHaveAttribute(
+    "href",
+    `${base}/files?file=synthetic-used`,
+  );
+  await expect(page.getByText("처음 입력한 이야기", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("추가 질문에 대한 답변", { exact: true })).toHaveCount(0);
+  expect(
+    (await messages(page)).find((message: { role: string }) => message.role === "assistant")
+      .references,
+  ).toHaveLength(5);
   await page.getByRole("link", { name: "자료 탭에서 확인하기" }).click();
   await expect(page).toHaveURL(/\/files$/);
   await expect(page.locator(".workspace-file-list")).toContainText("used.txt");

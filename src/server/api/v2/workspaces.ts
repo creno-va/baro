@@ -231,7 +231,15 @@ export function createWorkspacesApi(
       },
     );
   });
-  for (const name of ["answers", "advance", "editSummary", "confirm", "send", "state"] as const) {
+  for (const name of [
+    "answers",
+    "advance",
+    "editSummary",
+    "confirm",
+    "send",
+    "state",
+    "rename",
+  ] as const) {
     const path = {
       answers: "intake/answers",
       advance: "intake/advance",
@@ -239,9 +247,12 @@ export function createWorkspacesApi(
       confirm: "summary/confirm",
       send: "messages",
       state: "state",
+      rename: "title",
     }[name];
     const method =
-      name === "answers" || name === "editSummary" || name === "state" ? "put" : "post";
+      name === "answers" || name === "editSummary" || name === "state" || name === "rename"
+        ? "put"
+        : "post";
     app[method](`/:id/${path}`, async (c) => {
       const a = await customerAccess(c, true, true);
       if (a.response) return a.response;
