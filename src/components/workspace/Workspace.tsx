@@ -1657,6 +1657,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                         access={{ ready, canMutate, ticket, current, verify }}
                         incomingMessageIds={incomingActionMessages}
                         refreshKey={conversationRefresh}
+                        queuedWork={queuedSend}
                         requestedAction={conversationRequest}
                         disabled={
                           !!busy ||

@@ -77,6 +77,7 @@ export function ConversationAgent({
   requestedAction,
   onPaneOpen,
   refreshKey = 0,
+  queuedWork = false,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -96,6 +97,7 @@ export function ConversationAgent({
   requestedAction?: { id: string; action: V2ConversationIntent } | null;
   onPaneOpen?: () => void;
   refreshKey?: number;
+  queuedWork?: boolean;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
@@ -106,8 +108,7 @@ export function ConversationAgent({
   const [readFailures, setReadFailures] = useState(0);
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
   const backgroundBusy =
-    acceptedRefresh !== refreshKey ||
-    !stateIsCurrent ||
+    (queuedWork && acceptedRefresh !== refreshKey) ||
     (!!state &&
       (["pending", "running"].includes(state.analysis.status) ||
         state.report.status === "pending"));
@@ -230,7 +231,7 @@ export function ConversationAgent({
       !state ||
       readFailures >= 3 ||
       !(
-        acceptedRefresh !== refreshKey ||
+        (queuedWork && acceptedRefresh !== refreshKey) ||
         !stateIsCurrent ||
         ["pending", "running"].includes(state.analysis.status) ||
         state.report.status === "pending"
@@ -241,7 +242,7 @@ export function ConversationAgent({
       if (locked.current || paneLocked.current) return;
       await load();
     }, 1800);
-  }, [ready, state, stateIsCurrent, acceptedRefresh, refreshKey, readFailures, load]);
+  }, [ready, state, stateIsCurrent, acceptedRefresh, refreshKey, queuedWork, readFailures, load]);
   const changed = useCallback(async () => {
     const epoch = ticket();
     await callbacks.current.onChanged();
