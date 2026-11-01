@@ -1,9 +1,19 @@
-import { expect, test } from "@playwright/test";
-import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+import { expect, type Page, test } from "@playwright/test";
+import { openReportOptions } from "../helpers/report-controls";
+
+// Read the same session-bound facade as ReportReview. Legacy provenance blocks
+// stay in the saved snapshot even when the reading/editor UI omits duplicates.
+async function preparedReport(page: Page, caseId: string) {
+  return page.evaluate(async (id) => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    return api.rework.peekReport(id);
+  }, caseId);
+}
 
 test.skip(
   process.env.BARO_WORKSPACE_SHARED_UI !== "true",
-  "Run shared mock configuration on port 4342.",
+  "Run with PUBLIC_API_MODE=mock and BARO_WORKSPACE_SHARED_UI=true.",
 );
 test("common login and B intake flow through C workspace and D report with original files", async ({
   page,
@@ -19,6 +29,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await page.goto("/cases/new");
+  await page.getByRole("radio", { name: "고소·청구를 준비하고 싶어요", exact: true }).check();
   await page
     .getByLabel("지금까지 있었던 일")
     .fill(
@@ -34,8 +45,11 @@ test("common login and B intake flow through C workspace and D report with origi
     await page.getByRole("button", { name: "모름", exact: true }).click();
   }
   await expect(page).toHaveURL(/\/summary$/);
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?" })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   const base = new URL(page.url()).pathname;
   await page.evaluate(() =>
@@ -91,9 +105,21 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByRole("link", { name: "리포트 보기" }).first().click();
   await expect(page).toHaveURL(`${base}/reports`);
   await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toBeVisible();
+  await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);
-  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
+  await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
+    "공식 자료를 확인하지 못했어요",
+  );
+  await expect(page.getByRole("list", { name: "사건에 추가한 증거" })).toContainText(
     "shared-synthetic.txt",
+  );
+  const savedReport = await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)));
+  expect(savedReport?.content).toContain("shared-synthetic.txt");
+  expect(savedReport?.content).toContain("공통 저장소의 합성 원본 자료입니다.");
+  await page.reload();
+  await openReportOptions(page);
+  expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
+    savedReport,
   );
   await page
     .getByRole("navigation", { name: "사건 메뉴" })
@@ -131,6 +157,13 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
         schemaVersion: "2",
       },
     });
+    put("reworkContexts", {
+      "synthetic-material-case": {
+        casePurpose: "prepare_claim",
+        subjectContext: "individual",
+        procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+      },
+    });
     put("files", {});
   });
   await page.goto("/cases/synthetic-material-case/files");
@@ -163,8 +196,19 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await review.getByText("원본 추출 내용", { exact: true }).nth(0).click();
   await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
   await page.goto("/cases/synthetic-material-case/reports");
-  await openReportEditor(page);
-  const report = page.getByRole("textbox", { name: "준비할 자료와 처리 범위 수정", exact: true });
-  await expect(report).toHaveValue(/Synthetic corrected first chunk/);
-  await expect(report).not.toHaveValue(/Synthetic second chunk/);
+  await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  await openReportOptions(page);
+  await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
+    "공식 자료를 확인하지 못했어요",
+  );
+  await expect(page.getByRole("list", { name: "사건에 추가한 증거" })).toContainText(
+    "긴 합성 자료.txt",
+  );
+  const report = await preparedReport(page, "synthetic-material-case");
+  expect(report?.content).toContain("긴 합성 자료.txt");
+  expect(report?.content).toContain("Synthetic corrected first chunk");
+  expect(report?.content).not.toContain("Synthetic second chunk");
+  await page.reload();
+  await openReportOptions(page);
+  expect(await preparedReport(page, "synthetic-material-case")).toEqual(report);
 });
