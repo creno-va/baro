@@ -263,3 +263,10 @@ Chromium에서 통과**했다(44.4초). 실제 commit 뒤 잃은 응답이며 �
 유지한다. 따라서 실제14개 중 NLP와 독립인 경계5+ACK2가 통과했다. 중앙 intent의 W는
 검증된 동일 owner/operation/workspace의 completed job과 암호화 메시지를 통해 실제 게시
 W로 projection한다고00과 확정했다. UI의 정확 비교와 과거 intent 차단은 유지한다.
+
+WebKit의 NLP 독립7개 중6개가 통과했고, 동의 철회1개는 offline 상태의 route 종료를
+기다리는 테스트 정리 단계가120초를 소진했다. proxy는 새 요청을 abort하는 route를
+context 종료까지 유지하고 실제 upstream fetch만 drain하도록 수정했다. 같은 동의 철회는
+2초에 통과했다(전체6.3초). 검사 중 실제 fetch 실패를 성공 DTO로 대체하지 않는다.
+앞선 offline→unroute wait 정리 방식은 이 수정으로 대체했다. 01이 별도 관찰한 WebKit
+summary200 이후 body 읽기 오류는 이 검사들에서 재현되지 않았으며 해결로 단정하지 않는다.
