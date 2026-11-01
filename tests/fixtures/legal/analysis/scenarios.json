@@ -1,0 +1,49 @@
+{
+  "origin": "synthetic",
+  "liveAcceptance": false,
+  "notice": "공식 응답 형식의 합성 원문이며 실제 법률·판례 내용 또는 적용 승인 증거가 아닙니다.",
+  "law": {
+    "title": "민법",
+    "article": "598",
+    "body": "제598조 합성 검증 전용: 대여 약정과 금전 교부 사실을 구분하여 확인한다. 실제 법률 문언이 아니다."
+  },
+  "precedent": {
+    "officialId": "90000000623",
+    "title": "합성 대여금 반환 자료 사건",
+    "court": "합성 법원",
+    "caseNumber": "2026합성623",
+    "decisionDate": "2026-01-02",
+    "body": "합성 전문. 당사자들은 서면 차용증을 작성했고 송금 기록을 제출했다. 지급 이후 일부 변제가 있었다. 대여 약정의 존재가 쟁점이었다. 실제 판결 내용이 아니다."
+  },
+  "unrelatedPrecedent": {
+    "officialId": "90000000624",
+    "title": "합성 건축 공사대금 사건",
+    "body": "합성 전문. 공사업자와 건축주 사이 하자보수 대금이 쟁점이었다. 대여금 판결은 배경 인용에만 등장한다."
+  },
+  "facts": [
+    {
+      "id": "loan_promise",
+      "text": "문자로 돈을 빌려 달라는 요청과 반환 약속을 주고받았다.",
+      "certainty": "reported"
+    },
+    {
+      "id": "transfer",
+      "text": "송금 자료에는 상대방에게 지급한 기록이 적혀 있다.",
+      "certainty": "observed"
+    },
+    {
+      "id": "return_unknown",
+      "text": "상대방은 일부를 이미 돌려줬다고 설명했지만 자료는 아직 없다.",
+      "certainty": "uncertain"
+    }
+  ],
+  "expected": {
+    "lawTitles": ["민법"],
+    "notMandatoryLawTitle": "형법",
+    "commonality": "돈을 교부한 기록과 대여 약정 존재가 쟁점인 점",
+    "difference": "합성 판례에는 서면 차용증과 일부 변제가 있으나 이번 사건은 문자 약속과 미확인 변제 설명",
+    "claimGap": "반환 약속과 교부, 이미 돌려받은 금액을 구분할 자료",
+    "defenseGap": "상대방의 대여 주장과 일부 변제 설명의 충돌 및 실제 반환 내역",
+    "neverInfer": ["사기 확정", "승소 확률", "자료 없는 변제 확정", "검색 카드의 리포트 인용 승격"]
+  }
+}
