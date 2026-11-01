@@ -46,6 +46,8 @@ export type ReportReviewProps = {
   onChanged?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
+  /** A fresh, owner-checked body has been accepted and rendered. */
+  onViewed?: (identity: { id: string; revision: number }) => void;
 };
 export function ReportReview({
   caseId,
@@ -54,6 +56,7 @@ export function ReportReview({
   onChanged,
   onDirtyChange,
   onBusyChange,
+  onViewed,
 }: ReportReviewProps) {
   const [report, setReport] = useState<ReportView | null>(null);
   const [files, setFiles] = useState<FileView[]>([]);
@@ -96,6 +99,10 @@ export function ReportReview({
     text: string;
     selectedFileIds: string[];
   } | null>(null);
+  const acceptedBody = useRef<{ id: string; revision: number } | null>(null);
+  const viewedIdentity = useRef("");
+  const onViewedRef = useRef(onViewed);
+  onViewedRef.current = onViewed;
   const readReport = useCallback(
     () =>
       rework
@@ -111,6 +118,7 @@ export function ReportReview({
     [caseId, rework],
   );
   const accept = useCallback((value: ReportView) => {
+    acceptedBody.current = { id: value.id, revision: value.revision };
     const positioned = value.maskIdentifiers
       ? value.content
       : withInlineReportPhotos(
@@ -136,6 +144,8 @@ export function ReportReview({
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     owner.current = null;
+    acceptedBody.current = null;
+    viewedIdentity.current = "";
     setReport(null);
     setNeedsConsent(false);
     setInitialLimit(false);
@@ -270,6 +280,27 @@ export function ReportReview({
       }
     }
   }, [caseId, accept, clearOwnerState, verifyOwner, readReport, readPreparation]);
+  useEffect(() => {
+    // Passive focus metadata can advance a revision without replacing the local
+    // draft. Only the exact body accepted by load/save/readback counts as viewed.
+    if (
+      !report ||
+      report.caseId !== caseId ||
+      report.stale ||
+      !owner.current ||
+      accessChecking ||
+      accessUnknown ||
+      busy ||
+      acceptedBody.current?.id !== report.id ||
+      acceptedBody.current.revision !== report.revision ||
+      !onViewedRef.current
+    )
+      return;
+    const key = JSON.stringify([owner.current, report.id, report.revision]);
+    if (viewedIdentity.current === key) return;
+    viewedIdentity.current = key;
+    onViewedRef.current({ id: report.id, revision: report.revision });
+  }, [caseId, report, accessChecking, accessUnknown, busy]);
   useEffect(() => {
     clearOwnerState();
     void load();
@@ -592,13 +623,17 @@ export function ReportReview({
               reportRevision: value.revision,
               expectedOwner: owner.current ?? "",
               verify: async () => {
+                setBusy("접근 권한 다시 확인 중…");
                 await verifyOwner(() => sequence === loadSequence.current);
               },
             },
             {
               session: () => api.session.get(),
               peekReport: api.rework.peekReport,
-              pdf: api.reports.pdf,
+              pdf: async (id) => {
+                setBusy("PDF 준비 중…");
+                return api.reports.pdf(id);
+              },
             },
           );
         } else {

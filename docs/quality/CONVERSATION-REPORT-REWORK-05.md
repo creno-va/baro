@@ -42,3 +42,15 @@
 04의 후속 통합 검토에서, 접수 뒤 응답만 유실되고 workspace revision이 증가하면 ReportReview가 기존 request ID를 새 ID로 바꾸는 경계를 발견했다. `codex/626-report-preparation-retry`는 준비 요청의 action·expectedRevision·requestId 전체를 보존한다. 이후 조회한 revision이 달라도 응답이 불명확한 동안에는 같은 본문과 멱등 키로 결과를 확인한다. 확정 거절이나 정상 응답을 받은 뒤 사용자가 다시 요청할 때 새 시도를 만든다. 계정·사건 변경은 기존 접근 경계에서 요청을 폐기한다.
 
 합성 HTTP 브라우저 회귀에서 서버 접수로 revision 7→8 후 ACK503을 반환하고, 재조회가 8을 반환해도 재전송 본문/키는 최초와 같으며 접수는 1회인 것을 확인했다. 별도 409 확정 거절 뒤에는 revision8과 새 ID/키로 한 번만 접수한다. 기존 접수 후 작업 실패의 명시적 재시도·계정 전환을 포함해 ReportReview 13개 브라우저 검사가 통과했다. 이 검사는 실제 클라이언트와 UI에 합성 HTTP 응답을 연결한 검증이며, 04의 실제 Hono/D1 전체 경로 검증과 구분한다.
+
+## 실제 페이지의 읽기·대기·본문 확인 후속 검증
+
+`codex/626-report-draft-wait`는 실제 Astro 리포트 페이지가 opt-in rework 읽기를 사용하는 경계를 기존 browser fixture에 반영한다. 합성 상태는 공식 원문 미확인(`unavailable`)과 후속 해결 `not_ready`를 그대로 유지한다. 예전 API만 제공하여 초기 본문을 못 여는 오류를 준비 완료 데이터로 숨기지 않는다. 계정 복구 fixture도 같은 읽기 경로를 사용하며 동의·계정 변경·지연 응답·미저장 draft 보호 assertions는 유지한다. 공통 최근 사건 접근은 #619의 양 역할 허용 계약을 따르고, 변호사 settings의 보관 사건 영역은 계속 숨긴다.
+
+`ReportReview.onViewed({id, revision})`는 owner 검증을 거친 실제 본문 accept/readback과 DOM 반영 후, 현재 사건·정확한 본문 identity·fresh 상태가 모두 맞을 때만 알린다. 단순 pane 열기, 본문 로드 실패, stale snapshot, focus metadata만 새 revision으로 바뀐 경우에는 새 본문 확인으로 알리지 않는다. 콜백 자체는 API나 모델 호출을 추가하지 않는다. 실제 SQL browser에서 fresh emit, focus 새 revision 미emit, 동의 철회와 source 변경 후 stale PDF 읽기 미emit, 삭제 후 미emit을 검사한다. rework PDF의 접근 재확인과 PDF 생성 대기 문구도 실제 처리 단계에 맞춘다.
+
+2026-11-02 로컬 결과: `bun ci`, `validate:quick`, `validate:build`, reports 285 tests/3449 assertions, 독립 rework browser 13개와 기존 draft browser 6개 통과. 실제 Astro에서 공통 클라이언트 오류 코드·동기 생성 deadline 및 06의 오래된 세션 lock 수정 의존 4개를 제외한 18개가 통과했다. 해당 공통/06 수정은 각 소유자가 처리하며 최종 통합 결과를 별도로 기록한다.
+
+서명 session·실제 SQL 리포트의 80문단·여러 페이지 긴 문단·초 단위 출처·식별정보 삭제 검증도 실행했다. hash로 고정한 `tests/browser/requirements.txt`의 pypdf 6.20.1을 사용했다. 인쇄 PDF의 margin footer가 긴 문단 중간에 섞이는 추출 현상은 좌표로 footer band를 구분해 해결했다. 본문에서 BARO/숫자 문자열을 삭제하지 않으며, Chromium의 숫자 사이 en dash 추출 alias(U+00AD)만 1:1 변환한다. HTML 모든 원문/heading 검사와 함께 실제 다운로드 PDF의 모든 기대 문단도 exact 검사한다.
+
+합성 실제 다운로드 PDF와 실제 HTML 인쇄 PDF 각8쪽을 `pdftoppm`으로 전 페이지 렌더링하고 4개 contact sheet의 총16쪽을 육안 검토했다. 잘림·겹침·빈 페이지 없음. 현물은 `.wrangler/report-draft-wait/real-korean-report.{pdf,html}`, `real-html-printed.pdf`, `download-page-*.png`, `print-page-*.png`, `*-contact-*.png`에 보존한다. 이 검증은 기존 서명 SQL/legacy PDF 호환 검증이며 앞선 고정 WeasyPrint의 청구·방어·사진 28쪽 검증 및 중앙의 최종 실제 Hono 통합 인수와 구분한다.
