@@ -136,21 +136,48 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     ];
     const actualLines = await printPage.locator(".section .lines p").allTextContents();
     for (const line of expectedLines) expect(actualLines).toContain(line);
-    const printedPages: string[] = JSON.parse(
+    const extracted: { printed: string[]; downloaded: string[] } = JSON.parse(
       execFileSync(
         process.platform === "win32" ? "python" : "python3",
         [
           "-c",
-          "import json,sys; from pypdf import PdfReader; print(json.dumps([page.extract_text() for page in PdfReader(sys.argv[1]).pages]))",
+          [
+            "import json,sys",
+            "from pypdf import PdfReader",
+            "def body_pages(path, bottom, top=None):",
+            "    result=[]",
+            "    for page in PdfReader(path).pages:",
+            "        fragments=[]",
+            "        def collect(text, cm, tm, font, size):",
+            "            y=tm[4]*cm[1]+tm[5]*cm[3]+cm[5]",
+            "            if bottom <= y and (top is None or y <= top):",
+            "                fragments.append(text)",
+            "        page.extract_text(visitor_text=collect)",
+            "        result.append(''.join(fragments))",
+            "    return result",
+            // The HTML @page bottom margin is 20mm; the native PDF body is
+            // between its y=82 lower bound and y=776 header rule. Never delete
+            // matching words/numbers from the report body to remove furniture.
+            "print(json.dumps({'printed':body_pages(sys.argv[1],20*72/25.4), 'downloaded':body_pages(sys.argv[2],82,776)}))",
+          ].join("\n"),
           resolve(out, "real-html-printed.pdf"),
+          resolve(out, "real-korean-report.pdf"),
         ],
         { encoding: "utf8" },
       ),
     );
-    expect(printedPages.length).toBeGreaterThan(2);
-    expect(printedPages.every((text) => text.trim().length > 0)).toBe(true);
+    const printedPages = extracted.printed;
+    for (const pages of [printedPages, extracted.downloaded]) {
+      expect(pages.length).toBeGreaterThan(2);
+      expect(pages.every((text) => text.trim().length > 0)).toBe(true);
+    }
     const compact = (text: string) => text.replace(/\s/g, "");
-    const printedText = compact(printedPages.join("\n"));
+    // Chromium's embedded font maps the visible en dash between time-span
+    // digits to U+00AD. Normalize only that extraction alias, without removing
+    // characters or changing the HTML/source assertions or native PDF text.
+    const printedText = compact(printedPages.join("\n")).replace(/(?<=\d)\u00ad(?=\d)/g, "–");
+    const downloadedText = compact(extracted.downloaded.join("\n"));
+    for (const line of expectedLines) expect(downloadedText).toContain(compact(line));
     for (const line of [
       ...expectedLines,
       ...(await previewDocument.locator(".section h2").allTextContents()),
@@ -159,6 +186,8 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     }
     expect(printedText).not.toContain("010-1234-5678");
     expect(printedText).not.toContain("synthetic@example.test");
+    expect(downloadedText).not.toContain("010-1234-5678");
+    expect(downloadedText).not.toContain("synthetic@example.test");
     expect(await printPage.locator("script").count()).toBe(0);
     await printPage.close();
   } finally {

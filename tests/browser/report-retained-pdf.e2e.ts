@@ -54,9 +54,37 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await context.addCookies([seed.cookie]);
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
     await openReportEditor(page);
+    const report = await (
+      await page.request.get(`${seed.origin}/api/v2/cases/${seed.caseId}/reports`)
+    ).json();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-report-viewed",
+      JSON.stringify({ id: report.id, revision: report.revision }),
+    );
     const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
     await expect(editor).toBeVisible();
     const originalText = await editor.inputValue();
+    // A passive metadata refresh must not certify a new body that the reader
+    // has never accepted. The open editor still holds the original version.
+    const reportPath = `${seed.origin}/api/v2/cases/${seed.caseId}/reports`;
+    let metadataReads = 0;
+    await page.route(reportPath, (route) => {
+      metadataReads++;
+      return route.fulfill({
+        json: { ...report, revision: report.revision + 1, content: "아직 열지 않은 새 본문" },
+      });
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(() => metadataReads).toBeGreaterThan(0);
+    await expect(editor).toHaveValue(originalText);
+    await expect(page.locator(".report-edit-toggle")).toBeEnabled();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-report-viewed",
+      JSON.stringify({ id: report.id, revision: report.revision }),
+    );
+    await page.unroute(reportPath);
+    await page.reload();
+    await openReportEditor(page);
     await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
     const firstEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
@@ -71,7 +99,9 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
       originalText,
     );
-    await expect(page.getByRole("button", { name: "리포트 내용 수정하기" })).toBeDisabled();
+    await expect(page.locator("html")).not.toHaveAttribute("data-report-viewed");
+    await expect(page.locator(".report-edit-toggle")).toHaveAccessibleName("수정하기");
+    await expect(page.locator(".report-edit-toggle")).toBeDisabled();
     await expect(page.getByText(/새 리포트 생성과 수정은 필수 동의 후/)).toBeVisible();
     await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeDisabled();
     await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(
@@ -103,6 +133,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await expect(editor).not.toBeVisible();
     await expect(page.getByRole("button", { name: /저장된 선택 원본 ZIP/ })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).not.toBeVisible();
+    await expect(page.locator("html")).not.toHaveAttribute("data-report-viewed");
   } finally {
     server.stdin?.end();
     server.kill();
