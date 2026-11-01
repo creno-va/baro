@@ -6,11 +6,13 @@ import { ApiError } from "../../client/api/core";
 import type { CaseView, QuestionView } from "../../client/api/types";
 import { startForegroundPolling } from "../../client/foreground-poll";
 import { accessHref } from "../../client/return-path";
+import type { V2CaseContext } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Textarea } from "../ui/form";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
+import { CaseContextNote } from "./CaseContextNote";
 import { BackToCases, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 import { useSceneTransition } from "./useSceneTransition";
@@ -24,6 +26,7 @@ type AnswerSnapshot = {
 
 export function IntakeQuestions({ caseId }: { caseId: string }) {
   const [item, setItem] = useState<CaseView | null>(null);
+  const [caseContext, setCaseContext] = useState<V2CaseContext | null>(null);
   const [result, setResult] = useState<QuestionsResult | null>(null);
   const [index, setIndex] = useState(0);
   const [value, setValue] = useState("");
@@ -66,6 +69,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
     current: accessCurrent,
     alive,
     deny,
+    ownerId,
   } = useCustomerAccess(
     () => {
       ++request.current;
@@ -73,6 +77,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       drafts.current.clear();
       acknowledgedRevision.current = null;
       setItem(null);
+      setCaseContext(null);
       setResult(null);
       setValue("");
       setAnswerState(undefined);
@@ -207,9 +212,12 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       try {
         if (!(await verify()) || serial !== request.current) return;
         epoch = ticket();
-        let [caseView, questions] = await Promise.all([
+        let [caseView, questions, contextView] = await Promise.all([
           poll && caseSnapshot.current ? caseSnapshot.current : api.cases.get(caseId),
           api.cases.getQuestions(caseId),
+          poll
+            ? null
+            : api.rework.getContext(caseId, { expectedOwner: ownerId() ?? "" }).catch(() => null),
         ]);
         // A read started before a save/advance cannot restore its old answers.
         if (serial !== request.current) return;
@@ -237,6 +245,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         failedOperation.current = null;
         caseSnapshot.current = caseView;
         setItem(caseView);
+        if (!poll) setCaseContext(contextView?.context ?? null);
         const params = new URLSearchParams(window.location.search);
         const isEditing = params.get("edit") === "1";
         setEditing(isEditing);
@@ -328,7 +337,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
         if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
-    [caseId, verify, ticket, accessCurrent, alive, report, transition],
+    [caseId, verify, ticket, accessCurrent, alive, report, transition, ownerId],
   );
   useEffect(() => {
     if (version) void load();
@@ -737,6 +746,13 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
               key={question?.id ?? "initial"}
               data-waiting={waiting}
             >
+              {caseContext ? (
+                <CaseContextNote context={caseContext} />
+              ) : (
+                <p className="intake-scene-notice" role="status">
+                  사건 입장 정보를 불러오지 못했어요. 저장한 답변은 계속 확인할 수 있어요.
+                </p>
+              )}
               <header className="intake-scene-heading">
                 <span className="intake-scene-emblem" aria-hidden="true">
                   <BrandMark size={48} />

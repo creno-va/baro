@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { answerSchema } from "../../src/contracts/questions";
 import {
   v2IntakeSchema,
+  v2ReworkVersionSchema,
   v2SummaryEditRequestSchema,
   v2SummarySchema,
   v2WorkspaceSchema,
@@ -146,15 +147,19 @@ test("answers autosave without advancing, survive reload and keep only an inline
     const geometry = await page.locator(".intake-scene-action").evaluate((node) => {
       const back = node.querySelector(".intake-scene-back")?.getBoundingClientRect();
       const next = node.querySelector(".intake-scene-primary")?.getBoundingClientRect();
-      if (!back || !next) throw new Error("Intake navigation missing");
+      if (!next) throw new Error("Intake navigation missing");
       return {
-        backRight: back.right,
+        backRight: back?.right ?? next.left,
         nextLeft: next.left,
-        centerDifference: Math.abs(back.y + back.height / 2 - next.y - next.height / 2),
+        centerDifference: back ? Math.abs(back.y + back.height / 2 - next.y - next.height / 2) : 0,
+        hasBack: !!back,
+        nextHeight: next.height,
       };
     });
     expect(geometry.backRight).toBeLessThanOrEqual(geometry.nextLeft);
     expect(geometry.centerDifference).toBeLessThanOrEqual(1);
+    expect(geometry.hasBack).toBe(false);
+    expect(geometry.nextHeight).toBeGreaterThanOrEqual(44);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
@@ -287,10 +292,9 @@ test("postflight recovery keeps a reverted newer edit and does not advance the q
   release();
   await settleIntakeSave(page);
   await expect(answer).toHaveValue("처음 저장한 합성 답변");
-  expect(f.writes.map((write) => write.value)).toEqual([
-    "응답 대기 중인 중간 합성 답변",
-    "처음 저장한 합성 답변",
-  ]);
+  await expect
+    .poll(() => f.writes.map((write) => write.value), { timeout: 12000 })
+    .toEqual(["응답 대기 중인 중간 합성 답변", "처음 저장한 합성 답변"]);
   await expect(page).toHaveURL(/question=0/);
   expect(f.requests.some((request) => request.includes("/intake/advance"))).toBe(false);
 });
@@ -508,6 +512,32 @@ async function summaryFixture(page: Page) {
           needsConsent: false,
         },
       });
+    if (u.pathname.endsWith("/rework/summary-reconciliation"))
+      return route.fulfill({
+        json: {
+          contractVersion: v2ReworkVersionSchema.value,
+          workspaceRevision: current.workspaceRevision,
+          status: "idle",
+          request: null,
+          proposal: null,
+          currentJobId: null,
+          failure: null,
+          confirmedSummaryRevision: null,
+          confirmedWorkspaceRevision: null,
+        },
+      });
+    if (u.pathname.endsWith("/rework/context"))
+      return route.fulfill({
+        json: {
+          contractVersion: v2ReworkVersionSchema.value,
+          workspaceRevision: current.workspaceRevision,
+          context: {
+            casePurpose: "unconfirmed",
+            subjectContext: current.subjectContext,
+            procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+          },
+        },
+      });
     if (u.pathname.endsWith("/workspace")) return route.fulfill({ json: current });
     if (u.pathname.endsWith("/intake"))
       return route.fulfill({
@@ -537,42 +567,34 @@ async function summaryFixture(page: Page) {
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
   });
   await page.goto(`/cases/${id}/summary`);
-  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
+  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
   return writes;
 }
 
-test("persisted emoji summary remains editable without separate fact controls", async ({
+test("persisted Unicode summary and facts are readable without canonical text controls", async ({
   page,
 }) => {
   const writes = await summaryFixture(page);
-  const overview = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  await expect(overview).toHaveValue("😀".repeat(3000));
+  await expect(page.locator(".summary-reading-overview").first()).toHaveText("😀".repeat(3000));
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
-  for (const field of [overview]) {
-    // macOS End scrolls a multiline textarea without moving its caret.
-    // Place only the caret explicitly; a real keypress must still edit the text.
-    await field.evaluate((element) => {
-      const input = element as HTMLTextAreaElement;
-      input.setSelectionRange(input.value.length, input.value.length);
-    });
-    await field.press("Backspace");
-  }
-  await expect(overview).toHaveValue("😀".repeat(2999));
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect.poll(() => writes.length).toBe(1);
-  expect(writes[0]?.overview).toBe("😀".repeat(2999));
-  expect(writes[0]?.factEdits).toBeUndefined();
-  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
+  await expect(page.locator(".fact-answer__text")).toHaveText("😀".repeat(1200));
+  expect(writes).toHaveLength(0);
 });
 
-test("summary limits block oversized code-point drafts without cutting input", async ({ page }) => {
+test("natural explanations count Unicode code points without truncating or writing a raw summary", async ({
+  page,
+}) => {
   const writes = await summaryFixture(page);
-  const overview = page.getByRole("textbox", { name: "요약 편집", exact: true });
-  await overview.fill("😀".repeat(5001));
-  await expect(overview).toHaveValue("😀".repeat(5001));
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  const explanation = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+  await explanation.fill("😀".repeat(5001));
+  await expect(explanation).toHaveValue("😀".repeat(5001));
   await expect(page.getByRole("alert")).toContainText("5,000자");
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeDisabled();
+  await explanation.fill("😀".repeat(5000));
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeEnabled();
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
   expect(writes).toHaveLength(0);
-  await overview.fill("😀".repeat(5000));
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeEnabled();
+  await expect(page.locator(".summary-reading-overview").first()).toHaveText("😀".repeat(3000));
 });
