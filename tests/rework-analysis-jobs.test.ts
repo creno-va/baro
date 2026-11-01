@@ -3,9 +3,15 @@ import { modelBounds } from "../scripts/provision-ai-budget";
 import type { V2Fact } from "../src/contracts/v2";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2ReworkRepository } from "../src/server/db/v2-rework";
+import { createReportsService } from "../src/server/modules/reports/service";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
 import { preparedAnalysisRecordSchema } from "../src/server/modules/rework/records";
-import { createReworkStateService, readPreparedAnalysis } from "../src/server/modules/rework/state";
+import { createReportContinuation } from "../src/server/modules/rework/report-continuation";
+import {
+  createReworkStateService,
+  preparedAnalysisMatchesScope,
+  readPreparedAnalysis,
+} from "../src/server/modules/rework/state";
 import { createLegalAnalysisJobs } from "../src/server/runtime/rework-analysis";
 import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
@@ -111,11 +117,32 @@ async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_
       },
     },
   } as unknown as Env;
+  const reportDeps = {
+    ...f.deps,
+    readPreparedAnalysis: (actor: typeof f.actor, id: string) =>
+      readPreparedAnalysis(core, actor, id),
+    preparedAnalysisMatchesScope: (
+      actor: typeof f.actor,
+      id: string,
+      snapshot: NonNullable<Awaited<ReturnType<typeof readPreparedAnalysis>>>,
+      scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean },
+    ) =>
+      preparedAnalysisMatchesScope(core, actor, id, snapshot, {
+        ...scope,
+        excludedFileIds: [...scope.excludedFileIds],
+      }),
+  };
+  const reports = createReportsService(core, reportDeps);
+  const reportContinuation = createReportContinuation(core, env, {
+    clock: () => f.actor.now,
+    reportDependencies: async () => reportDeps,
+  });
   const service = createLegalAnalysisJobs(core, env, {
     clock: () => f.actor.now,
     waitUntil: (p) => pending.push(p),
-    prepareReport: async (_owner, _case, requestId) => {
+    prepareReport: async (owner, caseId, requestId, expectedRevision) => {
       continuations.push(requestId);
+      await reportContinuation.prepare(owner, caseId, requestId, expectedRevision);
     },
   });
   const execute = async (jobId: string) => {
@@ -141,6 +168,8 @@ async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_
     service,
     calls,
     continuations,
+    reports,
+    reportContinuation,
     execute,
     outage: () => {
       outage = true;
@@ -160,10 +189,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
     expect(f.calls).toHaveLength(0);
     expect(await f.service.admit(f.actor.ownerId, f.workspaceId, request)).toEqual(admitted);
     expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 1 });
-    expect((await f.execute(admitted.operationId)).status).toBe("completed");
+    expect((await f.execute(admitted.operationId))?.status).toBe("completed");
     expect(f.calls).toEqual(["workspace_legal_plan"]);
     const snapshot = await readPreparedAnalysis(f.core, f.actor, f.workspaceId);
-    expect(snapshot?.status).toBe("unavailable");
+    if (!snapshot) throw new Error("Missing actual prepared snapshot");
+    expect(snapshot.status).toBe("unavailable");
     expect(snapshot?.availability.every((s) => s.status === "unavailable")).toBe(true);
     expect(snapshot?.citations).toEqual([]);
     expect(snapshot?.sourceClaims).toEqual([]);
@@ -176,6 +206,22 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       ).analysis.status,
     ).toBe("unavailable");
     expect(f.continuations).toEqual([requestId]);
+    const report = await f.reports.peek(f.actor.ownerId, f.workspaceId);
+    if (!report) throw new Error("Missing actual generated report");
+    expect(report.analysisReview?.status).toBe("unavailable");
+    expect(report?.content).toContain("법적 쟁점과 법 조항");
+    const conversation = await createReworkStateService(f.core, {
+      clock: () => f.actor.now,
+      peekReport: (owner, id) => f.reports.peek(owner, id),
+    }).get(f.actor.ownerId, f.workspaceId);
+    expect(conversation.report.status).toBe("ready");
+    expect(conversation.report.basis).toEqual(snapshot.basis);
+    expect(
+      (await f.reportContinuation.prepare(f.actor.ownerId, f.workspaceId, requestId, null)).id,
+    ).toBe(report.id);
+    expect(
+      f.db.sqlite.query("SELECT count(*) n FROM v2_reports WHERE id NOT LIKE 'export-%'").get(),
+    ).toEqual({ n: 1 });
     await f.execute(admitted.operationId);
     expect(f.continuations).toEqual([requestId]);
     expect(f.calls).toHaveLength(1);
@@ -222,7 +268,7 @@ test("provider failure remains a failed encrypted analysis and retains every adm
     expectedRevision: f.rev(),
     continueWithReport: false,
   });
-  expect((await f.execute(admitted.operationId)).status).toBe("failed");
+  expect((await f.execute(admitted.operationId))?.status).toBe("failed");
   const raw = await createV2ReworkRepository(f.core).read(
     f.actor,
     f.workspaceId,
@@ -254,7 +300,7 @@ test("a consent revoked during actual native response cannot publish analysis or
     expectedRevision: f.rev(),
     continueWithReport: true,
   });
-  expect((await f.execute(admitted.operationId)).status).toBe("stopped");
+  expect((await f.execute(admitted.operationId))?.status).toBe("stopped");
   expect(
     await createV2ReworkRepository(f.core).head(f.actor, f.workspaceId, "analysis", f.workspaceId),
   ).toBeNull();
@@ -262,4 +308,49 @@ test("a consent revoked during actual native response cannot publish analysis or
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_job_holds").get()).toEqual({
     n: 1,
   });
+});
+
+test("report continuation preserves a human revision and its original CAS across replay", async () => {
+  const f = await fixture(),
+    requestId = crypto.randomUUID();
+  const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+    requestId,
+    expectedRevision: f.rev(),
+    continueWithReport: true,
+  });
+  await f.execute(admitted.operationId);
+  const original = await f.reports.peek(f.actor.ownerId, f.workspaceId);
+  if (!original) throw new Error("Missing actual generated report");
+  const edited = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: original.revision,
+    content: `${original.content}\n\n사용자 검토 메모`,
+    maskIdentifiers: original.maskIdentifiers,
+    excludedFileIds: original.excludedFileIds,
+  });
+  expect(edited.revision).toBe(original.revision + 1);
+  const state = () =>
+    createReworkStateService(f.core, {
+      clock: () => f.actor.now,
+      peekReport: (owner, id) => f.reports.peek(owner, id),
+    }).get(f.actor.ownerId, f.workspaceId);
+  expect((await state()).report.status).toBe("stale");
+  expect(
+    (await f.reportContinuation.prepare(f.actor.ownerId, f.workspaceId, requestId, null)).id,
+  ).toBe(original.id);
+  expect((await f.reports.peek(f.actor.ownerId, f.workspaceId))?.id).toBe(edited.id);
+  const newRequest = crypto.randomUUID();
+  await expect(
+    f.reportContinuation.prepare(f.actor.ownerId, f.workspaceId, newRequest, original.revision),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  // Retrying with a newer CAS cannot change the original registered request.
+  await expect(
+    f.reportContinuation.prepare(f.actor.ownerId, f.workspaceId, newRequest, edited.revision),
+  ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+  const failed = await state();
+  expect(failed.report.status).toBe("failed");
+  expect(failed.report.id).toBe(edited.id);
+  expect(f.calls).toHaveLength(1);
+  expect(
+    f.db.sqlite.query("SELECT count(*) n FROM v2_reports WHERE id NOT LIKE 'export-%'").get(),
+  ).toEqual({ n: 2 });
 });

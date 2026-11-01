@@ -18,7 +18,10 @@ import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
 import type { Transport } from "../modules/legal-retrieval/v2/transport";
 import { ModelError } from "../modules/llm-gateway/service";
-import { buildProcedureSources } from "../modules/resolution/procedure-sources";
+import {
+  buildProcedureSources,
+  selectReviewedProcedurePlans,
+} from "../modules/resolution/procedure-sources";
 import { loadAnalysisInput, readAnalysisScope } from "../modules/rework/analysis-input";
 import { ReworkError } from "../modules/rework/case-context";
 import {
@@ -52,7 +55,12 @@ export function createLegalAnalysisJobs(
     waitUntil?: (work: Promise<void>) => void;
     /** Constructor-only official-source transport for offline tests, never HTTP input. */
     transport?: Transport;
-    prepareReport?: (ownerId: string, caseId: string, requestId: string) => Promise<void>;
+    prepareReport?: (
+      ownerId: string,
+      caseId: string,
+      requestId: string,
+      expectedRevision: number | null,
+    ) => Promise<void>;
   } = {},
 ) {
   const clock = deps.clock ?? (() => new Date().toISOString()),
@@ -101,6 +109,12 @@ export function createLegalAnalysisJobs(
       if (previous) return previous;
       const a = actor(ownerId),
         scope = await readAnalysisScope(core, a, caseId);
+      const priorReport = await core
+        .statement(
+          "SELECT r.revision FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE w.id=? AND w.owner_id=? AND r.id NOT LIKE 'export-%' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) ORDER BY r.revision DESC,r.id DESC LIMIT 1",
+          [caseId, ownerId],
+        )
+        .first<number>("revision");
       const loaded = await loadAnalysisInput(core, a, caseId, scope);
       if (loaded.workspace.workspaceRevision !== request.expectedRevision)
         throw new ReworkError("STALE_REVISION");
@@ -198,6 +212,7 @@ export function createLegalAnalysisJobs(
         createdAt: admission.actor.now,
         invocationIds,
         continueWithReport: request.continueWithReport,
+        reportExpectedRevision: priorReport ?? null,
         limitations: loaded.limits,
       });
       const written = await records.write(guard, {
@@ -333,6 +348,7 @@ export function createLegalAnalysisJobs(
         const adapter = createLegalAnalysisRuntimeAdapter({
           core,
           env,
+          additionalPlans: selectReviewedProcedurePlans(task.input.context),
           guard: guard(),
           requestId: task.requestId,
           gateway,
@@ -357,6 +373,10 @@ export function createLegalAnalysisJobs(
         );
         const snapshot = {
           ...result.snapshot,
+          status:
+            result.snapshot.status === "ready" && task.limitations.length
+              ? ("partial" as const)
+              : result.snapshot.status,
           limitations: [
             ...new Set([
               ...result.snapshot.limitations,
@@ -374,6 +394,7 @@ export function createLegalAnalysisJobs(
           GUIDE_HOSTS,
         );
         if (!sourceAuthority || !(await authorize())) throw new ReworkError("STALE_REVISION");
+        const caseAuthority = loaded.authority;
         const prior = await records.head(
           actor(params.ownerId),
           params.workspaceId,
@@ -397,8 +418,8 @@ export function createLegalAnalysisJobs(
             procedureSources: procedure,
           },
           authority: (now) => ({
-            sql: `(${loaded?.authority.sql ?? "1"}) AND (${sourceAuthority.sql})`,
-            values: [...(loaded?.authority.values ?? []), ...sourceAuthority.values(now)],
+            sql: `(${caseAuthority.sql}) AND (${sourceAuthority.sql})`,
+            values: [...caseAuthority.values, ...sourceAuthority.values(now)],
           }),
           statements: (claim) => [
             ...completeLeaseStatements(core, lease, claim, clock()),
@@ -410,7 +431,12 @@ export function createLegalAnalysisJobs(
         });
         if (!publication) throw new ReworkError("STALE_REVISION");
         if (task.continueWithReport)
-          await deps.prepareReport?.(params.ownerId, params.workspaceId, task.requestId);
+          await deps.prepareReport?.(
+            params.ownerId,
+            params.workspaceId,
+            task.requestId,
+            task.reportExpectedRevision ?? null,
+          );
         return { jobId: task.jobId, status: "completed" as const };
       } catch (error) {
         // A downstream report failure cannot undo a completed analysis job.
@@ -466,7 +492,12 @@ export function createLegalAnalysisJobs(
           ],
         });
         if (written && task.continueWithReport)
-          await deps.prepareReport?.(params.ownerId, params.workspaceId, task.requestId);
+          await deps.prepareReport?.(
+            params.ownerId,
+            params.workspaceId,
+            task.requestId,
+            task.reportExpectedRevision ?? null,
+          );
         return { jobId: task.jobId, status: written ? ("failed" as const) : ("stopped" as const) };
       }
     },

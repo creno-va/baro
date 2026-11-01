@@ -422,8 +422,15 @@ export function createReconciliationRuntime(
     },
     settleTask: async (args, prepare) => {
       const p = await prepare();
+      const proof = args.status === "proposed" ? runs.get(args.requestId)?.sourceProof : null;
+      if (args.status === "proposed" && !proof) throw new ReworkError("STALE_REVISION");
       return p.commit({
-        authority: p.authority,
+        authority: proof
+          ? (now) => ({
+              sql: `(${p.authority.sql}) AND (${proof.sql})`,
+              values: [...p.authority.values, ...proof.values(now)],
+            })
+          : p.authority,
         statements: (claim) => [
           ...(args.status === "proposed"
             ? completeLeaseStatements(core, args.lease, claim, clock())

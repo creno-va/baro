@@ -34,6 +34,7 @@ export const analysisTaskSchema = z
       workspace_legal_audit: opaqueIdSchema,
     }),
     continueWithReport: z.boolean(),
+    reportExpectedRevision: revisionSchema.nullable().optional(),
     limitations: z.array(z.string().max(2000)).max(100),
   })
   .refine(
@@ -79,3 +80,22 @@ export const preparedAnalysisRecordSchema = z
   })
   .refine((r) => (r.snapshot === null) === (r.failure !== null));
 export type PreparedAnalysisRecord = z.infer<typeof preparedAnalysisRecordSchema>;
+export const reportContinuationSchema = z
+  .strictObject({
+    format: z.literal("report-continuation-v1"),
+    requestId: opaqueIdSchema,
+    requestHash: z.string().regex(/^[a-f0-9]{64}$/),
+    basis: v2AnalysisBasisSchema,
+    expectedReportRevision: revisionSchema.nullable(),
+    status: z.enum(["pending", "ready", "failed"]),
+    failure: v2FailureCodeSchema.nullable(),
+    errorCode: z.string().min(1).max(100).nullable(),
+    reportId: opaqueIdSchema.nullable(),
+    reportRevision: revisionSchema.nullable(),
+  })
+  .refine(
+    (r) =>
+      (r.status === "failed") === (r.failure !== null) &&
+      (r.reportId === null) === (r.reportRevision === null) &&
+      (r.status !== "ready" || r.reportId !== null),
+  );

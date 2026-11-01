@@ -229,6 +229,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       f.actor,
       f.workspaceId,
     );
+    if (!before?.summary) throw new Error("Missing canonical summary");
     const requested = await f.runtime.service.request(f.owner, key, input);
     expect(requested.status).toBe("pending");
     expect(f.calls).toEqual([]);
@@ -264,7 +265,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
     ]);
     const proposed = await f.runtime.service.read(f.owner);
     expect(proposed.state.status).toBe("proposed");
-    expect(proposed.summary).toEqual(before?.summary);
+    expect(proposed.summary).toEqual(before.summary);
     if (!proposed.state.proposal) throw new Error("Missing actual proposal");
     const confirmKey = crypto.randomUUID(),
       confirmInput = {
