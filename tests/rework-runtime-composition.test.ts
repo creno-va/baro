@@ -493,3 +493,17 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       n: 3,
     });
   });
+
+test("automatic preparation retains the real account rate boundary before paid admission", async () => {
+  const f = await fixture();
+  let allowed = false;
+  f.env.ANALYSIS_ACCOUNT_LIMIT = { limit: async () => ({ success: allowed }) } as RateLimit;
+  expect((await f.runtime.resume(f.actor.ownerId, f.workspaceId)).status).toBe("waiting");
+  expect(f.calls).toHaveLength(0);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  allowed = true;
+  expect((await f.runtime.resume(f.actor.ownerId, f.workspaceId)).status).toBe("analysis");
+  await f.drain();
+  expect((await f.runtime.state.get(f.actor.ownerId, f.workspaceId)).report.status).toBe("ready");
+  expect(f.calls).toHaveLength(1);
+});

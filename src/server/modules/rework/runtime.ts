@@ -213,6 +213,12 @@ export function createReworkRuntime(core: V2Core, env: Env, options: ReworkRunti
       }
       // A registered intent can recover an ACK loss before dispatch; the same
       // full request always resolves the original immutable admission.
+      if (!env.ANALYSIS_ACCOUNT_LIMIT && !options.admissionAllowed)
+        throw new ReworkError("DEPENDENCY_UNAVAILABLE");
+      const allowed = options.admissionAllowed
+        ? await options.admissionAllowed()
+        : await env.ANALYSIS_ACCOUNT_LIMIT.limit({ key: owner }).then((value) => value.success);
+      if (!allowed) return { status: "waiting" as const };
       const admitted = await analysis.admit(owner, id, {
         requestId: intent.requestId,
         expectedRevision: loaded.workspace.workspaceRevision,

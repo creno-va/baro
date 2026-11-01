@@ -138,3 +138,5 @@ PR656 head6c148074f31ca801b6545a168c2cef4ba971b6cc의 Quality41313917239/Legal41
 전체 intake2×3→재조율/확인→자료/사진→공식 근거 분석→report→후속6여정 browser와 실제 최종PDF 생성·렌더·검토, exact 최종 main manual validate:full은 아직 남아 있다. 합성 native/공식 source·model 검증은 실제 계정 provider/OAuth/법률 승인·공개 gate 성공이 아니다.
 
 중앙 Workflow dispatcher에 HTTP에서 선택할 수 없는 5번째 constructor options를 연결해 offline source transport와 같은 report factory를 실제 production dispatcher가 소비한다. 기본4인자 운영 동작은 같다. 최종 fixture가 private job 선택 분기를 복제하거나 실제 외부 법률 API로 유출되지 않도록 하는 포트이며, signed Hono 검사의 모든 job drain도 이 dispatcher로 바꿨다. 기존 runtime9+새중앙15 =24 tests240 assertions 재통과. PR661은 이 작은 포트까지 포함한 새 head로 CI를 다시 확인한다.
+
+자동 준비도 기존 ANALYSIS_ACCOUNT_LIMIT를 paid admission 전에 검사한다. 실제 rate 제한 중에는 미접수 의도를 보존해 다음 허용 시 재개하며 provider 호출/작업을 만들지 않는다. 이 검사 추가 뒤 중앙 actual dispatcher16 tests168 assertions 통과(기존 두 목적의 법령·판례/요건·비교/HTML 일치 포함). 가격·재원 관측을 이 경계에 섞지 않는다.
