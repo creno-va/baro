@@ -19,6 +19,8 @@ export function useCustomerAccess(
   const sessionLookup = useRef<Promise<SessionView> | null>(null);
   const latestCheck = useRef<Promise<SessionView | null> | null>(null);
   const allowed = useRef(false);
+  const owner = useRef<string | null>(null);
+  const ownerId = useCallback(() => owner.current, []);
   const [canMutate, setCanMutate] = useState(false);
   const [ready, setReady] = useState(false);
   const [version, setVersion] = useState(0);
@@ -28,6 +30,7 @@ export function useCustomerAccess(
   const revoke = useCallback(() => {
     ++epoch.current;
     allowed.current = false;
+    owner.current = null;
     setReady(false);
     setCanMutate(false);
     callbacks.current.purge();
@@ -91,6 +94,7 @@ export function useCustomerAccess(
           throw error;
         }
         setCanMutate(!session.needsConsent);
+        owner.current = session.user.id;
         allowed.current = true;
         setReady(true);
         return session;
@@ -195,5 +199,5 @@ export function useCustomerAccess(
       document.removeEventListener("visibilitychange", visible);
     };
   }, [deny, verify]);
-  return { ready, canMutate, version, verify, ticket, alive, current, deny };
+  return { ready, canMutate, version, verify, ticket, alive, current, deny, ownerId };
 }

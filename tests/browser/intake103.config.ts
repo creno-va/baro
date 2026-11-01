@@ -11,7 +11,8 @@ export default defineConfig({
       ASTRO_TELEMETRY_DISABLED: "1",
       WRANGLER_LOG_PATH: "/tmp/baro-b-wrangler.log",
     },
-    command: "bun run dev -- --host 127.0.0.1 --port 4341 --ignore-lock",
+    command:
+      "bun run dev -- --host 127.0.0.1 --port 4341 --ignore-lock --config tests/helpers/intake-reconfirmation.astro.config.ts",
     url: "http://127.0.0.1:4341/cases",
     reuseExistingServer: false,
     timeout: 120000,
