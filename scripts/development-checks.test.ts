@@ -52,6 +52,79 @@ test("browser validation succeeds only when every selected group succeeds", asyn
   expect(calls).toBe(2);
 });
 
+test("full rework journeys use their actual composers and opt in without silently skipping integration", async () => {
+  const calls: { command: string[]; env: Record<string, string | undefined> | undefined }[] = [];
+  await runBrowserTargets(
+    [
+      "tests/browser/auth.e2e.ts",
+      "tests/browser/conversation-agent.e2e.ts",
+      "tests/browser/rework-shared-mock.e2e.ts",
+      "tests/browser/rework-conversation.e2e.ts",
+    ],
+    async (command, env) => {
+      calls.push({ command, env });
+      return 0;
+    },
+  );
+  expect(calls.map(({ command }) => command.at(-1))).toEqual([
+    "tests/browser/auth.e2e.ts",
+    "tests/browser/conversation-agent.e2e.ts",
+    "tests/browser/rework-shared-mock.e2e.ts",
+    ".",
+    "tests/browser/rework-conversation.e2e.ts",
+  ]);
+  expect(calls[0]?.env).toBeUndefined();
+  expect(calls[1]?.command).toContain("tests/helpers/conversation-agent.playwright.config.ts");
+  expect(calls[2]?.command).toContain("tests/helpers/rework-mock-browser.playwright.config.ts");
+  expect(calls[2]?.env?.BARO_REWORK_SHARED_MOCK).toBe("true");
+  expect(calls[3]?.command).toEqual([
+    "docker",
+    "build",
+    "--target",
+    "office-runtime",
+    "-f",
+    "services/file-processor/Dockerfile",
+    "-t",
+    "baro-report-rendering",
+    ".",
+  ]);
+  expect(calls[4]?.command).toContain("tests/helpers/rework-browser.playwright.config.ts");
+  expect(calls[4]?.env?.BARO_REWORK_BROWSER_INTEGRATED).toBe("true");
+});
+
+test("an integrated PDF runtime build failure is retained while the browser corpus still reports its own result", async () => {
+  const commands: string[][] = [];
+  await expect(
+    runBrowserTargets(["tests/browser/rework-conversation.e2e.ts"], async (command) => {
+      commands.push(command);
+      return command[0] === "docker" ? 7 : 0;
+    }),
+  ).rejects.toThrow("docker build --target office-runtime");
+  expect(commands).toHaveLength(2);
+  expect(commands[1]?.at(-1)).toBe("tests/browser/rework-conversation.e2e.ts");
+});
+
+test("case, report and rework fixture changes retain their inline conversation consumers", () => {
+  const flows: [string, string, string, string] = [
+    "tests/browser/conversation-agent.e2e.ts",
+    "tests/browser/rework-shared-mock.e2e.ts",
+    "tests/browser/rework-conversation.e2e.ts",
+    "tests/browser/auth.e2e.ts",
+  ];
+  for (const source of [
+    "src/components/workspace/Workspace.tsx",
+    "tests/helpers/rework-browser.playwright.config.ts",
+    "tests/helpers/conversation-agent-fixture.tsx",
+  ]) {
+    const selected = browserTargets([source], flows);
+    for (const flow of flows.slice(0, 3)) expect(selected).toContain(flow);
+    expect(selected).not.toContain(flows[3]);
+  }
+  const report = browserTargets(["src/components/reports/ReportReview.tsx"], flows);
+  expect(report).toContain(flows[1]);
+  expect(report).toContain(flows[2]);
+});
+
 const browserTests = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].map((path) =>
   path.replaceAll("\\", "/"),
 );
