@@ -3,6 +3,7 @@ import {
   type V2LegalAnalysisSnapshot,
   type V2ReportBody,
   v2LegalAnalysisSnapshotSchema,
+  v2ReportAnalysisStatus,
   v2ReportBodySchema,
 } from "../../../contracts/v2";
 import type { Actor, V2Core } from "../../db/v2-core";
@@ -111,13 +112,7 @@ export async function bindPreparedReportAnalysis(
     }),
     analysis: {
       snapshot,
-      status:
-        snapshot.status === "ready" &&
-        (snapshot.context.casePurpose === "unconfirmed" ||
-          snapshot.context.procedure.kind === "unconfirmed" ||
-          snapshot.context.procedure.stage === "unconfirmed")
-          ? ("partial" as const)
-          : snapshot.status,
+      status: v2ReportAnalysisStatus(snapshot),
       userEdited: false,
       excerpts,
     } satisfies ReportAnalysisReview,
