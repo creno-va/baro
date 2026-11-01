@@ -42,6 +42,7 @@ import {
   type PublicCopyIntent,
   prepareApprovedPublicCopy,
 } from "./v2-public-copies";
+import { reportRevisionStatements } from "./v2-report-revision";
 import {
   abandonSanitizedAssetBlob,
   commitSanitizedAssetBlob,
@@ -226,6 +227,46 @@ export function createV2StorageRepository(core: V2Core) {
         if (!(await accounting.ensurePrincipal(g))) return false;
         const predicate = storagePredicate(g.ownerId, input.byteLength);
         const claimId = crypto.randomUUID();
+        const report =
+          input.target.kind === "report"
+            ? await core
+                .statement(
+                  `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id
+           WHERE r.id=? AND r.workspace_id=? AND w.owner_id=? AND r.workspace_revision=? AND r.operation_id=?
+           AND r.state IN ('queued','building') AND ${aliveWorkspace}
+           AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)`,
+                  [
+                    input.target.id,
+                    g.workspaceId,
+                    g.ownerId,
+                    input.target.revision,
+                    input.operationId,
+                  ],
+                )
+                .first<{
+                  id: string;
+                  revision: number;
+                  operation_id: string;
+                  summary_revision: number;
+                  snapshot_id: string;
+                  encrypted_payload: string;
+                }>()
+            : null;
+        if (input.target.kind === "report" && !report) return false;
+        const proof = report
+          ? await reportRevisionStatements(
+              core,
+              g,
+              report,
+              {
+                kind: "reservation",
+                reservationId: input.id,
+                artifactId: input.artifactId,
+                byteLength: input.byteLength,
+              },
+              claimId,
+            )
+          : [];
         const targetSql =
           input.target.kind === "file"
             ? "EXISTS(SELECT 1 FROM v2_files WHERE id=? AND workspace_id=w.id AND revision=? AND operation_id=? AND state IN ('uploaded','queued','processing'))"
@@ -234,7 +275,7 @@ export function createV2StorageRepository(core: V2Core) {
           core.claim(
             g,
             claimId,
-            `${predicate.sql} AND ${targetSql} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=? AND target_id=?)`,
+            `${predicate.sql} AND ${targetSql} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind=? AND target_id=?)${report ? " AND EXISTS(SELECT 1 FROM v2_reports WHERE id=? AND revision=? AND encrypted_payload=? AND snapshot_id=? AND summary_revision=?)" : ""}`,
             [
               ...predicate.values,
               input.target.id,
@@ -242,6 +283,15 @@ export function createV2StorageRepository(core: V2Core) {
               input.operationId,
               input.target.kind,
               input.target.id,
+              ...(report
+                ? [
+                    report.id,
+                    report.revision,
+                    report.encrypted_payload,
+                    report.snapshot_id,
+                    report.summary_revision,
+                  ]
+                : []),
             ],
           ),
           ...storageReservationStatements(
@@ -260,6 +310,7 @@ export function createV2StorageRepository(core: V2Core) {
             input.artifactId,
             input.target.id,
           ),
+          ...proof,
           core.bump(g, claimId),
           core.finish(claimId),
         ]);
