@@ -16,6 +16,13 @@ alone is insufficient. `isAnalysisCurrent` checks this basis and dependencies; i
 does not grant source authority. Pass the authenticated `researchRevisionBase`, not
 the current display/CAS revision, to preserve comparison-only revision semantics.
 
+Material observations preserve optional `coverage: {observationCertainty, userEdited}`
+from the actual included observation window. Missing coverage remains unknown. An
+uncertain, corrected or unknown observation cannot independently support a requirement,
+including through a derived fact mislabeled observed at the same current reference.
+Already verified current facts outside that window and qualified user statements stay
+distinct. Coverage participates in the digest; changing it invalidates old analysis.
+
 The trusted caller injects three `model.plan/analyze/audit` callbacks routed through
 the existing llm-gateway and paid attempt ledger. Planning selects up to three issues
 and four reviewed public requests. Retrieval uses the existing official parser/cache/
