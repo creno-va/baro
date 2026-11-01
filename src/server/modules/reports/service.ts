@@ -919,7 +919,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         "originals_export",
         data.row,
       );
-      return exports.zip(a, exportId, selectedFileIds);
+      return exports.zip(a, exportId, selectedFileIds, id);
     },
     renderText: (review: ReportReviewData) =>
       review.maskIdentifiers ? maskReportText(review.content) : review.content,

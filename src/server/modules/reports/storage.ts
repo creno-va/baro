@@ -777,11 +777,11 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       if (r.state !== "ready" || !r.zip_blob_id) throw new ReportError("NOT_FOUND");
       return download(actor.ownerId, { row: r }, r.zip_blob_id, "original_zip", parentReportId);
     },
-    async zip(actor: Actor, id: string, selected: readonly string[]) {
+    async zip(actor: Actor, id: string, selected: readonly string[], parentReportId: string) {
       const built = await build(actor, id, selected),
         r = built.row;
       if (!r.zip_blob_id) throw new ReportError("STORAGE_UNAVAILABLE");
-      return download(actor.ownerId, built, r.zip_blob_id, "original_zip");
+      return download(actor.ownerId, built, r.zip_blob_id, "original_zip", parentReportId);
     },
   };
 }

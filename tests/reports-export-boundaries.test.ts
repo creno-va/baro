@@ -10,6 +10,7 @@ import { createV2StagingRepository } from "../src/server/db/v2-staging";
 import { renderReportPdf } from "../src/server/modules/reports/pdf";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { reportReviewSchema } from "../src/server/modules/reports/source";
+import { readyFile, reportFixture } from "./helpers/report-fixture";
 import { reportPreparedAnalysisFixture } from "./helpers/report-prepared-analysis-fixture";
 
 test("a ZIP copy with changed analysis stops before lease, font, renderer or original bytes", async () => {
@@ -358,4 +359,68 @@ for (const byteLength of [98304, 98305])
         v2ReportBodySchema(),
       ),
     ).toEqual(body);
+  });
+
+for (const phase of ["during_write", "before_first_bytes", "during_stream"] as const)
+  test(`parent deletion ${phase} stops the first ZIP export`, async () => {
+    const f = await reportFixture();
+    const file = await readyFile(f, "S".repeat(600000));
+    let parentId = "";
+    let deleted = false;
+    const removeParent = () => {
+      if (!deleted) {
+        deleted = true;
+        f.db.sqlite.query("DELETE FROM v2_reports WHERE id=?").run(parentId);
+        // Actual deletion triggers fence the parent but do not know the child
+        // relation stored only in its encrypted private review.
+        expect(
+          f.db.sqlite.query("SELECT count(*) n FROM v2_reports WHERE id LIKE 'export-%'").get(),
+        ).toEqual({ n: 1 });
+      }
+    };
+    const reports = createReportsService(f.core, {
+      ...f.deps,
+      bucket: {
+        ...f.bucketPort,
+        get: async (key: string) => {
+          const value = await f.bucketPort.get(key);
+          if (
+            phase === "before_first_bytes" &&
+            f.db.sqlite
+              .query("SELECT id FROM v2_reports WHERE id LIKE 'export-%' AND state='ready'")
+              .get()
+          )
+            removeParent();
+          return value;
+        },
+      },
+    });
+    const parent = await reports.get(f.actor.ownerId, f.workspaceId);
+    parentId = parent.id;
+    if (phase === "during_write")
+      f.setHook(async () => {
+        removeParent();
+      });
+    if (phase === "during_stream") {
+      const archive = await reports.zip(f.actor.ownerId, parentId, crypto.randomUUID(), [
+        file.session.fileId,
+      ]);
+      const reader = archive.body.getReader();
+      try {
+        const first = await reader.read();
+        expect(first.done).toBe(false);
+        expect(first.value?.byteLength).toBeGreaterThan(0);
+        expect(first.value?.byteLength ?? 0).toBeLessThan(archive.byteLength);
+        removeParent();
+        await expect(reader.read()).rejects.toThrow("NOT_FOUND");
+      } finally {
+        await reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+    } else {
+      await expect(
+        reports.zip(f.actor.ownerId, parentId, crypto.randomUUID(), [file.session.fileId]),
+      ).rejects.toThrow("NOT_FOUND");
+    }
+    expect(deleted).toBe(true);
   });
