@@ -152,6 +152,8 @@ export type ApiErrorView = {
     | "QUOTA_EXCEEDED"
     | "VALIDATION_ERROR"
     | "FILE_REJECTED"
+    | "EXPORT_LIMIT_EXCEEDED"
+    | "EXPORT_RETRY_EXHAUSTED"
     | "UNAVAILABLE";
   message: string;
   retryable: boolean;

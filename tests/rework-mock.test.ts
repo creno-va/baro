@@ -61,6 +61,42 @@ function fixture() {
     },
   };
 }
+test("an actual explicit-mock report size failure survives the rework boundary without an empty report", async () => {
+  const f = fixture();
+  f.change((state) => {
+    state.files[f.item.id] = [
+      {
+        id: "oversized-synthetic-material",
+        name: "합성 자료.txt",
+        mimeType: "text/plain",
+        sizeBytes: 120000,
+        status: "ready",
+        coverage: "전체",
+        extractedText: "합성".repeat(20000),
+      },
+    ];
+  });
+  const context = await f.client.getContext(f.item.id);
+  const next = await f.client.updateContext(f.item.id, {
+    expectedRevision: context.workspaceRevision,
+    casePurpose: "prepare_claim",
+    subjectContext: "individual",
+    procedure: context.context.procedure,
+  });
+  await expect(
+    f.client.executeAction(f.item.id, {
+      action: "prepare_report",
+      requestId: crypto.randomUUID(),
+      expectedRevision: next.workspaceRevision,
+    }),
+  ).rejects.toMatchObject({
+    code: "EXPORT_LIMIT_EXCEEDED",
+    httpStatus: 413,
+    retryable: false,
+  });
+  expect(Object.keys(f.read().reports)).toHaveLength(0);
+  expect(f.read().files[f.item.id]?.[0]?.extractedText).toBe("합성".repeat(20000));
+});
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   for (const choice of ["self", "lawyer", "save_report"] as const)
     test(`explicit mock ${purpose} → unavailable legal analysis → report → ${choice} reuses domain services`, async () => {
