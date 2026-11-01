@@ -638,7 +638,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     if (!view) return null;
     if (pane === "reconfirmation")
       return (
-        <div inert={props.disabled}>
+        <div inert={props.readDisabled}>
           <SummaryReconfirmation
             caseId={caseId}
             embedded
@@ -658,7 +658,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       );
     if (pane === "report")
       return (
-        <div inert={props.disabled}>
+        <div inert={props.readDisabled}>
           <ReportReview
             caseId={caseId}
             embedded
@@ -748,7 +748,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             {...(props.state.report.id && props.state.report.revision
               ? { reportId: props.state.report.id, reportRevision: props.state.report.revision }
               : {})}
-            disabled={props.disabled || props.state.report.status !== "ready"}
+            disabled={props.readDisabled || props.state.report.status !== "ready"}
             onSaveReport={() =>
               saveConversationReport(props.state.report.id, props.state.report.revision)
             }

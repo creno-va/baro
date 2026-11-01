@@ -15,6 +15,7 @@ import { ConversationPanel } from "./ConversationPanel";
 import {
   conversationActionLabels,
   conversationPaneTitles,
+  conversationReadPanes,
   nextConversationAction,
 } from "./conversation-state";
 
@@ -48,6 +49,7 @@ export type ConversationPane = V2ConversationActionResult["pane"];
 export type ConversationPaneProps = {
   state: V2ConversationState;
   disabled: boolean;
+  readDisabled: boolean;
   onChanged: () => Promise<unknown>;
   onCancel: () => void;
   onDirtyChange: (dirty: boolean) => void;
@@ -209,7 +211,7 @@ export function ConversationAgent({
   }, []);
   const execute = useCallback(
     async (action: V2ConversationIntent, requestId?: string) => {
-      if (disabled || !canMutate || !stateIsCurrent || locked.current || paneLocked.current) return;
+      if (disabled || !stateIsCurrent || locked.current || paneLocked.current) return;
       if (
         dirty.current &&
         !window.confirm("저장하지 않은 입력이 있어요. 내용을 버리고 다른 작업을 열까요?")
@@ -226,14 +228,28 @@ export function ConversationAgent({
       callbacks.current.onBusyChange(true);
       ++reads.current;
       try {
-        const expectedOwner = await authorizedOwner(epoch, true);
+        const expectedOwner = await authorizedOwner(epoch, canMutate);
         if (!expectedOwner) return;
         const fresh = await client.getConversation(caseId, {
           expectedOwner,
           signal: abort.current.signal,
         });
-        if (!current(epoch) || !mounted.current) return;
+        if (!(await verify(false, false)) || !current(epoch) || !mounted.current) return;
+        if (fresh.workspaceRevision < workspace.case.revision)
+          throw Object.assign(new Error("최신 사건 상태를 다시 확인해 주세요."), {
+            code: "STALE_REVISION",
+          });
         setState(fresh);
+        if (!canMutate) {
+          // Withdrawal keeps authorized stored reads. The children enforce their
+          // own current write/consent checks; no action receipt or job is created.
+          attempt.current = null;
+          dirty.current = false;
+          setResult(null);
+          setPane(conversationReadPanes[action]);
+          await changed();
+          return;
+        }
         const effective = action === "save_report" && !fresh.report.id ? "prepare_report" : action;
         // Preserve the reviewed identity, rather than silently saving a newer report.
         const reviewedReport = state?.report ?? fresh.report;
@@ -303,6 +319,7 @@ export function ConversationAgent({
       changed,
       load,
       stateIsCurrent,
+      workspace.case.revision,
     ],
   );
   useEffect(() => {
@@ -392,46 +409,54 @@ export function ConversationAgent({
         </div>
       )}
       {state && (
-        <fieldset className="conversation-agent-actions">
-          <legend className="workspace-sr-only">대화에서 이어갈 작업</legend>
-          <Button
-            type="button"
-            variant="default"
-            disabled={disabled || !canMutate || !stateIsCurrent || busy || paneBusy}
-            loading={busy}
-            onClick={(event) => {
-              event.currentTarget.focus();
-              if (next) void execute(next);
-            }}
-          >
-            {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
-          </Button>
-          <details ref={menu}>
-            <summary>다른 작업</summary>
-            <fieldset
-              className="conversation-agent-menu"
-              disabled={disabled || !canMutate || !stateIsCurrent || busy || paneBusy}
+        <>
+          {!canMutate && (
+            <p className="workspace-muted">
+              저장된 내용을 확인할 수 있어요. 새 분석·수정·생성은 현재 정책 동의 후 이어갈 수
+              있어요.
+            </p>
+          )}
+          <fieldset className="conversation-agent-actions">
+            <legend className="workspace-sr-only">대화에서 이어갈 작업</legend>
+            <Button
+              type="button"
+              variant="default"
+              disabled={disabled || !stateIsCurrent || busy || paneBusy}
+              loading={busy}
+              onClick={(event) => {
+                event.currentTarget.focus();
+                if (next) void execute(next);
+              }}
             >
-              <legend className="workspace-sr-only">다른 사건 작업</legend>
-              {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
-                .filter((action) => action !== next)
-                .map((action) => (
-                  <Button
-                    type="button"
-                    key={action}
-                    variant="ghost"
-                    size="sm"
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      void execute(action);
-                    }}
-                  >
-                    {conversationActionLabels[action]}
-                  </Button>
-                ))}
-            </fieldset>
-          </details>
-        </fieldset>
+              {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
+            </Button>
+            <details ref={menu}>
+              <summary>다른 작업</summary>
+              <fieldset
+                className="conversation-agent-menu"
+                disabled={disabled || !stateIsCurrent || busy || paneBusy}
+              >
+                <legend className="workspace-sr-only">다른 사건 작업</legend>
+                {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
+                  .filter((action) => action !== next)
+                  .map((action) => (
+                    <Button
+                      type="button"
+                      key={action}
+                      variant="ghost"
+                      size="sm"
+                      onClick={(event) => {
+                        event.currentTarget.focus();
+                        void execute(action);
+                      }}
+                    >
+                      {conversationActionLabels[action]}
+                    </Button>
+                  ))}
+              </fieldset>
+            </details>
+          </fieldset>
+        </>
       )}
       {!state && !error && (
         <p className="workspace-muted" role="status">
@@ -480,6 +505,7 @@ export function ConversationAgent({
             renderPane(pane, {
               state,
               disabled: disabled || busy || !canMutate || !stateIsCurrent,
+              readDisabled: disabled || busy || !stateIsCurrent,
               onChanged: changed,
               onCancel: close,
               onDirtyChange: changeDirty,

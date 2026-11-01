@@ -1,4 +1,23 @@
-import type { V2ConversationIntent, V2ConversationState } from "../../contracts/v2";
+import type {
+  V2ConversationActionResult,
+  V2ConversationIntent,
+  V2ConversationState,
+} from "../../contracts/v2";
+
+/** Pure UI views for an authorized read-only owner. No POST/admission occurs. */
+export const conversationReadPanes: Record<
+  V2ConversationIntent,
+  V2ConversationActionResult["pane"]
+> = {
+  add_material: "materials",
+  reconfirm_case: "reconfirmation",
+  show_preparation: "preparation",
+  analyze_legal: "analysis",
+  prepare_report: "report",
+  resolve_followup: "followup",
+  save_report: "report",
+  open_lawyers: "lawyers",
+};
 
 export const conversationActionLabels: Record<V2ConversationIntent, string> = {
   add_material: "자료 추가·검토",

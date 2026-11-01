@@ -16,6 +16,7 @@ export function ConversationAgentFixture() {
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [workspaceRevision, setWorkspaceRevision] = useState(8);
+  const [canMutate, setCanMutate] = useState(true);
   const scope = useRef(0);
   const control = useRef<ConversationFixtureControl>({
     calls: [],
@@ -23,12 +24,18 @@ export function ConversationAgentFixture() {
     fail: false,
     resolve: null,
     aborted: false,
+    needsConsent: false,
+    withdrawConsent: () => {},
     emitIntent: () => {},
     advanceWorkspace: () => {},
     catchUpState: () => {},
   });
   useEffect(() => {
     const value = control.current;
+    value.withdrawConsent = () => {
+      value.needsConsent = true;
+      setCanMutate(false);
+    };
     value.advanceWorkspace = () => setWorkspaceRevision(9);
     value.catchUpState = () => {
       state.current.workspaceRevision = 9;
@@ -146,10 +153,10 @@ export function ConversationAgentFixture() {
               disabled={false}
               access={{
                 ready: true,
-                canMutate: true,
+                canMutate,
                 ticket: () => scope.current,
                 current: (epoch) => scope.current === epoch,
-                verify: async () => true,
+                verify: async (_hide, write) => !write || !control.current.needsConsent,
               }}
               onChanged={async () => {}}
               onBusyChange={setBusy}
@@ -161,6 +168,7 @@ export function ConversationAgentFixture() {
                       ? "기존 자료 컴포넌트 연결 자리"
                       : "기존 담당 컴포넌트 연결 자리"}
                   </p>
+                  <Button disabled={props.readDisabled}>기존 저장본 읽기</Button>
                   <label>
                     검토 중인 입력
                     <textarea

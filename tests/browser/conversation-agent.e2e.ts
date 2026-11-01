@@ -115,3 +115,17 @@ test("a stale read after a concurrent edit preserves the draft and cannot execut
   await expect(draft).toHaveValue("경합 중에도 보존할 초안");
   expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(1);
 });
+
+test("consent withdrawal preserves authorized stored views without posting an action or enabling edits", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeVisible();
+  await page.evaluate(() => window.conversationFixture.withdrawConsent());
+  await page.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
+  const panel = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: "기존 저장본 읽기", exact: true })).toBeEnabled();
+  await expect(panel.getByLabel("검토 중인 입력")).toBeDisabled();
+  expect(await page.evaluate(() => window.conversationFixture.calls)).toEqual([]);
+});

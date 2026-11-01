@@ -86,11 +86,36 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
-        if (followup === "직접 해결")
+        if (followup === "직접 해결") {
           await expect(
             report.getByRole("heading", { name: "준비 순서와 확인할 안내", exact: true }),
           ).toBeVisible();
-        else if (followup === "변호사와 해결")
+          await report
+            .getByRole("checkbox", {
+              name: "현재 리포트의 사실과 사용할 자료를 확인했어요.",
+              exact: true,
+            })
+            .check();
+          await report.getByRole("button", { name: "검토용 초안 준비", exact: true }).click();
+          const draft = report.getByRole("textbox", { name: "초안 검토·수정", exact: true });
+          await expect(draft).toBeEnabled();
+          await expect(draft).toHaveValue(/\S+/);
+          const reviewedText = await draft.inputValue();
+          await report
+            .getByRole("checkbox", {
+              name: "사실·증거·미입력 항목과 수정한 내용을 검토했어요.",
+              exact: true,
+            })
+            .check();
+          await report.getByRole("button", { name: "검토한 초안 저장", exact: true }).click();
+          const draftDownload = page.waitForEvent("download");
+          await report.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+          const artifact = await draftDownload;
+          const file = await artifact.path();
+          if (!file) throw new Error("MISSING_REVIEWED_DRAFT_BYTES");
+          expect(await readFile(file, "utf8")).toBe(reviewedText);
+          await artifact.delete();
+        } else if (followup === "변호사와 해결")
           await expect(
             report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
           ).toBeVisible();
@@ -104,6 +129,8 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         );
         await expect(composer).toBeInViewport();
       } finally {
-        f.close();
+        await f.close();
       }
     });
+
+import { readFile } from "node:fs/promises";

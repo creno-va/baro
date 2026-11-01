@@ -138,3 +138,11 @@ idempotency header를 실제 Hono로 전달한다. 중앙 runtime의 CI/main 전
 `downloadReviewedReport`를 재사용하며 현재 owner/case epoch와 정확한 report ID/revision/stale를
 PDF 요청 전후 확인한다. helper의 실패·취소를 throw해06의 저장 완료 표시를 막는다.
 이 조립 뒤 `validate:quick`과 `validate:build`(실제 Worker 부팅)가 다시 통과했다.
+
+05 통합 검토에서 동의 철회 시 부모의 전체 inert가 저장본 읽기까지 막는 문제를 발견해
+write disabled와 readDisabled를 분리했다. 동의 없는 현재 소유자의 명시적 보기는 fresh
+owner 검증과 conversation GET으로만 열며 action POST/admission을 만들지 않는다. 자식의
+현재 동의·수정·생성 검사는 유지하고 stale/다른 owner는 읽기도 잠근다. 해당 브라우저
+회귀를 추가해 격리 대화 UI는 **7개 통과**했다. 05가 조립을 재검토해 수정 사항을 수용했다.
+법률 관찰 자격 보존 PR644의 정확 head `41a2e9b0` Quality41304742070/Legal41304742069
+성공과 main `93131b4f`를 확인해 통합했다.

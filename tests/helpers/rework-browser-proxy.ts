@@ -13,6 +13,19 @@ export async function openReworkBrowserFixture(
     env: { ...process.env, BARO_SYNTHETIC_REWORK_SERVER: "true" },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  // Provider diagnostics never become browser artifacts or fill a pipe.
+  child.stderr.resume();
+  const close = async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => child.kill("SIGTERM"), 5000);
+      child.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+      child.stdin.end();
+    });
+  };
   try {
     const info = await new Promise<ReworkBrowserInfo>((resolve, reject) => {
       let output = "";
@@ -68,11 +81,11 @@ export async function openReworkBrowserFixture(
           ...(input === undefined ? {} : { data: input }),
         });
       },
-      close: () => child.stdin.end(),
+      close,
     };
   } catch (cause) {
-    child.stdin.end();
     child.kill("SIGTERM");
+    await close();
     throw cause;
   }
 }
