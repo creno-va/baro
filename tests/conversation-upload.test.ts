@@ -6,6 +6,10 @@ import {
 } from "../src/components/workspace/conversation-upload";
 import { conversationState } from "./helpers/conversation-state";
 
+function present<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing synthetic fixture");
+  return value;
+}
 function fixture() {
   const state = conversationState();
   state.summaryConfirmed = true;
@@ -84,7 +88,7 @@ function fixture() {
 test("first upload admission tolerates only technical revisions with the same frozen semantic sources and acknowledged original", () => {
   const f = fixture();
   expect(f.decide()).toBe("ready");
-  f.view.case.summaryDetails!.overview = "mutated old reference";
+  present(f.view.case.summaryDetails).overview = "mutated old reference";
   expect(f.decide()).toBe("ready");
   f.current.analysis = { ...f.current.analysis, status: "running", currentJobId: "job" };
   expect(f.decide()).toBe("waiting");
@@ -99,6 +103,9 @@ test.each([
   "other_file",
   "partial",
   "hash",
+  "missing_hash",
+  "malformed_hash",
+  "missing_revision",
   "name",
   "size",
   "mime",
@@ -109,7 +116,7 @@ test.each([
   const f = fixture();
   switch (kind) {
     case "summary":
-      f.fresh.case.summaryDetails!.overview = "다른 정본";
+      present(f.fresh.case.summaryDetails).overview = "다른 정본";
       break;
     case "context":
       f.current.caseContext.procedure.description = "다른 설명";
@@ -133,25 +140,35 @@ test.each([
       f.fresh.unknowns = [];
       break;
     case "other_file":
-      f.fresh.files.push({ ...f.fresh.files[0]!, id: "peer" });
+      f.fresh.files.push({ ...present(f.fresh.files[0]), id: "peer" });
       break;
     case "partial":
-      f.fresh.pagination!.messages = true;
+      present(f.fresh.pagination).messages = true;
       break;
     case "hash":
-      f.fresh.files[0]!.uploadContentHash = "b".repeat(64);
+      present(f.fresh.files[0]).uploadContentHash = "b".repeat(64);
+      break;
+    case "missing_hash":
+      delete present(f.queue.files.get("file")).uploadContentHash;
+      break;
+    case "malformed_hash":
+      present(f.queue.files.get("file")).uploadContentHash = "unverified";
+      present(f.fresh.files[0]).uploadContentHash = "unverified";
+      break;
+    case "missing_revision":
+      delete present(f.fresh.files[0]).revision;
       break;
     case "name":
-      f.fresh.files[0]!.name = "다른.txt";
+      present(f.fresh.files[0]).name = "다른.txt";
       break;
     case "size":
-      f.fresh.files[0]!.sizeBytes++;
+      present(f.fresh.files[0]).sizeBytes++;
       break;
     case "mime":
-      f.fresh.files[0]!.mimeType = "application/pdf";
+      present(f.fresh.files[0]).mimeType = "application/pdf";
       break;
     case "failure":
-      f.fresh.files[0]!.status = "failed";
+      present(f.fresh.files[0]).status = "failed";
       break;
     case "workspace":
       f.current.workspaceRevision++;
@@ -187,14 +204,14 @@ test("already sent, different owner epoch/input/selection, incomplete original a
   expect(check(3, "다른 입력")).toBe("changed");
   expect(check(3, "원래 입력", [])).toBe("changed");
   expect(check(3, "원래 입력", ["file"], new Set())).toBe("changed");
-  f.queue.files.get("file")!.status = "ready";
+  present(f.queue.files.get("file")).status = "ready";
   expect(check()).toBe("changed");
 });
 test("partial history or a missing canonical summary cannot establish an automatic queue baseline", () => {
   const f = fixture();
-  f.view.pagination!.timeline = true;
+  present(f.view.pagination).timeline = true;
   expect(beginConversationUpload(f.view, f.view.case, f.state, 3, "입력", [])).toBeNull();
-  f.view.pagination!.timeline = false;
+  present(f.view.pagination).timeline = false;
   delete f.view.case.summaryDetails;
   expect(beginConversationUpload(f.view, f.view.case, f.state, 3, "입력", [])).toBeNull();
 });

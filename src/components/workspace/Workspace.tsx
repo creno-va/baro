@@ -148,6 +148,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
   const [queuedSend, setQueuedSend] = useState(false);
   const queuedUpload = useRef<ConversationUpload | null>(null);
+  const [conversationRefresh, setConversationRefresh] = useState(0);
   const [notice, setNotice] = useState("");
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
@@ -476,7 +477,16 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   }, [preview, deleteFile, entry]);
 
   useEffect(() => {
-    if (!queuedSend || busy || agentBusy || !ready || !view || localAttachments.length) return;
+    if (
+      !queuedSend ||
+      busy ||
+      agentBusy ||
+      uploadReadbackPending ||
+      !ready ||
+      !view ||
+      localAttachments.length
+    )
+      return;
     if (
       !canMutate ||
       view.case.stage !== "active" ||
@@ -502,6 +512,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     queuedSend,
     busy,
     agentBusy,
+    uploadReadbackPending,
     ready,
     canMutate,
     view,
@@ -1125,7 +1136,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         }
         // Each accepted upload already has an authorized readback. Refresh the
         // workspace once per batch, rather than delaying every following file.
-        refreshed = Boolean(await load());
+        if (tab === "chat" && queuedUpload.current) setConversationRefresh((value) => value + 1);
+        else refreshed = Boolean(await load());
         if (!alive(epoch)) return;
         if (!refreshed)
           setNotice("자료는 접수됐지만 최신 목록을 확인하지 못했어요. 새로고침으로 확인해 주세요.");
@@ -1644,6 +1656,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                         client={api.rework}
                         access={{ ready, canMutate, ticket, current, verify }}
                         incomingMessageIds={incomingActionMessages}
+                        refreshKey={conversationRefresh}
                         requestedAction={conversationRequest}
                         disabled={
                           !!busy ||

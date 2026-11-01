@@ -1,5 +1,5 @@
 import type { CaseView, FileView, WorkspaceView } from "../../client/api/types";
-import type { V2ConversationState } from "../../contracts/v2";
+import { type V2ConversationState, v2HashSchema } from "../../contracts/v2";
 
 export function uploadCanonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(uploadCanonical).join(",")}]`;
@@ -97,6 +97,9 @@ export function queuedConversationUpload(
       !original ||
       !file ||
       !original.uploadContentHash ||
+      !v2HashSchema.safeParse(original.uploadContentHash).success ||
+      !Number.isSafeInteger(original.revision) ||
+      !Number.isSafeInteger(file.revision) ||
       original.uploadContentHash !== file.uploadContentHash ||
       original.name !== file.name ||
       original.sizeBytes !== file.sizeBytes ||

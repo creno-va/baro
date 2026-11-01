@@ -37,6 +37,55 @@ async function reportReady(page: Page) {
       .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
   ).toBeVisible();
 }
+async function preserveReport(page: Page, directory: string) {
+  const current = await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+    const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
+    const report = await api.rework.peekReport(id);
+    if (!report || report.stale) throw new Error("MISSING_CURRENT_ARTIFACT_BASIS");
+    const html = await api.reports.html(report.id);
+    return { id: report.id, revision: report.revision, html: await html.text() };
+  });
+  expect(current.html).toContain('data-baro-report="1"');
+  await writeFile(join(directory, "report.html"), current.html);
+  const response = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" &&
+      /^\/api\/v2\/reports\/[^/]+\/pdf$/.test(new URL(r.url()).pathname) &&
+      r.ok(),
+  );
+  const downloaded = page.waitForEvent("download");
+  const button = page
+    .getByRole("region", { name: "리포트 준비와 검토", exact: true })
+    .getByRole("button", { name: "PDF 다운로드", exact: true });
+  await button.click();
+  const artifact = await downloaded;
+  const file = await artifact.path();
+  if (!file) throw new Error("MISSING_UI_REPORT_ARTIFACT");
+  const bytes = await readFile(file);
+  expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  expect(bytes.equals(await (await response).body())).toBe(true);
+  await artifact.saveAs(join(directory, "report.pdf"));
+  await artifact.delete();
+  await expect(button).toBeEnabled();
+  await writeFile(
+    join(directory, "basis.json"),
+    JSON.stringify(
+      {
+        synthetic: true,
+        reportId: current.id,
+        reportRevision: current.revision,
+        pdfBytes: bytes.byteLength,
+        pdfSha256: createHash("sha256").update(bytes).digest("hex"),
+        htmlSha256: createHash("sha256").update(current.html).digest("hex"),
+      },
+      null,
+      2,
+    ),
+  );
+  return bytes;
+}
 async function addMaterial(page: Page, expectProcessingFailure = false) {
   const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
   await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
@@ -432,6 +481,15 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
       const f = await openReworkBrowserFixture(context, browserOrigin, purpose);
       try {
+        const branch = { "직접 해결": "self", "변호사와 해결": "lawyer", "리포트만 저장": "save" }[
+          followup
+        ];
+        const directory = join(
+          "/tmp/baro-625-journeys",
+          String(testInfo.project.name || "chromium"),
+          `${purpose}-${branch}`,
+        );
+        await mkdir(directory, { recursive: true });
         await page.setViewportSize({ width: 320, height: 844 });
         const path = `/cases/${encodeURIComponent(f.info.caseId)}`;
         await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
@@ -445,6 +503,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             exact: true,
           }),
         ).toBeVisible();
+        await page.screenshot({ path: join(directory, "materials.png") });
         await page.keyboard.press("Escape");
         await expect(page.getByRole("dialog")).toHaveCount(0);
 
@@ -482,6 +541,8 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         if (purpose === "prepare_claim" && followup === "직접 해결")
           await page.screenshot({ path: "/tmp/baro-625-real-conversation-320.png" });
+        await page.screenshot({ path: join(directory, "report.png") });
+        const preservedPdf = await preserveReport(page, directory);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         const pdfResponse =
           followup === "리포트만 저장"
@@ -521,6 +582,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           const file = await artifact.path();
           if (!file) throw new Error("MISSING_REVIEWED_DRAFT_BYTES");
           expect(await readFile(file, "utf8")).toBe(reviewedText);
+          await artifact.saveAs(join(directory, "reviewed-draft.txt"));
           await artifact.delete();
         } else if (followup === "변호사와 해결")
           await expect(
@@ -536,6 +598,8 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
           expect(bytes.byteLength).toBeGreaterThan(100);
           expect(bytes.equals(await (await pdfResponse).body())).toBe(true);
+          expect(bytes.equals(preservedPdf)).toBe(true);
+          await artifact.saveAs(join(directory, "downloaded-report.pdf"));
           const stored = z
             .object({
               artifacts: z.object({
@@ -549,6 +613,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           });
           await artifact.delete();
         }
+        await page.screenshot({ path: join(directory, "followup.png") });
         expect(new URL(page.url()).pathname).toBe(path);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
@@ -571,4 +636,6 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       }
     });
 
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";

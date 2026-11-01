@@ -76,6 +76,7 @@ export function ConversationAgent({
   renderPane,
   requestedAction,
   onPaneOpen,
+  refreshKey = 0,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -94,12 +95,18 @@ export function ConversationAgent({
   renderPane: (pane: ConversationPane, props: ConversationPaneProps) => ReactNode;
   requestedAction?: { id: string; action: V2ConversationIntent } | null;
   onPaneOpen?: () => void;
+  refreshKey?: number;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
   const [state, setState] = useState<V2ConversationState | null>(null);
+  const refreshHint = useRef(refreshKey);
+  refreshHint.current = refreshKey;
+  const [acceptedRefresh, setAcceptedRefresh] = useState(refreshKey);
+  const [readFailures, setReadFailures] = useState(0);
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
   const backgroundBusy =
+    acceptedRefresh !== refreshKey ||
     !stateIsCurrent ||
     (!!state &&
       (["pending", "running"].includes(state.analysis.status) ||
@@ -168,6 +175,7 @@ export function ConversationAgent({
   const load = useCallback(async () => {
     const serial = ++reads.current;
     const epoch = ticket();
+    const hint = refreshHint.current;
     try {
       const expectedOwner = await authorizedOwner(epoch, false);
       if (!expectedOwner || serial !== reads.current) return null;
@@ -183,34 +191,51 @@ export function ConversationAgent({
       )
         return null;
       if (value.workspaceRevision < workspace.case.revision) {
+        setReadFailures((n) => n + 1);
         setError("사건의 최신 작업 상태를 아직 확인하지 못했어요. 다시 확인해 주세요.");
         return null;
       }
       setState(value);
-      if (value.workspaceRevision > workspace.case.revision) await callbacks.current.onChanged();
+      setAcceptedRefresh(hint);
+      setReadFailures(0);
+      if (
+        value.workspaceRevision > workspace.case.revision &&
+        !["pending", "running"].includes(value.analysis.status) &&
+        value.report.status !== "pending"
+      )
+        await callbacks.current.onChanged();
       return value;
     } catch (cause) {
-      if (mounted.current && current(epoch) && serial === reads.current)
+      if (mounted.current && current(epoch) && serial === reads.current) {
+        const code = (cause as { code?: string })?.code;
+        setReadFailures((n) => (["CONFLICT", "STALE_REVISION"].includes(code ?? "") ? n + 1 : 3));
         setError(failureMessage(cause));
+      }
       return null;
     }
   }, [authorizedOwner, ticket, current, verify, client, caseId, workspace.case.revision]);
   useEffect(() => {
-    if (ready && !locked.current) void load();
-  }, [ready, load]);
+    if (ready && Number.isSafeInteger(refreshKey) && refreshKey >= 0 && !locked.current)
+      void load();
+  }, [ready, load, refreshKey]);
   useEffect(() => {
     if (
       !ready ||
       !state ||
-      !(["pending", "running"].includes(state.analysis.status) || state.report.status === "pending")
+      readFailures >= 3 ||
+      !(
+        acceptedRefresh !== refreshKey ||
+        !stateIsCurrent ||
+        ["pending", "running"].includes(state.analysis.status) ||
+        state.report.status === "pending"
+      )
     )
       return;
     return startForegroundPolling(async () => {
       if (locked.current || paneLocked.current) return;
-      await callbacks.current.onChanged();
       await load();
     }, 1800);
-  }, [ready, state, load]);
+  }, [ready, state, stateIsCurrent, acceptedRefresh, refreshKey, readFailures, load]);
   const changed = useCallback(async () => {
     const epoch = ticket();
     await callbacks.current.onChanged();
@@ -484,6 +509,7 @@ export function ConversationAgent({
             disabled={busy}
             onClick={() => {
               setError("");
+              setReadFailures(0);
               void load();
             }}
           >
