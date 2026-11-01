@@ -885,9 +885,6 @@
 .intake-scene-content[data-waiting="true"] .intake-scene-emblem {
   animation: intake-emblem-breathe 1800ms ease-in-out infinite;
 }
-.intake-summary-scene #case-summary {
-  min-height: 300px;
-}
 .intake-summary-scene .intake-count {
   margin: 2px 16px 4px;
 }
@@ -1027,9 +1024,6 @@
     min-height: 120px;
     padding: 14px 12px;
   }
-  .intake-summary-scene #case-summary {
-    min-height: 260px;
-  }
   .intake-scene-nav {
     font-size: 0.75rem;
   }
@@ -1082,4 +1076,176 @@
 }
 .summary-materials-column:empty {
   display: none;
+}
+.conversation-purpose {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 0;
+  padding: 0;
+  margin: 0 0 22px;
+  min-width: 0;
+}
+.conversation-purpose legend {
+  padding: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.conversation-purpose label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  border: 1px solid var(--product-line, #edf0f4);
+  border-radius: 16px;
+  padding: 14px;
+  background: white;
+  color: var(--product-ink, #191f28);
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.conversation-purpose label:has(:checked) {
+  border-color: #2364e8;
+  background: #eff5ff;
+}
+.conversation-purpose label:focus-within,
+.conversation-composer .conversation-context label:focus-within {
+  outline: 2px solid #2364e8;
+  outline-offset: 3px;
+}
+.conversation-purpose input {
+  accent-color: #2364e8;
+  flex-shrink: 0;
+}
+.conversation-purpose:disabled label {
+  cursor: default;
+  opacity: 0.65;
+}
+.intake-case-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 16px 0 24px;
+  color: var(--muted-foreground);
+  font-size: 0.8rem;
+}
+.intake-case-context span:first-child {
+  color: #2364e8;
+  font-weight: 650;
+}
+.intake-case-context p {
+  width: 100%;
+  margin: 0;
+}
+.summary-reading {
+  color: var(--product-ink, #191f28);
+  overflow-wrap: anywhere;
+}
+.summary-reading > section + section {
+  margin-top: 28px;
+}
+.summary-reading h2 {
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.summary-reading-overview {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  margin: 0;
+}
+.summary-reading ul,
+.summary-change-reasons {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.summary-reading-facts article {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--product-line, #edf0f4);
+}
+.summary-reading-facts article:first-child {
+  padding-top: 0;
+}
+.summary-reading-facts .fact-answer__text {
+  white-space: pre-wrap;
+}
+.summary-reading details > summary,
+.summary-comparison > details > summary {
+  min-height: 44px;
+  display: list-item;
+  align-content: center;
+  cursor: pointer;
+}
+.summary-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+.summary-review-actions > .ui-button + .ui-button {
+  margin-left: 0;
+}
+.summary-review-actions .ui-button {
+  white-space: normal;
+  min-height: 44px;
+  height: auto;
+}
+.summary-changes {
+  margin-top: 28px;
+  border-top: 1px solid var(--product-line, #edf0f4);
+  padding-top: 24px;
+  overflow-wrap: anywhere;
+}
+.summary-changes > h2 {
+  font-size: 1.2rem;
+}
+.summary-changes > p {
+  line-height: 1.8;
+}
+.summary-candidate {
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--product-subtle, #f6f8fb);
+  margin-top: 16px;
+}
+.summary-candidate > h3 {
+  color: #2364e8;
+  font-size: 0.9rem;
+  margin: 0 0 18px;
+}
+.summary-reconciliation-form textarea {
+  min-height: 160px;
+  width: 100%;
+}
+.summary-reconciliation-form > label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 650;
+}
+.summary-reconciliation-form > p {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.summary-reconfirmation--embedded {
+  width: 100%;
+  min-width: 0;
+}
+.summary-reconfirmation--embedded .intake-scene {
+  padding: 0;
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .conversation-purpose {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .summary-review-actions {
+    flex-direction: column;
+  }
+  .summary-review-actions > .ui-button {
+    width: 100%;
+  }
+  .summary-candidate {
+    padding: 16px;
+  }
 }

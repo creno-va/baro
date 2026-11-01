@@ -166,3 +166,23 @@ test("a local draft download failure preserves reviewed save and consent loss pe
   const calls = await (await request.get("/fixture/counts")).json();
   expect(calls.draft).toBe(1);
 });
+test("the real default client peeks at existing reports and reads file metadata without recreating a deleted report", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/?default");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
+  await request.post("/fixture/control", { data: { missingReport: true } });
+  await page.reload();
+  await expect(page.getByRole("alert")).toContainText("현재 리포트");
+  const calls = await (await request.get("/fixture/counts")).json();
+  expect(calls).toMatchObject({
+    legacyGets: 0,
+    observations: 0,
+    update: 1,
+    draft: 0,
+    saveReport: 0,
+  });
+  expect(calls.reportReads).toBeGreaterThanOrEqual(2);
+});
