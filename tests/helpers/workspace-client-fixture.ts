@@ -8,8 +8,12 @@ import {
   type WorkspaceMockState,
 } from "../../src/client/api/mock/workspace";
 import { createWorkspaceApi } from "../../src/client/api/workspace";
+import { v2SummarySchema } from "../../src/contracts/v2";
+import { workspaceConversationFixture } from "./workspace-conversation-client-fixture";
 
 const key = "baro-c-contract-test-state";
+const narrative =
+  "친구에게 빌려준 금액과 반환 약속 날짜를 원본 자료로 확인하려고 합니다. 이 내용은 브라우저 검증용 합성 사건입니다.";
 const initial: WorkspaceMockState = {
   session: {
     user: { id: "synthetic-owner", name: "합성 사용자", accountType: "customer" },
@@ -23,8 +27,18 @@ const initial: WorkspaceMockState = {
       stage: "active",
       revision: 1,
       updatedAt: "2026-10-06T00:00:00.000Z",
-      summary:
-        "친구에게 빌려준 금액과 반환 약속 날짜를 원본 자료로 확인하려고 합니다. 이 내용은 브라우저 검증용 합성 사건입니다.",
+      summary: narrative,
+      summaryDetails: {
+        schemaVersion: "2",
+        revision: 1,
+        intakeRevision: 1,
+        createdAt: "2026-10-06T00:00:00.000Z",
+        overview: narrative,
+        facts: [],
+        parties: [],
+        unknowns: [],
+        notices: ["브라우저 합성 검증용 정본입니다."],
+      },
       schemaVersion: "2",
     },
   },
@@ -36,6 +50,11 @@ const runtime: WorkspaceMockRuntime = {
   update: (action) => {
     const state = runtime.read();
     const result = action(state);
+    // This isolated legacy-view adapter declares v2 metadata for uploads it
+    // actually admitted. Unrelated legacy files keep an absent revision.
+    for (const files of Object.values(state.files))
+      for (const file of files)
+        if (file.revision === undefined && state.fileUploads?.[file.id]) file.revision = 1;
     localStorage.setItem(key, JSON.stringify(state));
     return result;
   },
@@ -49,8 +68,18 @@ async function request(path: string, init?: RequestInit) {
   }
   return Response.json({ error: { code: "NOT_FOUND", retryable: false } }, { status: 404 });
 }
+const workspaceClient = createWorkspaceApi(request);
 export const api = {
   session: { get: async () => runtime.read().session },
-  workspace: createWorkspaceApi(request),
+  workspace: workspaceClient,
   files: createFilesApi(request),
+  rework: workspaceConversationFixture(runtime),
+  cases: {
+    get: async (id: string) => {
+      await workspaceClient.get(id);
+      const item = runtime.read().cases[id];
+      if (!item) throw new Error("Missing synthetic case");
+      return { ...item, summaryDetails: v2SummarySchema.parse(item.summaryDetails) };
+    },
+  },
 };

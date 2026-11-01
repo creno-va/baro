@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createFilesClient, reworkReportViewSchema } from "@baro/api-client";
+import { createFilesClient, createWorkspaceClient, reworkReportViewSchema } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { z } from "zod";
 import { EXPECTED_OWNER_HEADER } from "../src/contracts/session";
@@ -81,6 +81,7 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
         undefined,
         { metadataOnly: true },
       );
+      expect(uploaded.uploadContentHash).toBe(await digest(await new Blob([text]).arrayBuffer()));
       const ready = await until(
         async () =>
           (await files.list(f.info.caseId, { metadataOnly: true })).find(
@@ -89,6 +90,7 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
         (value) => value?.status === "ready" || value?.status === "failed",
       );
       expect(ready?.status).toBe("ready");
+      expect(ready?.uploadContentHash).toBe(uploaded.uploadContentHash);
       expect(new TextDecoder().decode(await files.original(f.info.caseId, uploaded.id))).toBe(text);
       const state = await until(
         () => json(f, "/rework/conversation"),
@@ -259,7 +261,7 @@ async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
   }
   throw new Error("SYNTHETIC_FIXTURE_WAIT_LIMIT");
 }
-async function prepare(f: Fixture) {
+async function prepare(f: Fixture, options: { reconcile?: boolean } = {}) {
   for (let round = 0; round < 2; round++) {
     const workspace = await json(f, "/workspace");
     await json(f, "/intake/advance", { expectedRevision: workspace.workspaceRevision });
@@ -291,6 +293,17 @@ async function prepare(f: Fixture) {
   );
   const before = await json(f, "/summary"),
     current = await json(f, "/workspace");
+  if (options.reconcile === false) {
+    await json(f, "/summary/confirm", {
+      expectedRevision: before.intakeRevision,
+      summaryRevision: before.revision,
+      workspaceRevision: current.workspaceRevision,
+    });
+    return until(
+      () => json(f, "/rework/conversation"),
+      (value) => value.report.status === "ready",
+    );
+  }
   await json(f, "/rework/summary-reconciliation/request", {
     expectedRevision: current.workspaceRevision,
     summaryRevision: before.revision,
@@ -352,6 +365,117 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       await f.close();
     }
   });
+
+for (const scenario of [
+  { intent: null, text: "현재 기록을 다시 읽어주세요." },
+  { intent: "analyze_legal", text: "관련 판례 보여줘" },
+  { intent: "prepare_report", text: "보고서 만들어줘" },
+  { intent: "add_material", text: "계약서 올릴게" },
+] as const)
+  test(`an audited ${scenario.intent ?? "ordinary"} conversation without case changes preserves analysis/report and starts no research`, async () => {
+    const f = await createReworkRuntimeFixture({
+      browserOrigin: "http://127.0.0.1:4396",
+      purpose: "prepare_claim",
+      native: "unavailable",
+    });
+    try {
+      const state = await prepare(f, { reconcile: false });
+      const before = await stats(f);
+      const current = await json(f, "/workspace");
+      await json(f, "/messages", {
+        expectedRevision: current.workspaceRevision,
+        text: scenario.text,
+        selectedFileIds: [],
+      });
+      expect(
+        (
+          await f.control(
+            new Request("http://127.0.0.1:4396/__rework-test/settle", {
+              method: "POST",
+              body: "{}",
+            }),
+          )
+        )?.ok,
+      ).toBe(true);
+      const after = await stats(f);
+      expect(after.models.slice(before.models.length)).toEqual([
+        "workspace_chat",
+        "workspace_audit",
+      ]);
+      expect(after.sources).toBe(before.sources);
+      expect(after.reports.total).toBe(before.reports.total);
+      const currentState = await json(f, "/rework/conversation");
+      expect(currentState.snapshot?.id).toBe(state.snapshot?.id);
+      expect(currentState.analysis.status).toBe("ready");
+      expect(currentState.report.id).toBe(state.report.id);
+      expect(currentState.intents.map((value) => value.intent)).toEqual(
+        scenario.intent ? [scenario.intent] : [],
+      );
+      if (scenario.intent) {
+        expect(currentState.intents[0]?.workspaceRevision).toBe(currentState.workspaceRevision);
+        expect(currentState.intents[0]?.workspaceRevision).toBe(current.workspaceRevision + 2);
+      }
+    } finally {
+      await f.close();
+    }
+  });
+
+test("the installed workspace facade reads a completed private analysis without requiring a chat reply", async () => {
+  const f = await createReworkRuntimeFixture({
+    browserOrigin: "http://127.0.0.1:4396",
+    purpose: "prepare_claim",
+    native: "unavailable",
+  });
+  const scope = createSessionScope();
+  try {
+    const state = await prepare(f, { reconcile: false });
+    const session = z
+      .object({ user: z.object({ id: z.string() }) })
+      .parse(await (await f.request("/api/me/session")).json());
+    const request = (path: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("cookie", `${f.info.ownerCookie.name}=${f.info.ownerCookie.value}`);
+      headers.set("origin", f.browserOrigin);
+      headers.set(EXPECTED_OWNER_HEADER, encodeURIComponent(session.user.id));
+      return Promise.resolve(
+        f.fetch(new Request(new URL(path, f.browserOrigin), { ...init, headers })),
+      );
+    };
+    const files = createFilesClient<never, never>({
+      request,
+      scope,
+      newKey: () => crypto.randomUUID(),
+      openUpload: async () => {
+        throw new Error("SYNTHETIC_READ_ONLY_CLIENT");
+      },
+      download: async () => {
+        throw new Error("SYNTHETIC_READ_ONLY_CLIENT");
+      },
+    });
+    const client = createWorkspaceClient({
+      request,
+      scope,
+      newKey: () => crypto.randomUUID(),
+      listFiles: (id, options) => files.list(id, options),
+    });
+    const before = await stats(f);
+    expect((await json(f, "/workspace")).currentJobId).toBeNull();
+    const latest = await request(`/api/v2/cases/${f.info.caseId}/workspace-jobs/latest`);
+    expect(latest.ok).toBe(true);
+    expect(await latest.json()).toBeNull();
+    const workspace = await client.get(f.info.caseId);
+    expect(workspace.case.id).toBe(f.info.caseId);
+    expect(workspace.case.stage).toBe("active");
+    expect(workspace.messages.some((message) => message.id.startsWith("job:"))).toBe(false);
+    expect((await json(f, "/rework/conversation")).report.id).toBe(state.report.id);
+    const after = await stats(f);
+    expect(after.models).toEqual(before.models);
+    expect(after.sources).toBe(before.sources);
+  } finally {
+    scope.invalidate();
+    await f.close();
+  }
+});
 
 test("an unavailable official source gives a limited report and passive reads do not retry it", async () => {
   const f = await createReworkRuntimeFixture({

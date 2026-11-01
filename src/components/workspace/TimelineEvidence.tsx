@@ -2,6 +2,7 @@ import { BadgeCheck, CircleHelp, MessageSquare, Paperclip, PencilLine } from "lu
 import type { FileView, TimelineView } from "../../client/api/types";
 import type { V2Fact } from "../../contracts/v2";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { positionLabel } from "./source-label";
 import { timelineEvidence } from "./timeline-evidence";
 
@@ -10,11 +11,13 @@ export function TimelineEvidence({
   files,
   facts,
   base,
+  onReviewFile,
 }: {
   entry: TimelineView;
   files: readonly FileView[];
   facts?: readonly V2Fact[] | undefined;
   base: string;
+  onReviewFile?: (fileId: string) => void;
 }) {
   const evidence = timelineEvidence(entry, files, facts);
   const Icon =
@@ -49,7 +52,18 @@ export function TimelineEvidence({
           <div className="timeline-evidence-links">
             {evidence.materials.map(({ reference, file, current }) => (
               <div key={JSON.stringify(reference)}>
-                {file ? (
+                {file && onReviewFile ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      onReviewFile(file.id);
+                    }}
+                  >
+                    {file.name} · {positionLabel(reference.position)}
+                  </Button>
+                ) : file ? (
                   <a href={`${base}/files?file=${encodeURIComponent(file.id)}`}>
                     {file.name} · {positionLabel(reference.position)}
                   </a>

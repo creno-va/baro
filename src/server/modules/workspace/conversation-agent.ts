@@ -158,7 +158,8 @@ export function createConversationAgent(deps: ConversationAgentDependencies) {
             if (
               analysisPending ||
               state.analysis.status === "not_started" ||
-              state.analysis.status === "stale"
+              state.analysis.status === "stale" ||
+              (!reporting && state.analysis.status === "failed")
             )
               return result(
                 reporting ? "report" : "analysis",
@@ -166,12 +167,7 @@ export function createConversationAgent(deps: ConversationAgentDependencies) {
                 state.analysis.missingItems,
                 await deps.analyze(input, { continueWithReport: reporting }),
               );
-            if (!reporting)
-              return result(
-                "analysis",
-                state.analysis.status === "failed" ? "blocked" : "ready",
-                state.analysis.missingItems,
-              );
+            if (!reporting) return result("analysis", "ready", state.analysis.missingItems);
             if (state.report.status === "ready") return result("report", "ready");
             if (state.report.status === "pending")
               return result("report", "pending", state.analysis.missingItems, {
