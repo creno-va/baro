@@ -3,6 +3,7 @@ import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { v2FactSchema } from "../src/contracts/v2";
 import type { V2LegalAnalysisDraft } from "../src/contracts/v2/legal-analysis";
 import type { V2CasePurpose } from "../src/contracts/v2/rework";
+import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import {
   analysisBasis,
   analysisMaterialIsObserved,
@@ -15,13 +16,18 @@ import {
   createAutomaticLegalAnalysis,
   type LegalAnalysisModelInput,
 } from "../src/server/modules/legal-retrieval/analysis/service";
+import type { RetrievalPlan } from "../src/server/modules/legal-retrieval/v2/contracts";
+import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
+import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
 import type { Transport } from "../src/server/modules/legal-retrieval/v2/transport";
+import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
 import {
   legalAnalysisOutputSchema,
   legalAnalysisPlanSchema,
 } from "../src/server/modules/llm-gateway/analysis-schema";
 import sample from "./fixtures/legal/analysis/scenarios.json";
 import { legalAnalysisFixture } from "./helpers/legal-analysis-fixture";
+import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 const now = "2026-10-06T00:00:00.000Z";
 const material = {
@@ -171,6 +177,8 @@ async function setup(
     audit?: () => unknown;
     noBinding?: boolean;
     plan?: () => unknown;
+    additionalPlans?: readonly RetrievalPlan[];
+    capturePlans?: (plans: RetrievalPlan[]) => void;
   } = {},
 ) {
   const f = await legalAnalysisFixture();
@@ -212,11 +220,20 @@ async function setup(
   };
   const counts = { plan: 0, analyze: 0, audit: 0, attempts: 0 };
   let time = now;
-  const retrieval = f.service(
+  let retrieval = f.service(
     options.transport?.(f),
     !options.noBinding,
     analysisPrecedentDiscovery(input),
   );
+  if (options.additionalPlans) {
+    const sources = createV2OfficialSourceRepository(f.core, GUIDE_HOSTS);
+    retrieval = createV2LegalRetrieval({ LAW_API_OC: "synthetic-only" }, sources, {
+      transport: options.transport?.(f) ?? f.transport,
+      sleep: async () => {},
+      bindCitation: (citation) => sources.bindCitation(f.guard, citation),
+      precedentDiscovery: analysisPrecedentDiscovery(input),
+    });
+  }
   const controller = new AbortController();
   const service = createAutomaticLegalAnalysis({
     model: {
@@ -235,7 +252,10 @@ async function setup(
         return (options.audit ?? (() => approved))();
       },
     },
-    retrieve: (request, access) => retrieval.retrieve(request, access),
+    retrieve: (request, access) => {
+      options.capturePlans?.(structuredClone(request.plans));
+      return retrieval.retrieve(request, access);
+    },
     readBoundSources: async (ids, at) => {
       f.guard.now = at;
       return f.bound(ids);
@@ -247,6 +267,7 @@ async function setup(
     },
     clock: () => time,
     signal: controller.signal,
+    ...(options.additionalPlans ? { additionalPlans: options.additionalPlans } : {}),
   });
   return {
     ...f,
@@ -830,3 +851,148 @@ test("the analysis module initializes and validates synthetic claims in actual l
     f.db.close();
   }
 }, 30000);
+
+test("reviewed guides share the original round, normalize/deduplicate and retain limited originals", async () => {
+  const guide: Extract<RetrievalPlan, { kind: "official_guide" }> = {
+    ...workspaceGuidePlans.legal_consultation,
+  };
+  let received: RetrievalPlan[] = [];
+  const f = await setup("prepare_claim", {
+    additionalPlans: [guide, { ...guide, csmSeq: "0568" }],
+    capturePlans: (plans) => {
+      received = plans;
+    },
+    transport: (base) => async (url, init) =>
+      new URL(url).hostname === "www.easylaw.go.kr"
+        ? new Response(syntheticGeneralGuide, { headers: { "content-type": "text/html" } })
+        : base.transport(url, init),
+  });
+  try {
+    guide.csmSeq = "999"; // Factory validation captured a copy for this admitted job.
+    const result = await f.service.prepare(f.input);
+    expect(received).toHaveLength(3);
+    expect(received[2]).toEqual(workspaceGuidePlans.legal_consultation);
+    expect(result.sourceRetrieval.outcomes.filter((o) => o.kind === "official_guide")).toEqual([
+      {
+        kind: "official_guide",
+        availability: "limited",
+        reason: "update_pending",
+        sourceFailures: ["update_pending"],
+        chunks: [],
+      },
+    ]);
+    expect(result.snapshot.status).toBe("partial");
+    expect(result.snapshot.citations.some((c) => c.kind === "official_guide")).toBe(false);
+    expect(result.snapshot.limitations.some((s) => s.includes("개정 내용 확인 중"))).toBe(true);
+    expect(f.counts.attempts).toBe(5);
+    await f.service.prepare(f.input);
+    expect(f.counts).toEqual({ plan: 1, analyze: 1, audit: 1, attempts: 5 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test.each([3, 4])(
+  "%i existing case plans keep the four-plan bound and explicitly report skipped procedure guides",
+  async (count) => {
+    let received: RetrievalPlan[] = [];
+    const guide = workspaceGuidePlans.legal_consultation;
+    const f = await setup("prepare_claim", {
+      additionalPlans: [guide, { ...guide, ccfNo: "4" }],
+      capturePlans: (plans) => {
+        received = plans;
+      },
+      plan: () => {
+        const value = plan();
+        const issue = value.issues[0];
+        if (!issue) throw new Error("Missing synthetic issue");
+        return {
+          issues: [
+            {
+              ...issue,
+              requests: [
+                ...issue.requests,
+                { kind: "precedent", concept: "계약" },
+                ...(count === 4
+                  ? [{ kind: "official_guide", guideKey: "legal_consultation" }]
+                  : []),
+              ],
+            },
+          ],
+        };
+      },
+      transport: (base) => async (url, init) =>
+        new URL(url).hostname === "www.easylaw.go.kr"
+          ? new Response(syntheticGeneralGuide, { headers: { "content-type": "text/html" } })
+          : base.transport(url, init),
+    });
+    try {
+      const result = await f.service.prepare(f.input);
+      expect(received).toHaveLength(4);
+      expect(received.filter((p) => p.kind === "official_guide")).toHaveLength(1);
+      expect(
+        result.sourceRetrieval.outcomes.filter((o) => o.availability === "not_requested"),
+      ).toEqual([
+        {
+          kind: "official_guide",
+          availability: "not_requested",
+          reason: "budget_exhausted",
+          chunks: [],
+        },
+      ]);
+      expect(result.snapshot.limitations.some((s) => s.includes("기술적 조사 한도"))).toBe(true);
+      expect(result.snapshot.limitations.some((s) => s.includes("안내 1개는 조회하지"))).toBe(true);
+      expect(
+        result.snapshot.availability.some(
+          (o) => o.reason === "budget_exhausted" && o.status === "unavailable",
+        ),
+      ).toBe(true);
+      expect(result.snapshot.status).toBe("partial");
+      expect(f.counts.attempts).toBeLessThanOrEqual(12);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test("two skipped reviewed guides do not expand the twelve-attempt technical ceiling", async () => {
+  let received: RetrievalPlan[] = [];
+  const guide = workspaceGuidePlans.legal_consultation;
+  const f = await setup("prepare_claim", {
+    additionalPlans: [guide, { ...guide, ccfNo: "4" }],
+    capturePlans: (plans) => {
+      received = plans;
+    },
+    plan: () => ({
+      issues: [
+        {
+          id: "bounded_issue",
+          title: "합성 기술 한도 검증",
+          factIds: ["loan_promise"],
+          requests: ["민법", "형법", "근로기준법", "상법"].map((lawTitle) => ({
+            kind: "statute",
+            lawTitle,
+            articles: [{ number: "1", branch: "0" }],
+          })),
+        },
+      ],
+    }),
+    transport: () => async () => new Response("", { status: 503 }),
+  });
+  try {
+    const result = await f.service.prepare(f.input);
+    expect(received).toHaveLength(4);
+    expect(received.every((p) => p.kind === "statute")).toBe(true);
+    expect(result.sourceRetrieval.outcomes.filter((o) => o.kind === "official_guide")).toHaveLength(
+      2,
+    );
+    expect(
+      result.sourceRetrieval.outcomes.filter((o) => o.reason === "budget_exhausted"),
+    ).toHaveLength(2);
+    expect(result.snapshot.limitations.some((s) => s.includes("안내 2개는 조회하지"))).toBe(true);
+    expect(result.snapshot.status).toBe("unavailable");
+    expect(f.counts).toEqual({ plan: 1, analyze: 0, audit: 0, attempts: 12 });
+  } finally {
+    f.db.close();
+  }
+});
