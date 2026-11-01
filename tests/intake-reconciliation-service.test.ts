@@ -12,9 +12,12 @@ import {
   syntheticReconfirmationExplanation,
 } from "./helpers/intake-reconfirmation";
 
-function fixture(overrides: Partial<SummaryReconciliationDependencies> = {}) {
+function fixture(
+  overrides: Partial<SummaryReconciliationDependencies> = {},
+  before = reconfirmationSummary(),
+) {
   const actor = { ownerId: "synthetic-owner", caseId: "synthetic-case" };
-  let canonical = reconfirmationSummary();
+  let canonical = structuredClone(before);
   let state = emptyReconciliation(12);
   let revision = 12;
   let consent = true;
@@ -208,6 +211,27 @@ describe("synthetic summary reconciliation service", () => {
       },
     ],
     [
+      "reclassifies the original user's statement as AI inference",
+      (after: V2Summary) => {
+        const fact = after.facts[0];
+        if (fact) fact.attribution = "ai_organization";
+      },
+    ],
+    [
+      "marks an unchanged saved fact as manually edited",
+      (after: V2Summary) => {
+        const fact = after.facts[0];
+        if (fact) fact.userEdited = true;
+      },
+    ],
+    [
+      "claims the new proposed fact was manually edited",
+      (after: V2Summary) => {
+        const fact = after.facts.at(-1);
+        if (fact) fact.userEdited = true;
+      },
+    ],
+    [
       "hides an unresolved unknown",
       (after: V2Summary) => {
         after.unknowns = [];
@@ -247,6 +271,62 @@ describe("synthetic summary reconciliation service", () => {
       expect(result.status).toBe("failed");
       expect(result.failure).toBe("POLICY_REJECTED");
       expect(f.calls.publish).toBe(0);
+      expect(f.canonical()).toEqual(reconfirmationSummary());
+    });
+  }
+  for (const retainsMarker of [true, false]) {
+    test(`${retainsMarker ? "retains" : "rejects erasing"} a prior manual-edit marker without rewriting canonical facts`, async () => {
+      const before = reconfirmationSummary();
+      const original = before.facts[0];
+      if (!original) throw new Error("Missing synthetic original fact");
+      original.userEdited = true;
+      const after = reconfirmationCandidate();
+      const next = after.facts[0];
+      if (!next) throw new Error("Missing synthetic proposed fact");
+      next.userEdited = retainsMarker;
+      const f = fixture(
+        { generate: async () => ({ after, reasons: ["수동 수정 이력 보존 검사"] }) },
+        before,
+      );
+      const pending = await f.request();
+      const result = await f.service.execute(f.actor, pending.request?.id ?? "");
+      expect(result.status).toBe(retainsMarker ? "proposed" : "failed");
+      expect(f.calls.publish).toBe(retainsMarker ? 1 : 0);
+      if (retainsMarker) expect(result.proposal?.after.facts[0]?.userEdited).toBe(true);
+      else expect(result.failure).toBe("POLICY_REJECTED");
+      expect(f.canonical()).toEqual(before);
+    });
+  }
+  for (const [coverage, certainty] of [
+    [{ observationCertainty: "uncertain", userEdited: false }, "observed"],
+    [{ observationCertainty: "uncertain", userEdited: false }, "reported"],
+    [{ observationCertainty: "observed", userEdited: true }, "observed"],
+    [{ observationCertainty: "observed", userEdited: true }, "reported"],
+    [{ observationCertainty: "uncertain", userEdited: false }, "uncertain"],
+  ] as const) {
+    test(`material ${JSON.stringify(coverage)} stays uncertain instead of becoming ${certainty}`, async () => {
+      const after = reconfirmationCandidate();
+      const material = after.facts[1];
+      if (!material) throw new Error("Missing synthetic material fact");
+      after.facts.push({
+        ...material,
+        id: "synthetic-new-material",
+        certainty,
+        conflictingFactIds: [],
+      });
+      const f = fixture({
+        generate: async () => ({ after, reasons: ["자료 관찰의 불확실성 보존 검사"] }),
+      });
+      const originalClaim = f.deps.claim;
+      f.deps.claim = async (...args) => {
+        const claimed = await originalClaim(...args);
+        if (claimed?.context.materials[0]) claimed.context.materials[0].coverage = coverage;
+        return claimed;
+      };
+      const pending = await f.request();
+      const result = await f.service.execute(f.actor, pending.request?.id ?? "");
+      expect(result.status).toBe(certainty === "uncertain" ? "proposed" : "failed");
+      expect(f.calls.publish).toBe(certainty === "uncertain" ? 1 : 0);
       expect(f.canonical()).toEqual(reconfirmationSummary());
     });
   }
