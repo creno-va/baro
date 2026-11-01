@@ -32,6 +32,9 @@ if (Bun.argv[3] === "pending-chat-summary") {
 }
 const env: Env = {
   ...f.owner.env,
+  ...(Bun.argv[3] === "pending-chat-summary"
+    ? { ANALYSIS_ACCOUNT_LIMIT: { limit: async () => ({ success: true }) } }
+    : {}),
   BETTER_AUTH_URL: browserOrigin,
   CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, ""),
 };
