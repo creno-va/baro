@@ -16,7 +16,8 @@ export const reworkApi = createSessionBoundClient(browserSessionScope, () =>
       request({ ...options, path: options.path ?? "/api/invalid" }),
     session: () => sessionApi.get(),
     scope: browserSessionScope,
-    challenge: securityToken,
+    challenge:
+      import.meta.env.PUBLIC_API_MODE === "mock" ? async () => "mock-turnstile" : securityToken,
     newKey: () => crypto.randomUUID(),
     // Approved guide registry host; individual paths/identity remain server verified.
     guideHosts: ["www.easylaw.go.kr", "easylaw.go.kr"],

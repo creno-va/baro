@@ -23,7 +23,8 @@ import {
   ConversationAgentError,
   createConversationAgent,
 } from "../../../server/modules/workspace/conversation-agent";
-import type { CaseView, QuestionView } from "../types";
+import type { CaseView } from "../types";
+import { makeMockQuestions } from "./cases";
 import { createReconciliationMock } from "./mock-reconciliation";
 import { createReportsMockHandler, type ReportMockState } from "./reports";
 import {
@@ -504,22 +505,9 @@ export function createReworkMock(
             subjectContext: body.subjectContext,
             procedure: procedure(),
           };
-          const questions: QuestionView[] = [
-            { id: crypto.randomUUID(), kind: "text", text: "이 일은 언제 시작됐나요?" },
-            {
-              id: crypto.randomUUID(),
-              kind: "text",
-              text:
-                body.casePurpose === "respond_to_claim"
-                  ? "상대방은 어떤 내용을 주장하나요?"
-                  : "어떤 사실과 자료를 정리하고 싶나요?",
-            },
-            {
-              id: crypto.randomUUID(),
-              kind: "text",
-              text: "관련된 계약서·대화·사진 등 자료가 있나요?",
-            },
-          ];
+          const questions = makeMockQuestions(body.narrative, body.subjectContext);
+          if (body.casePurpose === "respond_to_claim" && questions[1])
+            questions[1].text = "상대방은 어떤 내용을 주장하나요?";
           s.intake ??= {};
           s.intake[id] = {
             narrative: body.narrative,
