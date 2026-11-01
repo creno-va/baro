@@ -1,5 +1,10 @@
 # BARO v2 전체 서비스 기능 명세
 
+> 2026-11-01 대화·법률 분석·리포트·후속 해결 개편은 [ADR-0018](../adr/0018-conversation-report-rework.md)과
+> [통합 기록](../development/CONVERSATION-REPORT-REWORK.md)을 따릅니다. 사건 목적·개인기업·분야·절차는 별개이며
+> 옛 사건을 추측해 확정하지 않습니다. 근거 기반 법률 분석·취약점/대응점·검토용 초안을 허용하고 과거 사실 준비
+> 전용·blanket strategy refusal·신규 기능 중단의 충돌 부분을 이번 범위에서 대체합니다. 법률 승인·공개 gate는 유지합니다.
+
 > 2026-10-21 직접 사용자 후속 지시(#312): 리포트는 서비스 UI 톤의 HTML로 구성하고 사용자 저장 UI는 PDF만 제공한다. 사용자가 선택한 상해·진단서 등 근거 사진과 자료 버전을 포함할 수 있다. 식별정보 자동 가림 시 사진은 통째로 제외한다. 기존 ZIP 원본 보관/API 이력은 보존하며 아래 과거 PDF·ZIP UI 명세보다 [사진·PDF 계약](../architecture/REPORT-PHOTOS-PDF.md)이 우선한다.
 
 

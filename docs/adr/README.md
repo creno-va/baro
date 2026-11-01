@@ -1,5 +1,8 @@
 # Architecture Decision Records
 
+2026-11-01 [ADR-0018](./0018-conversation-report-rework.md)은 사용자 요청한 대화·법률 분석·리포트·후속 해결 범위에서
+ADR-0006의 사실 준비 전용/제출문서 일괄 금지와 ADR-0015의 신규 확장 중단을 부분 대체한다. 방향 승인과 독립 법률 인수는 구분한다.
+
 ADR은 제품 목표가 아니라 중요한 기술 선택·맥락·대안·결과를 기록한다.
 범위는 [PRD](../PRD.md), 동작은 [MVP](../product/MVP-SPEC.md), 실행 shape는 architecture,
 운영 절차는 runbook에 둔다.
