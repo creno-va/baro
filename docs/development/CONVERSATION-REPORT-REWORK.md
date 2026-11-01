@@ -193,6 +193,14 @@ PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal4
 
 04는 실제 일반 대화1회에서 workspace chat/audit 이후 법률 plan/analysis/audit가 추가 실행되는 문제도 재현했다. 의미 변경 없는 turn의 서버 인증과 research revision 계약을00/04가 함께 정리 중이며 현재 미해결이다. 이 회귀와 전체14여정·최종PDF·최종main manual full을 완료로 표시하지 않는다.
 
+PR677 exactcc87f0337204d7745678945fd6d18582f71a934b의 Quality41326734507/Legal41326734552/native41326734560 성공 후 mainec292cbbe7c2486480cba67850bf879ef2795f14에 병합했다.04가 이 main으로 actual signed Hono/native TXT→R2 원본→Docker PDF 저장/다운로드를3회 반복했고 양 입장/재조율/검색 실패/AI200·권한을 포함한15 tests864 assertions를 통과했다. 이전400/503/413은 재현되지 않았다.00은 `/tmp/baro-625-runtime-report.pdf` 실제4페이지를 Poppler로 렌더해 전부 확인했다. 법조항/요건-사실·증거, 판례 공통점/차이점, 약점/보완 자료, 공식 링크와 검증 시각·범위, 합성 출처/모델 고지가 읽히며 잘림·겹침은 없었다. 아직 최종 Workspace14 브라우저 여정의 PDF는 아니다.
+
+00의 `codex/621-rework-neutral-basis`는 DB atomic response publication에서 검증된 사실·당사자·unknowns·행동·완료·타임라인·tool·공식 인용 변경이 전혀 없을 때만 private encrypted unchanged-research-v1 증명을 직접 만든다. 모델이나 요청이 증명을 전달할 수 없다. 실제 completed job/operation과 사용자·assistant revision, 현재 confirmed summary, 선택자료·lookup 부재가 일치한 경우에만 research basis가 대화 admission/publication 두 revision을 건너뛴다. 제안 전용 conversationIntent는 실제 후속 action의 CAS와 분리하며 자체로 사건 변경으로 취급하지 않는다. 구형 unmarked 응답·실패/미완료 job·identity 불일치와 unknowns 빈 배열 clear 등 실제 변경은 경계를 유지한다. public projection이 증명을 제거하므로 설치 client strict DTO는 그대로다. schema/migration·공급자·모델·가격 관측·실제 AI 한도를 변경하지 않는다.
+
+DB 실제 publication/반복 대화/strict public DTO/unknowns clear·action 변경/구형·summary·revision·operation·failed·foreign-owner의 proof 거절과 기존 원문/audit publication39 tests281 assertions를 통과했다.04의 추가 실제 neutral/intent-only4종 회귀는 이 변경 CI/main 뒤 소비한다. DB drift/fresh/upgrade와 quick/build 검증을 별도 수행하고 최종 결과를 기록한다.
+
+이 tree의 bun ci·validate:quick 전체 profile·validate:db drift/fresh/upgrade·validate:build 및 built local workerd 부팅이 모두 성공했다. 최초 quick은 pinned Node PATH가 빠져 보안 baseline probe가 실패했으며, 지정된 Node24.19.0 경로를 사용한 재실행에서 보안 원본 실패/패치 후 거절 검사를 그대로 통과했다. 이를 제품 보호 완화로 해결하지 않았다.
+
 PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal41324914750/nativePDF41324914761 성공 후 main26427659ac8a386334a545e0bf32b4cd3ba1073c에 병합했다. 실제 fixture의 Syntax400은 반복 검사에서0으로 해소됐지만 재조율 context read의 별도503은 남았다.04가 임시 enum 진단으로 readWorkspaceContext의 readIntake→summary unavailable 경합까지 좁혔으며 원복 완료했다.00은 실제 source proof가 바뀐 경우만 stale로 분류하고 unchanged source의 실제 오류는 보존하는 후속을 진행한다. DB corruption 거절을 완화하거나 unknown503을 반복해 성공으로 만들지 않는다.
 
 PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/nativePDF41325273571 성공 후 main32abc5f79bf04fede1dfdce19c13f967e90c92a3에 병합했다. private scoped read 포트만 추가됐으며00의 실제 current-scope 전후 확인/runtime binding은 아직 남아 있다.
