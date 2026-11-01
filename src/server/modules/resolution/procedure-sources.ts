@@ -121,7 +121,6 @@ async function proofMatches(chunk: SourceChunk, review: Review, asOfDate: string
   if (
     source.sourceType !== "official_guide" ||
     source.sourceDate === null ||
-    source.verifiedAt !== chunk.citation.verifiedAt ||
     source.canonicalUrl !== guideUrl(planFor(review)).href ||
     source.extractorVersion !== EXTRACTOR_VERSION ||
     source.rightsProvenance !== OFFICIAL_CATALOG[2].rights ||
@@ -140,6 +139,9 @@ async function proofMatches(chunk: SourceChunk, review: Review, asOfDate: string
       source.sourceId === rebuilt.source.sourceId &&
       source.contentHash === rebuilt.source.contentHash &&
       source.expiresAt === rebuilt.source.expiresAt &&
+      // Bound reads preserve the original citation receipt when the identical
+      // original is genuinely reverified. Reuse their complete identity/time
+      // comparison; the caller still proves the exact binding and live authority.
       citationMatchesReverifiedSource(chunk.citation, rebuilt.citation)
     );
   } catch {
