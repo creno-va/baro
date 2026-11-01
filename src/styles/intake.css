@@ -904,18 +904,6 @@
 .summary-confirm-actions > .ui-button + .ui-button {
   margin-left: 0;
 }
-.conversation-effort {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 16px;
-  padding: 8px 13px;
-  border-radius: 100px;
-  color: var(--secondary-foreground);
-  background: var(--secondary);
-  font-size: 0.8rem;
-  font-weight: 550;
-}
 .conversation-entry .conversation-field-label {
   display: block;
   margin: 14px 18px 8px;

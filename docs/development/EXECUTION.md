@@ -1,5 +1,12 @@
 # 에이전트 실행 기준
 
+2026-11-01 /app의 질문 횟수 안내 칩과 전용 스타일을 제거한다. 배경은 옅은 파란 radial
+gradient 두 겹이20/27초 주기로 천천히 이동·회전하도록 CSS transform만 적용한다. /app
+conversation-main 안에 한정하고 장식은 pointer-events:none·overflow:clip으로 입력/가로
+스크롤에 간섭하지 않게 한다. 기존 reduced-motion 규칙으로 정지한다. 데스크톱/375px에서
+실제 transform 변화·칩 제거·입력 동작·가로 넘침 없음·동작 줄이기와 스크린샷을 확인했다.
+전체 CI·배포 없이 로컬 커밋으로 누적한다.
+
 2026-11-01 PR #618 릴리스 CI에서 웹 API facade에 빠진 사건 제목 rename 타입을 추가한다.
 합성 Gemini 관측 fixture만 가격/FX 유효기간을 실행 시각 이후로 유지해 달력 경과로 로컬 DB
 초기화가 실패하지 않게 한다. 과거 실제 관측 파일과 제품의 비용 정책/검사는 변경하지 않는다.
