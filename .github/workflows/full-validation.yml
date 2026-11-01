@@ -65,6 +65,13 @@ jobs:
       - name: Scan committed history (fully redacted)
         run: gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn
 
+      - name: Build pinned report runtime for acceptance
+        run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
+      - name: Verify native report and originals after final integration
+        env:
+          BARO_REWORK_NATIVE_FIXTURE: "true"
+          BARO_REPORT_EXPORT_ARTIFACT_DIR: .wrangler/report-export-budget-final
+        run: bun test tests/reports-export-query-budget.test.ts
       - name: Run explicit full validation
         run: bun run validate:full
       - name: Record actual tested candidate
@@ -82,5 +89,31 @@ jobs:
         with:
           name: deterministic-eval-${{ inputs.target_sha }}
           path: .wrangler/eval/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain synthetic conversation acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rework-journeys-${{ inputs.target_sha }}
+          include-hidden-files: true
+          path: |
+            /tmp/baro-625-journeys/**/report.pdf
+            /tmp/baro-625-journeys/**/report.html
+            /tmp/baro-625-journeys/**/reviewed-draft.txt
+            /tmp/baro-625-journeys/**/basis.json
+            /tmp/baro-625-journeys/**/photo-evidence.json
+            /tmp/baro-625-journeys/**/keyboard-focus.json
+            /tmp/baro-625-journeys/**/materials.png
+            /tmp/baro-625-journeys/**/materials-visual.json
+            /tmp/baro-625-journeys/**/report.png
+            /tmp/baro-625-journeys/**/report-visual.json
+            /tmp/baro-625-journeys/**/followup.png
+            /tmp/baro-625-journeys/**/followup-visual.json
+            .wrangler/report-export-budget-final/*/report.pdf
+            .wrangler/report-export-budget-final/*/report.html
+            .wrangler/report-export-budget-final/*/review.json
+            .wrangler/report-export-budget-final/*/originals.zip
+            .wrangler/report-export-budget-final/*/receipts.json
           if-no-files-found: ignore
           retention-days: 14
