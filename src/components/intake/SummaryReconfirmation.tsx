@@ -8,6 +8,8 @@ import { accessHref } from "../../client/return-path";
 import type {
   V2CaseContext,
   V2CaseContextUpdate,
+  V2ConversationState,
+  V2Summary,
   V2SummaryReconciliation,
   V2SummaryReconciliationCancel,
   V2SummaryReconciliationConfirm,
@@ -38,7 +40,7 @@ export type SummaryReconfirmationProps = {
 type Mutation =
   | { kind: "context"; input: V2CaseContextUpdate }
   | { kind: "request"; input: V2SummaryReconciliationRequest }
-  | { kind: "proposal"; input: V2SummaryReconciliationConfirm }
+  | { kind: "proposal"; input: V2SummaryReconciliationConfirm; requestId: string }
   | {
       kind: "cancel";
       input: V2SummaryReconciliationCancel;
@@ -49,23 +51,66 @@ type Mutation =
       revision: number;
       summaryRevision: number | null;
       alreadyConfirmed: boolean;
+      canonical: V2Summary | null;
     };
 type Completion =
-  | { kind: "proposal"; proposalId: string; summaryRevision: number }
-  | { kind: "initial"; revision: number; summaryRevision: number | null };
-function matches(item: CaseView, state: V2SummaryReconciliation | null, intent: Completion) {
+  | {
+      kind: "proposal";
+      caseId: string;
+      proposalId: string;
+      requestId: string;
+      revision: number;
+      summaryRevision: number;
+    }
+  | {
+      kind: "initial";
+      caseId: string;
+      revision: number;
+      summaryRevision: number | null;
+      canonical: V2Summary | null;
+      acknowledged: boolean;
+    };
+function matches(
+  item: CaseView,
+  state: V2SummaryReconciliation | null,
+  intent: Completion,
+  conversation: V2ConversationState | null,
+) {
   if (item.stage !== "active") return false;
   if (intent.kind === "initial")
     return (
-      item.revision === intent.revision &&
-      (item.summaryDetails?.revision ?? null) === intent.summaryRevision
+      intent.acknowledged &&
+      item.id === intent.caseId &&
+      item.summaryNeedsConfirmation !== true &&
+      (item.summaryDetails?.revision ?? null) === intent.summaryRevision &&
+      (!intent.canonical ||
+        (item.summaryDetails &&
+          JSON.stringify(v2SummarySchema.parse(item.summaryDetails)) ===
+            JSON.stringify(intent.canonical))) &&
+      (intent.canonical === null
+        ? item.revision === intent.revision
+        : // Continuing to this identical confirmed summary does not assert that
+          // its later analysis/report basis is still current.
+          item.revision >= intent.revision &&
+          conversation?.workspaceRevision === item.revision &&
+          conversation.summaryConfirmed)
     );
   return (
+    // The server keeps confirmed only while the exact snapshot and source
+    // basis still match. Automatic preparation may advance the current CAS.
+    item.id === intent.caseId &&
     state?.status === "confirmed" &&
     state.proposal?.id === intent.proposalId &&
-    state.confirmedWorkspaceRevision === item.revision &&
+    state.request?.id === intent.requestId &&
+    state.proposal.requestId === intent.requestId &&
+    state.confirmedWorkspaceRevision === intent.revision &&
+    state.workspaceRevision === item.revision &&
+    item.revision >= intent.revision &&
     state.confirmedSummaryRevision === intent.summaryRevision &&
-    item.summaryDetails?.revision === intent.summaryRevision
+    item.summaryDetails?.revision === intent.summaryRevision &&
+    item.summaryNeedsConfirmation !== true &&
+    JSON.stringify(v2SummarySchema.parse(item.summaryDetails)) ===
+      JSON.stringify(v2SummarySchema.parse(state.proposal.after))
   );
 }
 
@@ -98,7 +143,7 @@ function SummaryReconfirmationScene({
     null,
   );
   const contextIntent = useRef<{ input: V2CaseContextUpdate; revision: number } | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<Extract<Mutation, { kind: "initial" }> | null>(null);
   const [returnHref, setReturnHref] = useState(`/cases/${encodeURIComponent(caseId)}`);
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const fieldId = useId();
@@ -142,7 +187,7 @@ function SummaryReconfirmationScene({
       setFiles([]);
       setExplanation("");
       setKind(null);
-      setConfirming(false);
+      setConfirming(null);
       setBusy(false);
       setNotice("");
       setError(null);
@@ -204,11 +249,14 @@ function SummaryReconfirmationScene({
     [deny],
   );
   const readSnapshot = useCallback(async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // A just-confirmed case can advance through automatic preparation between
+    // these reads. Retry only mismatched fresh pairs, never mutations or errors.
+    const attempts = completion.current ? 4 : 2;
+    for (let attempt = 0; attempt < attempts; attempt++) {
       const next = await api.cases.get(caseId);
       // Legacy summary routes remain readable without requiring a v2 rework record.
       if (next.schemaVersion === "1" || !["summary", "active"].includes(next.stage))
-        return { next, reconciliation: null, context: null };
+        return { next, reconciliation: null, context: null, conversation: null };
       const [reconciliation, contextView] = await Promise.all([
         api.rework.getReconciliation(caseId, { expectedOwner: access.ownerId() ?? "" }),
         api.rework.getContext(caseId, { expectedOwner: access.ownerId() ?? "" }).catch(() => null),
@@ -225,10 +273,17 @@ function SummaryReconfirmationScene({
             "CONFLICT",
             "변경안의 기준과 현재 정리가 달라요. 최신 내용을 확인해 주세요.",
           );
+        const intent = completion.current;
+        const conversation =
+          intent?.kind === "initial" && intent.canonical !== null
+            ? await api.rework.getConversation(caseId, { expectedOwner: access.ownerId() ?? "" })
+            : null;
+        if (conversation && conversation.workspaceRevision !== next.revision) continue;
         return {
           next,
           reconciliation,
           context: contextView?.workspaceRevision === next.revision ? contextView.context : null,
+          conversation,
         };
       }
     }
@@ -334,7 +389,8 @@ function SummaryReconfirmationScene({
         setError(null);
         const intent = completion.current;
         if (intent) {
-          if (matches(snapshot.next, snapshot.reconciliation, intent)) finish(snapshot.next);
+          if (matches(snapshot.next, snapshot.reconciliation, intent, snapshot.conversation))
+            finish(snapshot.next);
           else if (
             snapshot.next.stage === "active" &&
             snapshot.reconciliation?.status !== "pending" &&
@@ -392,28 +448,31 @@ function SummaryReconfirmationScene({
       } else if (operation.kind === "proposal") {
         completion.current = {
           kind: "proposal",
+          caseId,
           proposalId: operation.input.proposalId,
+          requestId: operation.requestId,
+          revision: operation.input.expectedRevision + 1,
           summaryRevision: operation.input.summaryRevision + 1,
         };
         await api.rework.confirmReconciliation(caseId, operation.input, { expectedOwner: owner });
       } else if (operation.kind === "cancel") {
         await api.rework.cancelReconciliation(caseId, operation.input, { expectedOwner: owner });
       } else {
-        completion.current = {
+        const intent: Completion = {
           kind: "initial",
+          caseId,
           revision: operation.revision + (operation.alreadyConfirmed ? 0 : 1),
           summaryRevision: operation.summaryRevision,
+          canonical: operation.canonical,
+          acknowledged: false,
         };
+        completion.current = intent;
         if (!operation.alreadyConfirmed) {
-          const confirmed = await api.cases.confirmSummary(caseId, {
+          await api.cases.confirmSummary(caseId, {
             expectedRevision: operation.revision,
           });
-          completion.current = {
-            kind: "initial",
-            revision: confirmed.revision,
-            summaryRevision: operation.summaryRevision,
-          };
         }
+        completion.current = { ...intent, acknowledged: true };
       }
       acknowledged = true;
       failed.current = null;
@@ -456,9 +515,12 @@ function SummaryReconfirmationScene({
         setNotice("변경 요청을 취소했어요. 기존 정리는 그대로예요.");
         focusTarget.current?.focus();
       } else {
-        setConfirming(false);
+        setConfirming(null);
         const intent = completion.current;
-        if (!intent || !matches(snapshot.next, snapshot.reconciliation, intent)) {
+        if (
+          !intent ||
+          !matches(snapshot.next, snapshot.reconciliation, intent, snapshot.conversation)
+        ) {
           completion.current = null;
           throw new ApiError("CONFLICT", "사건 내용이 바뀌었어요. 최신 정리를 확인해 주세요.");
         }
@@ -645,6 +707,7 @@ function SummaryReconfirmationScene({
                           onClick={() =>
                             void mutate({
                               kind: "proposal",
+                              requestId: proposal.requestId,
                               input: {
                                 expectedRevision: item.revision,
                                 proposalId: proposal.id,
@@ -709,7 +772,16 @@ function SummaryReconfirmationScene({
                         aria-haspopup="dialog"
                         onClick={(event) => {
                           event.currentTarget.focus();
-                          setConfirming(true);
+                          setConfirming({
+                            kind: "initial",
+                            revision: item.revision,
+                            summaryRevision: item.summaryDetails?.revision ?? null,
+                            canonical: item.summaryDetails
+                              ? structuredClone(v2SummarySchema.parse(item.summaryDetails))
+                              : null,
+                            alreadyConfirmed:
+                              item.stage === "active" && !item.summaryNeedsConfirmation,
+                          });
                         }}
                       >
                         맞아요
@@ -879,9 +951,9 @@ function SummaryReconfirmationScene({
         </form>
       </Dialog>
       <Dialog
-        open={ready && confirming}
+        open={ready && confirming !== null}
         onOpenChange={(open) => {
-          if (ready && !busy) setConfirming(open);
+          if (ready && !busy && !open) setConfirming(null);
         }}
         title="이 내용으로 계속할까요?"
         description="확인한 사실과 미확인 내용을 바탕으로 사건 정리를 이어가요."
@@ -889,20 +961,12 @@ function SummaryReconfirmationScene({
         <div className="summary-confirm-actions">
           <Button
             loading={busy}
-            disabled={locked || !item}
-            onClick={() =>
-              item &&
-              void mutate({
-                kind: "initial",
-                revision: item.revision,
-                summaryRevision: item.summaryDetails?.revision ?? null,
-                alreadyConfirmed: item.stage === "active" && !item.summaryNeedsConfirmation,
-              })
-            }
+            disabled={locked || !confirming}
+            onClick={() => confirming && void mutate(confirming)}
           >
             확인하고 계속
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
+          <Button variant="outline" disabled={busy} onClick={() => setConfirming(null)}>
             취소
           </Button>
         </div>
