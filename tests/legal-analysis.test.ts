@@ -5,8 +5,10 @@ import type { V2LegalAnalysisDraft } from "../src/contracts/v2/legal-analysis";
 import type { V2CasePurpose } from "../src/contracts/v2/rework";
 import {
   analysisBasis,
+  analysisMaterialIsObserved,
   isAnalysisCurrent,
   type LegalAnalysisInput,
+  legalAnalysisInputSchema,
 } from "../src/server/modules/legal-retrieval/analysis/context";
 import { analysisPrecedentDiscovery } from "../src/server/modules/legal-retrieval/analysis/discovery";
 import {
@@ -310,6 +312,146 @@ test("same-job concurrent calls and replay reuse results; mutation, expiry and r
     f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
     await expect(f.service.prepare(f.input)).rejects.toMatchObject({ code: "NOT_AUTHORIZED" });
     expect(f.counts.plan).toBe(1);
+  } finally {
+    f.db.close();
+  }
+});
+
+test.each([
+  { name: "missing", coverage: undefined, supported: false },
+  {
+    name: "uncertain",
+    coverage: { observationCertainty: "uncertain", userEdited: false },
+    supported: false,
+  },
+  {
+    name: "corrected",
+    coverage: { observationCertainty: "uncertain", userEdited: true },
+    supported: false,
+  },
+  {
+    name: "incorrectly observed correction",
+    coverage: { observationCertainty: "observed", userEdited: true },
+    supported: false,
+  },
+  {
+    name: "observed unchanged",
+    coverage: { observationCertainty: "observed", userEdited: false },
+    supported: true,
+  },
+] as const)(
+  "%s material alone cannot be promoted through an observed-labelled fact",
+  async ({ coverage, supported }) => {
+    const f = await setup("prepare_claim", {
+      draft: (draft) => {
+        const requirement = draft.issues[0]?.requirements[0];
+        if (!requirement) throw new Error("Missing synthetic requirement");
+        requirement.assessment = "supported";
+        requirement.factIds = ["transfer"];
+        requirement.gaps = [];
+        requirement.label =
+          "합성 조문의 교부 확인 항목에는 송금 자료에 기록된 지급 내역이 대응하며 실제 사건 발생과 원본 진정성은 별도 확인이 필요합니다.";
+      },
+    });
+    try {
+      const observation = f.input.materials[0];
+      if (!observation) throw new Error("Missing synthetic observation");
+      if (coverage) observation.coverage = { ...coverage };
+      else delete observation.coverage;
+      expect(analysisMaterialIsObserved(observation)).toBe(supported);
+      if (supported)
+        expect(
+          (await f.service.prepare(f.input)).snapshot.issues[0]?.requirements[0]?.assessment,
+        ).toBe("supported");
+      else {
+        await expect(f.service.prepare(f.input)).rejects.toMatchObject({ code: "POLICY_REJECTED" });
+        expect(f.counts.audit).toBe(0); // A permissive fake auditor cannot bypass structural grounding.
+      }
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test("uncertain supplemental material does not erase an independent qualified user statement", async () => {
+  const f = await setup("prepare_claim", {
+    draft: (draft) => {
+      const requirement = draft.issues[0]?.requirements[0];
+      if (!requirement) throw new Error("Missing synthetic requirement");
+      requirement.assessment = "supported";
+      requirement.factIds = ["loan_promise"];
+      requirement.gaps = [];
+      requirement.label =
+        "사용자는 문자로 반환 약속을 주고받았다고 진술했어요. 교정된 송금 자료는 확인 전이며 이 진술을 확정하지 않아요.";
+    },
+  });
+  try {
+    const observation = f.input.materials[0];
+    if (!observation) throw new Error("Missing synthetic observation");
+    observation.coverage = { observationCertainty: "uncertain", userEdited: true };
+    const result = await f.service.prepare(f.input);
+    expect(result.snapshot.issues[0]?.requirements[0]?.assessment).toBe("supported");
+    expect(result.snapshot.limitations.some((text) => text.includes("사용자가 교정"))).toBe(true);
+    expect(result.snapshot.limitations.some((text) => text.includes("불확실하게"))).toBe(true);
+    expect(f.input.facts.find((fact) => fact.id === "loan_promise")?.certainty).toBe("reported");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("an existing verified current fact outside the observation window remains independently usable", async () => {
+  const f = await setup("prepare_claim", {
+    draft: (draft) => {
+      const requirement = draft.issues[0]?.requirements[0];
+      if (!requirement) throw new Error("Missing synthetic requirement");
+      requirement.assessment = "supported";
+      requirement.factIds = ["transfer"];
+      requirement.gaps = [];
+      requirement.label =
+        "현재 저장된 사실에는 송금 자료의 기록이 관찰되어 있어요. 사건 발생 및 원본 진정성 판단은 별도예요.";
+    },
+  });
+  try {
+    f.input.materials = [];
+    const result = await f.service.prepare(f.input);
+    expect(result.snapshot.issues[0]?.requirements[0]?.assessment).toBe("supported");
+    expect(f.input.facts.find((fact) => fact.id === "transfer")?.certainty).toBe("observed");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("coverage certainty/edit changes invalidate identical text/revision, and old omitted coverage stays unknown", async () => {
+  const f = await setup();
+  try {
+    const observation = f.input.materials[0];
+    if (!observation) throw new Error("Missing synthetic observation");
+    expect(legalAnalysisInputSchema.parse(f.input).materials[0]).not.toHaveProperty("coverage");
+    const unknown = await f.service.prepare(f.input);
+    expect(
+      unknown.snapshot.limitations.some((text) =>
+        text.includes("관찰·교정 상태를 확인하지 못했어요"),
+      ),
+    ).toBe(true);
+    const explicitUnknown = structuredClone(f.input);
+    Object.assign(explicitUnknown.materials[0] ?? {}, { coverage: undefined });
+    expect((await analysisBasis(explicitUnknown)).evidenceHash).toBe(
+      unknown.snapshot.basis.evidenceHash,
+    );
+    expect((await f.service.prepare(explicitUnknown)).snapshot.id).toBe(unknown.snapshot.id);
+    const observed = structuredClone(f.input);
+    if (!observed.materials[0]) throw new Error("Missing synthetic observation");
+    observed.materials[0].coverage = { observationCertainty: "observed", userEdited: false };
+    expect(await isAnalysisCurrent(unknown.snapshot, observed)).toBe(false);
+    const before = await analysisBasis(observed);
+    observed.materials[0].coverage.observationCertainty = "uncertain";
+    expect((await analysisBasis(observed)).evidenceHash).not.toBe(before.evidenceHash);
+    const uncertain = await analysisBasis(observed);
+    observed.materials[0].coverage.userEdited = true;
+    expect((await analysisBasis(observed)).evidenceHash).not.toBe(uncertain.evidenceHash);
+    const invalid = structuredClone(observed);
+    Object.assign(invalid.materials[0]?.coverage ?? {}, { observationCertainty: "verified" });
+    expect(legalAnalysisInputSchema.safeParse(invalid).success).toBe(false);
   } finally {
     f.db.close();
   }
