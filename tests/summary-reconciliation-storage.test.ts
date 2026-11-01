@@ -432,6 +432,48 @@ test("missing or altered issued-message text cannot authorize model generation",
   }
 });
 
+test("existing model timestamp projection keeps statement authorization and the original issued timestamp", async () => {
+  const f = await fixture();
+  try {
+    const pending = await f.request();
+    const original = f.ports.authorize;
+    const service = createSummaryReconciliationService(
+      createSummaryReconciliationStorage(f.core, {
+        ...f.ports,
+        authorize: async (a, options) => {
+          const source = await original(a, options);
+          return {
+            ...source,
+            context: {
+              ...source.context,
+              messages: source.context.messages.map((m) => ({
+                ...m,
+                createdAt: "1970-01-01T00:00:00.000Z",
+              })),
+              latestMessage: source.context.latestMessage
+                ? { ...source.context.latestMessage, createdAt: "1970-01-01T00:00:00.000Z" }
+                : null,
+            },
+          };
+        },
+      }),
+    );
+    const result = await service.execute(f.actor, pending.request?.id ?? "missing");
+    expect(result.status).toBe("proposed");
+    const record = await f.records.read(
+      f.actor,
+      f.actor.caseId,
+      "reconciliation",
+      f.actor.caseId,
+      summaryReconciliationRecordSchema,
+    );
+    expect(record?.value.requestMessage.createdAt).toBe(f.now);
+    expect(record?.value.requestMessage.text).toBe(f.input.explanation);
+  } finally {
+    f.db.close();
+  }
+});
+
 test("a sealed confirmation interrupted before commit can retry the same request without publishing twice", async () => {
   const f = await fixture();
   try {

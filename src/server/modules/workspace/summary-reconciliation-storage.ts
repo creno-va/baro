@@ -227,12 +227,18 @@ export function createSummaryReconciliationStorage(
   }
   const issuedSource = (source: ReconciliationAuthority, value: StoredSummaryReconciliation) => {
     const issued = value.requestMessage;
+    // Existing model contexts redact event-like timestamps. Authorization binds
+    // the issued statement, while its original timestamp stays in the encrypted record.
+    const identity = (message: V2UserMessage) => {
+      const { createdAt: _createdAt, ...statement } = v2UserMessageSchema.parse(message);
+      return statement;
+    };
     const message = [source.context.latestMessage, ...source.context.messages].find(
       (m) => m?.id === issued.id,
     );
     if (
       !message ||
-      !same(v2UserMessageSchema.parse(message), issued) ||
+      !same(identity(message), identity(issued)) ||
       !source.context.references.messages.some(
         (ref) => ref.id === issued.id && ref.workspaceRevision === issued.workspaceRevision,
       )
