@@ -661,10 +661,13 @@
   }
 }
 
+.app-frame .ui-dialog__content:has(.sidebar-title-field) {
+  padding-top: 12px;
+}
 .sidebar-title-field {
   display: grid;
   gap: 8px;
-  margin-top: 24px;
+  margin-top: 0;
   font-size: 14px;
 }
 .sidebar-title-field input {
