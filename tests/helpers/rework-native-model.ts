@@ -34,7 +34,9 @@ const scriptedIntents = new Map<string, V2ConversationIntent>([
   ["현재 확인한 내용으로 보고서를 준비해 주세요.", "prepare_report"],
 ]);
 function context(raw: unknown): WorkspaceContext {
-  const value = z.object({ intake: v2IntakeSchema }).passthrough().parse(raw);
+  // Private model context carries additional server metadata (unlike the
+  // strict public DTO). Keep every known intake/lifecycle check unchanged.
+  const value = z.object({ intake: v2IntakeSchema.passthrough() }).passthrough().parse(raw);
   if (!value.references || !Array.isArray(value.facts) || !Array.isArray(value.materials))
     throw new Error("SYNTHETIC_WORKSPACE_CONTEXT_MISSING");
   return value as WorkspaceContext;
