@@ -150,6 +150,22 @@ const request: OperationRequest = async <T>(
     return value as T;
   }
   const session = requireSession({ consent: options.method !== "GET" });
+  const conversationMatch = /^\/api\/v2\/cases\/([^/]+)\/rework\/conversation$/.exec(path);
+  if (conversationMatch) {
+    const value = await original.rework.getConversation(
+      decodeURIComponent(conversationMatch[1] ?? ""),
+      {
+        ...(options.expectedOwner ? { expectedOwner: options.expectedOwner } : {}),
+      },
+    );
+    writeStore("syntheticInitialProofReads", readStore("syntheticInitialProofReads", 0) + 1);
+    const fault = localStorage.getItem("synthetic-initial-proof-fault");
+    return {
+      ...value,
+      ...(fault === "false" ? { summaryConfirmed: false } : {}),
+      ...(fault === "revision" ? { workspaceRevision: value.workspaceRevision + 1 } : {}),
+    } as T;
+  }
   const contextMatch = /^\/api\/v2\/cases\/([^/]+)\/rework\/context$/.exec(path);
   if (contextMatch) {
     const id = decodeURIComponent(contextMatch[1] ?? "");
