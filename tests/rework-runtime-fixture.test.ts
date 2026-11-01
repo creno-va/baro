@@ -81,6 +81,7 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
         undefined,
         { metadataOnly: true },
       );
+      expect(uploaded.uploadContentHash).toBe(await digest(await new Blob([text]).arrayBuffer()));
       const ready = await until(
         async () =>
           (await files.list(f.info.caseId, { metadataOnly: true })).find(
@@ -89,6 +90,7 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
         (value) => value?.status === "ready" || value?.status === "failed",
       );
       expect(ready?.status).toBe("ready");
+      expect(ready?.uploadContentHash).toBe(uploaded.uploadContentHash);
       expect(new TextDecoder().decode(await files.original(f.info.caseId, uploaded.id))).toBe(text);
       const state = await until(
         () => json(f, "/rework/conversation"),
