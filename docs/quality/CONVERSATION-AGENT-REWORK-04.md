@@ -56,3 +56,25 @@ Pretendard, Lucide를 사용한다. 패널은 한 번에 하나를 열고 주 �
 Tab/Shift+Tab, Enter/Space, Escape와 패널 닫기 후 composer 또는 원래 버튼으로 초점 복귀를
 검사한다. 가로 넘침과 composer 가림이 없어야 한다. 기존 탭과 inline 결과는 같은 서비스를
 읽으며 별도 fixture 결과를 제품 fallback으로 사용하지 않는다.
+
+## 2026-11-01 실행 기록: 서버 선행 범위
+
+선행 PR628의 exact head CI/법률 회귀 성공과 main `b5b7de0`, PR630의 exact head CI 성공과
+main `3df82be8`를 확인해 통합했다. 별도 `codex/625-conversation-agent`에서 구현했다.
+
+- `conversation-agent.ts`는 인증·동의·삭제 전후 확인, 서버 action allowlist, 입력/CAS,
+  현재 작업/자료 처리/요약 확인, 리포트 ID+revision, durable receipt DI를 적용한다.
+  분석과 리포트의 후속 실행은 서버에 저장할 continuation으로 구분한다.
+- 일반 대화의 기존 generation/audit에서 구조화 intent를 받는다. 별도 분류 호출은 없다.
+  조사 intent는 같은 대화에서 중복 공식 검색을 실행하지 않는다. 검증되지 않은 intent는
+  게시하지 않는다. 새 신뢰 context가 없으면 기존 대화 범위와 구형 응답을 보존한다.
+- `bun test tests/conversation-agent.test.ts tests/conversation-publication.test.ts
+  tests/workspace-pipeline.test.ts`: **141개 통과**. 양 입장의 제한 리포트×후속3경로,
+  quota/timeout/경합/계정·삭제·동의/중복/잘못된 receipt와 기존 근거 검증을 포함한다.
+- publication 검사는 실제 로컬 SQLite/D1 저장소에서 intake→확정→job 실행→독립 audit→
+  암호화 메시지 저장→public DTO 읽기를 통과했다. 동일 job을 다시 실행해도 assistant1개와
+  모델 callback2회를 유지하고, intent는 private payload에만 남는다.
+
+이 선행 범위는 중앙 runtime 어댑터와 UI 조립을 위한 인터페이스다. 01~06의 실제 서비스·
+컴포넌트를 연결한 전체 여섯 경로와 원격 외부 인수는 아직 완료하지 않았다. 후속 PR에서
+Workspace와 동일 데이터를 사용하는 inline UI를 조립하고 검증 결과를 추가한다.
