@@ -202,16 +202,37 @@ ReportReview의 검증된 본문 `onViewed({id,revision})`만 검토 사실로 �
 후속 해결을 주 행동으로 제시한다. metadata가 늦게 반영돼도 이미 검증해 표시한 본문의
 identity를 유지한다.
 
-00이 별도 배정한 실제 runtime fixture PR672는 signed Hono/API·SQLite/AES·현재 시각·
-실제 dispatcher·원장/용량/CAS와 외부 합성 transport를 조합한다. 정상 양 입장과 검색
-실패의 제한 리포트, passive read 추가 모델/검색0, 실제 SQL AI200 admission, 다른 계정과
-동의 경계를 검사한다. native opt-in은 실제 SDK upload→03 processor→R2 원본 바이트를
-통과했다. PDF는 실제 Docker에서 52KB 렌더 후 저장의 321번째 쿼리가 계획320을 넘는
-413을 재현해05/00이 중복 검증 조회를 개선 중이다. 읽는 중 revision이 바뀌면 요약 fragment
-읽기가 중단돼 JSON parse400이 될 수 있는 경합도 발견해00에 전달했다. 두 실패를 성공으로
-표시하거나 테스트에서 숨기지 않으며 PR672의 실패 CI는 수정 뒤 갱신한다.
+00이 별도 배정한 실제 runtime fixture PR672는 exact head `5d37bbce`의 CI3개 성공 후
+main `ef58bcc8`에 병합됐다. signed Hono/API·SQLite/AES·현재 시각·실제 dispatcher·
+원장/용량/CAS와 외부 합성 transport를 조합한다. 실제 API 연결 검사15개/864 assertions가
+통과했다. 양 입장, 검색 실패의 제한 리포트, passive read 추가 모델/검색0, 실제 SQL
+AI200 admission, 다른 계정과 동의 경계를 포함한다. AI200의 이전 사용량은 합성 계정의
+실제 admission 행으로만 구성하며 200회 모델 호출을 실행한 것으로 표현하지 않는다.
 
-실제 브라우저 통합 **14개는 작성·typecheck 완료, 아직 미실행**이다. 양 입장×후속3경로6,
-실제 응답 유실2, 검색 실패·처리 실패/원본 바이트 보존·AI200·동의 철회·foreign 계정·
-peer context 수정6을 포함한다. 중앙 factory와 위 수정의 CI/main 후 CLI를 연결해 실행한다.
-이는 실제 외부 모델/법률 API/OAuth/운영 인수 완료를 의미하지 않는다.
+native 검사는 실제 SDK upload→03 processor→R2 원본 바이트와 05 실제 Docker PDF를
+통과했다. PDF 본문은 합성 자료임을 명시하며 4페이지의 한국어·줄바꿈·표제·근거·쪽번호를
+렌더해 확인했다. 저장된 PDF/예약 바이트와 암호화 바이트, 실제 held binding과 용량 합계의
+일치도 읽기 전용으로 검사한다. 이 결과는 cloud Containers 물리 정지 증거가 아니다.
+초기에 찾은 PDF 저장 query320 초과와 summary fragment 중단의 JSON400, fresh context
+읽기의 503 경합은 PR675/677의 원인 수정과 CI/main 후 같은 실제 연결 검사에서 해소됐다.
+제한을 늘리거나 실패 결과를 합성 성공으로 바꾸지 않았다.
+
+main678의 서버 인증 neutral proof 이후 일반 대화와 `analyze_legal`, `prepare_report`,
+`add_material` intent만 있는 대화의 실제 게시/완료를 각각 검사했다. 4개 모두 기존 분석과
+리포트 ID를 유지하며 새 법률 모델·검색·리포트 생성0회를 통과했다. 이 증거는 사실·자료·
+근거가 달라진 대화를 같은 basis로 취급한다는 뜻이 아니다.
+
+실제 브라우저 통합14개는 CLI/실제 Astro/설치된 공유 클라이언트에 연결했다. 양 입장×
+후속3경로6, 실제 응답 유실2, 검색 실패·처리 실패/원본 바이트 보존·AI200·동의 철회·
+foreign 계정·peer context 수정6을 포함한다. 실행 중 다음 두 공통 결함을 발견해 담당자에게
+전달하고 실제 회귀를 보존했다. 아직14개 통과로 기록하지 않는다.
+
+- 00: 완료된 private 분석 작업이 구형 `chat_response`로 노출돼, 실제 공유 workspace
+  클라이언트가 존재하지 않는 assistant 응답을 요구한다. 현재 응답 누락 검사는 유지하며
+  서버의 인증된 private 작업 표시를 수정 중이다. 설치된 facade 단위 회귀도 같은 오류를
+  재현한다. 독립 실패6개는 실제 API로 확인된 기존 사건을 준비하되 결과 DTO를 만들지 않는다.
+- 01: 사건 확인 직후 자동 분석/리포트가 올린 기술 revision을 확인 receipt의 옛 revision과
+  비교해 확인 화면이 CONFLICT로 남는다. 원래 receipt/request ID와 정본/source proof를
+  검증하는 수정 중이며 전체6여정과 ACK2는 이 실제 초기 확인 UI를 계속 통과해야 한다.
+
+이 검사는 실제 외부 모델/법률 API/OAuth/기기 촬영/운영 배포의 인수를 대신하지 않는다.
