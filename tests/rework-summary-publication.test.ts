@@ -1,8 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { z } from "zod";
 import { v2SummarySchema } from "../src/contracts/v2";
+import { researchRevisionBase } from "../src/server/db/v2-research-revision";
 import { createV2ReworkRepository } from "../src/server/db/v2-rework";
 import { prepareReconciledSummary } from "../src/server/db/v2-rework-summary";
+import { createFilesService } from "../src/server/modules/files/service";
+import { createReportsService } from "../src/server/modules/reports/service";
 import {
   confirmCustomerSummary,
   customerWorkspaceFixture,
@@ -201,4 +204,39 @@ test("a cancelled older staging candidate cannot block a later reviewed proposal
     }),
   ).not.toBeNull();
   expect((await f.repository.readIntake(g, f.workspace.id))?.summary?.overview).toBe(next.overview);
+});
+test("actual report drafting is metadata-only for research, while a following case mutation remains a new basis", async () => {
+  const f = await fixture();
+  const reports = createReportsService(f.core, {
+    environment: "preview",
+    clock: () => f.now,
+    files: createFilesService(f.core, { environment: "preview", clock: () => f.now }),
+    font: async () => new Uint8Array(),
+    testOnlyUnmeteredStorage: true,
+  });
+  const report = await reports.generate(f.owner.userId, f.workspace.id, crypto.randomUUID(), {
+    expectedRevision: null,
+  });
+  expect(report.id).toBeTruthy();
+  const revision = (await f.repository.findWorkspace(f.g, f.workspace.id))?.workspaceRevision;
+  expect(revision).toBe(f.g.expectedRevision + 1);
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.owner.userId,
+      f.workspace.id,
+      revision ?? 0,
+      f.before.revision,
+    ),
+  ).toBe(f.g.expectedRevision);
+  f.db.sqlite.query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?").run(f.workspace.id);
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.owner.userId,
+      f.workspace.id,
+      (revision ?? 0) + 1,
+      f.before.revision,
+    ),
+  ).toBe((revision ?? 0) + 1);
 });

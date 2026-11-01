@@ -42,7 +42,30 @@ export async function researchRevisionBase(
       }>()
   ).results;
   let base = revision;
-  for (const job of jobs) {
+  for (let steps = 0; steps < 64 && base > 1; steps++) {
+    // Report drafting/export creates a CAS version without changing source
+    // facts. Require its real operation, report job and published body before
+    // traversing that one revision. Report scope remains in the analysis hash.
+    const report = await core
+      .statement(
+        `SELECT r.id FROM v2_reports r
+      JOIN v2_operations o ON o.id=r.operation_id JOIN v2_jobs j ON j.operation_id=o.id
+      JOIN v2_private_snapshots s ON s.id=r.snapshot_id
+      WHERE r.workspace_id=? AND r.workspace_revision=? AND r.summary_revision=?
+      AND o.owner_id=? AND o.workspace_id=r.workspace_id AND o.kind='report' AND o.revision=r.workspace_revision
+      AND j.target_kind='report' AND j.target_id=r.id AND j.target_revision=r.workspace_revision AND j.kind='report_build'
+      AND s.owner_id=o.owner_id AND s.workspace_id=r.workspace_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision AND s.state='published' LIMIT 1`,
+        [workspaceId, base - 1, summaryRevision, ownerId],
+      )
+      .first();
+    if (report) {
+      base--;
+      continue;
+    }
+    const job = jobs.find(
+      (job) => job.target_revision === base || job.target_revision === base - 1,
+    );
+    if (!job) break;
     const admitted =
       job.target_revision === base &&
       job.current_job_id === job.id &&
