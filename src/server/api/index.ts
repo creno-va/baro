@@ -3,6 +3,7 @@ import { getAuth } from "../auth";
 import { AuthConfigurationError } from "../auth/env";
 import { createFileStorageBudget } from "../modules/files/runtime";
 import { createLawyerStorageBudget } from "../modules/lawyers/storage-runtime";
+import { createReworkRuntime } from "../modules/rework/runtime";
 import { createAssetProcessingAdmission } from "../runtime/asset-admission";
 import { createFileProcessingAdmission } from "../runtime/file-admission";
 import { createSanitizedReaders } from "../runtime/sanitized-reader";
@@ -103,6 +104,9 @@ export const api = new Hono<ApiEnvironment>()
     "/v2/cases",
     createWorkspacesApi({
       dependencies: async (env, core) => createWorkspaceDependencies(core, env),
+      afterConfirmed: async (env, core, owner, id) => {
+        await createReworkRuntime(core, env).resume(owner, id);
+      },
     }),
   )
   .route(

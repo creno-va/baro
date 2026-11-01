@@ -24,6 +24,7 @@ import { type AnalysisScope, loadAnalysisInput, readAnalysisScope } from "./anal
 import { createReworkCaseService, ReworkError } from "./case-context";
 import {
   analysisTaskSchema,
+  automaticPreparationRecordSchema,
   preparedAnalysisRecordSchema,
   reportContinuationSchema,
 } from "./records";
@@ -291,6 +292,35 @@ export function createReworkStateService(
           failure: null,
           missingItems: [],
         };
+      const automatic = await records.read(
+        a,
+        id,
+        "checkpoint",
+        "automatic-preparation",
+        automaticPreparationRecordSchema,
+      );
+      if (
+        automatic?.value.status === "failed" &&
+        automatic.value.failure &&
+        loaded.input &&
+        !["pending", "running"].includes(analysis.status) &&
+        canonicalAnalysisJson(await analysisBasis(loaded.input)) ===
+          canonicalAnalysisJson(automatic.value.basis) &&
+        ["not_started", "stale"].includes(analysis.status)
+      ) {
+        analysis = {
+          status: "failed",
+          basis: automatic.value.basis,
+          currentJobId: null,
+          failure: automatic.value.failure,
+          missingItems: [
+            "분석 처리를 시작하지 못했어요. 저장된 사건과 자료는 보존돼요.",
+            ...loaded.limits,
+          ],
+        };
+      }
+      const reportPending =
+        !!task?.value.continueWithReport && ["pending", "running"].includes(analysis.status);
       const report = (await deps.peekReport?.(ownerId, id)) ?? null;
       const reportReady =
         !!report &&
@@ -361,18 +391,20 @@ export function createReworkStateService(
         analysis,
         snapshot,
         report: {
-          status: reportReady
-            ? "ready"
-            : reportFailure
-              ? "failed"
-              : report
-                ? "stale"
-                : "not_started",
+          status: reportPending
+            ? "pending"
+            : reportReady
+              ? "ready"
+              : reportFailure
+                ? "failed"
+                : report
+                  ? "stale"
+                  : "not_started",
           id: report?.id ?? null,
           revision: report?.revision ?? null,
           basis: reportReady ? analysis.basis : null,
-          currentJobId: null,
-          failure: reportReady ? null : reportFailure,
+          currentJobId: reportPending ? analysis.currentJobId : null,
+          failure: reportPending || reportReady ? null : reportFailure,
         },
         intents,
       });
