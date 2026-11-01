@@ -1,24 +1,29 @@
 import { expect, type Page, test } from "@playwright/test";
+import { v2SummarySchema } from "../../src/contracts/v2";
 import { summary } from "../fixtures/contracts/v2";
 
 const id = "synthetic-human-review";
 async function seed(page: Page) {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const seededSummary = v2SummarySchema.parse({
+    ...summary,
+    overview: "검토한 합성 요약입니다.",
+    facts: [0, 1].map((n) => ({
+      ...summary.facts[0],
+      id: `human-fact-${n}`,
+      text: n ? "두 번째 합성 사실입니다." : "첫 번째 합성 사실입니다.",
+      attribution: "user_statement",
+      certainty: "reported",
+      significance: "neutral",
+      references: [{ kind: "intake_narrative", intakeRevision: 1 }],
+      conflictingFactIds: [],
+      userEdited: false,
+    })),
+  });
   await page.addInitScript(
     ({ id, summary }) => {
       if (localStorage.getItem("synthetic-human-seeded")) return;
       localStorage.setItem("synthetic-human-seeded", "true");
-      const facts = [0, 1].map((n) => ({
-        ...summary.facts[0],
-        id: `human-fact-${n}`,
-        text: n ? "두 번째 합성 사실입니다." : "첫 번째 합성 사실입니다.",
-        attribution: "user_statement",
-        certainty: "reported",
-        significance: "neutral",
-        references: [{ kind: "intake_narrative", intakeRevision: 1 }],
-        conflictingFactIds: [],
-        userEdited: false,
-      }));
       const values = {
         session: {
           user: { id: "human-owner", name: "합성 검증 사용자", accountType: "customer" },
@@ -34,7 +39,7 @@ async function seed(page: Page) {
             updatedAt: new Date().toISOString(),
             summary: "검토한 합성 요약입니다.",
             schemaVersion: "2",
-            summaryDetails: { ...summary, overview: "검토한 합성 요약입니다.", facts },
+            summaryDetails: summary,
           },
         },
         caseOwners: { [id]: "human-owner" },
@@ -57,16 +62,16 @@ async function seed(page: Page) {
       for (const [key, value] of Object.entries(values))
         localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
     },
-    { id, summary },
+    { id, summary: seededSummary },
   );
 }
 
-test("active summary edits its overview, keeps materials and returns to its workspace tab", async ({
+test("active summary proposes a change, keeps materials and confirms before returning to its workspace tab", async ({
   page,
 }) => {
   await seed(page);
   await page.goto(`/cases/${id}/summary?from=files`);
-  await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이야기를 이렇게 정리했어요" })).toBeVisible();
   await expect(
     page
       .getByRole("region", { name: "추가한 자료" })
@@ -74,26 +79,38 @@ test("active summary edits its overview, keeps materials and returns to its work
   ).toBeVisible();
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/ui-human-summary-desktop.png", fullPage: true });
-  await page.getByLabel("요약 편집", { exact: true }).fill("수정하고 적용한 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const canonical = () =>
+    page.evaluate(
+      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].summaryDetails,
+      id,
+    );
+  const before = await canonical();
+  const explanation = "금액을 일부 돌려받았지만 정확한 금액은 아직 모른다는 합성 설명입니다.";
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
+    .fill(explanation);
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+  expect(await canonical()).toEqual(before);
   await page.reload();
-  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
-    "수정하고 적용한 합성 요약입니다.",
-  );
-  await expect(page.locator(".summary-facts")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+  expect(await canonical()).toEqual(before);
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveCount(0);
   for (const width of [320, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
-    await expect(page.getByLabel("요약 편집", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
     if (width === 320)
       await page.screenshot({ path: ".wrangler/ui-human-summary-320.png", fullPage: true });
   }
-  await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
+  await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/cases/${id}/files$`));
+  const confirmed = await canonical();
+  expect(confirmed.overview).toContain(explanation);
+  expect(confirmed.facts.slice(0, before.facts.length)).toEqual(before.facts);
   await expect(page).toHaveURL(new RegExp(`/cases/${id}/files$`));
   await expect(
     page.getByRole("heading", { name: "휴먼 리뷰 합성 사건", exact: true }),
@@ -125,10 +142,13 @@ test("active summary edits its overview, keeps materials and returns to its work
   await page.screenshot({ path: ".wrangler/ui-human-files-320.png", fullPage: true });
 });
 
-test("slow foreground authentication preserves editor DOM, draft and scroll", async ({ page }) => {
+test("slow foreground authentication preserves explanation DOM, draft and scroll", async ({
+  page,
+}) => {
   await seed(page);
   await page.goto(`/cases/${id}/summary`);
-  const editor = page.getByLabel("요약 편집", { exact: true });
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
   await expect(editor).toBeVisible();
   await editor.fill("포커스 복귀 중에도 남아야 하는 합성 입력");
   const original = await editor.elementHandle();
@@ -166,37 +186,51 @@ test("slow foreground authentication preserves editor DOM, draft and scroll", as
   await expect(editor).toHaveValue("포커스 복귀 중에도 남아야 하는 합성 입력");
 });
 
-test("a saved active-summary edit retries only its failed confirmation", async ({ page }) => {
+test("a proposed active-summary change retries only its failed confirmation", async ({ page }) => {
   await seed(page);
-  await page.route("**/src/client/api/cases.ts*", async (route) => {
-    const response = await route.fetch();
-    const body = await response.text();
-    await route.fulfill({
-      response,
-      body: `${body}\nconst originalHumanConfirmation = casesApi.confirmSummary;\nlet failHumanConfirmation = true;\ncasesApi.confirmSummary = async (...args) => { if (failHumanConfirmation) { failHumanConfirmation = false; throw new ApiError('UNAVAILABLE', '합성 확인 요청 실패', true); } return originalHumanConfirmation(...args); };\n`,
-    });
-  });
   await page.goto(`/cases/${id}/summary?from=files`);
-  const editor = page.getByLabel("요약 편집", { exact: true });
-  await expect(editor).toBeVisible();
-  await editor.fill("확인 요청 실패 후에도 저장된 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  const retry = page.getByRole("button", { name: "다시 시도", exact: true });
-  await expect(retry).toBeEnabled();
-  await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();
-  await expect(page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요.")).toHaveCount(0);
-  const revision = () =>
+  const canonical = () =>
     page.evaluate(
-      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].revision,
+      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id],
       id,
     );
-  expect(await revision()).toBe(2);
+  const before = await canonical();
+  await expect(page.getByRole("button", { name: "빠진 내용이 있어요", exact: true })).toBeEnabled();
+  await page.evaluate(async () => {
+    const path = "/src/client/api/rework.ts";
+    const { reworkApi } = await import(/* @vite-ignore */ path);
+    const corePath = "/src/client/api/core.ts";
+    const { ApiError } = await import(/* @vite-ignore */ corePath);
+    const confirm = reworkApi.confirmReconciliation;
+    let calls = 0;
+    reworkApi.confirmReconciliation = async (...args: unknown[]) => {
+      if (++calls === 1) throw new ApiError("UNAVAILABLE", "합성 확인 요청 실패", true);
+      return confirm(...args);
+    };
+  });
+  const explanation = "확인 요청 실패 후에도 변경안으로 남아야 하는 합성 설명입니다.";
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
+    .fill(explanation);
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+  await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+  const retry = page.getByRole("button", { name: "다시 시도", exact: true });
+  await expect(retry).toBeEnabled();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveCount(0);
+  expect((await canonical()).revision).toBe(2);
+  expect((await canonical()).summaryDetails).toEqual(before.summaryDetails);
   await retry.click();
   await expect(page).toHaveURL(new RegExp(`/cases/${id}/files$`));
-  expect(await revision()).toBe(3);
+  const confirmed = await canonical();
+  expect(confirmed.revision).toBe(3);
+  expect(confirmed.summaryDetails.facts.slice(0, before.summaryDetails.facts.length)).toEqual(
+    before.summaryDetails.facts,
+  );
   await page.goto(`/cases/${id}/summary`);
-  await expect(editor).toHaveValue("확인 요청 실패 후에도 저장된 합성 요약입니다.");
-  await expect(page.getByRole("heading", { name: "사건 요약을 확인해요" })).toBeVisible();
+  await expect(page.getByText(confirmed.summary, { exact: true })).toBeVisible();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveCount(0);
+  expect((await canonical()).revision).toBe(3);
 });
 
 test("correction is saved before an explicit material reflection request", async ({ page }) => {
@@ -250,7 +284,7 @@ test("case deletion is reachable from the list and survives reload", async ({ pa
   await page.goto("/cases");
   const opener = page.getByRole("button", { name: "휴먼 리뷰 합성 사건 사건 삭제", exact: true });
   await opener.focus();
-  await opener.click();
+  await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog");
   const remove = dialog.getByRole("button", { name: "사건 삭제", exact: true });
   await expect(remove).toBeEnabled();
