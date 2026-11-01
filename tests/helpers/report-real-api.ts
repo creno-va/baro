@@ -3,6 +3,7 @@
 import { createAccountApi } from "../../src/client/api/account";
 import { createFilesApi } from "../../src/client/api/files";
 import { createReportsApi } from "../../src/client/api/reports";
+import { reworkApi } from "../../src/client/api/rework";
 
 export { errorMessage } from "../../src/client/api/errors";
 export const apiMode = "real";
@@ -10,6 +11,7 @@ export const apiMode = "real";
 const request = (path: string, init?: RequestInit) =>
   fetch(path, { ...init, credentials: "same-origin", cache: "no-store" });
 export const api = {
+  rework: reworkApi,
   reports: createReportsApi(request),
   files: createFilesApi(request),
   account: createAccountApi(request),

@@ -1252,3 +1252,20 @@
 .report-markdown {
   color: #191f28;
 }
+
+.report-preparation,
+.report-scope {
+  padding: 20px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  background: #f6f8fb;
+  color: #191f28;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.report-preparation h3 { margin: 0 0 10px; font-size: 18px; }
+.report-preparation p,
+.report-scope p { margin: 8px 0 16px; color: var(--muted-foreground); }
+.report-preparation ul { list-style: disc; padding-left: 22px; }
+.report-preparation-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.report-scope summary { min-height: 44px; cursor: pointer; font-weight: 650; }

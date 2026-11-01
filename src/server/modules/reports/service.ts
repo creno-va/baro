@@ -550,12 +550,9 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const inlinePhotos = reportMarkdownBlocks(
         scopeChanged ? sourceContent(source) : value.content,
       ).filter((block) => block.kind === "photo");
-      const requestedPhotoIds =
+      const includedPhotoIds =
         value.includedPhotoIds ??
         (inlinePhotos.length ? reportPhotoIds(value.content) : (old.review.includedPhotoIds ?? []));
-      const includedPhotoIds = scopeChanged
-        ? requestedPhotoIds.filter((id) => !value.excludedFileIds.includes(id))
-        : requestedPhotoIds;
       if (inlinePhotos.some((photo) => !includedPhotoIds.includes(photo.id)))
         throw new ReportError("VALIDATION_ERROR");
       if (

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
+import type { V2ConversationState } from "../../contracts/v2";
 import type { ReportAnalysisSummary } from "../../server/modules/reports/analysis-review";
 import { reportPhotoIds } from "../../utils/report-markdown";
 import { Button } from "../ui/button";
@@ -22,6 +23,7 @@ type ReportView = BaseReportView & {
 export type ReportReviewProps = {
   caseId: string;
   embedded?: boolean;
+  rework?: boolean;
   onChanged?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -29,6 +31,7 @@ export type ReportReviewProps = {
 export function ReportReview({
   caseId,
   embedded = false,
+  rework = false,
   onChanged,
   onDirtyChange,
   onBusyChange,
@@ -53,10 +56,30 @@ export function ReportReview({
   const [exportExhausted, setExportExhausted] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [preservedEdit, setPreservedEdit] = useState("");
+  const [preparation, setPreparation] = useState<V2ConversationState | null>(null);
+  const [actionMissing, setActionMissing] = useState<string[]>([]);
+  const [newReportAvailable, setNewReportAvailable] = useState(false);
+  const [pollPaused, setPollPaused] = useState(false);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const focusRequest = useRef(0);
+  const refreshStatus = useRef<() => void>(() => {});
+  const preparationAttempt = useRef<{ revision: number; requestId: string } | null>(null);
+  const readReport = useCallback(
+    () =>
+      rework
+        ? api.rework.peekReport(caseId, { expectedOwner: owner.current ?? "" })
+        : api.reports.get(caseId),
+    [caseId, rework],
+  );
+  const readPreparation = useCallback(
+    () =>
+      rework
+        ? api.rework.getConversation(caseId, { expectedOwner: owner.current ?? "" })
+        : Promise.resolve(null),
+    [caseId, rework],
+  );
   const accept = useCallback((value: ReportView) => {
     const positioned = value.maskIdentifiers
       ? value.content
@@ -68,6 +91,7 @@ export function ReportReview({
           })),
         );
     setReport({ ...value, content: positioned });
+    setNewReportAvailable(false);
     setEditing(false);
     setIncludedPhotos(value.includedPhotoIds ?? []);
     setMaskIdentifiers(value.maskIdentifiers);
@@ -90,6 +114,11 @@ export function ReportReview({
     setExportingPdf(false);
     setContent("");
     setPreservedEdit("");
+    setPreparation(null);
+    setActionMissing([]);
+    setNewReportAvailable(false);
+    setPollPaused(false);
+    preparationAttempt.current = null;
     setEditing(false);
 
     setExcluded([]);
@@ -156,9 +185,10 @@ export function ReportReview({
     setError("");
     try {
       await verifyOwner(() => sequence === loadSequence.current);
-      const [value, materials] = await Promise.allSettled([
-        api.reports.get(caseId),
+      const [value, materials, state] = await Promise.allSettled([
+        readReport(),
         api.files.list(caseId),
+        readPreparation(),
       ]);
       await verifyOwner(() => sequence === loadSequence.current);
       if (sequence !== loadSequence.current) return;
@@ -169,7 +199,13 @@ export function ReportReview({
         throw value.reason;
       }
       if (materials.status === "rejected") throw materials.reason;
-      accept(value.value);
+      if (state.status === "rejected") throw state.reason;
+      setPreparation(state.value);
+      if (value.value) accept(value.value);
+      else {
+        setReport(null);
+        setContent("");
+      }
     } catch (e) {
       const failure = e as { code?: string; ownerRevoked?: boolean };
       if (
@@ -197,7 +233,7 @@ export function ReportReview({
         setAccessChecking(false);
       }
     }
-  }, [caseId, accept, clearOwnerState, verifyOwner]);
+  }, [caseId, accept, clearOwnerState, verifyOwner, readReport, readPreparation]);
   useEffect(() => {
     clearOwnerState();
     void load();
@@ -215,15 +251,25 @@ export function ReportReview({
       void (async () => {
         await verifyOwner(current);
         if (!current() || lock.current) return;
-        const [value, materials] = await Promise.all([
-          api.reports.get(caseId),
+        const [value, materials, state] = await Promise.all([
+          readReport(),
           api.files.list(caseId),
+          readPreparation(),
         ]);
         await verifyOwner(current);
         if (!current()) return;
+        setPreparation(state);
         setReport((existing) => {
-          if (!existing) return existing;
-          return existing.id === value.id ? value : existing;
+          if (!value) return null;
+          if (!existing) {
+            setNewReportAvailable(true);
+            return existing;
+          }
+          if (existing.id !== value.id) {
+            setNewReportAvailable(true);
+            return { ...existing, stale: true };
+          }
+          return value;
         });
         setFiles(materials);
         setIncludedPhotos((ids) =>
@@ -256,18 +302,36 @@ export function ReportReview({
           if (current()) setAccessChecking(false);
         });
     };
+    refreshStatus.current = () => check(new Event("report-status"));
     window.addEventListener("focus", check);
     window.addEventListener("storage", check);
     window.addEventListener("baro-session-changed", check);
     document.addEventListener("visibilitychange", check);
     return () => {
       ++loadSequence.current;
+      refreshStatus.current = () => {};
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", check);
       window.removeEventListener("baro-session-changed", check);
       document.removeEventListener("visibilitychange", check);
     };
-  }, [load, clearOwnerState, verifyOwner, caseId]);
+  }, [load, clearOwnerState, verifyOwner, caseId, readReport, readPreparation]);
+  const pendingJob = preparation?.report.currentJobId ?? preparation?.analysis.currentJobId;
+  useEffect(() => {
+    setPollPaused(false);
+    if (!rework || !pendingJob) return;
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden" || !navigator.onLine) return;
+      if (attempts++ >= 60) {
+        window.clearInterval(timer);
+        setPollPaused(true);
+        return;
+      }
+      refreshStatus.current();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [rework, pendingJob]);
   const dirty = Boolean(
     report &&
       (content !== report.content ||
@@ -298,7 +362,7 @@ export function ReportReview({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, preservedEdit]);
   async function run(label: string, action: () => Promise<void>) {
-    if (lock.current || accessChecking) return;
+    if (lock.current || accessChecking) return false;
     const sequence = loadSequence.current;
     lock.current = true;
     setBusy("계정 접근 상태 확인 중…");
@@ -309,6 +373,7 @@ export function ReportReview({
       await verifyOwner();
       setBusy(label);
       await action();
+      return true;
     } catch (e) {
       const failure = e as { code?: string; ownerRevoked?: boolean };
       if (
@@ -317,6 +382,8 @@ export function ReportReview({
       )
         return;
       if ((e as { code?: string })?.code === "EXPORT_RETRY_EXHAUSTED") setExportExhausted(true);
+      if ((e as { code?: string })?.code === "EXPORT_LIMIT_EXCEEDED" && !report)
+        setInitialLimit(true);
       if ((e as { code?: string })?.code === "CONSENT_REQUIRED") setNeedsConsent(true);
       if (
         [
@@ -330,6 +397,7 @@ export function ReportReview({
         if (!failure?.ownerRevoked) clearOwnerState();
       }
       setError(e instanceof Error ? e.message : "처리하지 못했어요. 다시 시도해 주세요.");
+      return false;
     } finally {
       lock.current = false;
       if (sequence === loadSequence.current) {
@@ -353,15 +421,52 @@ export function ReportReview({
         {
           content,
           maskIdentifiers,
-          includedPhotoIds: includedPhotos,
+          includedPhotoIds: includedPhotos.filter((id) => !excluded.includes(id)),
           excludedFileIds: excluded,
         },
         report.revision,
       ),
     );
-    accept(value);
+    const latest = rework ? await ownedResult(readReport()) : value;
+    if (!latest || latest.id !== value.id)
+      throw new Error("저장된 리포트 버전이 바뀌었어요. 저장 상태를 다시 확인해 주세요.");
+    accept(latest);
     onChanged?.();
-    return value;
+    return latest;
+  }
+  async function prepareReport() {
+    const state = await ownedResult(readPreparation());
+    if (!state) throw new Error("사건 준비 상태를 다시 확인해 주세요.");
+    setPreparation(state);
+    if (
+      !preparationAttempt.current ||
+      preparationAttempt.current.revision !== state.workspaceRevision
+    )
+      preparationAttempt.current = {
+        revision: state.workspaceRevision,
+        requestId: crypto.randomUUID(),
+      };
+    const result = await ownedResult(
+      api.rework.executeAction(
+        caseId,
+        {
+          action: "prepare_report",
+          expectedRevision: state.workspaceRevision,
+          requestId: preparationAttempt.current.requestId,
+        },
+        { expectedOwner: owner.current ?? "" },
+      ),
+    );
+    setActionMissing(result.missingItems);
+    if (result.status === "blocked" || result.status === "require_confirmation") {
+      setPreparation(await ownedResult(readPreparation()));
+      if (regenerate)
+        setError(result.missingItems.join(" ") || "먼저 사건과 자료를 확인해 주세요.");
+      return false;
+    }
+    await load();
+    onChanged?.();
+    return true;
   }
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
@@ -432,6 +537,82 @@ export function ReportReview({
           </p>
         )}
         {initialLoading && <LoadingContent layout="detail" title="리포트를 불러오고 있어요." />}
+        {rework &&
+          preparation &&
+          (!report ||
+            preparation.analysis.status !== "ready" ||
+            preparation.report.status === "pending" ||
+            actionMissing.length > 0) && (
+            <section
+              className="report-preparation"
+              aria-label="리포트 준비 상태"
+              aria-live="polite"
+            >
+              <h3>
+                {preparation.report.status === "pending"
+                  ? "리포트를 준비하고 있어요"
+                  : {
+                      not_started: "현재 사건의 법률 분석을 준비해요",
+                      pending: "법률 분석을 준비하고 있어요",
+                      running: "법 조항과 판례를 확인하고 있어요",
+                      ready: "검증한 분석으로 리포트를 준비할 수 있어요",
+                      partial: "확인된 분석과 보완할 항목이 있어요",
+                      empty: "조사한 범위에서 관련 결과를 찾지 못했어요",
+                      unavailable: "공식 자료를 확인하지 못했어요",
+                      failed: "분석을 완료하지 못했어요",
+                      stale: "사건과 자료 변경을 반영해야 해요",
+                    }[preparation.analysis.status]}
+              </h3>
+              <p>
+                리포트는 준비된 검증 결과를 사용합니다. PDF를 저장할 때 새 분석을 요청하지 않습니다.
+              </p>
+              {preparation.analysis.failure && <p>분석 실패 · {preparation.analysis.failure}</p>}
+              {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].length >
+                0 && (
+                <ul>
+                  {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].map(
+                    (item) => (
+                      <li key={item}>{item}</li>
+                    ),
+                  )}
+                </ul>
+              )}
+              {pollPaused && <p>처리가 계속되고 있을 수 있어요. 상태를 다시 확인해 주세요.</p>}
+              <div className="report-preparation-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={Boolean(busy) || accessChecking || needsConsent || Boolean(pendingJob)}
+                  onClick={() =>
+                    void run("리포트 준비 요청 중…", async () => {
+                      await prepareReport();
+                    })
+                  }
+                >
+                  리포트 준비
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(busy) || accessChecking}
+                  onClick={() => refreshStatus.current()}
+                >
+                  상태 확인
+                </button>
+              </div>
+            </section>
+          )}
+        {newReportAvailable && (
+          <section className="report-callout" role="status">
+            <p>새 리포트가 준비됐어요. 현재 편집 내용은 확인한 뒤 전환할 수 있어요.</p>
+            <button
+              type="button"
+              disabled={Boolean(busy) || accessChecking}
+              onClick={() => (dirty ? setReloadConfirm(true) : void load())}
+            >
+              새 리포트 열기
+            </button>
+          </section>
+        )}
         {error && !regenerate && !reloadConfirm && (
           <div className="report-error" role="alert">
             <p>{error}</p>
@@ -544,6 +725,57 @@ export function ReportReview({
                 </button>
               </details>
             )}
+            {(rework || report.analysisReview) && (
+              <details className="report-scope">
+                <summary>포함할 자료와 식별정보 가림</summary>
+                <p>
+                  본문 수정을 먼저 저장한 뒤 범위를 바꾸세요. 제외 자료에 의존하는 법률 분석과 판례
+                  비교도 새 리포트에서 다시 검토합니다.
+                </p>
+                <label className="report-check">
+                  <input
+                    type="checkbox"
+                    checked={maskIdentifiers}
+                    disabled={needsConsent || report.stale || content !== report.content}
+                    onChange={(event) => setMaskIdentifiers(event.target.checked)}
+                  />
+                  식별정보 가리기
+                </label>
+                <p>
+                  전화번호·이메일·주민등록번호 형태의 식별정보를 가립니다. 이름·주소와 원본은 직접
+                  확인해 주세요. 가림을 켜면 선택 사진을 통째로 제외합니다.
+                </p>
+                {files.map((file) => (
+                  <label className="report-check" key={file.id}>
+                    <input
+                      type="checkbox"
+                      checked={excluded.includes(file.id)}
+                      disabled={needsConsent || report.stale || content !== report.content}
+                      onChange={() => setExcluded(toggle(excluded, file.id))}
+                    />
+                    {file.name} · 리포트에서 제외
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  disabled={
+                    Boolean(busy) ||
+                    needsConsent ||
+                    report.stale ||
+                    content !== report.content ||
+                    (maskIdentifiers === report.maskIdentifiers &&
+                      JSON.stringify(excluded) === JSON.stringify(report.excludedFileIds))
+                  }
+                  onClick={() =>
+                    void run("선택 범위 저장 중…", async () => {
+                      await save();
+                    })
+                  }
+                >
+                  선택 범위 저장
+                </button>
+              </details>
+            )}
             <section className="report-read-content" aria-label="리포트 검토 본문">
               <div id="report-edit-fields">
                 <ReportReading
@@ -640,12 +872,25 @@ export function ReportReview({
                   void run("새 버전 생성 중…", async () => {
                     if (dirty && report.stale) setPreservedEdit(content);
                     const current = dirty && !report.stale ? await save() : report;
+                    if (
+                      rework &&
+                      (!preparation?.snapshot ||
+                        ["not_started", "pending", "running", "failed", "stale"].includes(
+                          preparation.analysis.status,
+                        ))
+                    ) {
+                      if (await prepareReport()) setRegenerate(false);
+                      return;
+                    }
                     const value = await ownedResult(
                       api.reports.generate(caseId, undefined, current.revision),
                     );
                     setBusy("자료 목록 확인 중…");
                     const materials = await ownedResult(api.files.list(caseId));
-                    accept(value);
+                    const latest = rework ? await ownedResult(readReport()) : value;
+                    if (!latest || latest.id !== value.id)
+                      throw new Error("새 리포트의 저장 상태를 다시 확인해 주세요.");
+                    accept(latest);
                     onChanged?.();
                     setFiles(materials);
                     setRegenerate(false);

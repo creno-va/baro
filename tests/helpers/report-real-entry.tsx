@@ -7,6 +7,7 @@ if (root)
     <ReportReview
       caseId={location.pathname.split("/")[2] ?? ""}
       embedded={new URLSearchParams(location.search).get("embedded") === "true"}
+      rework={new URLSearchParams(location.search).get("rework") === "true"}
       onDirtyChange={(dirty) => {
         document.documentElement.dataset.reportDirty = String(dirty);
       }}
