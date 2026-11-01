@@ -1,22 +1,13 @@
 import { z } from "zod";
-import { displayText, hasUniqueIds, opaqueIdSchema } from "../../../contracts";
-import { v2CitationsForRetrievedSourcesSchema } from "../../../contracts/v2";
+import { hasUniqueIds } from "../../../contracts";
+import { v2CitationsForRetrievedSourcesSchema, v2SourceClaimSchema } from "../../../contracts/v2";
 import { textHash } from "../legal-retrieval/service";
 import { EXTRACTOR_VERSION, type RetrievalOutput } from "../legal-retrieval/v2/contracts";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import { citationMatchesReverifiedSource, makeChunk } from "../legal-retrieval/v2/source";
 import type { ClaimFailure } from "./claim-diagnostics";
 
-export const sourceClaimSchema = z
-  .strictObject({
-    id: opaqueIdSchema,
-    text: displayText(10000),
-    kind: z.enum(["quotation", "legal_explanation"]),
-    citationId: opaqueIdSchema,
-    startUtf16: z.number().int().nonnegative(),
-    endUtf16: z.number().int().positive(),
-  })
-  .refine((c) => c.endUtf16 > c.startUtf16);
+export const sourceClaimSchema = v2SourceClaimSchema;
 export type SourceClaim = z.infer<typeof sourceClaimSchema>;
 export function claimReviewHash(claim: SourceClaim, asOfDate: string) {
   return textHash(
