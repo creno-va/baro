@@ -76,7 +76,7 @@ function partialSnapshot(context: V2ConversationState["caseContext"]): V2LegalAn
   return {
     contractVersion: "conversation-report-v1",
     id: "synthetic-analysis",
-    basis,
+    basis: { ...basis, casePurpose: context.casePurpose },
     context,
     basedOnFactIds: [],
     includedEvidence: [],
@@ -89,7 +89,7 @@ function partialSnapshot(context: V2ConversationState["caseContext"]): V2LegalAn
     issues: [],
     precedents: [],
     perspective: {
-      casePurpose: "prepare_claim",
+      casePurpose: context.casePurpose,
       weaknesses: [],
       claimGaps: [],
       responsePoints: [],
