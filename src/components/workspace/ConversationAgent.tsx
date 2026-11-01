@@ -208,8 +208,15 @@ export function ConversationAgent({
         value.workspaceRevision > workspace.case.revision &&
         !["pending", "running"].includes(value.analysis.status) &&
         value.report.status !== "pending"
-      )
-        await callbacks.current.onChanged();
+      ) {
+        if ((await callbacks.current.onChanged()) === false)
+          throw Object.assign(
+            new Error("최신 사건을 불러오지 못했어요. 상태를 다시 확인해 주세요."),
+            {
+              code: "UNAVAILABLE",
+            },
+          );
+      }
       return value;
     } catch (cause) {
       if (mounted.current && current(epoch) && serial === reads.current) {
@@ -245,8 +252,22 @@ export function ConversationAgent({
   }, [ready, state, stateIsCurrent, acceptedRefresh, refreshKey, queuedWork, readFailures, load]);
   const changed = useCallback(async () => {
     const epoch = ticket();
-    await callbacks.current.onChanged();
-    if (current(epoch) && mounted.current) return load();
+    try {
+      if ((await callbacks.current.onChanged()) === false)
+        throw Object.assign(
+          new Error("최신 사건을 불러오지 못했어요. 상태를 다시 확인해 주세요."),
+          {
+            code: "UNAVAILABLE",
+          },
+        );
+      if (current(epoch) && mounted.current) return load();
+    } catch (cause) {
+      if (current(epoch) && mounted.current) {
+        readError.current = true;
+        setReadFailures(3);
+        setError(failureMessage(cause));
+      }
+    }
     return null;
   }, [load, ticket, current]);
   const close = useCallback(() => {
@@ -506,39 +527,40 @@ export function ConversationAgent({
             !state?.analysis.missingItems.includes(item),
         )
       : [];
+  const errorFeedback = error ? (
+    <div className="workspace-error" role="alert">
+      <p>{error}</p>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        onClick={() => {
+          setError("");
+          setReadFailures(0);
+          void load();
+        }}
+      >
+        상태 다시 확인
+      </Button>
+      {attempt.current && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || disabled}
+          onClick={(event) => {
+            event.currentTarget.focus();
+            const request = attempt.current?.input;
+            if (request) void execute(request.action, request.requestId);
+          }}
+        >
+          같은 요청 결과 확인
+        </Button>
+      )}
+    </div>
+  ) : null;
   return (
     <div className="conversation-agent">
-      {error && (
-        <div className="workspace-error" role="alert">
-          <p>{error}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => {
-              setError("");
-              setReadFailures(0);
-              void load();
-            }}
-          >
-            상태 다시 확인
-          </Button>
-          {attempt.current && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy || disabled}
-              onClick={(event) => {
-                event.currentTarget.focus();
-                const request = attempt.current?.input;
-                if (request) void execute(request.action, request.requestId);
-              }}
-            >
-              같은 요청 결과 확인
-            </Button>
-          )}
-        </div>
-      )}
+      {!pane && errorFeedback}
       {state && (
         <>
           {!canMutate && (
@@ -606,7 +628,8 @@ export function ConversationAgent({
             mounted.current && current(paneEpoch.current) && !abort.current.signal.aborted
           }
         >
-          {!stateIsCurrent && (
+          {errorFeedback}
+          {!stateIsCurrent && !error && (
             <p role="status">현재 사건 상태를 다시 확인하고 있어요. 검토 중인 입력은 보존돼요.</p>
           )}
           {result?.status === "pending" && waiting && (

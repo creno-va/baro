@@ -22,6 +22,8 @@ export function ConversationAgentFixture() {
     calls: [],
     delay: false,
     fail: false,
+    readFailure: null,
+    reads: 0,
     failureCode: "UNAVAILABLE",
     resolve: null,
     aborted: false,
@@ -80,6 +82,10 @@ export function ConversationAgentFixture() {
   }, []);
   const client = useRef<ConversationClient>({
     getConversation: async () => {
+      control.current.reads++;
+      if (control.current.readFailure === "unavailable")
+        throw Object.assign(new Error("합성 상태 조회 실패"), { code: "UNAVAILABLE" });
+      if (control.current.readFailure === "parse") throw new SyntaxError("합성 JSON 읽기 실패");
       const snapshot = structuredClone(state.current);
       if (control.current.advanceAfterIntentRead && snapshot.intents.length > 1) {
         control.current.advanceAfterIntentRead = false;

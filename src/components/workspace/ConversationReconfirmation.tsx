@@ -24,8 +24,17 @@ export function ConversationReconfirmation({
   const [summaryBusy, setSummaryBusy] = useState(false),
     [contextBusy, setContextBusy] = useState(false);
   const [summaryKey, setSummaryKey] = useState(0);
+  const mounted = useRef(false);
+  const continuation = useRef(0);
   const callbacks = useRef(pane);
   callbacks.current = pane;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      continuation.current++;
+    };
+  }, []);
   useEffect(() => {
     callbacks.current.onDirtyChange(summaryDirty || contextDirty);
   }, [summaryDirty, contextDirty]);
@@ -40,11 +49,26 @@ export function ConversationReconfirmation({
     [],
   );
   async function afterConfirmation() {
-    const fresh = await callbacks.current.onChanged();
-    if (fresh)
-      callbacks.current.onOpenPane(
-        ["pending", "ready"].includes(fresh.report.status) ? "report" : "analysis",
-      );
+    const epoch = access.ticket();
+    const serial = ++continuation.current;
+    const fresh = await callbacks.current.onChanged().catch(() => null);
+    if (
+      !mounted.current ||
+      serial !== continuation.current ||
+      !access.current(epoch) ||
+      !(await access.verify(false, false)) ||
+      !mounted.current ||
+      serial !== continuation.current ||
+      !access.current(epoch)
+    )
+      return;
+    // The owning UI has already verified the confirmation. A superseding
+    // background read can return null while publishing fresher state; it must
+    // not strand this finished editor. This only opens a read view. The agent
+    // still fences its content/readiness against the current workspace.
+    callbacks.current.onOpenPane(
+      fresh && ["pending", "ready"].includes(fresh.report.status) ? "report" : "analysis",
+    );
   }
   return (
     <>

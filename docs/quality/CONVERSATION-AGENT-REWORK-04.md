@@ -307,3 +307,27 @@ source를 구분하는 중앙 수정 전에는 같은 실패를 반복하지 않
 Chromium11개(7.2초)/WebKit11개(9.8초)를 다시 통과했다. 이 head의 Quality41341386680,
 Legal41341386716, nativePDF41341386787도 모두 성공했다. 수정 전 실제202→stale의 원본
 protocol/로그/화면은 `/tmp/baro-625-recon-202-stale-original`에 별도로 보존했다.
+
+PR689 exact `dcfe45361db68b21441333b12298c4f1c59c6479`의 CI/main `cd05ff0e`와
+PR690 exact `b871c9936b124c57cf6b0c5a2fd7b0772ea2c569`의 Quality41343082762 성공/main
+`9800a92e`를 확인해 통합했다. 실제 새 요청은 expectedW37/S3의202/W38/pending→
+GET W39/proposed→확정200/W40/confirmed(S4)→fresh W42~43에서 원래 confirmedW40/S4를
+유지해 source 결함 해소를 확인했다. 첫 여정의 자료 반영 메시지는 실제 commit 응답1회를
+유실한 뒤 명시 재전송에서도 전체 본문/key 동일, 첨부 메시지1개를 통과했다.
+
+확인 후 `onChanged` 읽기가 경쟁 갱신으로 null을 반환하면 빈 재확인 영역에 남는04 조립도
+수정했다.01이 이미 검증한 완료와 후속 상태 조회를 구분하고, 현재 mounted/epoch와 읽기
+권한을 다시 확인한 뒤 analysis 또는 현재 report 읽기 화면만 연다. 확인 receipt나 revision
+조건을 완화하지 않으며 POST/모델 호출을 추가하지 않는다. 실제 상태 조회503/parse와 부모
+읽기 실패는 열린 영역 안에서 오류와 명시 `상태 다시 확인`을 제공한다. 무한 확인 중 문구를
+남기거나 자동 retry를 늘리지 않는다. poll 중단/명시 복구/추가 action0을 포함한 격리 대화 UI
+Chromium13개(8.7초)/WebKit13개(10.6초)가 통과했다.
+
+후속 실제 여정은 자동 조사→NLP 리포트 요청→본문HTML까지 통과한 뒤 PDF200의 사후
+freshness 검증에서 중지했다. 독립 실제 SDK/D1/native Docker 회귀에서도 같은 report
+ID/revision2/basis/analysisReview와 같은 analysis.basis, summaryConfirmed=true인데
+workspace W28→30만 바뀌며 analysis/report가 ready→stale가 됐다. guard는 올바르게
+다운로드를 거절했고 browser 저장 성공은0이다.00/05에 숫자와 본문 없는 basis JSON을
+전달했다. PDF 자체는52082B/A4 4쪽을 모두 렌더해 한국어·본문·인용·쪽번호의 잘림과 겹침이
+없음을 확인했다. 이는 UI 저장/후속 완료의 증거가 아니며 중앙 수정 전 같은 실패는 반복하지
+않는다. 전체14개 통과 기록은 계속 보류한다.

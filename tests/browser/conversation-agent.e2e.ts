@@ -100,6 +100,39 @@ test("a newly received intent from a previous revision cannot execute", async ({
   ).toEqual(["show_preparation"]);
 });
 
+for (const failure of ["unavailable", "parse"] as const)
+  test(`an open analysis exposes a ${failure} read failure and stops polling until explicit recovery`, async ({
+    page,
+  }) => {
+    await page.goto("/__conversation-agent");
+    await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeVisible();
+    await page.evaluate(() => window.conversationFixture.emitIntent("analyze_legal"));
+    const panel = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
+    await expect(panel).toBeVisible();
+    await page.clock.install();
+    await page.evaluate((mode) => {
+      window.conversationFixture.readFailure = mode;
+      window.conversationFixture.advanceWorkspace();
+    }, failure);
+    await expect(panel.getByRole("alert")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "상태 다시 확인", exact: true })).toBeEnabled();
+    await expect(
+      panel.getByText("현재 사건 상태를 다시 확인하고 있어요.", { exact: false }),
+    ).toHaveCount(0);
+    const failedReads = await page.evaluate(() => window.conversationFixture.reads);
+    await page.clock.fastForward(10000);
+    expect(await page.evaluate(() => window.conversationFixture.reads)).toBe(failedReads);
+    await page.evaluate(() => {
+      window.conversationFixture.readFailure = null;
+      window.conversationFixture.catchUpState();
+    });
+    await panel.getByRole("button", { name: "상태 다시 확인", exact: true }).click();
+    await expect(panel.getByRole("alert")).toHaveCount(0);
+    expect(
+      await page.evaluate(() => window.conversationFixture.calls.map((x) => x.action)),
+    ).toEqual(["analyze_legal"]);
+  });
+
 test("a concurrent revision change during intent preflight cannot silently rebase its action", async ({
   page,
 }) => {

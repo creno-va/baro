@@ -5,6 +5,8 @@ export type ConversationFixtureControl = {
   calls: V2ConversationActionRequest[];
   delay: boolean;
   fail: boolean;
+  readFailure: "unavailable" | "parse" | null;
+  reads: number;
   failureCode: string;
   resolve: (() => void) | null;
   aborted: boolean;
