@@ -234,3 +234,14 @@ PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/native
 00의 `codex/621-rework-report-edit-binding`은 explicit mock에서 본문 편집 후 새 report ID가 기존 정확한 parent analysis identity를 잃어 PDF를 불필요하게 stale로 막던 문제를 수정한다. 동일 case source revision·제외 목록·mask scope의 parent만 identity를 이어받고, userEdited=true/review_required를 별도 보존해 검증된 새 분석으로 승격하지 않는다. source/context/evidence 변경은 기존 전체 source hash 검사에서 stale이며, scope 변경은 binding을 이어받지 않는다. 최초 canonical 준비는 사용자 편집 표시를 붙이지 않는다. 원래 analysis.checkedAt와 이전 immutable 본문은 그대로 보존하고 사건 삭제 시 두 private map도 지운다.
 
 관련 mock/overflow/shared reports27 tests177 assertions, bun ci/validate:quick·production build/dry-run/local workerd 부팅 통과. 처음 추가 테스트의 넓은 fixture callback 타입을 실제 intersection으로 좁혀 타입 오류를 수정했다. 이 검증은 실제 provider/PDF native 인수와 구분하며05의 shared browser 전체는 이 후속의 CI/main 뒤 다시 검증한다.
+
+
+### 최종 읽기 경계 및 실제 여정 준비
+
+PR685 exacte2ab7f8d3396215b350e873cf5dae8fb4c9cd26d의 Quality41334505202/Legal41334505229/nativePDF41334505210 성공 후 main90b69502df15cf9a9aef7a27d64f037a289477e2에 squash 병합했다.01/04의 독립 읽기 검토에서 추가 finding은 없었다.04는 이 main으로 실제 intent의 정확 게시 revision과 처리 실패·양 입장3분기를 이어 검증한다. 일반 job 조회 횟수 복원은 기존 기대를 올리지 않았으며 전체 unit 재실행 결과는 별도 기록한다.
+
+00의 codex/621-rework-summary-http-read는 요약 lazy stream의 소유권/삭제/현재 summary·workspace revision/암호화 hash/complete 경계를 보존한다. 기존 단일 owned/alive preflight에서 실제 workspace revision을 추가 응답 header로만 전달하며 strict JSON DTO·DB schema는 그대로다. GET summary body 읽기 실패 뒤 같은 request scope/abort/expected owner로 현재 workspace를 확인하고 같은 사건의 실제 revision 증가가 검증된 경우에만 내부 SummarySourceChangedError로 분류한다. cases.get은 그 내부 증명에만 최대3회의 readonly 재조회가 가능하다. 일반 HTTP409·503/무header·같은 revision의 암호화 손상·malformed 응답·실제 권한 거절은 자동 재시도하지 않는다. POST/모델/법률 조회 재시도와 mutation key 변경은 없다.
+
+실제 Hono/암호화 SQLite/공유 HTTP·Cases client에서 첫 fragment와 중간 fragment의 source 변경을 재현해 새 revision의 온전한 본문으로 복구했고, 계속 변경되면3회에서 중단했다. owner/삭제/무결성의 기존 stream 거절·일반409의 단일 시도·probe401/404/503·계정 전환/abort·무header/같은W/다른사건/invalid probe/네트워크·mutation body 실패를 포함해62 tests343 assertions가 통과했다.01의 리뷰로 일반 CONFLICT 재시도와 증명된 내부 분류를 분리했다. 원래 WebKit 1건의 원인은 아직 미확정이며 이 deterministic 회귀를 그 원인의 확정 증거로 표현하지 않는다.
+
+main90b69502의 전체 validate:unit은5041 pass/4 skip/0 fail·181764 assertions(215.47s)이었다. 4skip은 명시적인 native opt-in 경로이며 기존 별도 실행 증거와 최종 browser/native full에서 구분한다.686 tree의 bun ci·validate:quick673/6286·DB drift/fresh/upgrade·production build/dry-run/local workerd도 성공했다. 첫 build에서는 새 HTTP→contract barrel import가 실제 bundle 초기화 순환으로 usage.dailyCases undefined를 일으켰다. 기존 개별 workspace 계약 export를 직접 참조해 순환을 제거한 뒤 동일 build/runtime 검사가 통과했으며 검사를 생략하거나 초기화 오류를 숨기지 않았다.

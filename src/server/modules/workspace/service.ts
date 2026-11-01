@@ -456,6 +456,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     async summaryAvailable(ownerId: string, id: string) {
       return workspace.summaryAvailable(actor(ownerId), id);
     },
+    async summaryReadRevision(ownerId: string, id: string) {
+      return workspace.summaryReadRevision(actor(ownerId), id);
+    },
     async *summary(ownerId: string, id: string) {
       opaqueIdSchema.parse(id);
       // The repository rereads the current owner/summary and fences every fragment.

@@ -241,6 +241,20 @@ export function createV2WorkspaceRepository(
 ) {
   const core = createV2Core(binding, cipher);
   const accounting = createV2AccountingRepository(core);
+  const summaryReadRevision = (actor: Actor, id: string) =>
+    safe(async () => {
+      actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
+      parse(opaqueIdSchema, id);
+      // Header preflight only. Every body fragment retains its independent
+      // owner, current summary, workspace revision and snapshot integrity fences.
+      const row = await core
+        .statement(
+          `SELECT i.id,w.revision FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+          [id, actor.ownerId],
+        )
+        .first<{ id: string; revision: number }>();
+      return row ? parse(z.number().int().positive(), row.revision) : null;
+    });
   const findWorkspace = async (
     actor: Actor,
     id: string,
@@ -845,20 +859,10 @@ export function createV2WorkspaceRepository(
           : null;
       });
     },
-    summaryAvailable(actor: Actor, id: string) {
-      return safe(async () => {
-        actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
-        parse(opaqueIdSchema, id);
-        // Header preflight only. The stream independently rereads its owner,
-        // current summary/revision and encrypted snapshot before yielding.
-        return !!(await core
-          .statement(
-            `SELECT i.id FROM v2_intakes i JOIN v2_summaries s ON s.id=i.summary_id JOIN v2_workspaces w ON w.id=i.id WHERE i.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
-            [id, actor.ownerId],
-          )
-          .first());
-      });
+    async summaryAvailable(actor: Actor, id: string) {
+      return (await summaryReadRevision(actor, id)) !== null;
     },
+    summaryReadRevision,
     async *summaryFragments(actor: Actor, id: string) {
       actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
       const row = await core
