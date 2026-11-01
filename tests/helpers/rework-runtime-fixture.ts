@@ -407,6 +407,38 @@ export async function createReworkRuntimeFixture(options: {
               "SELECT count(*) total FROM v2_reports WHERE workspace_id=? AND id NOT LIKE 'export-%'",
             )
             .get(caseId),
+          artifacts: {
+            pdf: f.db.sqlite
+              .query(
+                "SELECT b.state,count(*) total,sum(b.logical_bytes) logicalBytes,sum(b.cipher_bytes) cipherBytes FROM v2_blobs b JOIN v2_storage_reservations r ON r.id=b.reservation_id WHERE r.workspace_id=? AND b.kind='report_pdf' GROUP BY b.state",
+              )
+              .all(caseId),
+            reservations: f.db.sqlite
+              .query(
+                "SELECT r.state,count(*) total,sum(r.byte_length) bytes FROM v2_storage_reservations r JOIN v2_blobs b ON b.reservation_id=r.id WHERE r.workspace_id=? AND b.kind='report_pdf' GROUP BY r.state",
+              )
+              .all(caseId),
+            pdfBindings: f.db.sqlite
+              .query(
+                "SELECT p.state,p.writer_state writerState,count(*) total,sum(p.maximum_cipher_bytes) maximumBytes FROM v2_physical_blob_bindings p JOIN v2_blobs b ON b.id=p.blob_id JOIN v2_storage_reservations r ON r.id=b.reservation_id WHERE r.workspace_id=? AND b.kind='report_pdf' GROUP BY p.state,p.writer_state",
+              )
+              .all(caseId),
+            capacity: f.db.sqlite
+              .query(
+                "SELECT capacity_bytes capacityBytes,held_bytes heldBytes FROM v2_physical_storage_capacity WHERE environment='preview'",
+              )
+              .get(),
+            totals: f.db.sqlite
+              .query(
+                "SELECT held_bytes heldBytes FROM v2_physical_storage_totals WHERE environment='preview'",
+              )
+              .get(),
+            bindings: f.db.sqlite
+              .query(
+                "SELECT state,writer_state writerState,count(*) total,sum(maximum_cipher_bytes) maximumBytes FROM v2_physical_blob_bindings WHERE environment='preview' GROUP BY state,writer_state",
+              )
+              .all(),
+          },
           backgroundFailures: [...backgroundFailures],
         });
       if (request.method !== "POST") return new Response(null, { status: 404 });

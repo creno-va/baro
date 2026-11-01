@@ -111,6 +111,31 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
       await Bun.write("/tmp/baro-625-runtime-report.pdf", bytes);
       const observed = await stats(f);
       expect(observed.native).toMatchObject({ probe: 1, process: 1, report: 1 });
+      expect(observed.artifacts.pdf).toEqual([
+        {
+          state: "stored",
+          total: 1,
+          logicalBytes: bytes.byteLength,
+          cipherBytes: expect.any(Number),
+        },
+      ]);
+      expect(observed.artifacts.pdf[0]?.cipherBytes).toBeGreaterThan(bytes.byteLength);
+      expect(observed.artifacts.reservations).toEqual([
+        { state: "stored", total: 1, bytes: expect.any(Number) },
+      ]);
+      expect(observed.artifacts.pdfBindings).toEqual([
+        { state: "held", writerState: "stopped", total: 1, maximumBytes: expect.any(Number) },
+      ]);
+      expect(observed.artifacts.capacity.heldBytes).toBe(observed.artifacts.totals.heldBytes);
+      expect(observed.artifacts.capacity.heldBytes).toBe(
+        observed.artifacts.bindings
+          .filter((binding) => binding.state === "held")
+          .reduce((sum, binding) => sum + binding.maximumBytes, 0),
+      );
+      await Bun.write(
+        "/tmp/baro-625-runtime-receipts.json",
+        JSON.stringify({ pdfSha256: await digest(bytes.buffer), ...observed.artifacts }, null, 2),
+      );
       expect(observed.modelFailures).toEqual([]);
       expect(observed.backgroundFailures).toEqual([]);
     } finally {
@@ -129,6 +154,35 @@ const statsSchema = z.object({
   modelFailures: z.array(z.unknown()),
   backgroundFailures: z.array(z.string()),
   native: z.unknown().nullable(),
+  artifacts: z.object({
+    pdf: z.array(
+      z.object({
+        state: z.string(),
+        total: z.number(),
+        logicalBytes: z.number(),
+        cipherBytes: z.number(),
+      }),
+    ),
+    reservations: z.array(z.object({ state: z.string(), total: z.number(), bytes: z.number() })),
+    pdfBindings: z.array(
+      z.object({
+        state: z.string(),
+        writerState: z.string(),
+        total: z.number(),
+        maximumBytes: z.number(),
+      }),
+    ),
+    capacity: z.object({ capacityBytes: z.number(), heldBytes: z.number() }),
+    totals: z.object({ heldBytes: z.number() }),
+    bindings: z.array(
+      z.object({
+        state: z.string(),
+        writerState: z.string(),
+        total: z.number(),
+        maximumBytes: z.number(),
+      }),
+    ),
+  }),
 });
 const readers = {
   "/workspace": v2WorkspaceSchema,
