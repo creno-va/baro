@@ -1,3 +1,5 @@
+export {};
+
 const build = await Bun.build({
   entrypoints: ["tests/helpers/report-rework-layout-entry.tsx"],
   target: "browser",
