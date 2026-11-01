@@ -692,7 +692,7 @@ const releaseInput = () => ({
       service: "baro",
       environment: "preview",
       release: SHA,
-      schemaVersion: "0021_drop_consent_age",
+      schemaVersion: "0022_conversation_rework",
     });
   }) as typeof fetch,
 });
@@ -724,7 +724,7 @@ test("release gate requires exact main CI, preview live/ready and current schema
             service: "baro",
             environment: "preview",
             release: SHA,
-            schemaVersion: "0021_drop_consent_age",
+            schemaVersion: "0022_conversation_rework",
             ...override,
           })) as typeof fetch,
       }),

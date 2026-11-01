@@ -111,13 +111,16 @@ export async function prepareSyntheticLawyers(cipher: EnvelopeCipher, now: strin
     );
     sql.push(
       render(
-        core.statement("INSERT INTO user_consents VALUES(?,?,?,?,1,?)", [
-          ownerId,
-          CURRENT_POLICY_VERSIONS.termsVersion,
-          CURRENT_POLICY_VERSIONS.privacyVersion,
-          CURRENT_POLICY_VERSIONS.aiNoticeVersion,
-          now,
-        ]),
+        core.statement(
+          "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) VALUES(?,?,?,?,?)",
+          [
+            ownerId,
+            CURRENT_POLICY_VERSIONS.termsVersion,
+            CURRENT_POLICY_VERSIONS.privacyVersion,
+            CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+            now,
+          ],
+        ),
       ),
     );
     for (const [key, value] of [
