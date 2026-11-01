@@ -54,6 +54,11 @@ test("encrypted multi-part rework records preserve immutable versions and curren
       schema,
     });
     expect(first?.revision).toBe(1);
+    expect(await f.records.head(f.g, f.workspace.id, "analysis", f.workspace.id)).toMatchObject({
+      id: first?.id,
+      revision: 1,
+      workspaceRevision: f.g.expectedRevision,
+    });
     expect(
       (await f.records.read(f.g, f.workspace.id, "analysis", f.workspace.id, schema))?.value,
     ).toEqual(value);
@@ -75,6 +80,10 @@ test("encrypted multi-part rework records preserve immutable versions and curren
       schema,
     });
     expect(second?.revision).toBe(2);
+    expect(await f.records.head(f.g, f.workspace.id, "analysis", f.workspace.id)).toMatchObject({
+      id: second?.id,
+      revision: 2,
+    });
     expect(
       (await f.records.read(f.g, f.workspace.id, "analysis", f.workspace.id, schema, first?.id))
         ?.value,
