@@ -41,7 +41,9 @@ import {
   type ReportReviewData,
   reportFile,
   reportReviewSchema,
+  reportSourceDigest,
   reportSourceOptions,
+  reportSourceRows,
   reportText,
   sourceDigest,
   validateOriginalSelection,
@@ -79,6 +81,7 @@ type Row = {
   summary_revision: number;
   snapshot_id: string;
   review_snapshot_id?: string | null;
+  latest_canonical_revision?: number;
   operation_id: string;
   current_job_id: string | null;
   state: string;
@@ -175,7 +178,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const session = reportSessionFence(deps.sessionId);
     const result = await core
       .statement(
-        `SELECT r.*${includeReview ? ", (SELECT s.id FROM v2_private_snapshots s WHERE s.owner_id=w.owner_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision+1 AND s.state='published') AS review_snapshot_id" : ""} FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
+        `SELECT r.*${includeReview ? ", (SELECT s.id FROM v2_private_snapshots s WHERE s.owner_id=w.owner_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision+1 AND s.state='published') AS review_snapshot_id, (SELECT coalesce(max(p.revision),0) FROM v2_reports p WHERE p.workspace_id=r.workspace_id AND p.id NOT LIKE 'export-%') AS latest_canonical_revision" : ""} FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=? AND EXISTS(SELECT 1 FROM user WHERE id=w.owner_id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='account' AND target_id=w.owner_id) OR (target_kind='workspace' AND target_id=w.id) OR (target_kind='report' AND target_id=r.id)) ${session.sql}`,
         [id, a.ownerId, ...session.values],
       )
       .first<Row>();
@@ -327,12 +330,31 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     review: ReportReviewData,
     version: number,
     selectedOriginals: readonly string[] = [],
+    kind: "canonical" | "originals_export" = "canonical",
+    parent?: Row,
   ) {
+    // Only the private zip() call copies a reviewed parent for original export.
+    // It still performs a fresh full analysis check in build(), before lease
+    // acquisition/render/storage, and another after rendering. Canonical report
+    // creation and editing must validate before publishing their visible body.
+    if (
+      kind === "originals_export" &&
+      (!review.parentReportId || !selectedOriginals.length || parent?.id !== review.parentReportId)
+    )
+      throw new ReportError("VALIDATION_ERROR");
     idempotencyKeySchema.parse(key);
     await requireReportConsent(core, a);
     const replay = await accounting.findOperation(a, route, key, requestHash);
     if (replay?.kind === "conflict") throw new ReportError("IDEMPOTENCY_CONFLICT");
     if (replay?.kind === "replay") {
+      // A ZIP replay still requires current parent sources. New export copies
+      // perform this same check below, before staging; do not read both here
+      // and in zip() for every new copy.
+      if (
+        review.parentReportId &&
+        review.sourceDigest !== (await sourceDigest(core, a, caseId, reportSourceOptions(review)))
+      )
+        throw new ReportError("STALE_REVISION");
       const previous = await core
         .statement("SELECT id FROM v2_reports WHERE operation_id=?", [replay.operation.id])
         .first<string>("id");
@@ -342,11 +364,32 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const current = await ownedWorkspace(core, a, caseId);
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
-    if (review.sourceDigest !== (await sourceDigest(core, a, caseId, reportSourceOptions(review))))
-      throw new ReportError("STALE_REVISION");
-    await checkAnalysis(a, caseId, review);
+    // Current ownership/S/status was read immediately above. Hash freshly read
+    // source rows with that basis; the publication claim still compares current
+    // W/S/owner and the parent identity atomically after encryption.
+    const currentDigest =
+      kind === "canonical"
+        ? await sourceDigest(core, a, caseId, reportSourceOptions(review))
+        : await reportSourceDigest(
+            current.confirmed_summary_revision,
+            current.status,
+            await reportSourceRows(core, a, caseId, undefined, reportSourceOptions(review)),
+            reportSourceOptions(review),
+          );
+    if (review.sourceDigest !== currentDigest) throw new ReportError("STALE_REVISION");
+    if (kind === "canonical") await checkAnalysis(a, caseId, review);
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
-    const snapshotId = await stage(a, caseId, current.revision, id, body);
+    // A bounded copy of an already read private body can be encrypted in the
+    // publication batch. Visible canonical reports and larger copies retain
+    // their existing staged/checked path and limits.
+    const inlineBody =
+      kind === "originals_export" && utf8Bytes(JSON.stringify(body)) <= 98304
+        ? v2ReportBodySchema(deps.guideHosts).parse(body)
+        : null;
+    const inlineText = inlineBody ? JSON.stringify(inlineBody) : null;
+    const snapshotId = inlineBody
+      ? crypto.randomUUID()
+      : await stage(a, caseId, current.revision, id, body);
     const request = v2ReportCreateRequestSchema.parse({
       expectedRevision: current.revision,
       selectedFileIds: body.selectedFiles.map((f) => f.id),
@@ -390,17 +433,30 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       core.claim(
         g,
         claimId,
-        `w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=?) AND w.confirmed_summary_revision=? AND EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed') AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=? ${session.sql}`,
+        `w.status='active' AND w.current_job_id IS NULL AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=w.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=?) AND w.confirmed_summary_revision=? AND ${inlineBody ? "NOT EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=?)" : "EXISTS(SELECT 1 FROM v2_private_snapshots WHERE id=? AND owner_id=w.owner_id AND workspace_revision=w.revision AND state='sealed')"} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?) AND coalesce((SELECT max(revision) FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%'),0)=? ${parent ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=? AND parent.snapshot_id=? AND parent.encrypted_payload=? AND parent.workspace_revision=? AND parent.summary_revision=? AND parent.operation_id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} ${session.sql}`,
         [
           CURRENT_POLICY_VERSIONS.termsVersion,
           CURRENT_POLICY_VERSIONS.privacyVersion,
           CURRENT_POLICY_VERSIONS.aiNoticeVersion,
           current.confirmed_summary_revision,
           snapshotId,
+          id,
           route,
           key,
           a.now,
-          review.parentReportId ? ((await latest(a, caseId))?.revision ?? 0) : version - 1,
+          parent?.latest_canonical_revision ??
+            (review.parentReportId ? ((await latest(a, caseId))?.revision ?? 0) : version - 1),
+          ...(parent
+            ? [
+                parent.id,
+                parent.revision,
+                parent.snapshot_id,
+                parent.encrypted_payload,
+                parent.workspace_revision,
+                parent.summary_revision,
+                parent.operation_id,
+              ]
+            : []),
           ...session.values,
         ],
       ),
@@ -418,9 +474,25 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         },
         claimId,
       ),
+      ...(inlineBody
+        ? await snapshotStatements(
+            core,
+            {
+              id: snapshotId,
+              ownerId: a.ownerId,
+              workspaceId: caseId,
+              targetId: id,
+              purpose: "report",
+              revision: current.revision,
+              now: a.now,
+            },
+            inlineBody,
+            claimId,
+          )
+        : []),
       core.statement(
-        `UPDATE v2_private_snapshots SET state='published' WHERE id=? AND ${sqlClaim}`,
-        [snapshotId, claimId],
+        `UPDATE v2_private_snapshots SET state='published'${inlineBody ? ",workspace_revision=?" : ""} WHERE id=? AND ${sqlClaim}`,
+        [...(inlineBody ? [current.revision] : []), snapshotId, claimId],
       ),
       ...(await snapshotStatements(
         core,
@@ -457,8 +529,23 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         [id, JSON.stringify(selections), caseId, claimId],
       ),
       core.statement(
-        "UPDATE v2_mutation_claims SET verified=CASE WHEN (SELECT count(*) FROM v2_report_selections WHERE report_id=?)=? THEN 1 ELSE 0 END WHERE id=?",
-        [id, selections.length, claimId],
+        `UPDATE v2_mutation_claims SET verified=CASE WHEN (SELECT count(*) FROM v2_report_selections WHERE report_id=?)=? ${inlineText ? "AND EXISTS(SELECT 1 FROM v2_private_snapshots s WHERE s.id=? AND s.owner_id=? AND s.workspace_id=? AND s.target_id=? AND s.purpose='report' AND s.revision=? AND s.workspace_revision=s.revision AND s.state='published' AND s.part_count=? AND s.byte_length=? AND (SELECT count(*) FROM v2_private_parts p WHERE p.snapshot_id=s.id)=s.part_count AND (SELECT min(p.part_index) FROM v2_private_parts p WHERE p.snapshot_id=s.id)=0 AND (SELECT max(p.part_index) FROM v2_private_parts p WHERE p.snapshot_id=s.id)=s.part_count-1 AND (SELECT sum(p.byte_length) FROM v2_private_parts p WHERE p.snapshot_id=s.id)=s.byte_length)" : ""} THEN 1 ELSE 0 END WHERE id=?`,
+        [
+          id,
+          selections.length,
+          ...(inlineText
+            ? [
+                snapshotId,
+                a.ownerId,
+                caseId,
+                id,
+                current.revision,
+                fragmentText(inlineText).length,
+                utf8Bytes(inlineText),
+              ]
+            : []),
+          claimId,
+        ],
       ),
       ...jobInsertStatements(
         core,
@@ -819,11 +906,6 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const a = actor(ownerId),
         data = await read(a, id);
       validateOriginalSelection(data.body, data.review.excludedFileIds, selectedFileIds);
-      if (
-        data.review.sourceDigest !==
-        (await sourceDigest(core, a, data.row.workspace_id, reportSourceOptions(data.review)))
-      )
-        throw new ReportError("STALE_REVISION");
       const exportId = await createRecord(
         a,
         data.row.workspace_id,
@@ -834,8 +916,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         { ...data.review, parentReportId: id },
         data.row.revision,
         selectedFileIds,
+        "originals_export",
+        data.row,
       );
-      return exports.zip(a, exportId, selectedFileIds);
+      return exports.zip(a, exportId, selectedFileIds, id);
     },
     renderText: (review: ReportReviewData) =>
       review.maskIdentifiers ? maskReportText(review.content) : review.content,
