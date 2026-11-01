@@ -38,7 +38,11 @@ type Mutation =
   | { kind: "context"; input: V2CaseContextUpdate }
   | { kind: "request"; input: V2SummaryReconciliationRequest }
   | { kind: "proposal"; input: V2SummaryReconciliationConfirm }
-  | { kind: "cancel"; input: V2SummaryReconciliationCancel }
+  | {
+      kind: "cancel";
+      input: V2SummaryReconciliationCancel;
+      resumeExplanation?: Pick<V2SummaryReconciliationRequest, "kind" | "explanation">;
+    }
   | {
       kind: "initial";
       revision: number;
@@ -445,8 +449,8 @@ function SummaryReconfirmationScene({
         requestIntent.current = null;
         setNotice("변경안을 요청했어요. 확인하고 확정할 때까지 기존 정리는 그대로예요.");
       } else if (operation.kind === "cancel") {
-        setExplanation("");
-        setKind(null);
+        setExplanation(operation.resumeExplanation?.explanation ?? "");
+        setKind(operation.resumeExplanation?.kind ?? null);
         setNotice("변경 요청을 취소했어요. 기존 정리는 그대로예요.");
         focusTarget.current?.focus();
       } else {
@@ -490,24 +494,22 @@ function SummaryReconfirmationScene({
       },
     });
   };
-  const cancel = () =>
+  const cancel = (
+    resumeExplanation?: Pick<V2SummaryReconciliationRequest, "kind" | "explanation">,
+  ) =>
     state?.request && item
       ? mutate({
           kind: "cancel",
           input: { expectedRevision: item.revision, requestId: state.request.id },
+          ...(resumeExplanation ? { resumeExplanation } : {}),
         })
       : Promise.resolve(false);
-  const explainAgain = async () => {
+  const explainAgain = () => {
     const previous = state?.request;
     if (!previous) return;
-    // A terminal job may be projected as failed while its immutable private
-    // request is still pending/running. Retire it and read back the fresh
-    // revision before opening another explanation; cancellation failure keeps
-    // the saved request available for the same owner's idempotent retry.
-    if (await cancel()) {
-      setKind(previous.input.kind);
-      setExplanation(previous.input.explanation);
-    }
+    // Terminal jobs can read as failed while the private request stays pending.
+    // Retire and read back first, retaining the intent for either retry control.
+    return cancel(previous.input);
   };
   return (
     <div className={embedded ? "summary-reconfirmation--embedded" : "intake-flow"}>

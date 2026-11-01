@@ -274,8 +274,15 @@ test("proposal resume, cancel, explain again and confirm preserve canonical prov
   expect(saved.summaryDetails.unknowns).toEqual(item.summaryDetails?.unknowns);
 });
 
-for (const fault of [null, "cancel-fail-before", "cancel-lost-after", "cancel-peer-after"]) {
-  test(`terminal job: primary explain again retires the private request (${fault ?? "success"})`, async ({
+for (const [fault, errorPanelRetry] of [
+  [null, false],
+  ["cancel-fail-before", false],
+  ["cancel-lost-after", false],
+  ["cancel-peer-after", false],
+  ["cancel-fail-before", true],
+  ["cancel-lost-after", true],
+] as const) {
+  test(`terminal job: primary explain again retires the private request (${fault ?? "success"}${errorPanelRetry ? "/error-panel-retry" : ""})`, async ({
     page,
   }) => {
     const item = await seed(page, "active");
@@ -337,9 +344,12 @@ for (const fault of [null, "cancel-fail-before", "cancel-lost-after", "cancel-pe
     if (fault) {
       await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
       await expect(input).toHaveCount(0);
-      // Repeat the user's primary intent. Ambiguous cancellation reuses the
-      // shared client's persisted key instead of creating a second retirement.
-      await retry.click();
+      // Either retry control preserves the intent. Ambiguous cancellation reuses
+      // the shared client's persisted key instead of a second retirement.
+      await (errorPanelRetry
+        ? page.getByRole("button", { name: "다시 시도", exact: true })
+        : retry
+      ).click();
     }
     await expect(input).toHaveValue(explanation);
     expect(
