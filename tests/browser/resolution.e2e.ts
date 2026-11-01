@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ request }) => {
@@ -199,9 +200,12 @@ test("grounded draft review/edit/save/download and reconnect across both host su
   await editor.fill(`${await editor.inputValue()}\n직접 검토한 수정`);
   await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
   await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  const expectedContent = await editor.inputValue();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
-  expect((await download).suggestedFilename()).toMatch(/검토용\.txt$/);
+  const downloaded = await download;
+  expect(downloaded.suggestedFilename().normalize("NFC")).toMatch(/검토용\.txt$/);
+  expect(await readFile(await downloaded.path())).toEqual(Buffer.from(expectedContent, "utf8"));
   await page.reload();
   await expect(page.getByLabel("초안 검토·수정")).toContainText("직접 검토한 수정");
   await page.getByRole("button", { name: "대화·리포트 보기 전환" }).click();
@@ -363,9 +367,12 @@ test("consent withdrawal permits local historical path browsing and paused saved
   await expect(page.getByLabel("초안 검토·수정")).toBeDisabled();
   await expect(page.getByRole("button", { name: "검토용 초안 준비" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "이어서 진행" })).toBeDisabled();
+  const expectedContent = await page.getByLabel("초안 검토·수정").inputValue();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
-  expect((await download).suggestedFilename()).toMatch(/검토용\.txt$/);
+  const downloaded = await download;
+  expect(downloaded.suggestedFilename().normalize("NFC")).toMatch(/검토용\.txt$/);
+  expect(await readFile(await downloaded.path())).toEqual(Buffer.from(expectedContent, "utf8"));
   await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: /^변호사와 해결/ })).toHaveAttribute(
