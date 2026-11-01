@@ -31,8 +31,18 @@ let h = resolutionHarness(),
   ownerId = "owner",
   needsConsent = false,
   failDownload = false,
-  delayDraft = 0;
-let calls = { get: 0, update: 0, draft: 0, saveReport: 0, files: 0 };
+  delayDraft = 0,
+  missingReport = false;
+let calls = {
+  get: 0,
+  update: 0,
+  draft: 0,
+  saveReport: 0,
+  files: 0,
+  reportReads: 0,
+  legacyGets: 0,
+  observations: 0,
+};
 Bun.serve({
   hostname: "127.0.0.1",
   port: Number(Bun.env.BARO_RESOLUTION_TEST_PORT ?? "4376"),
@@ -40,6 +50,7 @@ Bun.serve({
     const path = new URL(request.url).pathname
       .replace("/api/v2/cases/case/rework/resolution/draft", "/fixture/draft")
       .replace("/api/v2/cases/case/rework/resolution", "/fixture/resolution");
+    const reportPath = path === "/api/v2/cases/case/rework/report" ? "/fixture/report" : path;
     if (path === "/fixture/control" && request.method === "POST") {
       const input = (await request.json()) as {
         reset?: boolean;
@@ -49,6 +60,7 @@ Bun.serve({
         failDownload?: boolean;
         delayDraft?: number;
         stale?: boolean;
+        missingReport?: boolean;
       };
       if (input.reset) {
         h = resolutionHarness();
@@ -56,7 +68,17 @@ Bun.serve({
         needsConsent = false;
         failDownload = false;
         delayDraft = 0;
-        calls = { get: 0, update: 0, draft: 0, saveReport: 0, files: 0 };
+        calls = {
+          get: 0,
+          update: 0,
+          draft: 0,
+          saveReport: 0,
+          files: 0,
+          reportReads: 0,
+          legacyGets: 0,
+          observations: 0,
+        };
+        missingReport = false;
       }
       if (input.purpose) {
         const source = resolutionSource();
@@ -74,6 +96,7 @@ Bun.serve({
       }
       if (input.failDownload !== undefined) failDownload = input.failDownload;
       if (input.delayDraft !== undefined) delayDraft = input.delayDraft;
+      if (input.missingReport !== undefined) missingReport = input.missingReport;
       if (input.stale && h.source.basis)
         h.source = {
           ...h.source,
@@ -86,16 +109,28 @@ Bun.serve({
     try {
       if (path === "/fixture/files") {
         calls.files++;
+        if (new URL(request.url).searchParams.get("metadataOnly") !== "true") calls.observations++;
         return Response.json(h.source.files.map(({ id, name }) => ({ id, name })));
       }
-      if (path === "/fixture/report")
+      if (reportPath === "/fixture/report") {
+        calls.reportReads++;
+        if (missingReport) return Response.json(null);
         return Response.json({
+          caseId: "case",
+          title: "합성 리포트",
+          content: "사용자 확인 사실",
+          updatedAt: "2026-11-01T10:00:00.000Z",
           id: "report",
           revision: 1,
           stale: false,
           excludedFileIds: ["excluded-file"],
           maskIdentifiers: true,
         });
+      }
+      if (path === "/fixture/legacy-get") {
+        calls.legacyGets++;
+        return Response.json({ ok: true });
+      }
       if (path === "/fixture/save-report") {
         calls.saveReport++;
         if (failDownload) return Response.json({ code: "STORAGE_UNAVAILABLE" }, { status: 503 });

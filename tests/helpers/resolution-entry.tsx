@@ -83,7 +83,7 @@ function Host() {
       <FollowUpResolution
         key={surface}
         caseId="case"
-        client={client}
+        {...(new URLSearchParams(location.search).has("default") ? {} : { client })}
         embedded={surface === "chat"}
         onSaveReport={() => json<void>("/fixture/save-report", { method: "POST" })}
         onDirtyChange={setDirty}
