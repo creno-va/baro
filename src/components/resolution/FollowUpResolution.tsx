@@ -40,7 +40,7 @@ export interface ResolutionClient {
     options: Options,
   ): Promise<V2ResolutionState>;
   files(caseId: string): Promise<{ id: string; name: string }[]>;
-  report(caseId: string): Promise<ReportIdentity>;
+  report(caseId: string, options: Options): Promise<ReportIdentity>;
 }
 const browserClient: ResolutionClient = {
   async session() {
@@ -50,8 +50,13 @@ const browserClient: ResolutionClient = {
   getResolution: (id, options) => api.rework.getResolution(id, options),
   updateResolution: (id, input, options) => api.rework.updateResolution(id, input, options),
   prepareDraft: (id, input, options) => api.rework.prepareDraft(id, input, options),
-  files: (id) => api.files.list(id),
-  report: (id) => api.reports.get(id),
+  files: (id) => api.files.list(id, { metadataOnly: true }),
+  async report(id, options) {
+    const report = await api.rework.peekReport(id, options);
+    if (!report)
+      throw Object.assign(new Error("현재 리포트를 확인해 주세요."), { code: "REVIEW_REQUIRED" });
+    return report;
+  },
 };
 const paths = [
   {
@@ -226,7 +231,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       if (next.selection === "self" || next.selection === "lawyer") {
         const [available, currentReport] = await Promise.all([
           client.files(props.caseId),
-          client.report(props.caseId),
+          client.report(props.caseId, options),
         ]);
         await verify(epoch);
         if (epoch === sequence.current) {
@@ -332,7 +337,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     await run(async (options, epoch) => {
       const [available, currentReport] = await Promise.all([
         client.files(props.caseId),
-        client.report(props.caseId),
+        client.report(props.caseId, options),
       ]);
       await verify(epoch);
       if (epoch !== sequence.current) return null;
