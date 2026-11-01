@@ -336,15 +336,22 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       }, false);
       return;
     }
+    const readOnly = needsConsent;
     await run(async (options, epoch) => {
-      const [available, currentReport] = await Promise.all([
+      const [available, currentReport, historical] = await Promise.all([
         client.files(props.caseId),
         client.report(props.caseId, options),
+        readOnly ? client.getResolution(props.caseId, options) : Promise.resolve(null),
       ]);
       await verify(epoch);
       if (epoch !== sequence.current) return null;
       setFiles(available.filter((f) => !currentReport.excludedFileIds.includes(f.id)));
       setReport(currentReport);
+      if (historical) {
+        accept(historical);
+        setSelected(choice);
+        return null;
+      }
       if (!state) throw new Error("NOT_READY");
       const base = state.basis
         ? { reportId: state.basis.reportId, reportRevision: state.basis.reportRevision }
@@ -361,7 +368,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         },
         options,
       );
-    });
+    }, !readOnly);
   }
   function requestChoice(choice: NonNullable<typeof selected>) {
     if (dirty) {
@@ -412,7 +419,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         `${latest.draft.title}-검토용.txt`,
       );
       setNotice("초안 다운로드를 요청했어요. 저장 위치를 확인해 주세요.");
-      return latest;
+      return null;
     }, false);
   }
   const scope = (
@@ -517,7 +524,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       {needsConsent && (
         <p>
           새 초안 준비·수정은 현재 정책 동의 후 이용할 수 있어요. 저장된 내용 확인과 다운로드는 계속
-          이용할 수 있어요.
+          이용할 수 있어요. 동의 전에는 화면만 전환하며 선택을 저장하지 않아요.
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
@@ -731,8 +738,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                         viewBlocked ||
                         dirty ||
                         state.draft.status !== "saved" ||
-                        !state.draft.reviewed ||
-                        state.status === "paused"
+                        !state.draft.reviewed
                       }
                       onClick={() => void exportDraft()}
                     >
@@ -813,7 +819,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         <div className="resolution-actions">
           <Button
             variant="ghost"
-            disabled={busy || !reference || dirty}
+            disabled={busy || blocked || !reference || dirty}
             onClick={() => {
               if (reference)
                 void run((options) =>

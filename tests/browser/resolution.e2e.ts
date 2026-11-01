@@ -228,3 +228,38 @@ test("the real default client peeks at existing reports and reads file metadata 
   });
   expect(calls.reportReads).toBeGreaterThanOrEqual(2);
 });
+
+test("consent withdrawal permits local historical path browsing and paused saved download without mutations", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/?default");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+  await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  await page.getByRole("button", { name: "잠시 중단" }).click();
+  await expect(page.getByRole("button", { name: "이어서 진행" })).toBeEnabled();
+  const before = await (await request.get("/fixture/counts")).json();
+  await request.post("/fixture/control", { data: { needsConsent: true } });
+  await page.reload();
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await expect(page.getByLabel("초안 검토·수정")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "검토용 초안 준비" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "이어서 진행" })).toBeDisabled();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/검토용\.txt$/);
+  await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^변호사와 해결/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const after = await (await request.get("/fixture/counts")).json();
+  expect(after.update).toBe(before.update);
+  expect(after.draft).toBe(before.draft);
+  expect(after.observations).toBe(0);
+});
