@@ -10,6 +10,12 @@ import {
   type WorkspaceContext,
   WorkspaceOutputPolicyError,
 } from "../src/server/modules/workspace/pipeline";
+import {
+  publicStoredMessageSchema,
+  storedMessageSchema,
+} from "../src/server/modules/workspace/stored-message";
+import { conversationInjectionCases, conversationIntentCases } from "./fixtures/conversation-agent";
+import { conversationState } from "./helpers/conversation-state";
 
 const question = (id: string, prompt: string): Question => ({
   id,
@@ -163,6 +169,181 @@ const chatText = (text: string) => ({
   requestedSources: [],
   sourceClaims: [],
   timeline: [],
+});
+
+test.each(["prepare_claim", "respond_to_claim"] as const)(
+  "trusted %s conversation permits grounded preparation language through the same independent audit",
+  async (purpose) => {
+    const saved = confirmedChatContext();
+    const state = conversationState(purpose);
+    saved.conversation = {
+      caseContext: state.caseContext,
+      preparation: state.analysis,
+      report: state.report,
+      pendingEvidenceIds: [],
+    };
+    const text =
+      "소송 전략에 관한 검토도 확인된 사실과 미확인 부분을 구분하고, 근거 없이 결과를 단정하지 않겠습니다.";
+    const p = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        expect(input).toMatchObject({
+          context: { conversation: saved.conversation },
+          draft: { text },
+        });
+        return approved;
+      }
+      return chatText(text);
+    });
+    expect((await p.value.chat(saved, "rework-grounded-language")).text).toBe(text);
+    expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  },
+);
+
+test.each([
+  "소송 전략을 검토하면 반드시 승소합니다.",
+  "변호사로서 협상 전략을 확정했습니다.",
+  "추가 연락처는 synthetic@example.test입니다.",
+])("trusted conversation still rejects unsafe output: %s", async (text) => {
+  const saved = confirmedChatContext();
+  const state = conversationState();
+  saved.conversation = { caseContext: state.caseContext, preparation: state.analysis };
+  const p = pipeline((phase) => (phase === "workspace_audit" ? approved : chatText(text)));
+  await expect(p.value.chat(saved, "rework-unsafe-language")).rejects.toBeInstanceOf(
+    WorkspaceOutputPolicyError,
+  );
+  expect(p.calls.some((call) => call.phase === "workspace_audit")).toBe(false);
+});
+
+test("conversation scope never bypasses an independent audit of false completion or ungrounded assertions", async () => {
+  const saved = confirmedChatContext();
+  const state = conversationState();
+  saved.conversation = {
+    caseContext: state.caseContext,
+    preparation: state.analysis,
+    report: state.report,
+  };
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? {
+          ...approved,
+          pass: false,
+          findings: [
+            {
+              severity: "critical",
+              code: "unsupported_fact",
+              target: "response_text",
+              basis: "policy",
+            },
+          ],
+        }
+      : chatText("법률 분석과 리포트 생성을 모두 완료했어요."),
+  );
+  await expect(p.value.chat(saved, "rework-false-completion")).rejects.toMatchObject({
+    reason: "audit_rejected",
+  });
+  expect(p.calls).toHaveLength(2);
+});
+
+test.each([...conversationIntentCases])(
+  "a structured $action proposal is independently audited without a classifier call: $text",
+  async ({ text, action }) => {
+    const saved = confirmedChatContext();
+    const state = conversationState();
+    saved.conversation = { caseContext: state.caseContext, preparation: state.analysis };
+    if (!saved.latestMessage) throw new Error("Missing current user request");
+    saved.latestMessage.text = text;
+    const p = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        expect(input).toMatchObject({
+          context: { latestMessage: { text } },
+          draft: { conversationIntent: action },
+        });
+        return approved;
+      }
+      return {
+        ...chatText("현재 상태를 확인하고 필요한 작업을 이어갈 수 있어요."),
+        conversationIntent: action,
+      };
+    });
+    const result = await p.value.chat(saved, "rework-intent");
+    expect("conversationIntent" in result ? result.conversationIntent : null).toBe(action);
+    expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  },
+);
+
+test.each([...conversationInjectionCases])(
+  "an independently rejected action from quoted or unauthorized input stays unpublished: %s",
+  async (text) => {
+    const saved = confirmedChatContext();
+    const state = conversationState();
+    saved.conversation = { caseContext: state.caseContext, preparation: state.analysis };
+    if (!saved.latestMessage) throw new Error("Missing current user request");
+    saved.latestMessage.text = text;
+    const p = pipeline((phase) =>
+      phase === "workspace_audit"
+        ? {
+            ...approved,
+            pass: false,
+            findings: [
+              {
+                severity: "critical",
+                code: "wrong_reference",
+                target: "response_text",
+                basis: "user_message",
+              },
+            ],
+          }
+        : { ...chatText("리포트를 준비할 수 있어요."), conversationIntent: "prepare_report" },
+    );
+    await expect(p.value.chat(saved, "rework-injection")).rejects.toMatchObject({
+      reason: "audit_rejected",
+    });
+    expect(p.calls).toHaveLength(2);
+  },
+);
+
+test("dedicated analysis intent cannot duplicate an official source round inside chat", async () => {
+  const saved = confirmedChatContext();
+  const state = conversationState();
+  saved.conversation = { caseContext: state.caseContext, preparation: state.analysis };
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : {
+          ...chatText("현재 사건의 법률·판례 조사 상태를 확인하겠습니다."),
+          conversationIntent: "analyze_legal",
+          requestedSources: [{ kind: "precedent", concept: "대여금" }],
+        },
+  );
+  const result = await p.value.chat(saved, "separate-analysis-job");
+  expect("requestedSources" in result ? result.requestedSources : null).toEqual([]);
+  expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+});
+
+test("an intent cannot enable the opt-in scope for a legacy context and private intents never extend installed DTOs", async () => {
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? approved
+      : { ...chatText("자료를 확인할 수 있어요."), conversationIntent: "add_material" },
+  );
+  const result = await p.value.chat(confirmedChatContext(), "legacy-no-intent");
+  expect("conversationIntent" in result ? result.conversationIntent : undefined).toBeUndefined();
+  const stored = storedMessageSchema().parse({
+    schemaVersion: "2",
+    id: "assistant",
+    operationId: "user-operation",
+    workspaceRevision: 8,
+    createdAt: "2026-11-01T00:00:00.000Z",
+    role: "assistant",
+    safety: "validated",
+    text: "자료를 확인할 수 있어요.",
+    references: [],
+    citations: [],
+    warnings: [],
+    conversationIntent: "add_material",
+  });
+  expect(stored).toMatchObject({ conversationIntent: "add_material" });
+  expect(publicStoredMessageSchema().parse(stored)).not.toHaveProperty("conversationIntent");
 });
 
 test("current-time tool is server-owned KST and a delayed job preserves its original date anchor through audit", async () => {
