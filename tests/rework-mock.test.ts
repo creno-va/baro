@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { createJsonRequester, createReworkClient } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
-import type { ReportMockState } from "../src/client/api/mock/reports";
+import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
 import { createReworkMock } from "../src/client/api/mock/rework";
 import type { WorkspaceMockState } from "../src/client/api/mock/workspace";
 import { reconfirmationCase } from "./helpers/intake-reconfirmation";
@@ -61,6 +61,85 @@ function fixture() {
     },
   };
 }
+for (const change of ["body", "mask", "exclusions", "evidence", "case_revision"] as const)
+  test(`explicit mock keeps edited-report ancestry without validating changed ${change}`, async () => {
+    const f = fixture();
+    const file = {
+      id: "binding-synthetic-file",
+      name: "합성 계약.txt",
+      mimeType: "text/plain",
+      sizeBytes: 100,
+      status: "ready" as const,
+      coverage: "전체",
+      extractedText: "계약 날짜는 아직 확인되지 않았습니다.",
+    };
+    f.change((state) => {
+      state.files[f.item.id] = [file];
+    });
+    const context = await f.client.getContext(f.item.id);
+    const next = await f.client.updateContext(f.item.id, {
+      expectedRevision: context.workspaceRevision,
+      casePurpose: "respond_to_claim",
+      subjectContext: "individual",
+      procedure: context.context.procedure,
+    });
+    await f.client.executeAction(f.item.id, {
+      action: "prepare_report",
+      requestId: crypto.randomUUID(),
+      expectedRevision: next.workspaceRevision,
+    });
+    const prior = await f.client.peekReport(f.item.id);
+    if (!prior) throw new Error("Synthetic prepared report missing");
+    const analysisId = prior.analysisReview?.analysisId;
+    f.change((state) => {
+      if (change === "evidence")
+        state.files[f.item.id] = [{ ...file, extractedText: "새로 확인한 합성 원문입니다." }];
+      if (change === "case_revision") {
+        const item = state.cases[f.item.id];
+        if (!item) throw new Error("Synthetic case missing");
+        item.revision++;
+      }
+    });
+    const reports = createReportsMockHandler({
+      read: f.runtime.read,
+      update: (fn) =>
+        f.runtime.update((state) => fn(state as WorkspaceMockState & ReportMockState)),
+      original: async () => new Blob(["synthetic-original"]),
+    });
+    await reports(`/api/v2/cases/${f.item.id}/reports`, {
+      method: "PATCH",
+      body: {
+        expectedRevision: prior.revision,
+        content:
+          change === "exclusions" ? prior.content : "사용자가 직접 검토한 합성 리포트입니다.",
+        excludedFileIds: change === "exclusions" ? [file.id] : prior.excludedFileIds,
+        maskIdentifiers: change === "mask" ? !prior.maskIdentifiers : prior.maskIdentifiers,
+      },
+    });
+    const edited = await f.client.peekReport(f.item.id);
+    expect(edited?.id).not.toBe(prior.id);
+    expect(edited?.revision).toBe(prior.revision + 1);
+    expect(edited?.stale).toBe(change !== "body");
+    expect(edited?.analysisReview?.status).toBe("review_required");
+    expect(edited?.analysisReview?.userEdited).toBe(true);
+    expect(edited?.analysisReview?.analysisId).toBe(change === "body" ? analysisId : null);
+    if (change === "body")
+      expect(edited?.analysisReview?.checkedAt).toBe(prior.analysisReview?.checkedAt);
+    expect(f.read().reportHistory?.[prior.id]?.content).toBe(prior.content);
+    expect((await f.client.getConversation(f.item.id)).report.status).toBe("stale");
+    if (change === "body") {
+      const account = createAccountMockHandler({
+        read: f.runtime.read,
+        update: (fn) =>
+          f.runtime.update((state) => fn(state as WorkspaceMockState & ReportMockState)),
+        removeOriginals: async () => {},
+      });
+      await account(`/api/v2/cases/${f.item.id}`, { method: "DELETE" });
+      expect(Object.keys(f.read().reworkReportBindings ?? {})).toHaveLength(0);
+      expect(Object.keys(f.read().reworkEditedReports ?? {})).toHaveLength(0);
+      await expect(f.client.peekReport(f.item.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    }
+  });
 test("an actual explicit-mock report size failure survives the rework boundary without an empty report", async () => {
   const f = fixture();
   f.change((state) => {

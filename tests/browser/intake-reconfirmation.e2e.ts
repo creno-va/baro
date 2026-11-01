@@ -374,6 +374,81 @@ for (const [fault, errorPanelRetry] of [
   });
 }
 
+for (const stage of ["summary", "active"] as const) {
+  test(`${stage}: identical summary key order permits proposal readback, cancellation and confirmation`, async ({
+    page,
+  }) => {
+    const item = await seed(page, stage);
+    await page.goto(`/cases/${item.id}/summary`);
+    await expect(
+      page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }),
+    ).toBeEnabled();
+    const reordered = await page.evaluate((id) => {
+      const reorder = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(reorder);
+        if (value && typeof value === "object")
+          return Object.fromEntries(
+            Object.entries(value)
+              .reverse()
+              .map(([key, value]) => [key, reorder(value)]),
+          );
+        return value;
+      };
+      const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+      cases[id].summaryDetails = reorder(cases[id].summaryDetails);
+      localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+      return cases[id].summaryDetails;
+    }, item.id);
+    expect(reordered).toEqual(item.summaryDetails);
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(item.summaryDetails));
+    await propose(page);
+    expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "변경안 취소", exact: true }).click();
+    await expect(page.getByRole("button", { name: "맞아요", exact: true })).toBeVisible();
+    expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+    await propose(page);
+    await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/cases/${item.id}$`));
+    const confirmed = (await canonical(page, item.id)).summaryDetails;
+    expect(confirmed.revision).toBe((item.summaryDetails?.revision ?? 0) + 1);
+    expect(confirmed.facts.slice(0, item.summaryDetails?.facts.length)).toEqual(
+      item.summaryDetails?.facts,
+    );
+    expect(confirmed.unknowns).toEqual(item.summaryDetails?.unknowns);
+  });
+}
+
+for (const difference of ["fact-text", "reference", "summary-revision", "fact-order"]) {
+  test(`a proposal with a different ${difference} is still rejected`, async ({ page }) => {
+    const item = await seed(page);
+    await page.goto(`/cases/${item.id}/summary`);
+    await propose(page);
+    const changed = await page.evaluate(
+      ({ id, difference }) => {
+        const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        const summary = cases[id].summaryDetails;
+        if (difference === "fact-text") summary.facts[0].text = "원래 사실과 다른 합성 진술입니다.";
+        if (difference === "reference")
+          summary.facts[0].references[0].questionId = "different-source";
+        if (difference === "summary-revision") summary.revision++;
+        if (difference === "fact-order") summary.facts.reverse();
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+        return summary;
+      },
+      { id: item.id, difference },
+    );
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("변경안의 기준과 현재 정리가 달라요.");
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toHaveCount(0);
+    expect((await canonical(page, item.id)).summaryDetails).toEqual(changed);
+  });
+}
+
 test("a lost request response retries the same persisted proposal", async ({ page }) => {
   const item = await seed(page);
   await page.goto(`/cases/${item.id}/summary`);

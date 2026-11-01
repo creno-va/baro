@@ -146,6 +146,7 @@ export function createReworkMock(
       ready =
         report &&
         !report.stale &&
+        !state.reworkEditedReports?.[report.id] &&
         current &&
         state.reworkReportBindings?.[report.id] === snapshot?.id;
     return v2ConversationStateSchema().parse({
@@ -179,18 +180,21 @@ export function createReworkMock(
     const report = state.reports[id];
     if (!report) return null;
     const conversation = await stateFor(id),
-      snapshot = conversation.snapshot;
+      snapshot = conversation.snapshot,
+      current =
+        snapshot !== null &&
+        ["ready", "partial", "empty", "unavailable"].includes(conversation.analysis.status) &&
+        state.reworkReportBindings?.[report.id] === snapshot.id,
+      userEdited =
+        !!state.reworkEditedReports?.[report.id] || !state.reworkReportBindings?.[report.id];
     return {
       ...report,
-      stale: report.stale || conversation.report.status === "stale",
+      stale: report.stale || !current,
       analysisReview: {
-        analysisId: state.reworkReportBindings?.[report.id] ?? null,
-        status:
-          conversation.report.status === "ready"
-            ? (snapshot?.status ?? "review_required")
-            : "review_required",
-        userEdited: !state.reworkReportBindings?.[report.id],
-        checkedAt: snapshot?.checkedAt ?? null,
+        analysisId: current ? snapshot.id : null,
+        status: current && !userEdited ? snapshot.status : "review_required",
+        userEdited,
+        checkedAt: current ? snapshot.checkedAt : null,
       },
     };
   }
@@ -226,6 +230,7 @@ export function createReworkMock(
       if (report && analysis) {
         s.reworkReportBindings ??= {};
         s.reworkReportBindings[report.id] = analysis.snapshot.id;
+        delete s.reworkEditedReports?.[report.id];
       }
     });
     return { operationId: null, workspaceRevision: owned(read(), id).revision };

@@ -26,9 +26,15 @@ function eraseCase(state: ReportMockState, id: string) {
   for (const key of Object.keys(rework.summaryReconciliationReceipts ?? {}))
     if (key.includes(`:${id}:`)) delete rework.summaryReconciliationReceipts?.[key];
   for (const report of Object.values(state.reportHistory ?? {}))
-    if (report.caseId === id) delete rework.reworkReportBindings?.[report.id];
+    if (report.caseId === id) {
+      delete rework.reworkReportBindings?.[report.id];
+      delete rework.reworkEditedReports?.[report.id];
+    }
   const latest = state.reports[id];
-  if (latest) delete rework.reworkReportBindings?.[latest.id];
+  if (latest) {
+    delete rework.reworkReportBindings?.[latest.id];
+    delete rework.reworkEditedReports?.[latest.id];
+  }
   const fileIds = new Set((state.files[id] ?? []).map((file) => file.id));
   for (const [fileId, upload] of Object.entries(state.fileUploads ?? {}))
     if (upload.caseId === id) fileIds.add(fileId);
