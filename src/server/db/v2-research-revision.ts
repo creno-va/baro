@@ -14,7 +14,7 @@ const analysisTaskIdentity = z.object({
 });
 
 /** Job admission/publication advance the CAS revision without changing case facts.
- * Only traverse server-authenticated comparison messages, never arbitrary chat jobs.
+ * Only traverse server-authenticated comparison or unchanged publication proofs.
  * A gap, another mutation or an incomplete history remains a real revision boundary.
  */
 export async function researchRevisionBase(
@@ -119,6 +119,36 @@ export async function researchRevisionBase(
       storedUserMessageSchema,
     );
     const request = user.precedentComparisonRequest;
+    if (!request && published && !user.selectedFileIds.length && !user.lookupRequests?.length) {
+      const row = rows.find((row) => row.role === "assistant");
+      if (!row) break;
+      const message = await core.decrypt(
+        "v2_messages",
+        row.id,
+        ownerId,
+        row.revision,
+        row.encrypted_payload,
+        storedMessageSchema(),
+      );
+      const proof = message.role === "assistant" ? message.unchangedResearch : null;
+      if (
+        message.role === "assistant" &&
+        proof &&
+        proof.beforeWorkspaceRevision === job.target_revision - 1 &&
+        proof.summaryRevision === summaryRevision &&
+        user.operationId === job.operation_id &&
+        user.workspaceRevision === job.target_revision &&
+        message.operationId === job.operation_id &&
+        message.workspaceRevision === job.target_revision &&
+        !message.citations.length &&
+        !message.references.some((reference) => reference.kind === "official_source") &&
+        !message.precedentComparison &&
+        !message.toolResults?.length
+      ) {
+        base = proof.beforeWorkspaceRevision;
+        continue;
+      }
+    }
     if (
       !request ||
       request.expectedRevision !== job.target_revision - 1 ||

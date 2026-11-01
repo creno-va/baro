@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { revisionSchema } from "../../../contracts/common";
 import {
   v2AssistantMessageSchema,
   v2ConversationIntentSchema,
@@ -11,6 +12,12 @@ import {
   v2PrecedentComparisonRequestSchema,
   v2PrecedentComparisonSchema,
 } from "../../../contracts/v2/precedent-comparison";
+
+export const unchangedResearchSchema = z.object({
+  format: z.literal("unchanged-research-v1"),
+  beforeWorkspaceRevision: revisionSchema,
+  summaryRevision: revisionSchema,
+});
 
 export const storedUserMessageSchema = v2UserMessageSchema.extend({
   precedentComparisonRequest: v2PrecedentComparisonRequestSchema.optional(),
@@ -30,6 +37,7 @@ export function storedMessageSchema(guideHosts: readonly string[] = []) {
       toolResults: v2ToolResultsSchema.optional(),
       precedentComparison: v2PrecedentComparisonSchema.optional(),
       conversationIntent: v2ConversationIntentSchema.nullable().optional(),
+      unchangedResearch: unchangedResearchSchema.optional(),
     }),
   ]);
 }
@@ -43,6 +51,7 @@ export function publicStoredMessageSchema(
       toolResults: _tools,
       precedentComparison: comparison,
       conversationIntent: _intent,
+      unchangedResearch: _unchangedResearch,
       ...message
     } = stored;
     const validated = v2MessageSchema(guideHosts).parse(message);
