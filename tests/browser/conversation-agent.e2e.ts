@@ -30,6 +30,23 @@ test("320px inline work stays on the conversation, protects dirty input and rest
   await page.screenshot({ path: "/tmp/baro-625-conversation-320.png", fullPage: true });
 });
 
+test("opening a report pane alone does not acknowledge that its current body was reviewed", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  const primary = page.getByRole("button", { name: "리포트 준비·검토", exact: true });
+  await primary.click();
+  await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(primary).toBeVisible();
+  await primary.click();
+  await page.getByLabel("검토 중인 입력").focus();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "이후 해결 방법 선택", exact: true }),
+  ).toBeVisible();
+});
+
 test("a newly completed intent runs once; rereading historical intents does not execute", async ({
   page,
 }) => {

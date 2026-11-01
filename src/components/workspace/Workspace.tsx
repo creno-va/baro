@@ -654,6 +654,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             onChanged={() => void props.onChanged()}
             onDirtyChange={props.onDirtyChange}
             onBusyChange={props.onBusyChange}
+            onViewed={props.onReportViewed}
           />
         </div>
       );

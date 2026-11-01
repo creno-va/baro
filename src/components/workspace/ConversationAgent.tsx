@@ -599,15 +599,14 @@ export function ConversationAgent({
               onReportViewed: (identity) => {
                 if (
                   pane !== "report" ||
-                  !stateIsCurrent ||
-                  state.report.status !== "ready" ||
-                  state.report.id !== identity.id ||
-                  state.report.revision !== identity.revision ||
                   !mounted.current ||
                   !current(paneEpoch.current) ||
                   abort.current.signal.aborted
                 )
                   return;
+                // The report owner emits only a freshly accepted body. Keep
+                // that identity even if conversation metadata catches up next;
+                // it counts only when the current report has the same identity.
                 setViewedReport(`${identity.id}:${identity.revision}`);
               },
               onOpenPane: (nextPane) => {
