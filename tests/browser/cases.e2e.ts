@@ -1,5 +1,9 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
+import {
+  v2ReworkCreateCaseRequestSchema,
+  v2ReworkCreateCaseResponseSchema,
+} from "../../src/contracts/v2";
 import { syntheticConsentStatus } from "../fixtures/consent-status";
 
 test("a session change closes a pending challenge without admitting the old creation", async ({
@@ -25,7 +29,7 @@ test("a session change closes a pending challenge without admitting the old crea
   await page.route("**/api/me/consent", (route) =>
     route.fulfill({ json: syntheticConsentStatus(false) }),
   );
-  await page.route("**/api/v2/cases", (route) => {
+  await page.route(/\/api\/v2\/cases(?:\/rework)?$/, (route) => {
     writes++;
     return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE" } } });
   });
@@ -68,128 +72,180 @@ async function challenge(page: Page) {
     };
   });
 }
-test("intake validates code points, blocks duplicates, preserves replay key and focus after errors", async ({
-  page,
-}) => {
-  await challenge(page);
-  await page.route("**/api/me/session", (route) =>
-    route.fulfill({
-      json: {
-        user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
-        needsConsent: false,
-      },
-    }),
-  );
-  await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: syntheticConsentStatus(false) }),
-  );
-  let calls = 0;
-  const keys: string[] = [];
-  await page.route("**/api/v2/cases", async (route) => {
-    calls++;
-    keys.push(route.request().headers()["idempotency-key"] ?? "");
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    await route.fulfill(
-      calls === 1
-        ? {
-            status: 503,
-            json: {
-              error: {
-                code: "MODEL_UNAVAILABLE",
-                message: "같은 입력으로 다시 시도해 주세요.",
-                requestId: "synthetic",
-                retryable: true,
-                details: {},
-              },
-            },
-          }
-        : {
-            status: 201,
-            json: workspace,
-          },
+for (const [purposeLabel, casePurpose, subjectLabel, subjectContext] of [
+  ["고소·청구를 준비하고 싶어요", "prepare_claim", "개인", "individual"],
+  ["상대방 주장에 대응하고 싶어요", "respond_to_claim", "기업", "company"],
+] as const) {
+  test(`${casePurpose}: intake validates code points, blocks duplicates, preserves replay key and focus after errors`, async ({
+    page,
+  }) => {
+    await challenge(page);
+    await page.route("**/api/me/session", (route) =>
+      route.fulfill({
+        json: {
+          user: { id: "synthetic-owner", name: "합성 고객", accountType: "customer" },
+          needsConsent: false,
+        },
+      }),
     );
-  });
-  const now = "2026-10-06T11:00:00.000Z";
-  const workspace = {
-    schemaVersion: "2",
-    id: "11111111-1111-4111-8111-111111111111",
-    title: "사건 작업 공간",
-    subjectContext: "individual",
-    jurisdiction: "KR",
-    status: "intake",
-    archivedFrom: null,
-    workspaceRevision: 1,
-    intakeRevision: 1,
-    confirmedSummaryRevision: null,
-    currentJobId: null,
-    legacySnapshotId: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await page.route("**/api/v2/cases/*/*", (route) =>
-    route.fulfill({
-      json: route.request().url().endsWith("/workspace")
-        ? workspace
-        : {
-            schemaVersion: "2",
-            revision: 1,
-            status: "collecting",
-            narrative: "합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.",
-            batches: [
-              {
-                id: "batch-one",
-                ordinal: 1,
-                generatedForIntakeRevision: 1,
-                questions: [
-                  { id: "q-one", prompt: "언제 있었나요?", answerType: "text", options: [] },
-                ],
-                answers: [],
+    await page.route("**/api/me/consent", (route) =>
+      route.fulfill({ json: syntheticConsentStatus(false) }),
+    );
+    let calls = 0;
+    const keys: string[] = [];
+    const inputs: unknown[] = [];
+    let legacyWrites = 0;
+    await page.route("**/api/v2/cases", (route) => {
+      legacyWrites++;
+      return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE" } } });
+    });
+    await page.route("**/api/v2/cases/rework", async (route) => {
+      calls++;
+      const request = route.request();
+      inputs.push(v2ReworkCreateCaseRequestSchema.parse(request.postDataJSON()));
+      expect(request.headers()["x-baro-expected-owner"]).toBe("synthetic-owner");
+      keys.push(request.headers()["idempotency-key"] ?? "");
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      await route.fulfill(
+        calls === 1
+          ? {
+              status: 503,
+              json: {
+                error: {
+                  code: "MODEL_UNAVAILABLE",
+                  message: "같은 입력으로 다시 시도해 주세요.",
+                  requestId: "synthetic",
+                  retryable: true,
+                  details: {},
+                },
               },
-            ],
-            confirmedSummaryRevision: null,
-            currentJobId: null,
-            summary: null,
-          },
-    }),
-  );
-  await page.route("**/api/v2/cases/*/workspace-jobs/latest", (route) =>
-    route.fulfill({ json: null }),
-  );
-  await page.goto("/cases/new");
-  const input = page.getByRole("textbox");
-  const submit = page.getByRole("button", { name: "저장하고 계속" });
-  await input.fill("😀😀");
-  await expect(submit).toBeEnabled();
-  await expect(page.locator(".conversation-context-hint")).toHaveText("10자 이상 입력해주세요");
-  await submit.click();
-  const validation = page.getByRole("dialog", { name: "이야기를 조금만 더 적어주세요" });
-  await expect(validation).toContainText("어떤 일이 있었는지 10자 이상 적어주세요.");
-  await expect(input).toHaveAttribute("aria-invalid", "true");
-  expect(calls).toBe(0);
-  expect(keys).toEqual([]);
-  await validation.getByRole("button", { name: "계속 작성하기" }).click();
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue("😀😀");
-  await submit.click();
-  await expect(validation).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(input).toBeFocused();
-  await expect(input).toHaveAttribute("aria-invalid", "false");
-  expect(calls).toBe(0);
-  await input.fill("합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.");
-  await submit.focus();
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("alert")).toContainText("다시 시도");
-  expect(calls).toBe(1);
-  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
-  await expect(page).toHaveURL(/\/intake$/);
-  await expect(page.getByRole("heading", { name: "언제 있었나요?" })).toBeVisible();
-  expect(calls).toBe(2);
-  expect(keys[0]).toBe(keys[1]);
-  expect(await page.evaluate(() => localStorage.length)).toBe(0);
-  expect(page.url()).not.toContain("합성");
-});
+            }
+          : {
+              status: 201,
+              json: v2ReworkCreateCaseResponseSchema.parse({
+                contractVersion: "conversation-report-v1",
+                workspace,
+                context: caseContext,
+              }),
+            },
+      );
+    });
+    const now = "2026-10-06T11:00:00.000Z";
+    const workspace = {
+      schemaVersion: "2",
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "사건 작업 공간",
+      subjectContext,
+      jurisdiction: "KR",
+      status: "intake",
+      archivedFrom: null,
+      workspaceRevision: 1,
+      intakeRevision: 1,
+      confirmedSummaryRevision: null,
+      currentJobId: null,
+      legacySnapshotId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const caseContext = {
+      casePurpose,
+      subjectContext,
+      procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+    };
+    await page.route("**/api/v2/cases/*/rework/context", (route) =>
+      route.fulfill({
+        json: {
+          contractVersion: "conversation-report-v1",
+          workspaceRevision: 1,
+          context: caseContext,
+        },
+      }),
+    );
+    await page.route("**/api/v2/cases/*/*", (route) =>
+      route.fulfill({
+        json: route.request().url().endsWith("/workspace")
+          ? workspace
+          : {
+              schemaVersion: "2",
+              revision: 1,
+              status: "collecting",
+              narrative: "합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.",
+              batches: [
+                {
+                  id: "batch-one",
+                  ordinal: 1,
+                  generatedForIntakeRevision: 1,
+                  questions: [
+                    { id: "q-one", prompt: "언제 있었나요?", answerType: "text", options: [] },
+                  ],
+                  answers: [],
+                },
+              ],
+              confirmedSummaryRevision: null,
+              currentJobId: null,
+              summary: null,
+            },
+      }),
+    );
+    await page.route("**/api/v2/cases/*/workspace-jobs/latest", (route) =>
+      route.fulfill({ json: null }),
+    );
+    await page.goto("/cases/new");
+    await page.getByRole("radio", { name: purposeLabel, exact: true }).check();
+    await page.getByRole("radio", { name: subjectLabel, exact: true }).check();
+    const input = page.getByRole("textbox");
+    const submit = page.getByRole("button", { name: "저장하고 계속" });
+    // Five supplementary characters are ten UTF-16 code units but only five code points.
+    const shortUnicode = "😀".repeat(5);
+    await input.fill(shortUnicode);
+    await expect(submit).toBeEnabled();
+    await expect(page.locator(".conversation-context-hint")).toHaveText("10자 이상 입력해주세요");
+    await submit.click();
+    const validation = page.getByRole("dialog", { name: "이야기를 조금만 더 적어주세요" });
+    await expect(validation).toContainText("어떤 일이 있었는지 10자 이상 적어주세요.");
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(calls).toBe(0);
+    expect(keys).toEqual([]);
+    await validation.getByRole("button", { name: "계속 작성하기" }).click();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(shortUnicode);
+    await submit.click();
+    await expect(validation).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(input).toBeFocused();
+    await expect(input).toHaveAttribute("aria-invalid", "false");
+    expect(calls).toBe(0);
+    await input.fill("합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.");
+    await submit.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("alert")).toContainText("다시 시도");
+    expect(calls).toBe(1);
+    await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+    await expect(page).toHaveURL(/\/intake$/);
+    await expect(page.getByRole("heading", { name: "언제 있었나요?" })).toBeVisible();
+    expect(calls).toBe(2);
+    expect(legacyWrites).toBe(0);
+    expect(keys[0]).not.toBe("");
+    expect(keys[0]).toBe(keys[1]);
+    expect(inputs).toEqual([
+      {
+        casePurpose,
+        subjectContext,
+        narrative: "합성 사건입니다. 지인에게 빌려준 돈을 돌려받는 상황입니다.",
+        jurisdiction: "KR",
+        turnstileToken: "synthetic-token",
+      },
+      inputs[0],
+    ]);
+    await expect(page.getByText(purposeLabel, { exact: true })).toBeVisible();
+    await expect(page.getByText(`${subjectLabel} 사건`, { exact: true })).toBeVisible();
+    await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.length)).toBe(0);
+    expect(page.url()).not.toContain("합성");
+  });
+}
+
 test("list empty/error/loading, auth and consent gates, refresh/back use server state", async ({
   page,
 }) => {

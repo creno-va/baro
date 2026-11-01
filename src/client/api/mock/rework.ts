@@ -26,7 +26,7 @@ import {
 import type { CaseView } from "../types";
 import { makeMockQuestions } from "./cases";
 import { createReconciliationMock } from "./mock-reconciliation";
-import { createReportsMockHandler, type ReportMockState } from "./reports";
+import { createReportsMockHandler, ReportMockError, type ReportMockState } from "./reports";
 import {
   mockFailure,
   mockResponse,
@@ -605,6 +605,20 @@ export function createReworkMock(
       }
       return mockResponse({}, 405);
     } catch (cause) {
+      if (
+        cause instanceof ReportMockError &&
+        ["EXPORT_LIMIT_EXCEEDED", "EXPORT_RETRY_EXHAUSTED"].includes(cause.code)
+      )
+        return mockResponse(
+          {
+            error: {
+              code: cause.code,
+              message: "리포트의 처리 한도와 다운로드 재시도 조건을 확인해 주세요.",
+              retryable: false,
+            },
+          },
+          cause.code === "EXPORT_LIMIT_EXCEEDED" ? 413 : 409,
+        );
       if (cause instanceof ConversationAgentError || cause instanceof ResolutionError)
         return mockFailure(
           new WorkspaceMockError(
