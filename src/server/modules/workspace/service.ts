@@ -1,8 +1,9 @@
-import type { z } from "zod";
-import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
+import { z } from "zod";
+import { idempotencyKeySchema, opaqueIdSchema, revisionSchema } from "../../../contracts";
 import {
   caseDisplayTitle,
   V2_INTAKE_POLICY,
+  type V2Job,
   v2ActionUpdateRequestSchema,
   v2AnswersForBatchSchema,
   v2AnswersRequestSchema,
@@ -13,6 +14,7 @@ import {
   v2SummaryConfirmationRequestSchema,
   v2SummaryEditRequestSchema,
   v2TimelineEditRequestSchema,
+  v2UserMessageSchema,
   v2WorkspaceStateRequestSchema,
 } from "../../../contracts/v2";
 import {
@@ -28,6 +30,7 @@ import type { MutationReceipt } from "../../db/v2-mutation-receipts";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import type { PreparedPaidHold } from "../../db/v2-paid-statements";
 import { researchRevisionBase } from "../../db/v2-research-revision";
+import { createV2ReworkRepository } from "../../db/v2-rework";
 import { createV2SummaryEditsRepository } from "../../db/v2-summary-edits";
 import { type Admission, createV2WorkspaceRepository } from "../../db/v2-workspace";
 import { dependencyStep } from "../../dependency-diagnostics";
@@ -85,6 +88,80 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     const value = await workspace.findWorkspace(actor(ownerId), id);
     if (!value) throw new WorkspaceError("NOT_FOUND");
     return value;
+  };
+  // Internal tasks reuse the storage job kind, but never promise a chat message.
+  // Authenticate their immutable encrypted admission proof before projecting them.
+  const isPrivateJob = async (ownerId: string, id: string, job: V2Job) => {
+    if (job.kind !== "chat_response" || job.target.kind !== "workspace" || job.target.caseId !== id)
+      return false;
+    const records = createV2ReworkRepository(core),
+      a = actor(ownerId);
+    const task = await records.read(
+      a,
+      id,
+      "task",
+      job.id,
+      z.object({
+        format: z.literal("legal-analysis-task-v1"),
+        kind: z.literal("legal_analysis"),
+        jobId: opaqueIdSchema,
+        operationId: opaqueIdSchema,
+        beforeWorkspaceRevision: revisionSchema,
+        targetWorkspaceRevision: revisionSchema,
+      }),
+    );
+    const revision = job.target.workspaceRevision;
+    if (task) {
+      if (
+        task.workspaceRevision !== revision ||
+        task.value.jobId !== job.id ||
+        task.value.operationId !== job.operationId ||
+        task.value.targetWorkspaceRevision !== revision ||
+        task.value.beforeWorkspaceRevision + 1 !== revision
+      )
+        throw new WorkspaceError("STALE_REVISION");
+      return true;
+    }
+    const recordId = await core
+      .statement(
+        "SELECT r.id FROM v2_rework_records r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.workspace_id=? AND r.owner_id=? AND w.owner_id=r.owner_id AND r.kind='reconciliation' AND r.entity_id=w.id AND r.workspace_revision=? AND r.state='published' ORDER BY r.revision ASC LIMIT 1",
+        [id, ownerId, revision],
+      )
+      .first<string>("id");
+    if (!recordId) return false;
+    const record = await records.read(
+      a,
+      id,
+      "reconciliation",
+      id,
+      z.object({
+        format: z.literal("summary-reconciliation-v1"),
+        requestMessage: v2UserMessageSchema,
+        state: z.object({
+          currentJobId: opaqueIdSchema.nullable(),
+          request: z
+            .object({
+              id: opaqueIdSchema,
+              input: z.object({ expectedRevision: revisionSchema }),
+            })
+            .nullable(),
+        }),
+      }),
+      recordId,
+    );
+    if (!record) throw new WorkspaceError("STALE_REVISION");
+    const { state, requestMessage } = record.value;
+    if (
+      record.workspaceRevision !== revision ||
+      state.currentJobId !== job.id ||
+      state.request?.input.expectedRevision !== revision - 1 ||
+      state.request.id !== requestMessage.id ||
+      requestMessage.operationId !== job.operationId ||
+      requestMessage.workspaceRevision !== revision ||
+      requestMessage.selectedFileIds.length
+    )
+      throw new WorkspaceError("STALE_REVISION");
+    return true;
   };
   const guard = async (ownerId: string, id: string, expected?: number) => {
     const current = await find(ownerId, id);
@@ -220,7 +297,21 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     return queued(ownerId, a.operationId);
   };
   return {
-    find,
+    async find(ownerId: string, id: string) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const current = await find(ownerId, id);
+        if (!current.currentJobId) return current;
+        const job = await jobs.find(actor(ownerId), current.currentJobId);
+        const privateJob = job ? await isPrivateJob(ownerId, id, job) : false;
+        const fresh = await find(ownerId, id);
+        if (
+          fresh.workspaceRevision === current.workspaceRevision &&
+          fresh.currentJobId === current.currentJobId
+        )
+          return privateJob ? { ...fresh, currentJobId: null } : fresh;
+      }
+      throw new WorkspaceError("STALE_REVISION");
+    },
     replayCreate,
     async job(ownerId: string, id: string, jobId: string) {
       const current = await find(ownerId, id);
@@ -232,7 +323,9 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     async latestJob(ownerId: string, id: string) {
       const current = await find(ownerId, id);
       const job = await jobs.latestWorkspace(actor(ownerId), id);
-      return job ? { ...job, retryable: canRetryV2Job(job, current) } : null;
+      const privateJob = job ? await isPrivateJob(ownerId, id, job) : false;
+      await find(ownerId, id);
+      return job && !privateJob ? { ...job, retryable: canRetryV2Job(job, current) } : null;
     },
     async retry(ownerId: string, id: string, jobId: string, raw: unknown) {
       const request = v2IntakeAdvanceRequestSchema.parse(raw);

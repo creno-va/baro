@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import type { V2Fact, V2UserMessage } from "../src/contracts/v2";
+import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createV2ReworkRepository } from "../src/server/db/v2-rework";
+import { OFFICIAL_CATALOG } from "../src/server/modules/legal-retrieval/v2/registry";
+import { makeChunk } from "../src/server/modules/legal-retrieval/v2/source";
 import { loadReconciliationSource } from "../src/server/modules/rework/reconciliation-source";
 import { readWorkspaceContext } from "../src/server/modules/workspace/context";
 import { reportFixture } from "./helpers/report-fixture";
@@ -148,6 +151,98 @@ test("issued correction admission leaves semantic digest stable; ordinary statem
     await expect(
       loadReconciliationSource(f.core, { ...f.actor, ownerId: "peer" }, { write: false }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("later research bindings preserve an issued receipt while changes to its admitted source still invalidate its authority", async () => {
+  const f = await fixture();
+  try {
+    const sources = createV2OfficialSourceRepository(f.core);
+    const chunk = (article: string) =>
+      makeChunk(
+        {
+          sourceType: "statute",
+          officialId: "1706",
+          version: "284415",
+          section: article,
+          canonicalUrl: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+          title: "합성 검증 법령",
+          body: `${article} 합성 검증 원문입니다. 실제 법률 설명이 아닙니다.`,
+          sourceDate: "2026-10-01",
+          fetchedAt: f.actor.now,
+          verifiedAt: f.actor.now,
+          rightsProvenance: OFFICIAL_CATALOG[0].rights,
+          court: null,
+          caseNumber: null,
+          institutionId: null,
+          endpointId: null,
+        },
+        f.actor.now.slice(0, 10),
+      );
+    const original = await chunk("제1조");
+    expect(await sources.put(original.source, original.citation)).toBe(true);
+    expect(
+      await sources.bindCitation(
+        {
+          ownerId: f.actor.ownerId,
+          now: f.actor.now,
+          workspaceId: f.workspaceId,
+          expectedRevision: f.rev(),
+        },
+        original.citation,
+      ),
+    ).toBe(true);
+    const issued = await message(f, true);
+    const before = await loadReconciliationSource(f.core, f.actor, {
+      write: false,
+      requestMessage: issued,
+    });
+    f.db.sqlite.query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?").run(f.workspaceId);
+    const later = await chunk("제2조");
+    expect(await sources.put(later.source, later.citation)).toBe(true);
+    expect(
+      await sources.bindCitation(
+        {
+          ownerId: f.actor.ownerId,
+          now: f.actor.now,
+          workspaceId: f.workspaceId,
+          expectedRevision: f.rev(),
+        },
+        later.citation,
+      ),
+    ).toBe(true);
+    const after = await loadReconciliationSource(f.core, f.actor, {
+      write: false,
+      requestMessage: issued,
+    });
+    expect(after.sourceDigest).toBe(before.sourceDigest);
+    expect(
+      await f.core
+        .statement(`SELECT 1 ok FROM v2_workspaces w WHERE w.id=? AND (${before.authority.sql})`, [
+          f.workspaceId,
+          ...before.authority.values,
+        ])
+        .first<{ ok: number }>(),
+    ).toEqual({ ok: 1 });
+    f.db.sqlite
+      .query(
+        "UPDATE v2_official_sources SET rights_provenance='synthetic-corruption' WHERE source_id=?",
+      )
+      .run(original.source.sourceId);
+    expect(
+      await f.core
+        .statement(`SELECT 1 ok FROM v2_workspaces w WHERE w.id=? AND (${before.authority.sql})`, [
+          f.workspaceId,
+          ...before.authority.values,
+        ])
+        .first<{ ok: number }>(),
+    ).toBeNull();
+    expect(
+      (await loadReconciliationSource(f.core, f.actor, { write: false, requestMessage: issued }))
+        .sourceDigest,
+    ).not.toBe(before.sourceDigest);
   } finally {
     f.db.close();
   }
