@@ -45,15 +45,16 @@ async function expectConfirmedWorkspace(page: Page, id: string) {
 }
 
 type Recovery = "same" | "other-owner" | "deleted" | "revision" | "files";
-const scenarios: { operation: "save" | "confirm"; loseSession: boolean; recovery: Recovery }[] = [];
-for (const operation of ["save", "confirm"] as const)
+const scenarios: { operation: "draft" | "confirm"; loseSession: boolean; recovery: Recovery }[] =
+  [];
+for (const operation of ["draft", "confirm"] as const)
   for (const loseSession of [false, true])
     scenarios.push({ operation, loseSession, recovery: "same" });
 for (const recovery of ["other-owner", "deleted", "revision", "files"] as const)
   scenarios.push({ operation: "confirm", loseSession: true, recovery });
 
 for (const { operation, loseSession, recovery } of scenarios) {
-  test(`real summary ${operation}; final session failure=${loseSession}${recovery === "same" ? "" : `; recovery=${recovery}`}`, async ({
+  test(`real summary ${operation}; ${operation === "draft" ? "foreground" : "final"} session failure=${loseSession}${recovery === "same" ? "" : `; recovery=${recovery}`}`, async ({
     page,
     context,
   }) => {
@@ -110,49 +111,57 @@ for (const { operation, loseSession, recovery } of scenarios) {
         });
         if (
           response.ok() &&
-          ((operation === "save" && req.method() === "PUT" && path.endsWith("/summary")) ||
-            (operation === "confirm" &&
-              req.method() === "POST" &&
-              path.endsWith("/summary/confirm")))
+          operation === "confirm" &&
+          req.method() === "POST" &&
+          path.endsWith("/summary/confirm")
         )
           committed = true;
         await route.fulfill({ response });
       });
       const summaryUrl = `/cases/${info.id}/summary${recovery === "files" ? "?from=files" : ""}`;
       await page.goto(summaryUrl);
-      if (operation === "save") {
-        const editor = page.getByLabel("요약 편집");
-        await editor.fill("저장 후 세션 확인 실패를 검증하는 합성 요약입니다.");
-        await page.getByRole("button", { name: "수정 내용 저장" }).click();
-        if (!loseSession) {
-          await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
-          await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-          expect(saveWrites).toBe(1);
-          expect(confirmWrites).toBe(0);
-          return;
+      await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("요약 편집")).toHaveCount(0);
+      await expect(page.getByLabel("사실 내용", { exact: true })).toHaveCount(0);
+      if (operation === "draft") {
+        const before = await summarySnapshot(page, info.id);
+        await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+        const explanation = page.getByRole("textbox", {
+          name: "빠진 내용을 알려주세요",
+          exact: true,
+        });
+        const draft = "세션 확인 실패를 거쳐도 보존할 합성 재조율 설명입니다.";
+        await explanation.fill(draft);
+        // This is an unsent explanation, not a canonical save or a model call.
+        committed = true;
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        if (loseSession) {
+          await expect(
+            page.getByRole("alert").filter({ hasText: "연결하지 못했어요" }),
+          ).toBeVisible();
+          await expect(explanation).toHaveValue(draft);
+          await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+          await expect(page.getByRole("alert")).toHaveCount(0);
         }
-        await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
-        const saved = await page.evaluate(
-          async (id) =>
-            ((await (await fetch(`/api/v2/cases/${id}/summary`)).json()) as { overview: string })
-              .overview,
-          info.id,
-        );
-        expect(saved).toBe("저장 후 세션 확인 실패를 검증하는 합성 요약입니다.");
-        await page.getByRole("button", { name: "다시 시도", exact: true }).click();
-        await expect(page.getByRole("alert")).toHaveCount(0);
-        await expect(editor).toHaveValue(saved);
-        await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
+        await expect(explanation).toHaveValue(draft);
+        expect(await summarySnapshot(page, info.id)).toEqual(before);
+        await page.keyboard.press("Escape");
         await page.reload();
-        await expect(editor).toHaveValue(saved);
-        expect(saveWrites).toBe(1);
+        await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+        await expect(explanation).not.toBeVisible();
+        expect(await summarySnapshot(page, info.id)).toEqual(before);
+        expect(saveWrites).toBe(0);
         expect(confirmWrites).toBe(0);
       } else {
-        await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-        await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+        await page.getByRole("button", { name: "맞아요", exact: true }).click();
+        await page
+          .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+          .getByRole("button", { name: "확인하고 계속", exact: true })
+          .click();
         let accepted: Awaited<ReturnType<typeof summarySnapshot>> | undefined;
         if (loseSession) {
           await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
+          await page.keyboard.press("Escape");
           const saved = await page.evaluate(
             async (id) =>
               ((await (await fetch(`/api/v2/cases/${id}/workspace`)).json()) as { status: string })
@@ -169,6 +178,8 @@ for (const { operation, loseSession, recovery } of scenarios) {
           // A deleted/inaccessible case's authoritative read denies scope. This
           // transport fixture does not claim to run the deletion workflow.
           if (recovery === "deleted") caseUnavailable = true;
+          // An installed legacy client remains able to change its strict DTO.
+          // Its real peer write must invalidate this screen's prior confirmation.
           if (recovery === "revision")
             await page.evaluate(
               async ({ id, revision, summary }) => {
@@ -188,7 +199,8 @@ for (const { operation, loseSession, recovery } of scenarios) {
             if (recovery === "other-owner") {
               await context.addCookies([info.ownerCookie]);
               await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-              await expect(page.getByLabel("요약 편집")).toHaveValue(originalSummary);
+              await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+              await expect(page.getByLabel("요약 편집")).toHaveCount(0);
               await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
               expect(confirmWrites).toBe(1);
             }
@@ -197,7 +209,8 @@ for (const { operation, loseSession, recovery } of scenarios) {
           await expect(page.getByRole("alert")).toHaveCount(0);
           if (recovery === "revision") {
             await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-            await expect(page.getByLabel("요약 편집")).toHaveValue(peerSummary);
+            await expect(page.getByText(peerSummary, { exact: true })).toBeVisible();
+            await expect(page.getByLabel("요약 편집")).toHaveCount(0);
             await expect(
               page.getByLabel("요약이 내가 이야기한 사실과 맞는지 확인했어요."),
             ).toHaveCount(0);
@@ -229,17 +242,16 @@ for (const { operation, loseSession, recovery } of scenarios) {
         expect(saveWrites).toBe(0);
         if (loseSession && recovery === "same") {
           await page.goto(summaryUrl);
+          await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+          await expect(page.getByLabel("요약 편집")).toHaveCount(0);
+          await page.getByRole("button", { name: "다른 부분이 있어요", exact: true }).click();
           await page
-            .getByLabel("요약 편집")
-            .fill("작업 공간에서 직접 편집한 활성 사건의 합성 요약입니다.");
-          await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-          await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
-          await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-          const edited = await summarySnapshot(page, info.id);
-          expect(edited.overview).toBe("작업 공간에서 직접 편집한 활성 사건의 합성 요약입니다.");
-          expect(edited.confirmedSummaryRevision).toBe(edited.summaryRevision);
-          expect(confirmWrites).toBe(2);
-          expect(saveWrites).toBe(1);
+            .getByRole("textbox", { name: "다른 부분을 알려주세요", exact: true })
+            .fill("활성 사건도 먼저 변경안을 검토해야 하는 합성 설명입니다.");
+          await page.keyboard.press("Escape");
+          expect(await summarySnapshot(page, info.id)).toEqual(confirmed);
+          expect(confirmWrites).toBe(1);
+          expect(saveWrites).toBe(0);
         }
       }
     } finally {
@@ -318,7 +330,8 @@ test("chat additions require the new summary confirmation in the real customer U
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeDisabled();
     await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-    await expect(page.getByLabel("요약 편집")).toHaveValue(originalSummary);
+    await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+    await expect(page.getByLabel("요약 편집")).toHaveCount(0);
     // Individual fact controls were removed from the review screen. The new
     // fact must still be retained in the exact summary revision being confirmed.
     const pending = await page.evaluate(
@@ -333,8 +346,11 @@ test("chat additions require the new summary confirmation in the real customer U
     expect(pending.facts).toEqual(
       expect.arrayContaining([expect.objectContaining({ text: "새로운 자료를 찾았습니다." })]),
     );
-    await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-    await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+      .getByRole("button", { name: "확인하고 계속", exact: true })
+      .click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeEnabled();
     const intake = await page.evaluate(
