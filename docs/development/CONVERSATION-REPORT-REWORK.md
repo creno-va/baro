@@ -12,6 +12,12 @@
 - 새 채팅·하위 에이전트·자동화 생성 없음. 사용자가 만든 아래 여섯 채팅과 이번 개편 메시지 교환만 허용된다. 메모리 자동 공유를 가정하지 않는다.
 - GitHub 커넥터 이슈 생성은403, 인증된 GitHub CLI로 이슈를 생성했다. 채팅 도구가 불가하면 각 하위 이슈 댓글로 조율하고 개인정보는 쓰지 않는다.
 
+- 저장 PR634: head `03eff2aa696335c5f28faad38b4a0b5f50f6a571`, Quality41299707708 SUCCESS → main `bffb5887a64b472e5fb8a39e03a29c10a2ab4761`.0022 적용은 로컬 fresh/upgrade 검증만 수행했고 원격 DB/배포는 하지 않았다.
+- 대화 코어 PR633: 최신 main 통합 head `6ea899cea93acdbf5d01222731ced5750365ea55`, Quality41300231923·Legal41300231955 SUCCESS → main `4fc4db00` 정상 병합. 법률 분석 PR631: head `57ad8db31b20442f60451d054b4784647e692e14`, Quality41300646086·Legal41300646132 SUCCESS → main `7a97be35` 정상 병합.
+-00 후속 `codex/621-rework-api`: opt-in 사건 생성/context 변경을 같은 암호화 DB admission/CAS에 연결한다. 기존 사건의 목적/절차는 미확정이며 기존 strict workspace 응답은 확장하지 않는다. context 변경·멱등 영수증·revision bump가 원자적으로 저장되고 동의 철회 후 mutation은 차단된다. 기존 raw payload를 덮어 목적을 추정하지 않는다.
+- 중앙 gateway는 02의 `workspace_legal_plan / workspace_legal_analysis / workspace_legal_audit` 세 단계를 등록한다. 동일 모델·기존 attempt ledger를 유지하며 generation LOW / 독립 audit MEDIUM이다. 04의 trusted conversation prompt는 중앙 registry에서만 선택한다. 신규 strict provider wire는 `conversationIntent: null` 또는 허용 intent를 필수로 보내되 구형 저장 parser는 누락을 계속 읽는다.
+-02 후속 `analysis/runtime-adapter.ts`는 실제 gateway/retrieval adapter(게시/DB 저장/dispatch 없음),06 후속 `resolution/runtime-adapter.ts`는 주입된 trusted source/authority와 실제 암호화 record adapter만 소유한다. DB/Hono/runtime 조립과 최종 source/basis CAS는00 소유를 유지한다. 각 후속은 선행 CI/main 뒤 별도 PR이다.
+
 ## 요구사항과 유지 경계
 
 1. `/app` 주 선택은 고소·청구 준비 / 상대방 주장 대응이다. `subjectContext` 개인/기업, 사건 분야·형민사, 절차 단계와 별개다. 옛 사건의 목적·단계를 추정해 확정하지 않는다.
