@@ -1,7 +1,12 @@
 import type { V2LegalAnalysisDraft } from "../../../../contracts/v2/legal-analysis";
 import type { LegalAnalysisPlan } from "../../llm-gateway/analysis-schema";
 import type { SourceChunk } from "../v2/contracts";
-import { analysisCaseFacts, canonicalAnalysisJson, type LegalAnalysisInput } from "./context";
+import {
+  analysisCaseFacts,
+  analysisFactHasIndependentSupport,
+  canonicalAnalysisJson,
+  type LegalAnalysisInput,
+} from "./context";
 
 /** Structural checks complement the independent semantic audit; neither replaces it. */
 export function analysisDraftGrounded(
@@ -65,9 +70,10 @@ export function analysisDraftGrounded(
       if (
         requirement.assessment === "supported" &&
         (!requirement.factIds.length ||
-          requirement.factIds.some((id) =>
-            ["uncertain", "conflicting"].includes(facts.get(id)?.certainty ?? "uncertain"),
-          ))
+          requirement.factIds.some((id) => {
+            const fact = facts.get(id);
+            return !fact || !analysisFactHasIndependentSupport(fact, input);
+          }))
       )
         return false;
       if (requirement.assessment === "conflicting" && !requirement.conflictingFactIds.length)
