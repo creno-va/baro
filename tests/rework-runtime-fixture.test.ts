@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createFilesClient, reworkReportViewSchema } from "@baro/api-client";
+import { createFilesClient, createWorkspaceClient, reworkReportViewSchema } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { z } from "zod";
 import { EXPECTED_OWNER_HEADER } from "../src/contracts/session";
@@ -379,6 +379,59 @@ for (const scenario of [
       await f.close();
     }
   });
+
+test("the installed workspace facade reads a completed private analysis without requiring a chat reply", async () => {
+  const f = await createReworkRuntimeFixture({
+    browserOrigin: "http://127.0.0.1:4396",
+    purpose: "prepare_claim",
+    native: "unavailable",
+  });
+  const scope = createSessionScope();
+  try {
+    const state = await prepare(f, { reconcile: false });
+    const session = z
+      .object({ user: z.object({ id: z.string() }) })
+      .parse(await (await f.request("/api/me/session")).json());
+    const request = (path: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("cookie", `${f.info.ownerCookie.name}=${f.info.ownerCookie.value}`);
+      headers.set("origin", f.browserOrigin);
+      headers.set(EXPECTED_OWNER_HEADER, encodeURIComponent(session.user.id));
+      return Promise.resolve(
+        f.fetch(new Request(new URL(path, f.browserOrigin), { ...init, headers })),
+      );
+    };
+    const files = createFilesClient<never, never>({
+      request,
+      scope,
+      newKey: () => crypto.randomUUID(),
+      openUpload: async () => {
+        throw new Error("SYNTHETIC_READ_ONLY_CLIENT");
+      },
+      download: async () => {
+        throw new Error("SYNTHETIC_READ_ONLY_CLIENT");
+      },
+    });
+    const client = createWorkspaceClient({
+      request,
+      scope,
+      newKey: () => crypto.randomUUID(),
+      listFiles: (id, options) => files.list(id, options),
+    });
+    const before = await stats(f);
+    const workspace = await client.get(f.info.caseId);
+    expect(workspace.case.id).toBe(f.info.caseId);
+    expect(workspace.case.stage).toBe("active");
+    expect(workspace.messages.some((message) => message.id.startsWith("job:"))).toBe(false);
+    expect((await json(f, "/rework/conversation")).report.id).toBe(state.report.id);
+    const after = await stats(f);
+    expect(after.models).toEqual(before.models);
+    expect(after.sources).toBe(before.sources);
+  } finally {
+    scope.invalidate();
+    await f.close();
+  }
+});
 
 test("an unavailable official source gives a limited report and passive reads do not retry it", async () => {
   const f = await createReworkRuntimeFixture({
