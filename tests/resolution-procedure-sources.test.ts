@@ -215,7 +215,8 @@ test("tampered source/citation/hash/extractor/time/URL/full span fail closed eve
       c.source.verifiedAt = "2026-11-02T12:00:00.000Z";
     },
     (c) => {
-      c.citation.verifiedAt = "2026-10-31T12:00:00.000Z";
+      // A stored older receipt can survive renewal; it cannot postdate the source verification.
+      c.citation.verifiedAt = "2026-11-01T12:00:01.000Z";
     },
     (c) => {
       c.citation.contentHash = "a".repeat(64);
