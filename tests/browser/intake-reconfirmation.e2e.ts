@@ -449,6 +449,153 @@ for (const difference of ["fact-text", "reference", "summary-revision", "fact-or
   });
 }
 
+for (const continuation of ["technical", "receipt", "request", "body", "stale", "owner"]) {
+  test(`confirmed proposal continuation: ${continuation}`, async ({ page }) => {
+    const item = await seed(page);
+    await page.goto(`/cases/${item.id}/summary`);
+    await propose(page);
+    await page.evaluate((mode) => {
+      localStorage.setItem("synthetic-reconciliation-fault", `confirm-continuation-${mode}`);
+    }, continuation);
+    await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+    if (continuation === "technical") {
+      await expect(page).toHaveURL(new RegExp(`/cases/${item.id}$`));
+      expect((await canonical(page, item.id)).revision).toBe(15);
+      expect((await canonical(page, item.id)).summaryDetails.revision).toBe(4);
+      return;
+    }
+    if (continuation === "owner") {
+      await expect(page.getByText(item.summary, { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toHaveCount(
+        0,
+      );
+    } else {
+      await expect(
+        page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("alert").filter({ hasText: "사건 내용이 바뀌었어요." }),
+      ).toBeVisible();
+    }
+    await expect(page).toHaveURL(new RegExp(`/cases/${item.id}/summary$`));
+  });
+}
+
+for (const continuation of [
+  "technical",
+  "body",
+  "new-summary",
+  "unconfirmed",
+  "false-proof",
+  "false-proof-same-revision",
+  "proof-revision",
+  "owner",
+]) {
+  test(`initial confirmation continuation: ${continuation}`, async ({ page }) => {
+    const item = await seed(page);
+    await page.goto(`/cases/${item.id}/summary`);
+    await expect(page.getByRole("button", { name: "맞아요", exact: true })).toBeEnabled();
+    await page.evaluate(
+      async ({ id, mode }) => {
+        const path = "/src/client/api/cases.ts";
+        const { casesApi } = await import(path);
+        const confirm = casesApi.confirmSummary;
+        casesApi.confirmSummary = async (...args: unknown[]) => {
+          await confirm(...args);
+          const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+          const value = cases[id];
+          if (mode !== "false-proof-same-revision") value.revision++;
+          if (mode === "body")
+            value.summaryDetails.facts[0].text = "원래 동의 대상과 다른 합성 사실입니다.";
+          if (mode === "new-summary") {
+            value.summaryDetails.revision++;
+            value.summaryDetails.overview = "SDK 후속 조회가 돌려준 새로운 합성 요약입니다.";
+            value.summary = value.summaryDetails.overview;
+          }
+          if (mode === "unconfirmed") value.summaryNeedsConfirmation = true;
+          if (mode === "false-proof" || mode === "false-proof-same-revision")
+            localStorage.setItem("synthetic-initial-proof-fault", "false");
+          if (mode === "proof-revision")
+            localStorage.setItem("synthetic-initial-proof-fault", "revision");
+          if (mode === "owner")
+            localStorage.setItem(
+              "baro-api-mock-v1:session",
+              JSON.stringify({
+                user: {
+                  id: "different-initial-owner",
+                  name: "다른 합성 사용자",
+                  accountType: "customer",
+                },
+                needsConsent: false,
+              }),
+            );
+          localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+          // A successful SDK read of S2 must not replace the S1 the user agreed to.
+          return value;
+        };
+      },
+      { id: item.id, mode: continuation },
+    );
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+      .getByRole("button", { name: "확인하고 계속", exact: true })
+      .click();
+    if (continuation === "technical") {
+      await expect(page).toHaveURL(new RegExp(`/cases/${item.id}$`));
+      expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+      expect(
+        await page.evaluate(() =>
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticInitialProofReads") ?? "0"),
+        ),
+      ).toBe(1);
+      return;
+    }
+    if (continuation === "owner") {
+      await expect(page.getByText(item.summary, { exact: true })).toHaveCount(0);
+    } else {
+      await expect(
+        page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+      ).toBeVisible();
+      if (continuation === "proof-revision")
+        expect(
+          await page.evaluate(() =>
+            JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticInitialProofReads") ?? "0"),
+          ),
+        ).toBe(4);
+    }
+    await expect(page).toHaveURL(new RegExp(`/cases/${item.id}/summary$`));
+  });
+}
+
+test("the confirmation dialog keeps the canonical summary the user originally reviewed", async ({
+  page,
+}) => {
+  const item = await seed(page);
+  await page.goto(`/cases/${item.id}/summary`);
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[id].revision++;
+    cases[id].summaryDetails.revision++;
+    cases[id].summaryDetails.overview = "대화창이 열린 뒤 다른 탭에서 만든 합성 요약입니다.";
+    cases[id].summary = cases[id].summaryDetails.overview;
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    window.dispatchEvent(new Event("focus"));
+  }, item.id);
+  await expect(
+    page.getByText("대화창이 열린 뒤 다른 탭에서 만든 합성 요약입니다.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
+  await expect(page.getByRole("button", { name: "최신 내용 불러오기", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/cases/${item.id}/summary$`));
+  expect((await canonical(page, item.id)).stage).toBe("summary");
+  expect((await canonical(page, item.id)).revision).toBe(13);
+});
+
 test("a lost request response retries the same persisted proposal", async ({ page }) => {
   const item = await seed(page);
   await page.goto(`/cases/${item.id}/summary`);
