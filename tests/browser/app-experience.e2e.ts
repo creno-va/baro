@@ -55,6 +55,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
   const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
   const link = row.locator(".sidebar-story");
   const copy = row.locator("strong");
+  const controls = row.locator(".sidebar-story-actions");
   const remove = row.getByRole("button");
   for (const product of [false, true]) {
     await page
@@ -63,15 +64,15 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     await page.locator("main").focus();
     await expect(page.locator("main")).toBeFocused();
     await page.mouse.move(800, 400);
-    await expect(remove).toHaveCSS("opacity", "0");
-    await expect(remove).toHaveCSS("pointer-events", "none");
+    await expect(controls).toHaveCSS("opacity", "0");
+    await expect(controls).toHaveCSS("pointer-events", "none");
     const rowBounds = await row.boundingBox();
     const copyBounds = await copy.boundingBox();
     if (!rowBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
     expect(copyBounds.width).toBeGreaterThanOrEqual(rowBounds.width - 22);
     if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-rest.png" });
     await row.hover();
-    await expect(remove).toHaveCSS("opacity", "1");
+    await expect(controls).toHaveCSS("opacity", "1");
     const button = await remove.boundingBox();
     const icon = await remove.locator("svg").boundingBox();
     if (!button || !icon) throw new Error("Synthetic sidebar icon missing");
@@ -89,7 +90,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     await page.mouse.move(800, 400);
     await page.keyboard.press("Tab");
     await link.focus();
-    await expect(remove).toHaveCSS("opacity", "1");
+    await expect(controls).toHaveCSS("opacity", "1");
     await page.keyboard.press("Tab");
     await expect(remove).toBeFocused();
     await page.keyboard.press("Enter");
@@ -255,7 +256,7 @@ test("dialogs center, contain long content and restore focus across viewport siz
       exact: true,
     });
     await opener.focus();
-    await opener.click();
+    await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
     const bounds = await dialog.boundingBox();
@@ -438,7 +439,7 @@ test("Escape cannot hide a deletion request that the dialog owner is still waiti
   await page.goto("/cases");
   await settled(page);
   const opener = page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
-  await opener.locator("..").hover();
+  await page.locator(".sidebar-desktop .sidebar-story-row").filter({ has: opener }).hover();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();

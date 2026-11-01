@@ -133,6 +133,10 @@ sourcesPartial로 표시하며, 선택 원문의 식별/날짜/본문/hash 검�
 
 공식 출처 unavailable 시 사실 정리·자료 목록·선택 원본 내보내기는 유지할 수 있다.
 법적 판단·기한·전략은 생성하지 않고 검증 못한 법률 설명은 PDF/채팅에서 제외한다.
+이 제한은 공식 근거가 없는 내용을 모델 지식으로 보충하지 않는다는 뜻이다.
+[ADR-0018](../adr/0018-conversation-report-rework.md)의 opt-in에서 공식 원문·권한·인용 binding·
+독립 audit가 검증된 조건부 요건 분석·대응점·검토 초안은 허용한다. 미확정 절차·기관·기한은
+확인 필요로 남기며, 기능 방향 수용과 실제 독립 법률 승인·공개 gate를 구분한다.
 source cache의 hash mismatch, 잘못된 판례 ID/선고일, stale guide, redirect 위조,
 구조 변경·등록/IP/credential 오류와 live Worker 성공을 각각 검증한다. 실제 출처 확장,
 업데이트 운영과 공개 법률 범주는 downstream 구현/승인 이슈의 미완료 조건이다.

@@ -106,7 +106,7 @@ test("help and policy profile entries follow the current role", async ({ page })
   }
 });
 
-test("app redirects guests, pending consent and lawyers before showing the customer composer", async ({
+test("app redirects missing access and permits the shared composer for both account roles", async ({
   page,
 }) => {
   const cases: { session: SessionView; path: string }[] = [
@@ -117,7 +117,7 @@ test("app redirects guests, pending consent and lawyers before showing the custo
         user: { id: "conversation-lawyer", name: "합성 변호사", accountType: "lawyer" },
         needsConsent: false,
       },
-      path: "/lawyer",
+      path: "/app",
     },
   ];
   for (const item of cases) {
@@ -127,8 +127,13 @@ test("app redirects guests, pending consent and lawyers before showing the custo
     }, item.session);
     await page.goto("/app");
     await expect(page).toHaveURL(new URL(item.path, page.url()).href);
-    await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCount(0);
+    if (item.path === "/app") {
+      await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeVisible();
+    } else {
+      await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCount(0);
+    }
   }
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });
@@ -187,8 +192,11 @@ test("conversation screens remain accessible and responsive from home through ch
   await page.screenshot({ path: ".wrangler/ui-review/intake-mobile.png", fullPage: true });
   for (let index = 0; index < 6; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await page
     .getByRole("textbox", { name: "추가 사실 또는 질문" })
