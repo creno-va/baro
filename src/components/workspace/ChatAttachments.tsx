@@ -1,7 +1,9 @@
 import { FileText, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FileView } from "../../client/api/types";
 import { Button } from "../ui/button";
+import { materialState, materialStateLabels } from "./evidence-state";
+import "../../styles/evidence.css";
 
 function LocalPreview({ file }: { file: File }) {
   const [url, setUrl] = useState("");
@@ -11,7 +13,11 @@ function LocalPreview({ file }: { file: File }) {
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [file]);
-  return url ? <img src={url} alt={`${file.name} 미리보기`} /> : <FileText aria-hidden="true" />;
+  return url ? (
+    <img src={url} alt={`${file.name} 미리보기`} onError={() => setUrl("")} />
+  ) : (
+    <FileText aria-hidden="true" />
+  );
 }
 
 export function ChatAttachments({
@@ -27,11 +33,21 @@ export function ChatAttachments({
   removeLocal: (file: File) => void;
   removeUploaded: (id: string) => void;
 }) {
+  const localKeys = useRef(new WeakMap<File, number>()),
+    nextKey = useRef(0);
+  const localKey = (file: File) => {
+    let key = localKeys.current.get(file);
+    if (key === undefined) {
+      key = ++nextKey.current;
+      localKeys.current.set(file, key);
+    }
+    return key;
+  };
   if (!local.length && !uploaded.length) return null;
   return (
     <ul className="workspace-chat-attachments" aria-label="이번 메시지의 첨부 파일">
       {local.map((file) => (
-        <li key={`${file.name}:${file.size}:${file.lastModified}`}>
+        <li key={localKey(file)}>
           <LocalPreview file={file} />
           <span>
             {file.name}
@@ -55,11 +71,9 @@ export function ChatAttachments({
           <span>
             {file.name}
             <small>
-              {file.status === "ready"
-                ? "대화에 함께 보낼 준비 완료"
-                : file.status === "failed" || file.uploadRejection
-                  ? "처리 실패 · 자료에서 확인"
-                  : "파일 처리 중"}
+              {file.status === "ready" && !file.uploadRejection
+                ? "대화에 함께 보낼 준비 완료 · 내용 검토 필요"
+                : materialStateLabels[materialState(file)]}
             </small>
           </span>
           <Button
