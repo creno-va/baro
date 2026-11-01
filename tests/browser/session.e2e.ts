@@ -59,8 +59,8 @@ test("signed SQL session completes the real consent API through the browser, the
     });
     await page.goto("/consent");
     await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toBeDisabled();
+    await expect(page.getByRole("checkbox")).toHaveCount(1);
     await page.getByRole("checkbox").nth(0).check();
-    await page.getByRole("checkbox").nth(1).check();
     await page.getByRole("button", { name: "동의하고 계속하기" }).click();
     await expect(page).toHaveURL(/\/app$/);
     const saved = await page.evaluate(async () => (await fetch("/api/me/consent")).json());
@@ -125,10 +125,10 @@ test("persisted role changes invalidate peer navigation without sharing session 
   await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-  await expect(page).toHaveURL(/\/lawyer$/);
-  await expect(peer).toHaveURL(/\/lawyer$/);
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(peer).toHaveURL(/\/app$/);
   await expect(peerNav.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
-  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toHaveCount(0);
+  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toMatch(
     /^[0-9a-f-]{36}$/,
   );

@@ -152,3 +152,9 @@ PR661 최종 head83d56e2f134e0e8038e892602a42b6b007e4f26d의 Quality41318509274/
 수정 후 전체 unit 4,965 tests180,888 assertions/0 fail, bun ci 및 validate:quick 전체 profile(마지막673 tests6,286 assertions 포함)이 성공했다. 관련 실제 native D1/삭제/자산 focused38 tests978 assertions도 성공했다. 이 변경은 제품 코드·schema·migration·비용 정책을 변경하지 않는다. 최종 main의 수동 full과 별개인 사전 검증이다.
 
 04는 실제 서명 session/Hono/DB/AES→초기2×3→요약 확인→native plan/generation/independent audit·공식 citation binding→report ready의 첫 단일 경로를 확인했다. 6개 unknowns를 보존했으며 아직 전체 여섯 브라우저 경로나 최종 PDF 인수로 표시하지 않는다. 최종 전체 여정·실패 경계·모든 PDF 페이지 검토와 exact main 수동 full은 계속 진행한다.
+
+PR664 최종c594432ab511f3b091ee7a07242501ff6bfd03b0의 Quality41320545184/Legal41320545090/nativePDF41320545311 성공 뒤 mainb8687a7ff9a0ccade0395d743482df0830629195에 병합했다. 04에 두 실제 native transport의 main 소비 가능 상태를 전달했다.
+
+사전 broad browser 검사에서 #619의 단일 동의 체크/공통 app 진입/변호사 사건 접근을 구형 기대값이 반영하지 못한 것을 확인했다.00은 tests/browser/auth.e2e.ts·session.e2e.ts·design-system.e2e.ts와 tests/security-browser/csp.e2e.ts를 단독 정비한다.01에는 tests/browser/cases.e2e.ts·public-preview.e2e.ts,05에는 tests/browser/report-draft-revision.e2e.ts·report-retained-pdf.e2e.ts를 단독 위임했다. 키보드·서명 SQL session·로그아웃·owner·CSP·PDF draft/시간/소스 fence 검사를 보존한다. 현재 built CSP는 수정 뒤8 pass/정상 bundle에서 explicit fixture1 skip이며, 나머지 browser는 실패 원인 확인/수정 중이다. 이 사전 검사를 최종 성공으로 표시하지 않는다.
+
+00 소유 인증/공통 shell 검사는 수정 뒤 Chromium27 tests 모두 통과했다. 실제 서명 SQL session의 동의 저장·로그아웃·쿠키 재사용 거절, 계정 역할 변경의 peer navigation, 단일 동의 체크의 on/off·실패 복구·keyboard, 허용된 복귀 경로와 부적절한 URL 거절을 유지한다.01에는 raw canonical 편집을 가정하던 tests/browser/customer-real.e2e.ts도 추가 단독 위임했다. 새 재조율 actual native/ACK 검증은04의 전체 fixture에서 수행하며 테스트를 위해 제품 원장을 대체하지 않는다.

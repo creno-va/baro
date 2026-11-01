@@ -100,7 +100,7 @@ for (const [accountType, returnTo, destination] of [
   ["customer", "/cases/synthetic-case/files", "/cases/synthetic-case/files"],
   ["lawyer", "/settings", "/settings"],
   ["customer", "https://example.com/evil", "/app"],
-  ["lawyer", "/cases/private-case", "/lawyer"],
+  ["lawyer", "/cases/private-case", "/cases/private-case"],
 ] as const) {
   test(`current consent continues automatically: ${accountType} ${returnTo}`, async ({ page }) => {
     await page.route("**/api/me/session", (route) =>
@@ -182,7 +182,7 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   await expect(page.getByRole("button", { name: "Naver로 계속하기" })).toBeFocused();
 });
 
-test("keyboard role selection reaches the lawyer destination after a synthetic OAuth callback", async ({
+test("keyboard role selection preserves the lawyer role and reaches the shared app after a synthetic OAuth callback", async ({
   page,
 }) => {
   await page.route("**/api/auth/sign-in/social", (route) =>
@@ -216,7 +216,7 @@ test("keyboard role selection reaches the lawyer destination after a synthetic O
   expect(callback.pathname).toBe("/consent");
   expect(callback.searchParams.get("loginAttempt")).toBeTruthy();
   expect((await saveRole).postDataJSON()).toEqual({ accountType: "lawyer" });
-  await expect(page).toHaveURL(/\/lawyer$/);
+  await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("checkbox")).toHaveCount(0);
 });
 
@@ -280,13 +280,17 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await page.keyboard.press("Enter");
   const boxes = page.getByRole("checkbox");
   const save = page.getByRole("button", { name: "동의하고 계속하기" });
+  await expect(boxes).toHaveCount(1);
   await expect(save).toBeDisabled();
   await boxes.nth(0).focus();
   await page.keyboard.press("Space");
-  await expect(save).toBeDisabled();
-  await page.keyboard.press("Tab");
-  await expect(boxes.nth(1)).toBeFocused();
+  await expect(save).toBeEnabled();
   await page.keyboard.press("Space");
+  await expect(save).toBeDisabled();
+  await page.keyboard.press("Space");
+  await expect(save).toBeEnabled();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: /이용약관/ })).toBeFocused();
   await save.focus();
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
@@ -369,8 +373,8 @@ test("an expired session during consent saving returns to login", async ({ page 
     ),
   );
   await page.goto("/consent");
+  await expect(page.getByRole("checkbox")).toHaveCount(1);
   await page.getByRole("checkbox").nth(0).check();
-  await page.getByRole("checkbox").nth(1).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/login\?error=session_expired$/);
   await expect(page.getByRole("alert")).toContainText("안전한 이용을 위해 다시 로그인해 주세요.");
