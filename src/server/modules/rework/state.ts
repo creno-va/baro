@@ -189,6 +189,25 @@ export async function preparedAnalysisMatchesScope(
   const current = await readPreparedAnalysis(core, a, id, scope);
   return current !== null && canonicalAnalysisJson(current) === canonicalAnalysisJson(snapshot);
 }
+/** One full authoritative read, fenced by the actual current report scope. */
+export async function readPreparedAnalysisForScope(
+  core: V2Core,
+  a: Actor,
+  id: string,
+  requested: { excludedFileIds: readonly string[]; maskIdentifiers: boolean },
+) {
+  const normalized = (scope: typeof requested) =>
+    canonicalAnalysisJson({
+      excludedFileIds: [...scope.excludedFileIds].sort(),
+      maskIdentifiers: scope.maskIdentifiers,
+    });
+  const before = await readAnalysisScope(core, a, id);
+  if (normalized(before) !== normalized(requested)) return null;
+  const snapshot = await readPreparedAnalysis(core, a, id, before);
+  if (!snapshot) return null;
+  const after = await readAnalysisScope(core, a, id);
+  return normalized(before) === normalized(after) ? snapshot : null;
+}
 type ReportSummary = {
   id: string;
   revision: number;

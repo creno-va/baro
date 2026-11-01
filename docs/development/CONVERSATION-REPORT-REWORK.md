@@ -185,6 +185,14 @@ PR667 exact9661c52adb44542a9074efa63983324eb2eff94c의 Quality41322634194 성공
 
 01의 key-order 동등 DTO와 실제 값/출처/revision 차이 거절 PR674,03의 shared originals/customer-completion corpus PR671,05의 scoped read PR673은 각각 최신 main CI 뒤 순차 통합한다. 최종 전체14 실제 브라우저 경로·actual PDF 전 페이지·exact main manual full은 계속 미완료로 보존한다.
 
+PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal41324914750/native41324914761 성공 후 main26427659ac8a386334a545e0bf32b4cd3ba1073c, PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/native41325273571 성공 후 main32abc5f79bf04fede1dfdce19c13f967e90c92a3, PR674 exactcb97649d5472ac6a86188a548e755ab14f507d0d의 Quality41325723886 성공 후 main38dd0f086a6f6e3935dbaeb70806215d3c4896e2에 병합했다. PR676 exact93f28fc0cf4439da5846d21b0dfc7ae91d13a5e6의 Quality41326268025/Legal41326267945/native41326267903 성공 후 maina86862e037aa39caccec26b947f64438126e8666에 병합했다.676은 사용자가 편집한 mock 리포트의 기존 source identity와 checkedAt을 보존하되 검토 필요 상태를 유지한다. 편집 사실을 새 검증 분석으로 승격하지 않고 자료/요약/입장/마스킹/제외 범위 변경은 계속 stale이다.
+
+00의 `codex/621-rework-scoped-current-read`는673의 private scoped read를 실제 opt-in report runtime에 연결한다. 요청 범위와 실제 현재 범위를 먼저 비교하고, owner/audit/원문/binding/TTL을 검증하는 full authoritative read를 한 번 실행한 뒤 현재 범위를 다시 확인한다. export 전후 검증, 최종 source SQL fence, 구형 fallback과900 hard limit는 유지한다. 범위 변경 중 검증 거절과 mismatch 시 full read 미실행을 실제 SQLite 저장/조회로 검증했다. 실제 PDF 저장 성공 여부는04/05의 같은 runtime 재실행 뒤 기록한다.
+
+재조율 source의 독립 context 읽기에서도 summary의 최종 revision fence가 바뀌면 null로 끝나는 경합을 확인했다. 캡처한 owner/revision/암호문/summary ID/snapshot ID가 실제 바뀐 경우에만 STALE_REVISION으로 분류하고 unchanged-source DB 오류는 그대로 실패한다. 기존 DB adapter·stream 계약·범용503 재시도는 변경하지 않는다. 수정 전 deterministic source-change 회귀 실패와 unchanged DB-error 보존을 확인했고, 수정 후 관련37 tests321 assertions·bun ci·validate:quick(673/6286)·production build/local workerd를 통과했다.
+
+04는 실제 일반 대화1회에서 workspace chat/audit 이후 법률 plan/analysis/audit가 추가 실행되는 문제도 재현했다. 의미 변경 없는 turn의 서버 인증과 research revision 계약을00/04가 함께 정리 중이며 현재 미해결이다. 이 회귀와 전체14여정·최종PDF·최종main manual full을 완료로 표시하지 않는다.
+
 PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal41324914750/nativePDF41324914761 성공 후 main26427659ac8a386334a545e0bf32b4cd3ba1073c에 병합했다. 실제 fixture의 Syntax400은 반복 검사에서0으로 해소됐지만 재조율 context read의 별도503은 남았다.04가 임시 enum 진단으로 readWorkspaceContext의 readIntake→summary unavailable 경합까지 좁혔으며 원복 완료했다.00은 실제 source proof가 바뀐 경우만 stale로 분류하고 unchanged source의 실제 오류는 보존하는 후속을 진행한다. DB corruption 거절을 완화하거나 unknown503을 반복해 성공으로 만들지 않는다.
 
 PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/nativePDF41325273571 성공 후 main32abc5f79bf04fede1dfdce19c13f967e90c92a3에 병합했다. private scoped read 포트만 추가됐으며00의 실제 current-scope 전후 확인/runtime binding은 아직 남아 있다.

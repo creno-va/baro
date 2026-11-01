@@ -16,6 +16,7 @@ import {
   createReworkStateService,
   preparedAnalysisMatchesScope,
   readPreparedAnalysis,
+  readPreparedAnalysisForScope,
 } from "../src/server/modules/rework/state";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 import { seedTestSession } from "./helpers/session";
@@ -145,6 +146,9 @@ test("report runtime selects prepared analysis only after this case explicitly c
     () => f.actor.now,
   );
   expect(await deps.readPreparedAnalysis?.(f.actor, f.workspaceId)).toEqual(snapshot);
+  expect(
+    await deps.readPreparedAnalysisForScope?.(f.actor, f.workspaceId, defaultAnalysisScope()),
+  ).toEqual(snapshot);
   f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
   const readonly = await createCaseReportDependencies(
     env,
@@ -156,6 +160,64 @@ test("report runtime selects prepared analysis only after this case explicitly c
   );
   expect(await readonly.readPreparedAnalysis?.(f.actor, f.workspaceId)).toEqual(snapshot);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+});
+test("the scoped report proof reads full sources once and refuses a different current scope", async () => {
+  const f = await fixture();
+  const { snapshot } = await publish(f);
+  let fullReads = 0;
+  const core: typeof f.core = {
+    ...f.core,
+    statement(sql, values) {
+      if (sql.startsWith("SELECT w.encrypted_payload,i.summary_id FROM v2_workspaces")) fullReads++;
+      return f.core.statement(sql, values);
+    },
+  };
+  expect(
+    await readPreparedAnalysisForScope(core, f.actor, f.workspaceId, defaultAnalysisScope()),
+  ).toEqual(snapshot);
+  expect(fullReads).toBe(1);
+  expect(
+    await readPreparedAnalysisForScope(core, f.actor, f.workspaceId, {
+      excludedFileIds: [],
+      maskIdentifiers: true,
+    }),
+  ).toBeNull();
+  expect(fullReads).toBe(1);
+});
+test("a real report scope replacement during the full proof invalidates its former selection", async () => {
+  const f = await fixture();
+  const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const scope = {
+    excludedFileIds: report.excludedFileIds,
+    maskIdentifiers: report.maskIdentifiers,
+  };
+  await publish(f, scope);
+  let scopeReads = 0;
+  const core: typeof f.core = {
+    ...f.core,
+    statement(sql, values) {
+      const statement = f.core.statement(sql, values);
+      if (sql.startsWith("SELECT r.id,r.workspace_revision,s.id review_id")) {
+        const first = statement.first;
+        statement.first = (async (...args: unknown[]) => {
+          if (++scopeReads === 2)
+            await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+              expectedRevision: report.revision,
+              content: report.content,
+              excludedFileIds: report.excludedFileIds,
+              maskIdentifiers: !report.maskIdentifiers,
+            });
+          return Reflect.apply(first, statement, args);
+        }) as typeof statement.first;
+      }
+      return statement;
+    },
+  };
+  expect(await readPreparedAnalysisForScope(core, f.actor, f.workspaceId, scope)).toBeNull();
+  expect(scopeReads).toBe(2);
+  expect((await f.reports.peek(f.actor.ownerId, f.workspaceId))?.maskIdentifiers).toBe(
+    !report.maskIdentifiers,
+  );
 });
 test("a current honest unavailable snapshot is preserved, and purpose/evidence changes invalidate its basis", async () => {
   const f = await fixture();
