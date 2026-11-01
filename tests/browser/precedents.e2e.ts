@@ -430,6 +430,7 @@ async function comparisonTransport(page: Page) {
       `${location.origin}/src/contracts/v2/precedent-comparison.ts`
     );
     const storage = "synthetic-comparison";
+    await import(`${location.origin}/src/client/api/mock/precedents.ts`);
     const initialContext = await read("precedents.context", { id });
     registerMockHandlers({
       "precedents.context": () => {
