@@ -1,4 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
+import { createCasesClient, createJsonRequester } from "@baro/api-client";
+import { createSessionScope } from "@baro/client-core";
 import { Hono } from "hono";
 import { createWorkspacesApi } from "../src/server/api/v2/workspaces";
 import { saveAccountType } from "../src/server/auth/account-type";
@@ -32,6 +34,20 @@ async function fixture(summary = true) {
   const sql: string[] = [];
   meter.before((statements) => sql.push(...statements));
   const app = new Hono().route("/api/v2/cases", createWorkspacesApi());
+  const http = (path: string, init: RequestInit = {}) =>
+    app.request(
+      path,
+      {
+        ...init,
+        headers: { ...Object.fromEntries(new Headers(init.headers)), cookie: f.owner.cookie },
+      },
+      {
+        ...f.owner.env,
+        DB: meter.binding,
+        CASE_DATA_KEY_V1: btoa("w".repeat(32)).replace(/=+$/, ""),
+        APPLICATION_COST_LIMITS_ENABLED: "false",
+      },
+    );
   const request = (id = f.workspace.id, cookie = f.owner.cookie) =>
     app.request(
       `/api/v2/cases/${id}/summary`,
@@ -47,7 +63,7 @@ async function fixture(summary = true) {
     f.db.sqlite
       .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES(?,?,?)")
       .run(kind, kind === "workspace" ? f.workspace.id : f.owner.userId, f.now);
-  return { ...f, meter, request, sql, tombstone };
+  return { ...f, meter, request, http, sql, tombstone };
 }
 
 test("summary preflight uses one owned/alive query without decrypting unrelated intake content", async () => {
@@ -67,6 +83,7 @@ test("summary preflight uses one owned/alive query without decrypting unrelated 
   f.sql.length = 0;
   const response = await f.request();
   expect(response.status).toBe(200);
+  expect(Number(response.headers.get("x-baro-summary-workspace-revision"))).toBeGreaterThan(0);
   expect(f.sql.filter((sql) => sql.includes("FROM v2_intakes"))).toHaveLength(1);
   expect(f.sql.some((sql) => /v2_answers|v2_question_batches|v2_private_parts/.test(sql))).toBe(
     false,
@@ -118,7 +135,7 @@ for (const condition of [
 test("summary preflight database errors remain closed and are not converted to absence", async () => {
   const f = await fixture();
   f.meter.before((sql) => {
-    if (sql.some((s) => s.startsWith("SELECT i.id FROM v2_intakes i JOIN v2_summaries")))
+    if (sql.some((s) => s.startsWith("SELECT i.id,w.revision FROM v2_intakes i JOIN v2_summaries")))
       throw new Error("Synthetic database failure");
   });
   const diagnostic = spyOn(console, "error").mockImplementation(() => {});
@@ -283,8 +300,7 @@ for (const kind of ["facts", "parties", "both"] as const) {
   });
 }
 
-test("a later summary chunk remains fenced after an earlier chunk has been read", async () => {
-  const f = await fixture();
+async function largeSummary(f: Awaited<ReturnType<typeof fixture>>) {
   const actor = { ownerId: f.owner.userId, now: f.now };
   const intake = await f.repository.readIntake(actor, f.workspace.id);
   const workspace = await f.service.find(f.owner.userId, f.workspace.id);
@@ -319,6 +335,11 @@ test("a later summary chunk remains fenced after an earlier chunk has been read"
   f.db.sqlite
     .query("UPDATE v2_summaries SET revision=2,snapshot_id=? WHERE workspace_id=?")
     .run(snapshotId, f.workspace.id);
+}
+
+test("a later summary chunk remains fenced after an earlier chunk has been read", async () => {
+  const f = await fixture();
+  await largeSummary(f);
   let parts = 0;
   f.meter.after((sql) => {
     if (!sql.some((s) => s.startsWith("SELECT * FROM v2_private_parts"))) return;
@@ -334,4 +355,163 @@ test("a later summary chunk remains fenced after an earlier chunk has been read"
   expect((await reader.read()).done).toBe(false);
   await expect(reader.read()).rejects.toMatchObject({ code: "STALE_REVISION" });
   expect(parts).toBe(2);
+});
+
+for (const partToChange of [1, 2]) {
+  test(`the actual summary HTTP/client recovers a fenced part ${partToChange} only after proving source advance`, async () => {
+    const f = await fixture();
+    if (partToChange === 2) await largeSummary(f);
+    let parts = 0;
+    f.meter.after((sql) => {
+      if (!sql.some((s) => s.startsWith("SELECT * FROM v2_private_parts"))) return;
+      if (++parts === partToChange)
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+          .run(f.workspace.id);
+    });
+    const paths: string[] = [];
+    let keys = 0;
+    const scope = createSessionScope();
+    const http = createJsonRequester({
+      scope,
+      newKey: () => {
+        keys++;
+        return "unused";
+      },
+      transport: async (path, init) => {
+        expect(init.method).toBe("GET");
+        paths.push(path);
+        return f.http(path, init);
+      },
+    });
+    const cases = createCasesClient({
+      request: (_operation, _input, options) => {
+        if (!options?.path) throw new Error("Missing synthetic HTTP path");
+        return http({ ...options, path: options.path });
+      },
+      scope,
+      mode: "real",
+      persistence: "optional",
+      newKey: () => {
+        keys++;
+        return "unused";
+      },
+      fingerprint: async () => "a".repeat(64),
+      challenge: async () => {
+        throw new Error("Readonly recovery must not call challenge");
+      },
+    });
+    const result = await cases.get(f.workspace.id);
+    expect(result.summaryDetails?.overview).toBe("사용자의 거래 자료 확인 준비를 정리했습니다.");
+    expect(result.revision).toBe(
+      (await f.service.find(f.owner.userId, f.workspace.id)).workspaceRevision,
+    );
+    expect(paths.filter((p) => p.endsWith("/summary"))).toHaveLength(2);
+    expect(paths.filter((p) => p.endsWith("/workspace"))).toHaveLength(3);
+    expect(paths.filter((p) => p.endsWith("/intake"))).toHaveLength(2);
+    expect(keys).toBe(0);
+  });
+}
+
+test("a corrupt summary at unchanged revision remains unavailable without replaying the read", async () => {
+  const f = await fixture();
+  f.db.sqlite
+    .query(
+      "DELETE FROM v2_private_parts WHERE snapshot_id IN (SELECT snapshot_id FROM v2_summaries WHERE workspace_id=?)",
+    )
+    .run(f.workspace.id);
+  const paths: string[] = [];
+  const scope = createSessionScope();
+  const http = createJsonRequester({
+    scope,
+    newKey: () => "unused",
+    transport: async (path, init) => {
+      paths.push(path);
+      return f.http(path, init);
+    },
+  });
+  const cases = createCasesClient({
+    request: (_operation, _input, options) => {
+      if (!options?.path) throw new Error("Missing synthetic HTTP path");
+      return http({ ...options, path: options.path });
+    },
+    scope,
+    mode: "real",
+    persistence: "optional",
+    newKey: () => "unused",
+    fingerprint: async () => "a".repeat(64),
+    challenge: async () => "unused",
+  });
+  await expect(cases.get(f.workspace.id)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  expect(paths.filter((p) => p.endsWith("/summary"))).toHaveLength(1);
+  expect(paths.filter((p) => p.endsWith("/workspace"))).toHaveLength(2);
+});
+
+for (const rejected of ["workspace", "intake", "summary"] as const) {
+  test(`ordinary ${rejected} HTTP 409 is not retried as a summary body race`, async () => {
+    const f = await fixture();
+    const paths: string[] = [];
+    const scope = createSessionScope();
+    const http = createJsonRequester({
+      scope,
+      newKey: () => "unused",
+      transport: async (path, init) => {
+        paths.push(path);
+        return path.endsWith(`/${rejected}`)
+          ? Response.json({ error: { code: "CONFLICT" } }, { status: 409 })
+          : f.http(path, init);
+      },
+    });
+    const cases = createCasesClient({
+      request: (_operation, _input, options) => {
+        if (!options?.path) throw new Error("Missing synthetic HTTP path");
+        return http({ ...options, path: options.path });
+      },
+      scope,
+      mode: "real",
+      persistence: "optional",
+      newKey: () => "unused",
+      fingerprint: async () => "a".repeat(64),
+      challenge: async () => "unused",
+    });
+    await expect(cases.get(f.workspace.id)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(paths.filter((p) => p.endsWith(`/${rejected}`))).toHaveLength(1);
+    expect(paths.filter((p) => p.endsWith("/workspace"))).toHaveLength(1);
+  });
+}
+
+test("continued source publication stops after three readonly summary attempts", async () => {
+  const f = await fixture();
+  f.meter.after((sql) => {
+    if (sql.some((s) => s.startsWith("SELECT * FROM v2_private_parts")))
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspace.id);
+  });
+  const paths: string[] = [];
+  const scope = createSessionScope();
+  const http = createJsonRequester({
+    scope,
+    newKey: () => "unused",
+    transport: async (path, init) => {
+      expect(init.method).toBe("GET");
+      paths.push(path);
+      return f.http(path, init);
+    },
+  });
+  const cases = createCasesClient({
+    request: (_operation, _input, options) => {
+      if (!options?.path) throw new Error("Missing synthetic HTTP path");
+      return http({ ...options, path: options.path });
+    },
+    scope,
+    mode: "real",
+    persistence: "optional",
+    newKey: () => "unused",
+    fingerprint: async () => "a".repeat(64),
+    challenge: async () => "unused",
+  });
+  await expect(cases.get(f.workspace.id)).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(paths.filter((p) => p.endsWith("/summary"))).toHaveLength(3);
+  expect(paths.filter((p) => p.endsWith("/workspace"))).toHaveLength(6);
 });

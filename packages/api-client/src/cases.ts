@@ -23,7 +23,11 @@ import {
 } from "@baro/contracts/v2";
 import { z } from "zod";
 import { ApiError } from "./errors";
-import type { OperationRequest, OperationRequestOptions } from "./http";
+import {
+  type OperationRequest,
+  type OperationRequestOptions,
+  SummarySourceChangedError,
+} from "./http";
 
 export const createInputSchema = z.object({
   narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
@@ -605,38 +609,45 @@ export function createCasesClient(
     },
     async get(id: string): Promise<CaseView> {
       if (apiMode === "mock") return request("cases.get", { id });
-      let w: Workspace;
-      try {
-        w = await workspace(id);
-      } catch (cause) {
-        if (!(cause instanceof ApiError && cause.code === "NOT_FOUND")) throw cause;
-        if (knownV2.has(id)) throw cause;
-        const old = caseDetailResponseSchema.parse(
-          await request(
-            "cases.getLegacy",
-            { id },
-            { path: `/api/cases/${encodeURIComponent(id)}` },
-          ),
-        );
-        return {
-          id: old.caseId,
-          title: old.title,
-          stage: "active",
-          subjectContext: "individual",
-          revision: old.inputRevision,
-          summary: "기존 사건 기록",
-          updatedAt: old.completedAt ?? old.startedAt ?? new Date().toISOString(),
-          schemaVersion: "1",
-          ...(dependencies.includeLegacyDetails ? { legacyDetail: old } : {}),
-        };
+      for (let attempt = 0; ; attempt++) {
+        try {
+          let w: Workspace;
+          try {
+            w = await workspace(id);
+          } catch (cause) {
+            if (!(cause instanceof ApiError && cause.code === "NOT_FOUND")) throw cause;
+            if (knownV2.has(id)) throw cause;
+            const old = caseDetailResponseSchema.parse(
+              await request(
+                "cases.getLegacy",
+                { id },
+                { path: `/api/cases/${encodeURIComponent(id)}` },
+              ),
+            );
+            return {
+              id: old.caseId,
+              title: old.title,
+              stage: "active",
+              subjectContext: "individual",
+              revision: old.inputRevision,
+              summary: "기존 사건 기록",
+              updatedAt: old.completedAt ?? old.startedAt ?? new Date().toISOString(),
+              schemaVersion: "1",
+              ...(dependencies.includeLegacyDetails ? { legacyDetail: old } : {}),
+            };
+          }
+          const m = await metadata(id);
+          const s = m.summary
+            ? v2SummarySchema.parse(
+                await request("cases.summary", { id }, { path: path(id, "summary") }),
+              )
+            : null;
+          return { ...view(w, m, s?.overview ?? ""), ...(s ? { summaryDetails: s } : {}) };
+        } catch (error) {
+          ensureCurrent();
+          if (!(error instanceof SummarySourceChangedError && attempt < 2)) throw error;
+        }
       }
-      const m = await metadata(id);
-      const s = m.summary
-        ? v2SummarySchema.parse(
-            await request("cases.summary", { id }, { path: path(id, "summary") }),
-          )
-        : null;
-      return { ...view(w, m, s?.overview ?? ""), ...(s ? { summaryDetails: s } : {}) };
     },
     getQuestions,
     async saveAnswers(id: string, raw: AnswersInput): Promise<QuestionsResult> {
