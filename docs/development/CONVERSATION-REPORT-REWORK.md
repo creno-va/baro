@@ -140,3 +140,15 @@ PR656 head6c148074f31ca801b6545a168c2cef4ba971b6cc의 Quality41313917239/Legal41
 중앙 Workflow dispatcher에 HTTP에서 선택할 수 없는 5번째 constructor options를 연결해 offline source transport와 같은 report factory를 실제 production dispatcher가 소비한다. 기본4인자 운영 동작은 같다. 최종 fixture가 private job 선택 분기를 복제하거나 실제 외부 법률 API로 유출되지 않도록 하는 포트이며, signed Hono 검사의 모든 job drain도 이 dispatcher로 바꿨다. 기존 runtime9+새중앙15 =24 tests240 assertions 재통과. PR661은 이 작은 포트까지 포함한 새 head로 CI를 다시 확인한다.
 
 자동 준비도 기존 ANALYSIS_ACCOUNT_LIMIT를 paid admission 전에 검사한다. 실제 rate 제한 중에는 미접수 의도를 보존해 다음 허용 시 재개하며 provider 호출/작업을 만들지 않는다. 이 검사 추가 뒤 중앙 actual dispatcher16 tests168 assertions 통과(기존 두 목적의 법령·판례/요건·비교/HTML 일치 포함). 가격·재원 관측을 이 경계에 섞지 않는다.
+
+### 전체 검증 준비와 실제 네이티브 포트 (2026-11-02)
+
+PR661 최종 head83d56e2f134e0e8038e892602a42b6b007e4f26d의 Quality41318509274/Legal41318509293/nativePDF41318509282 성공 후 main8f72e392f1996cba4ed963de8e84d0b6af4976f0에 병합했다. production build/local workerd 부팅도 성공했다. PR660 최종8174be4e859fc56f6c883bfbcc1a8ca20ea8bb57의 3개 CI 성공 후 maindcae393fc0bbb6f070e99a359cfeb9b0294d12a0, PR662 최종db225c75dfcf04410b22269eb602ceed881b8ccf의 Quality 성공 후 main8ff896a43f9786944a71dea3d69005df4f9c99ae에 병합했다. PR663 최종ee2a66b97601d9a54566ecee617b18f135af5d33의 Quality41320026615/Legal41320026562/nativePDF41320026548 성공 후 main04754d64c8f5fc38f65e05e65046b48c9fbe8ebe에 병합했다. PR664는 최신 main base로 갱신해 CI 재검증 중이다. 최종 main SHA는 아직 아니다.
+
+660은 외부 모델 출력 포트만 제공하며 실제 initial 2×3/요약/native wire/audit를 소비하는 5 tests40 assertions를 통과했다. 663은 격리 Docker의 실제 제품 report.py를 실행하는 PDF transport이며 실제 native 4 tests17 assertions를 통과했다. 664의 byte/hash 기반 사진·텍스트 처리 포트는 8 tests115 assertions를 통과했으며 등록된 PDF bytes의 합성 페이지 처리를 실제 PDF parser 인수로 표현하지 않는다. 이 포트들은 DB/원장/admission/lease를 대체하지 않는다.
+
+00의 `codex/621-rework-validation`은 전체 검사에서 발견한 기존 fixture drift를 test-only로 수정한다. 최초 unit 실행은 4,931 pass/29 fail이었다. 과거 consent 컬럼, SQL wall clock과 선언된 합성 fixture 월의 불일치, 삭제 journal 스케줄, 현재 한 개 선택 계약과 구형 30개 자산 보존 검사의 혼동이 원인이었다. native D1 복사는 source fixture의 선언 월로 초기화하고 파생 mirror는 실제 trigger로 재구성한다. retired consent 컬럼은 과거 migration target에서만 복원한다. 합성 cleanup schedule만 fixture 시간으로 맞추며 provider/funding/billing 관측 시각·금액·원장은 수정하지 않는다. 구형 30개 자산 보존과 D1 100 parameters 경계 검사를 유지하고 새 30개 선택 거절도 확인한다.
+
+수정 후 전체 unit 4,965 tests180,888 assertions/0 fail, bun ci 및 validate:quick 전체 profile(마지막673 tests6,286 assertions 포함)이 성공했다. 관련 실제 native D1/삭제/자산 focused38 tests978 assertions도 성공했다. 이 변경은 제품 코드·schema·migration·비용 정책을 변경하지 않는다. 최종 main의 수동 full과 별개인 사전 검증이다.
+
+04는 실제 서명 session/Hono/DB/AES→초기2×3→요약 확인→native plan/generation/independent audit·공식 citation binding→report ready의 첫 단일 경로를 확인했다. 6개 unknowns를 보존했으며 아직 전체 여섯 브라우저 경로나 최종 PDF 인수로 표시하지 않는다. 최종 전체 여정·실패 경계·모든 PDF 페이지 검토와 exact main 수동 full은 계속 진행한다.

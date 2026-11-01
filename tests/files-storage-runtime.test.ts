@@ -1,5 +1,4 @@
 import { expect, setSystemTime, test } from "bun:test";
-import { readdir } from "node:fs/promises";
 import { Hono } from "hono";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
@@ -22,6 +21,7 @@ import { createFilesService } from "../src/server/modules/files/service";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { measureD1Work } from "./helpers/d1-work";
 import { r2 } from "./helpers/file-processing-fixture";
+import { copySyntheticD1 } from "./helpers/native-d1";
 import { intent, NOW, ready, verifier } from "./helpers/storage-capacity";
 
 type FileStorageMetering = NonNullable<
@@ -597,52 +597,9 @@ test("signed global file composition stores an encrypted PDF chunk with actual w
       .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'customer',?)")
       .run(`account-type:${f.actor.ownerId}`, NOW);
     const db = (await mf.getD1Database("DB")) as unknown as D1Database;
-    for (const name of (await readdir("drizzle")).filter((n) => /^\d{4}_.+\.sql$/.test(n)).sort()) {
-      await db.batch(
-        (await Bun.file(`drizzle/${name}`).text())
-          .split("--> statement-breakpoint")
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .map((sql) => db.prepare(sql)),
-      );
-    }
-    // Only synthetic, pre-upload fixture rows; all actual admission runs in workerd.
-    const inserts = [db.prepare("PRAGMA defer_foreign_keys=ON")];
-    for (const { name } of f.db.sqlite
-      .query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-      .all() as { name: string }[]) {
-      // Migration-owned derived rows already exist in native D1. Source-row
-      // INSERT triggers reconstruct them; importing canonical mirrors directly
-      // would bypass the production integrity contract.
-      if (
-        [
-          "v2_physical_storage_totals",
-          "v2_physical_binding_totals",
-          "v2_physical_total_mutations",
-          "v2_storage_funding_heads",
-          "v2_storage_integrity_faults",
-          "v2_storage_carryover",
-          "v2_directory_epoch",
-        ].includes(name)
-      )
-        continue;
-      for (const row of f.db.sqlite.query(`SELECT * FROM ${name}`).all() as Record<
-        string,
-        unknown
-      >[]) {
-        if (name === "app_metadata" && !String(row.key).startsWith("account-type:")) continue;
-        inserts.push(
-          db
-            .prepare(
-              `INSERT INTO ${name}(${Object.keys(row).join(",")}) VALUES(${Object.keys(row)
-                .map(() => "?")
-                .join(",")})`,
-            )
-            .bind(...Object.values(row)),
-        );
-      }
-    }
-    await db.batch(inserts);
+    // Rebuild derived rows at the declared synthetic source month; do not use
+    // the host wall-clock month or copy canonical mirrors into native D1.
+    await copySyntheticD1(db, f.db.sqlite);
     const measured = measureD1Work(db);
     const bucket = r2(),
       env = {

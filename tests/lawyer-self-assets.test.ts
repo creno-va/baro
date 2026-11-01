@@ -7,9 +7,13 @@ import { createLawyersApi } from "../src/server/api/v2/lawyers";
 import { saveAccountType } from "../src/server/auth/account-type";
 import { createV2DeletionRepository } from "../src/server/db/v2-deletion";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
-import { selfAssetUrl } from "../src/server/modules/lawyers/self-profile-contract";
+import {
+  selfAssetUrl,
+  selfProfileSchema,
+} from "../src/server/modules/lawyers/self-profile-contract";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { selfAssetFixture } from "./helpers/lawyer-self-assets";
+import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
 import { seedTestSession } from "./helpers/session";
 
 async function publishedFixture(pdf = false) {
@@ -238,7 +242,7 @@ test("stream revision fences avoid snapshot decryption and support own uploads b
   expect(await freshService.isCurrent(fresh.actor.ownerId, blank, true)).toBe(false);
 });
 
-test("photo plus all 30 portfolio assets save/publish within D1's 100 bound parameters", async () => {
+test("unchanged historical photo plus 30 portfolio assets save/publish within D1's 100 bound parameters", async () => {
   const f = await selfAssetFixture();
   await saveAccountType(f.db.binding, f.actor.ownerId, "lawyer");
   expect(
@@ -312,7 +316,7 @@ test("photo plus all 30 portfolio assets save/publish within D1's 100 bound para
     () => f.actor.now,
   );
   const blank = await service.getMine(f.actor.ownerId);
-  const saved = await service.saveMine(f.actor.ownerId, {
+  const historical = selfProfileSchema.parse({
     ...blank,
     name: "합성",
     introduction: "합성 소개",
@@ -324,6 +328,16 @@ test("photo plus all 30 portfolio assets save/publish within D1's 100 bound para
     photoAssetId: f.params.assetId,
     photoUrl: selfAssetUrl(blank.id, f.params.assetId),
     portfolio: refs,
+    revision: 2,
+    published: true,
+  });
+  await expect(
+    service.saveMine(f.actor.ownerId, { ...historical, revision: blank.revision }),
+  ).rejects.toThrow();
+  await seedLegacySelfProfile(f.core, f.actor.ownerId, historical);
+  const saved = await service.saveMine(f.actor.ownerId, {
+    ...historical,
+    introduction: "합성 소개 수정",
   });
   const profile = await service.publishMine(f.actor.ownerId, true, saved.revision, saved.id);
   expect((await service.getMine(f.actor.ownerId)).portfolio).toHaveLength(30);
