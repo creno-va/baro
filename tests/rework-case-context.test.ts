@@ -163,6 +163,18 @@ test("HTTP creates and updates through current owner, origin, Turnstile and idem
   expect((await create()).status).toBe(201);
   expect(verified).toBe(1);
   const path = `/api/v2/cases/${made.workspace.id}/rework/context`;
+  const state = await app.request(
+    `/api/v2/cases/${made.workspace.id}/rework/conversation`,
+    { headers },
+    env,
+  );
+  expect(state.status).toBe(200);
+  expect(await state.json()).toMatchObject({
+    caseContext: { casePurpose: "respond_to_claim", subjectContext: "company" },
+    summaryConfirmed: false,
+    analysis: { status: "not_started" },
+    report: { status: "not_started" },
+  });
   expect((await app.request(path, undefined, env)).status).toBe(401);
   const update = {
     expectedRevision: made.workspace.workspaceRevision,

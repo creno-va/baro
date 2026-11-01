@@ -31,6 +31,13 @@ function binaryDatabase() {
   });
 }
 export async function mockOriginalStore(key: string, value?: Blob | null): Promise<Blob | null> {
+  // WebKit can reject a request-backed Blob during IndexedDB serialization.
+  // Materialize identical bytes before opening the transaction; legacy Blob
+  // records remain readable. This store exists only in explicit mock mode.
+  const stored =
+    value instanceof Blob
+      ? { format: "bytes_v1", type: value.type, bytes: await value.arrayBuffer() }
+      : value;
   const db = await binaryDatabase();
   try {
     return await new Promise<Blob | null>((resolve, reject) => {
@@ -41,10 +48,16 @@ export async function mockOriginalStore(key: string, value?: Blob | null): Promi
           ? store.get(key)
           : value === null
             ? store.delete(key)
-            : store.put(value, key);
+            : store.put(stored, key);
       let result: Blob | null = null;
       request.onsuccess = () => {
         if (request.result instanceof Blob) result = request.result;
+        else if (
+          request.result?.format === "bytes_v1" &&
+          typeof request.result.type === "string" &&
+          request.result.bytes instanceof ArrayBuffer
+        )
+          result = new Blob([request.result.bytes], { type: request.result.type });
       };
       tx.oncomplete = () => resolve(result);
       tx.onerror = () =>
