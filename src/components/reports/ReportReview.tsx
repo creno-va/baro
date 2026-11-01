@@ -1010,7 +1010,11 @@ export function ReportReview({
             }
             onSaveReport={downloadCurrentReport}
             onChanged={() => {
-              void evidenceChanged();
+              void evidenceChanged().catch((cause: unknown) => {
+                setError(
+                  cause instanceof Error ? cause.message : "현재 리포트 상태를 다시 확인해 주세요.",
+                );
+              });
             }}
             onDirtyChange={setResolutionDirty}
             onBusyChange={setResolutionBusy}
