@@ -1,5 +1,11 @@
 # BARO Product Requirements Document
 
+> 2026-11-01 사용자 개편 요청: 사건 목적(고소·청구 준비 / 상대방 주장 대응), AI 요약 재조율·사용자 확인,
+> 자료/사진 촬영·대화 내 실행, 자동 공식 법률·판례 분석과 요건별 사실/증거·구체적 판례 공통점/차이점·
+> 약점/보완 자료를 포함한 리포트, 직접 해결 / 변호사와 해결 / 리포트만 저장 및 검토용 문서 초안을 포함합니다.
+> [ADR-0018](./adr/0018-conversation-report-rework.md)이 아래 과거 신규 기능 중단·사실 준비 전용·전략/제출문서 일괄 거절의 해당 범위를 대체합니다.
+> 독립 법률 승인·정책/공개 gate·실제 외부 인수와 구현 완료는 별도입니다. 정확한 진행은 [단일 통합 기록](./development/CONVERSATION-REPORT-REWORK.md)을 따릅니다.
+
 - Version: 2.0
 - Status: Current MVP scope; implementation integrated; final live acceptance pending
 - Updated: 2026-10-14
