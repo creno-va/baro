@@ -47,6 +47,8 @@ export const jobAlive = `NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.targe
    (j.target_kind='file' AND EXISTS(SELECT 1 FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE f.id=j.target_id AND f.revision=j.target_revision AND f.current_job_id=j.id AND w.owner_id=o.owner_id AND ${aliveWorkspace})) OR
    (j.target_kind='report' AND EXISTS(SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=j.target_id AND r.workspace_revision=j.target_revision AND r.current_job_id=j.id AND w.owner_id=o.owner_id AND ${aliveWorkspace})) OR
    (j.target_kind='profile_asset' AND EXISTS(SELECT 1 FROM v2_assets a JOIN v2_profiles p ON p.id=a.profile_id WHERE a.id=j.target_id AND a.revision=j.target_revision AND a.current_job_id=j.id AND p.owner_id=o.owner_id AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='profile' AND target_id=p.id))))`;
+const latestWorkspaceQuery = (projection = "") =>
+  `SELECT j.*${projection} FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1`;
 type JobRow = {
   id: string;
   operation_id: string;
@@ -618,12 +620,26 @@ export function createV2JobsRepository(core: V2Core) {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, workspaceId);
         const row = await core
-          .statement(
-            "SELECT j.* FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE o.owner_id=? AND j.workspace_id=? AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=o.owner_id) ORDER BY j.target_revision DESC,j.created_at DESC,j.id DESC LIMIT 1",
-            [actor.ownerId, workspaceId],
-          )
+          .statement(latestWorkspaceQuery(), [actor.ownerId, workspaceId])
           .first<JobRow>();
         return row ? jobDto(row) : null;
+      });
+    },
+    /** A SQL hint only. The caller must authenticate any private candidate's
+     * encrypted admission before hiding it from installed-client projections. */
+    latestWorkspaceForProjection(actor: Actor, workspaceId: string) {
+      return safe(async () => {
+        actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
+        parse(opaqueIdSchema, workspaceId);
+        const row = await core
+          .statement(
+            latestWorkspaceQuery(
+              ", (j.kind='chat_response' AND EXISTS(SELECT 1 FROM v2_rework_records r WHERE r.workspace_id=j.workspace_id AND r.owner_id=o.owner_id AND r.state='published' AND ((r.kind='task' AND r.entity_id=j.id) OR (r.kind='reconciliation' AND r.entity_id=j.workspace_id AND r.workspace_revision=j.target_revision)))) rework_candidate",
+            ),
+            [actor.ownerId, workspaceId],
+          )
+          .first<JobRow & { rework_candidate: number }>();
+        return { job: row ? jobDto(row) : null, mayBePrivate: row?.rework_candidate === 1 };
       });
     },
     find(actor: Actor, jobId: string) {
