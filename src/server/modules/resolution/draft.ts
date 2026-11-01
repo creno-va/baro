@@ -47,6 +47,7 @@ export function resolutionAnalysisIncluded(source: ResolutionSource, ids: readon
 export function resolutionWeaknessChecks(source: ResolutionSource, ids: readonly string[]) {
   if (!resolutionAnalysisIncluded(source, ids) || !source.analysis) return [];
   return [
+    ...source.analysis.limitations.map((limitation) => `분석·자료 확인: ${limitation}`),
     ...source.analysis.perspective.responsePoints.map(
       (p) =>
         `확인할 주장: ${p.opponentPosition}\n우리 측 설명: ${p.ourExplanation}\n필요한 자료·사실 확인: ${p.additionalMaterials.length ? p.additionalMaterials.join(" / ") : "해당 주장의 원문과 우리 측 설명의 근거를 확인해 주세요."}`,
