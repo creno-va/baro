@@ -234,6 +234,21 @@ export function createAutomaticLegalAnalysis(deps: {
               "고소·청구를 준비하는 쪽인지 상대방 주장에 대응하는 쪽인지 확인해야 입장별 분석을 완성할 수 있어요.",
             ]
           : []),
+        ...(input.materials.some((material) => !material.coverage)
+          ? [
+              "일부 자료는 관찰·교정 상태를 확인하지 못했어요. 확인된 자료 관찰로 취급하지 않고 원본과 확인해야 해요.",
+            ]
+          : []),
+        ...(input.materials.some(
+          (material) => material.coverage?.observationCertainty === "uncertain",
+        )
+          ? ["불확실하게 읽힌 자료 내용은 확인이 필요하며 확정된 관찰이나 사건 사실로 보지 않아요."]
+          : []),
+        ...(input.materials.some((material) => material.coverage?.userEdited)
+          ? [
+              "사용자가 교정한 자료 내용은 원본과 확인해야 하며 기계가 확인한 관찰로 승격하지 않아요.",
+            ]
+          : []),
         "현재 법령 기준의 검토 자료예요. 사건 발생 시점의 적용과 최종 법적 판단은 별도로 확인해야 해요.",
       ]),
     ];

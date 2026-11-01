@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createReportHtml } from "../../../components/reports/document";
 import { maskReportText } from "../../../components/reports/download";
-import type { V2ReportBody } from "../../../contracts/v2";
+import type { V2LegalAnalysisSnapshot, V2ReportBody } from "../../../contracts/v2";
 import type { Actor, V2Core } from "../../db/v2-core";
 import { jobAlive } from "../../db/v2-jobs";
 import type { createV2ReportsRepository } from "../../db/v2-reports";
@@ -26,12 +26,22 @@ import {
   ownedWorkspace,
   ReportError,
   type ReportReviewData,
+  reportSourceOptions,
   sourceDigest,
   validateOriginalSelection,
 } from "./source";
 import { streamChunks, type ZipSource, zipByteLength, zipChunks } from "./zip";
 
 export type ReportDependencies = {
+  /** Server-authorized immutable analysis only. Never dispatch a job, invoke a
+   * model or perform external legal discovery from this callback. */
+  readPreparedAnalysis?: (actor: Actor, caseId: string) => Promise<V2LegalAnalysisSnapshot | null>;
+  preparedAnalysisMatchesScope?: (
+    actor: Actor,
+    caseId: string,
+    snapshot: V2LegalAnalysisSnapshot,
+    scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean },
+  ) => Promise<boolean>;
   environment: "preview" | "production";
   bucket?: PrivateBucket;
   files: FilesService;
@@ -87,6 +97,7 @@ type ExportRow = {
   encrypted_payload: string;
 };
 type Ports = {
+  checkAnalysis?: (actor: Actor, caseId: string, review: ReportReviewData) => Promise<void>;
   row: (actor: Actor, id: string) => Promise<ExportRow>;
   read: (
     actor: Actor,
@@ -126,8 +137,12 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
   });
   const valid = async (actor: Actor, id: string) => {
     const data = await ports.read(actor, id);
-    if (data.review.sourceDigest !== (await sourceDigest(core, actor, data.row.workspace_id)))
+    if (
+      data.review.sourceDigest !==
+      (await sourceDigest(core, actor, data.row.workspace_id, reportSourceOptions(data.review)))
+    )
       throw new ReportError("STALE_REVISION");
+    await ports.checkAnalysis?.(actor, data.row.workspace_id, data.review);
     return data;
   };
   async function abandon(blobId: string) {
@@ -524,6 +539,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       now,
       deps.sessionId,
       data.body.citations.map((citation) => citation.id),
+      reportSourceOptions(data.review),
     );
     if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);
@@ -591,6 +607,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
               throw new ReportError("STORAGE_UNAVAILABLE");
             })();
       await authorize();
+      await ports.checkAnalysis?.(a(actor.ownerId), r.workspace_id, data.review);
 
       const choices = selected
         ? validateOriginalSelection(data.body, data.review.excludedFileIds, selected)
