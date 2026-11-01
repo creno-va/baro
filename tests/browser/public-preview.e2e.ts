@@ -116,8 +116,12 @@ test("intake opens an active workspace with lawyer navigation and report control
     await page.getByRole("button", { name: "모름", exact: true }).click();
   }
   await expect(page).toHaveURL(/\/summary$/);
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "확인하고 계속", exact: true }).click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
   // Empty input still prevents submission; only the launch restriction is removed.
@@ -134,6 +138,9 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("heading", { name: "다음 행동", exact: true })).toBeVisible();
   await expect(page.locator(".workspace-action-list input").first()).toBeEnabled();
   await tabs.getByRole("link", { name: "리포트 보기" }).click();
+  const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
+  await expect(preparation).toBeVisible();
+  await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeEnabled();
