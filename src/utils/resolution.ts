@@ -5,6 +5,54 @@ import type {
   V2ResolutionState,
 } from "../contracts/v2/resolution";
 
+/** Public reading links only. These do not attest availability or legal applicability. */
+export const resolutionReadingLinks = {
+  legalAid: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=2&cciNo=2&cnpClsNo=1",
+  publicDefender:
+    "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=538&ccfNo=5&cciNo=3&cnpClsNo=5",
+} as const;
+
+/** A limited guide can be opened without turning it into a verified citation.
+ * Never link arbitrary model/user supplied hosts, redirects or query arguments. */
+export function resolutionGuideTextParts(
+  text: string,
+): { text: string; url: string | null; start: number }[] {
+  const parts: { text: string; url: string | null; start: number }[] = [];
+  let offset = 0;
+  for (const match of text.matchAll(/https:\/\/[^\s<>"'()[\]{}]+/gu)) {
+    const value = match[0];
+    let allowed = false;
+    try {
+      const url = new URL(value);
+      const keys = ["csmSeq", "ccfNo", "cciNo", "cnpClsNo"];
+      allowed =
+        value.length <= 2048 &&
+        ["www.easylaw.go.kr", "easylaw.go.kr"].includes(url.hostname) &&
+        !url.username &&
+        !url.password &&
+        !url.port &&
+        !url.hash &&
+        url.pathname === "/CSP/CnpClsMain.laf" &&
+        [...url.searchParams].length === 4 &&
+        keys.every(
+          (key) =>
+            url.searchParams.getAll(key).length === 1 &&
+            /^\d{1,12}$/.test(url.searchParams.get(key) ?? ""),
+        );
+    } catch {
+      /* Leave unrecognized content as plain text. */
+    }
+    if (!allowed) continue;
+    parts.push(
+      { text: text.slice(offset, match.index), url: null, start: offset },
+      { text: value, url: value, start: match.index },
+    );
+    offset = match.index + value.length;
+  }
+  parts.push({ text: text.slice(offset), url: null, start: offset });
+  return parts;
+}
+
 export const resolutionDocumentLabels: Record<V2ResolutionDocumentKind, string> = {
   fact_statement: "사실 정리 초안",
   criminal_complaint: "고소장 초안",
@@ -70,6 +118,7 @@ export function resolutionDraftIsCurrent(
     state.basis !== null &&
     state.status !== "stale" &&
     state.status !== "not_ready" &&
+    state.allowedDocumentKinds.includes(draft.documentKind) &&
     sameResolutionBasis(draft.basis, state.basis) &&
     sameResolutionFiles(draft.selectedFileIds, state.selectedFileIds) &&
     draft.maskIdentifiers === state.maskIdentifiers

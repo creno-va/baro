@@ -84,7 +84,11 @@
 .resolution a {
   overflow-wrap: anywhere;
 }
-.resolution-checks a {
+.resolution-checks a,
+.resolution-notice > a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--primary, #2364e8);
 }
 .resolution-scope {
