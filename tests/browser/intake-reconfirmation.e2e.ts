@@ -274,6 +274,96 @@ test("proposal resume, cancel, explain again and confirm preserve canonical prov
   expect(saved.summaryDetails.unknowns).toEqual(item.summaryDetails?.unknowns);
 });
 
+for (const fault of [null, "cancel-fail-before", "cancel-lost-after", "cancel-peer-after"]) {
+  test(`terminal job: primary explain again retires the private request (${fault ?? "success"})`, async ({
+    page,
+  }) => {
+    const item = await seed(page, "active");
+    const explanation = "종료된 합성 작업의 추가 설명입니다. 금액은 아직 모릅니다.";
+    await page.addInitScript(
+      ({ item, explanation }) => {
+        if (localStorage.getItem("synthetic-reconciliation-terminal-job")) return;
+        const values = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        values[item.id].revision = 13;
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(values));
+        localStorage.setItem(
+          "baro-api-mock-v1:summaryReconciliations",
+          JSON.stringify({
+            [item.id]: {
+              contractVersion: "conversation-report-v1",
+              workspaceRevision: 13,
+              status: "pending",
+              request: {
+                id: "synthetic-terminal-request",
+                input: { expectedRevision: 12, summaryRevision: 3, kind: "addition", explanation },
+                createdAt: item.updatedAt,
+              },
+              proposal: null,
+              currentJobId: "synthetic-terminal-job",
+              failure: null,
+              confirmedSummaryRevision: null,
+              confirmedWorkspaceRevision: null,
+            },
+          }),
+        );
+        localStorage.setItem("synthetic-reconciliation-terminal-job", "true");
+      },
+      { item, explanation },
+    );
+    await page.goto(`/cases/${item.id}/summary`);
+    const retry = page.getByRole("button", { name: "다시 설명하기", exact: true });
+    const input = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+    await expect(retry).toBeVisible();
+    if (fault)
+      await page.evaluate(
+        (fault) => localStorage.setItem("synthetic-reconciliation-fault", fault),
+        fault,
+      );
+    await retry.click();
+    if (fault === "cancel-peer-after") {
+      await expect(
+        page.getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+      ).toBeVisible();
+      await expect(input).toHaveCount(0);
+      const state = await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:summaryReconciliations") ?? "{}")[id],
+        item.id,
+      );
+      expect(state.request.id).not.toBe("synthetic-terminal-request");
+      expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+      return;
+    }
+    if (fault) {
+      await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
+      await expect(input).toHaveCount(0);
+      // Repeat the user's primary intent. Ambiguous cancellation reuses the
+      // shared client's persisted key instead of creating a second retirement.
+      await retry.click();
+    }
+    await expect(input).toHaveValue(explanation);
+    expect(
+      await page
+        .getByRole("dialog", { name: "어떤 내용이 빠졌나요?", exact: true })
+        .evaluate((dialog) => dialog.contains(document.activeElement)),
+    ).toBe(true);
+    const retired = await canonical(page, item.id);
+    expect(retired.revision).toBe(14);
+    expect(retired.summaryDetails).toEqual(item.summaryDetails);
+    const counts = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticReconciliationCounts") ?? "{}"),
+    );
+    expect(counts.cancel).toBe(fault ? 2 : 1);
+    expect(counts.request).toBeUndefined();
+    await input.fill(`${explanation} 새로운 합성 보완 진술입니다.`);
+    await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+    const proposed = await canonical(page, item.id);
+    expect(proposed.revision).toBe(15);
+    expect(proposed.summaryDetails).toEqual(item.summaryDetails);
+  });
+}
+
 test("a lost request response retries the same persisted proposal", async ({ page }) => {
   const item = await seed(page);
   await page.goto(`/cases/${item.id}/summary`);

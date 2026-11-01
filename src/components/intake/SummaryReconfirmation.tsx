@@ -500,7 +500,11 @@ function SummaryReconfirmationScene({
   const explainAgain = async () => {
     const previous = state?.request;
     if (!previous) return;
-    if (state.status === "failed" || (await cancel())) {
+    // A terminal job may be projected as failed while its immutable private
+    // request is still pending/running. Retire it and read back the fresh
+    // revision before opening another explanation; cancellation failure keeps
+    // the saved request available for the same owner's idempotent retry.
+    if (await cancel()) {
       setKind(previous.input.kind);
       setExplanation(previous.input.explanation);
     }
