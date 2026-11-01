@@ -24,6 +24,19 @@ export function ConversationPanel({
   const restore = useRef(canRestoreFocus);
   restore.current = canRestoreFocus;
   useEffect(() => {
+    if (
+      busy ||
+      !heading.current?.isConnected ||
+      document.activeElement !== document.body ||
+      document.querySelector("dialog[open]") ||
+      (restore.current && !restore.current())
+    )
+      return;
+    // A completed child can replace its focused controls. Restore this stable
+    // reading target only if no other control or modal owns the user's focus.
+    heading.current.focus({ preventScroll: true });
+  }, [busy]);
+  useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     const messages = heading.current?.closest(".workspace-messages");
     if (messages && heading.current)
@@ -40,8 +53,14 @@ export function ConversationPanel({
       const target = origin.current;
       if (restore.current && !restore.current()) return;
       if (target?.closest("[inert], [aria-hidden='true']")) return;
+      const focusable =
+        target &&
+        target !== document.body &&
+        target !== document.documentElement &&
+        !target.matches(":disabled, [aria-disabled='true']") &&
+        (target.tabIndex >= 0 || target.hasAttribute("tabindex") || target.isContentEditable);
       const visible =
-        target?.isConnected && target.getClientRects().length > 0
+        focusable && target.isConnected && target.getClientRects().length > 0
           ? target
           : target?.closest("details")?.querySelector<HTMLElement>("summary");
       (

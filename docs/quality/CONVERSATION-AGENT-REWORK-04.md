@@ -371,3 +371,16 @@ Quality41347886953/nativePDF41347886991 성공/main `6869aa6c`,06 consumer PR693
 확인해 통합했다. photo 검증은 최종6여정의 respond_to_claim-save 한 경로만 기존 촬영 picker와
 실제 합성 PNG로 준비한다. 다른5경로와 claim-self의 실제 큐 ACK 유실 검사는 유지한다.
 실제 기기 카메라 성공이나 low_quality 관찰의 확정 사실 승격을 주장하지 않는다.
+
+main693의 첫 실제 UI 여정은 self 선택→사실 정리 초안→명시 검토/저장→전체UTF8 다운로드
+3831B까지 통과했다. PDF 전/후 W46→48에서도 A=ready/R stale=false/S4와resolution active를
+유지했고, 선택은 같은 W48에서 resolution revision1→2만 바꿨다. 본문·자료·보고서 상태를
+관측한 JSON과 실제 파일은 보존했다. 마지막 Escape/초점 검사에서04 패널의 두 경계를
+독립 UI로 재현했다(수정 전2실패/외부초점1통과): body가 opener로 저장되면 닫은 후 입력창을
+찾지 못하고, 완료된 자식 controls가 제거되면 초점이 패널 밖 body로 남는다.
+
+ConversationPanel은 body/document를 복귀 대상으로 쓰지 않고, 작업 완료 후 현재 owner/epoch가
+유효하며 다른 control이나 열린 native dialog가 초점을 갖지 않을 때에만 지속 heading으로
+복구한다. 전역 Escape는 추가하지 않았다. 외부초점·nested native dialog의 Escape 우선순위·
+계정 전환의 지연 결과/초점을 포함한 격리 UI Chromium16개/WebKit16개가 통과했다. 실제
+전체 여정에는 임의 focus 이동을 넣지 않았으며 audit 전후 초점의 최소 metadata만 기록한다.

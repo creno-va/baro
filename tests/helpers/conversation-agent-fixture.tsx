@@ -15,6 +15,8 @@ export function ConversationAgentFixture() {
   const [visible, setVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
+  const [paneTaskBusy, setPaneTaskBusy] = useState(false);
+  const [paneTaskDone, setPaneTaskDone] = useState(false);
   const [workspaceRevision, setWorkspaceRevision] = useState(8);
   const [canMutate, setCanMutate] = useState(true);
   const scope = useRef(0);
@@ -24,6 +26,7 @@ export function ConversationAgentFixture() {
     fail: false,
     readFailure: null,
     reads: 0,
+    finishPaneTask: () => {},
     failureCode: "UNAVAILABLE",
     resolve: null,
     aborted: false,
@@ -209,6 +212,22 @@ export function ConversationAgentFixture() {
                       : "기존 담당 컴포넌트 연결 자리"}
                   </p>
                   <Button disabled={props.readDisabled}>기존 저장본 읽기</Button>
+                  {!paneTaskDone && (
+                    <Button
+                      disabled={props.disabled || paneTaskBusy}
+                      onClick={() => {
+                        setPaneTaskBusy(true);
+                        props.onBusyChange(true);
+                        control.current.finishPaneTask = () => {
+                          setPaneTaskDone(true);
+                          setPaneTaskBusy(false);
+                          props.onBusyChange(false);
+                        };
+                      }}
+                    >
+                      합성 비동기 작업
+                    </Button>
+                  )}
                   <label>
                     검토 중인 입력
                     <textarea
@@ -244,8 +263,8 @@ export function ConversationAgentFixture() {
           )}
         </div>
         <form className="workspace-composer" onSubmit={(event) => event.preventDefault()}>
-          <label htmlFor="fixture-composer">추가 사실 또는 질문</label>
-          <textarea id="fixture-composer" disabled={busy} />
+          <label htmlFor="workspace-message">추가 사실 또는 질문</label>
+          <textarea id="workspace-message" disabled={busy} />
         </form>
       </div>
     </div>

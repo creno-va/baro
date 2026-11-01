@@ -909,11 +909,34 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         );
         await expect(composer).toBeInViewport();
         if (purpose === "prepare_claim" && followup === "직접 해결") {
+          const focusState = () =>
+            page.evaluate(() => ({
+              tag: document.activeElement?.tagName,
+              id: document.activeElement?.id,
+              inPane: !!document.activeElement?.closest(".conversation-panel"),
+              body: document.activeElement === document.body,
+              dialogs: document.querySelectorAll("dialog[open]").length,
+            }));
+          const beforeAudit = await focusState();
           expect(
             (await new AxeBuilder({ page }).include(".workspace").analyze()).violations.filter(
               (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
             ),
           ).toEqual([]);
+          await writeFile(
+            join(directory, "keyboard-focus.json"),
+            JSON.stringify(
+              {
+                beforeAudit,
+                afterAudit: await focusState(),
+                closingBlocked: await report
+                  .getByRole("button", { name: "대화 작업 닫기", exact: true })
+                  .isDisabled(),
+              },
+              null,
+              2,
+            ),
+          );
           await page.keyboard.press("Escape");
           await expect(report).not.toBeVisible();
           expect(

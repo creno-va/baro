@@ -7,6 +7,7 @@ export type ConversationFixtureControl = {
   fail: boolean;
   readFailure: "unavailable" | "parse" | null;
   reads: number;
+  finishPaneTask: () => void;
   failureCode: string;
   resolve: (() => void) | null;
   aborted: boolean;

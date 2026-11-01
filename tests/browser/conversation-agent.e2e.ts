@@ -61,9 +61,50 @@ test("a newly completed intent runs once; rereading historical intents does not 
     await page.evaluate(() => window.conversationFixture.calls.map((request) => request.action)),
   ).toEqual(["analyze_legal"]);
   await page.getByRole("button", { name: "대화 작업 닫기" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).toBeFocused();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(1);
 });
+
+for (const focusTarget of ["removed", "outside", "modal"] as const)
+  test(`completed pane controls preserve focus (${focusTarget})`, async ({ page }) => {
+    await page.goto("/__conversation-agent");
+    await page.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
+    const panel = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+    await panel.getByRole("button", { name: "합성 비동기 작업", exact: true }).click();
+    await expect(panel.getByRole("button", { name: "대화 작업 닫기", exact: true })).toBeDisabled();
+    const outside = page.getByRole("button", { name: "합성 계정 전환", exact: true });
+    if (focusTarget === "outside") await outside.focus();
+    if (focusTarget === "modal")
+      await page.evaluate(() => {
+        const dialog = document.createElement("dialog");
+        dialog.setAttribute("aria-label", "합성 내부 모달");
+        const button = document.createElement("button");
+        button.textContent = "합성 모달 내부";
+        dialog.appendChild(button);
+        document.querySelector(".conversation-panel")!.appendChild(dialog);
+        dialog.showModal();
+        button.focus();
+      });
+    await page.evaluate(() => window.conversationFixture.finishPaneTask());
+    await expect(panel.getByRole("button", { name: "합성 비동기 작업", exact: true })).toHaveCount(
+      0,
+    );
+    if (focusTarget === "outside") await expect(outside).toBeFocused();
+    else if (focusTarget === "modal") {
+      await expect(page.getByRole("button", { name: "합성 모달 내부", exact: true })).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(
+        page.getByRole("dialog", { name: "합성 내부 모달", exact: true }),
+      ).not.toBeVisible();
+      await expect(panel).toBeVisible();
+    } else
+      await expect(
+        panel.getByRole("heading", { name: "리포트 준비와 검토", exact: true }),
+      ).toBeFocused();
+  });
 
 test("an ambiguous action keeps the same complete request when checking its result", async ({
   page,
@@ -187,11 +228,14 @@ test("scope revocation aborts pending actions and discards the late result", asy
   });
   await primary.click();
   await expect.poll(() => page.evaluate(() => window.conversationFixture.calls.length)).toBe(1);
-  await page.getByRole("button", { name: "합성 계정 전환" }).click();
+  const switchAccount = page.getByRole("button", { name: "합성 계정 전환", exact: true });
+  await switchAccount.focus();
+  await page.keyboard.press("Enter");
   expect(await page.evaluate(() => window.conversationFixture.aborted)).toBe(true);
   await page.evaluate(() => window.conversationFixture.resolve?.());
   await expect(page.getByRole("region", { name: "리포트 준비와 검토" })).toHaveCount(0);
   await expect(page.getByLabel("검토 중인 입력")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "합성 계정 전환", exact: true })).toBeFocused();
 });
 
 test("a stale read after a concurrent edit preserves the draft and cannot execute another action", async ({
