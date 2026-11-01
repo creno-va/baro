@@ -178,6 +178,9 @@ for (const purpose of ["고소·청구를 준비하고 싶어요", "상대방 �
       .check();
     await contextDialog.getByRole("button", { name: "입장·절차 저장", exact: true }).click();
     await expect(contextDialog).not.toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "법률·판례와 현재 약점", exact: true }),
+    ).toBeFocused();
     await actions.getByRole("button", { name: "법률·판례와 현재 약점 확인", exact: true }).click();
     const analysis = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
     await expect(

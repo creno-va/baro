@@ -161,7 +161,14 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           ).toBeVisible();
         else {
           if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
-          expect((await download).suggestedFilename()).toMatch(/\.pdf$/i);
+          const artifact = await download;
+          expect(artifact.suggestedFilename()).toMatch(/\.pdf$/i);
+          const file = await artifact.path();
+          if (!file) throw new Error("MISSING_REVIEWED_REPORT_BYTES");
+          const bytes = await readFile(file);
+          expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+          expect(bytes.byteLength).toBeGreaterThan(100);
+          await artifact.delete();
         }
         expect(new URL(page.url()).pathname).toBe(path);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

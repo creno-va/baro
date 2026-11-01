@@ -176,3 +176,13 @@ owner 검증과 conversation GET으로만 열며 action POST/admission을 만들
 중앙 실제 Hono/D1/AES/서명 세션 조립의 양 입장×후속3경로는 별도 미실행 상태다.
 준비된 브라우저 진입점은 중앙 factory가 CI/main을 통과한 뒤 연결한다. 처리/검색/모델은
 합성 외부 포트만 사용하며, 앱 서비스·영속 저장·권한 검사는 실제 구현을 사용한다.
+
+후속 PR651~654의 exact head CI 성공과 main `13f2d512`까지 확인해 통합했다.
+통합 head `8d659408`에서 `bun ci`, quick674, 위 관련153개, production build/workerd
+부팅을 다시 통과했다. 이 재검사는 아직 미연결인 실제 Hono 여섯 여정의 완료 증거가 아니다.
+
+추가 경합 검사는 새 intent를 읽은 직후 preflight GET에서 revision이 바뀌면 자동으로
+새 기준에 실행하지 않는지 확인한다. 수정 전 브라우저에서 재현한 뒤 새 요청은 중지하고
+최신 확인을 안내하도록 고쳤다. 이미 보낸 요청의 ACK 유실은 revision이 바뀌어도 원래
+request ID/expectedRevision/전체 본문으로만 결과를 확인한다. 격리 대화 UI **9개**가 통과했다.
+공통 mock WebKit 양 입장에서는 context 저장 후 새 분석 heading으로 초점 이동도 통과했다.

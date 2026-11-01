@@ -26,6 +26,7 @@ export function ConversationAgentFixture() {
     resolve: null,
     aborted: false,
     needsConsent: false,
+    advanceAfterIntentRead: false,
     withdrawConsent: () => {},
     emitIntent: () => {},
     advanceWorkspace: () => {},
@@ -63,7 +64,14 @@ export function ConversationAgentFixture() {
     window.conversationFixture = value;
   }, []);
   const client = useRef<ConversationClient>({
-    getConversation: async () => structuredClone(state.current),
+    getConversation: async () => {
+      const snapshot = structuredClone(state.current);
+      if (control.current.advanceAfterIntentRead && snapshot.intents.length > 1) {
+        control.current.advanceAfterIntentRead = false;
+        state.current.workspaceRevision++;
+      }
+      return snapshot;
+    },
     executeAction: async (_id, request, options) => {
       const value = control.current;
       value.calls.push(structuredClone(request));
@@ -111,7 +119,7 @@ export function ConversationAgentFixture() {
       return {
         contractVersion: "conversation-report-v1",
         requestId: request.requestId,
-        workspaceRevision: 8,
+        workspaceRevision: state.current.workspaceRevision,
         pane: panes[request.action],
         status: "require_confirmation",
         operationId: null,
@@ -166,7 +174,7 @@ export function ConversationAgentFixture() {
                 current: (epoch) => scope.current === epoch,
                 verify: async (_hide, write) => !write || !control.current.needsConsent,
               }}
-              onChanged={async () => {}}
+              onChanged={async () => setWorkspaceRevision(state.current.workspaceRevision)}
               onBusyChange={setBusy}
               onReviewFile={() => {}}
               renderPane={(pane, props) => (

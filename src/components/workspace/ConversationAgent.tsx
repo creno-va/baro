@@ -243,6 +243,17 @@ export function ConversationAgent({
           throw Object.assign(new Error("최신 사건 상태를 다시 확인해 주세요."), {
             code: "STALE_REVISION",
           });
+        if (
+          requestId &&
+          attempt.current?.input.requestId !== requestId &&
+          fresh.workspaceRevision !== state?.workspaceRevision
+        )
+          throw Object.assign(
+            new Error(
+              "요청을 준비한 뒤 사건이 바뀌었어요. 최신 내용을 확인하고 다시 선택해 주세요.",
+            ),
+            { code: "STALE_REVISION" },
+          );
         setState(fresh);
         if (!canMutate) {
           // Withdrawal keeps authorized stored reads. The children enforce their

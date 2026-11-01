@@ -62,6 +62,8 @@ test("an ambiguous action keeps the same complete request when checking its resu
   const original = await page.evaluate(() => window.conversationFixture.calls[0]);
   await page.evaluate(() => {
     window.conversationFixture.fail = false;
+    window.conversationFixture.catchUpState();
+    window.conversationFixture.advanceWorkspace();
   });
   await page.getByRole("button", { name: "같은 요청 결과 확인" }).click();
   await expect(page.getByRole("region", { name: "리포트 준비와 검토" })).toBeVisible();
@@ -79,6 +81,26 @@ test("a newly received intent from a previous revision cannot execute", async ({
   expect(
     await page.evaluate(() => window.conversationFixture.calls.map((item) => item.action)),
   ).toEqual(["show_preparation"]);
+});
+
+test("a concurrent revision change during intent preflight cannot silently rebase its action", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  const primary = page.getByRole("button", { name: "리포트 준비·검토", exact: true });
+  await expect(primary).toBeVisible();
+  await page.evaluate(() => {
+    window.conversationFixture.advanceAfterIntentRead = true;
+    window.conversationFixture.emitIntent("prepare_report");
+  });
+  await expect(page.getByRole("alert")).toContainText("요청을 준비한 뒤 사건이 바뀌었어요");
+  expect(await page.evaluate(() => window.conversationFixture.calls)).toEqual([]);
+  await expect(primary).toBeEnabled();
+  await primary.click();
+  await expect(page.getByRole("region", { name: "리포트 준비와 검토" })).toBeVisible();
+  const calls = await page.evaluate(() => window.conversationFixture.calls);
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.expectedRevision).toBe(9);
 });
 
 test("a definitive quota rejection ends the attempt; explicit retry after recovery uses a new request", async ({
