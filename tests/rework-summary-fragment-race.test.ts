@@ -5,6 +5,62 @@ import { createReworkCaseService } from "../src/server/modules/rework/case-conte
 import { loadReconciliationSource } from "../src/server/modules/rework/reconciliation-source";
 import { reportFixture } from "./helpers/report-fixture";
 
+for (const failure of ["source_changed", "database_error"] as const)
+  test(`reconciliation context distinguishes ${failure} from an unavailable current summary`, async () => {
+    const f = await reportFixture();
+    try {
+      let injected = false;
+      const core: V2Core = {
+        ...f.core,
+        binding: new Proxy(f.core.binding, {
+          get(binding, method) {
+            if (method !== "prepare") {
+              const value = Reflect.get(binding, method);
+              return typeof value === "function" ? value.bind(binding) : value;
+            }
+            return (sql: string) => {
+              const statement = binding.prepare(sql);
+              if (!sql.includes("i.summary_id IS ? AND w.revision=?")) return statement;
+              const intercept = (target: D1PreparedStatement): D1PreparedStatement =>
+                new Proxy(target, {
+                  get(target, key) {
+                    if (key === "bind")
+                      return (...values: unknown[]) => intercept(target.bind(...values));
+                    if (key === "first")
+                      return async (column?: string) => {
+                        if (!injected) {
+                          injected = true;
+                          if (failure === "database_error") throw new Error("SYNTHETIC_DB_FAILURE");
+                          f.db.sqlite
+                            .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+                            .run(f.workspaceId);
+                        }
+                        return column === undefined ? target.first() : target.first(column);
+                      };
+                    const value = Reflect.get(target, key);
+                    return typeof value === "function" ? value.bind(target) : value;
+                  },
+                });
+              return intercept(statement);
+            };
+          },
+        }),
+      };
+      await expect(
+        loadReconciliationSource(core, { ...f.actor, caseId: f.workspaceId }, { write: false }),
+      ).rejects.toMatchObject({
+        code: failure === "source_changed" ? "STALE_REVISION" : "DB_OPERATION_FAILED",
+      });
+      expect(injected).toBe(true);
+      await expect(
+        loadReconciliationSource(f.core, { ...f.actor, caseId: f.workspaceId }, { write: false }),
+      ).resolves.toBeDefined();
+      expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+    } finally {
+      f.db.close();
+    }
+  });
+
 for (const consumer of ["analysis", "reconciliation"] as const)
   for (const boundary of [1, 2])
     test(`${consumer} rejects an interrupted summary before parsing JSON at fragment ${boundary}`, async () => {
