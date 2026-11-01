@@ -37,6 +37,8 @@ export const V2_PRIVATE_TABLES = [
   "v2_summary_edit_cursors",
   "v2_blobs",
   "v2_report_selections",
+  "v2_rework_records",
+  "v2_rework_parts",
 ] as const;
 export const V2_SNAPSHOT_PURPOSES = [
   "summary",
