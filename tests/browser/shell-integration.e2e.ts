@@ -28,6 +28,13 @@ test("long service content fits narrow screens and the menu stays closable after
         },
       },
       caseOwners: { [id]: "responsive-owner" },
+      reworkContexts: {
+        [id]: {
+          casePurpose: "prepare_claim",
+          subjectContext: "individual",
+          procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+        },
+      },
       workspace: {
         [id]: {
           messages: [
@@ -75,6 +82,7 @@ test("long service content fits narrow screens and the menu stays closable after
     ]) {
       await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+      if (path.endsWith("/reports")) await prepareReport(page);
       if (path.startsWith("/cases/"))
         await expect(
           page
@@ -182,8 +190,11 @@ test("customer completes intake workspace original PDF report and cascading dele
   for (let index = 0; index < 6; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
   const casePath = new URL(page.url()).pathname;
   await page
@@ -227,6 +238,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.goto(`${casePath}/reports`);
+  await prepareReport(page);
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeVisible();
   await openReportOptions(page);
@@ -443,3 +455,14 @@ test("same-tab logout still navigates when cross-tab notification storage is una
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
 });
+
+async function prepareReport(page: Page) {
+  const reading = page.getByRole("region", { name: "리포트 검토 본문", exact: true });
+  const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
+  await expect
+    .poll(async () => (await reading.isVisible()) || (await preparation.isVisible()))
+    .toBe(true);
+  if (await preparation.isVisible())
+    await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  await expect(reading).toBeVisible();
+}
