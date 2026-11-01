@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { openReportEditor } from "../helpers/report-controls";
+import { preparationRead } from "../helpers/report-rework-reads";
 
 const progressReport = {
   id: "synthetic-progress-report",
@@ -31,6 +32,7 @@ async function progressFixture(
     const path = new URL(route.request().url()).pathname;
     // Vite module URLs also contain /api/; only intercept application API routes.
     if (!path.startsWith("/api/")) return route.continue();
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session")
       return handlers.session
         ? handlers.session(route)
@@ -41,7 +43,7 @@ async function progressFixture(
             },
           });
     if (path.endsWith("/pdf")) return handlers.pdf(route);
-    if (path.endsWith("/reports"))
+    if (path.endsWith("/reports") || path.endsWith("/rework/report"))
       return handlers.report ? handlers.report(route) : route.fulfill({ json: progressReport });
     if (path.endsWith("/files"))
       return route.fulfill({
@@ -239,6 +241,7 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
     const request = route.request(),
       path = new URL(request.url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session")
       return route.fulfill({
         json: {
@@ -262,7 +265,7 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
             ]
           : [],
       });
-    if (path.endsWith("/reports")) {
+    if (path.endsWith("/reports") || path.endsWith("/rework/report")) {
       if (request.method() === "POST") {
         revision++;
         stale = false;
@@ -297,6 +300,7 @@ test("initial report limit allows exclusions before any report exists", async ({
     const request = route.request(),
       path = new URL(request.url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session")
       return route.fulfill({
         json: {
@@ -318,7 +322,7 @@ test("initial report limit allows exclusions before any report exists", async ({
           },
         ],
       });
-    if (path.endsWith("/reports")) {
+    if (path.endsWith("/reports") || path.endsWith("/rework/report")) {
       if (request.method() === "POST") {
         exclusions = request.postDataJSON().excludedFileIds;
         created = exclusions.includes("large-file");
