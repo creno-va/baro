@@ -39,14 +39,14 @@ test("customer access snapshot preserves preference precedence and legacy role f
   }
 });
 
-test("customer access snapshot requires every current policy and over-14 consent on every read", async () => {
+test("customer access snapshot requires every current policy on every read without an age field", async () => {
   const db = await createTestDatabase();
   try {
     const owner = await seedTestSession(db, { consent: true });
     const reset = () =>
       db.sqlite
         .query(
-          "UPDATE user_consents SET terms_version=?,privacy_version=?,ai_notice_version=?,over_14_confirmed=1 WHERE user_id=?",
+          "UPDATE user_consents SET terms_version=?,privacy_version=?,ai_notice_version=? WHERE user_id=?",
         )
         .run(
           CURRENT_POLICY_VERSIONS.termsVersion,
@@ -67,12 +67,7 @@ test("customer access snapshot requires every current policy and over-14 consent
       );
     }
     reset();
-    // The DB contract also forbids storing a positive consent without this flag.
-    expect(() =>
-      db.sqlite
-        .query("UPDATE user_consents SET over_14_confirmed=0 WHERE user_id=?")
-        .run(owner.userId),
-    ).toThrow();
+    expect((await readCustomerConsentSnapshot(db.binding, owner.userId)).currentConsent).toBe(true);
     db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(owner.userId);
     expect((await readCustomerConsentSnapshot(db.binding, owner.userId)).currentConsent).toBe(
       false,

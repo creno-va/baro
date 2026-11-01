@@ -32,7 +32,6 @@ sliding update나 클라이언트 입력으로 변경하지 않는다. 기존 �
 | `terms_version` | text | 동의한 약관 버전 |
 | `privacy_version` | text | 동의한 개인정보 처리방침 버전 |
 | `ai_notice_version` | text | 동의한 AI 고지 버전 |
-| `over_14_confirmed` | integer boolean | 반드시 true |
 | `consented_at` | text | UTC |
 
 ### `cases`

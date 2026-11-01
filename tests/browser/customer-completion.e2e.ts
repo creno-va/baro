@@ -212,7 +212,6 @@ test("reconsent keeps existing case and source visible, restricts writes and ret
   await page.getByRole("link", { name: "동의 확인하고 계속하기" }).first().click();
   await expect(page).toHaveURL(/\/consent\?returnTo=%2Fcases%2Fcompletion-case%2Ffiles/);
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
-  await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(`${base}/files`);
   await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
@@ -225,7 +224,6 @@ test("login preserves a permitted path and rejects an external return destinatio
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent\?returnTo=%2Fcases%2Fcompletion-case%2Ftimeline/);
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
-  await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(`${base}/timeline`);
   await page.goto("/login?returnTo=https%3A%2F%2Fexample.com%2Fevil");

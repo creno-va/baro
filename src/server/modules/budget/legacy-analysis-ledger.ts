@@ -43,7 +43,7 @@ const currentSource = `FROM analyses a JOIN cases c ON c.current_analysis_id=a.i
  WHERE a.id=? AND a.input_revision=? AND a.workflow_instance_id=?
  AND a.status IN ('queued','screening','retrieving','generating','validating')
  AND EXISTS(SELECT 1 FROM user u WHERE u.id=c.user_id)
- AND EXISTS(SELECT 1 FROM user_consents s WHERE s.user_id=c.user_id AND s.terms_version=? AND s.privacy_version=? AND s.ai_notice_version=? AND s.over_14_confirmed=1)
+ AND EXISTS(SELECT 1 FROM user_consents s WHERE s.user_id=c.user_id AND s.terms_version=? AND s.privacy_version=? AND s.ai_notice_version=?)
  AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||c.user_id AND value IN ('customer','lawyer')),
  CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=c.user_id AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END) IN ('customer','lawyer')
  AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='account' AND target_id=c.user_id)

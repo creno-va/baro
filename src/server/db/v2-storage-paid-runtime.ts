@@ -60,7 +60,7 @@ async function envelopeDigest(value: string) {
 
 function sourceQuery(r: StoragePaidHoldRequest, actor: Actor, pending: boolean) {
   const req = (path: string) => `json_extract(q.req,'$.${path}')`;
-  const consent = `EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=q.owner AND c.terms_version=json_extract(q.policy,'$.termsVersion') AND c.privacy_version=json_extract(q.policy,'$.privacyVersion') AND c.ai_notice_version=json_extract(q.policy,'$.aiNoticeVersion') AND c.over_14_confirmed=1 AND julianday(c.consented_at)<=julianday(q.now))`;
+  const consent = `EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=q.owner AND c.terms_version=json_extract(q.policy,'$.termsVersion') AND c.privacy_version=json_extract(q.policy,'$.privacyVersion') AND c.ai_notice_version=json_extract(q.policy,'$.aiNoticeVersion') AND julianday(c.consented_at)<=julianday(q.now))`;
   // A separately authenticated action may use the same exact pending object.
   // It adds another financial hold, but cannot reserve its storage twice or
   // substitute an object with different physical metadata.

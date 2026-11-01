@@ -12,7 +12,7 @@ export function createWorkspaceSourceAuthorization(
     Boolean(
       await binding
         .prepare(
-          `SELECT w.id FROM v2_workspaces w JOIN user_consents c ON c.user_id=w.owner_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1 AND c.consented_at<=? AND ${aliveWorkspace}`,
+          `SELECT w.id FROM v2_workspaces w JOIN user_consents c ON c.user_id=w.owner_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.consented_at<=? AND ${aliveWorkspace}`,
         )
         .bind(
           g.workspaceId,

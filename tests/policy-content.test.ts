@@ -2,16 +2,20 @@ import { expect, test } from "bun:test";
 import {
   currentConsentVersions,
   POLICY_REVIEW,
-  POLICY_VERSION,
+  POLICY_VERSIONS,
   policyDrafts,
 } from "../src/content/policy-drafts";
 import { CURRENT_POLICY_VERSIONS, consentInputSchema } from "../src/contracts/consent";
 
 test("reviewed service policies match new consent versions without fabricating external legal or release evidence", async () => {
   expect(currentConsentVersions).toEqual(CURRENT_POLICY_VERSIONS);
-  for (const path of ["TERMS.DRAFT.md", "PRIVACY-POLICY.DRAFT.md", "AI-NOTICE.md"]) {
+  for (const [kind, path] of [
+    ["terms", "TERMS.DRAFT.md"],
+    ["privacy", "PRIVACY-POLICY.DRAFT.md"],
+    ["ai", "AI-NOTICE.md"],
+  ] as const) {
     const text = await Bun.file(`docs/policies/${path}`).text();
-    expect(text).toContain(POLICY_VERSION);
+    expect(text).toContain(POLICY_VERSIONS[kind]);
     expect(text).toContain("황은찬");
     expect(text).toContain("hechec3534@naver.com");
     expect(text).not.toMatch(/^- Status: Approved for publication$/m);
@@ -21,7 +25,6 @@ test("reviewed service policies match new consent versions without fabricating e
       termsVersion: "2026-10-04",
       privacyVersion: "2026-10-04",
       aiNoticeVersion: "2026-10-04",
-      over14Confirmed: true,
     }).success,
   ).toBe(false);
   expect(POLICY_REVIEW.scope).toBe("service-content");
@@ -31,6 +34,8 @@ test("reviewed service policies match new consent versions without fabricating e
   expect(evidence.reviewedAt).toBeNull();
   expect(evidence.checks.publishedPolicies.passed).toBe(false);
   const copy = JSON.stringify(policyDrafts);
+  expect(copy).not.toMatch(/만 14세 이상|연령 확인을 받|동의 시각·연령 확인/);
+  expect(copy).toContain("법정대리인의 동의");
   for (const word of [
     "Whisper",
     "Containers",

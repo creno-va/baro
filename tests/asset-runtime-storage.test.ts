@@ -372,7 +372,8 @@ test("asset runtime preserves current/source boundaries with guarded dispatch an
         if (sql.includes("original.encrypted_payload AS source_payload")) {
           currentReads++;
           expect(sql).toContain("EXISTS(SELECT 1 FROM user_consents consent");
-          expect(sql).toContain("consent.over_14_confirmed=1");
+          expect(sql).toContain("consent.ai_notice_version=?");
+          expect(sql).not.toContain("over_14_confirmed");
         } else if (sql.includes("reserved_principal.owner_id=a.owner_id")) originalSnapshotReads++;
         else if (sql.includes("user_consents")) separateConsentReads++;
         if (sql.startsWith("UPDATE v2_execution_admissions SET state='dispatched'")) dispatches++;
@@ -458,7 +459,6 @@ for (const mutation of [
   "terms",
   "privacy",
   "ai_notice",
-  "over14",
   "owner",
   "profile",
   "revision",
@@ -504,11 +504,7 @@ for (const mutation of [
           f.db.sqlite
             .query(`UPDATE user_consents SET ${column}='stale' WHERE user_id=?`)
             .run(f.params.ownerId);
-        } else if (mutation === "over14")
-          f.db.sqlite
-            .query("UPDATE user_consents SET over_14_confirmed=0 WHERE user_id=?")
-            .run(f.params.ownerId);
-        else if (mutation === "owner")
+        } else if (mutation === "owner")
           f.db.sqlite
             .query("UPDATE v2_assets SET owner_id=? WHERE id=?")
             .run(foreign.userId, f.params.assetId);

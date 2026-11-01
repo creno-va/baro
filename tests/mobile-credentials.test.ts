@@ -318,7 +318,7 @@ test("native transport and the shared session client preserve real Hono role, co
     expect((await api.session.get()).user?.id).toBe(seeded.userId);
     expect((await api.session.get()).needsConsent).toBe(true);
     await api.session.setAccountType("lawyer");
-    await api.session.saveConsent({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true });
+    await api.session.saveConsent({ ...CURRENT_POLICY_VERSIONS });
     const live = await api.session.get();
     expect(live.user?.accountType).toBe("lawyer");
     expect(live.needsConsent).toBe(false);

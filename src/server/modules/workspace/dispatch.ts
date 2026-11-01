@@ -11,7 +11,7 @@ type Binding = {
 };
 const joins =
   "FROM v2_outbox x JOIN v2_jobs j ON j.id=x.job_id JOIN v2_operations o ON o.id=j.operation_id";
-const live = `x.kind='job_dispatch' AND x.operation_id=j.operation_id AND x.target_id=j.runtime_instance_id AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') AND o.state='admitted' AND j.status IN ('queued','running','validating') AND ${jobAlive} AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1)`;
+const live = `x.kind='job_dispatch' AND x.operation_id=j.operation_id AND x.target_id=j.runtime_instance_id AND j.target_kind='workspace' AND j.kind IN ('intake_questions','intake_summary','chat_response') AND o.state='admitted' AND j.status IN ('queued','running','validating') AND ${jobAlive} AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=o.owner_id AND terms_version=? AND privacy_version=? AND ai_notice_version=?)`;
 const consent = [
   CURRENT_POLICY_VERSIONS.termsVersion,
   CURRENT_POLICY_VERSIONS.privacyVersion,

@@ -44,7 +44,7 @@ test("real SQL sessions and consent routes enforce authentication, origin and po
         },
         env,
       );
-    const consent = { ...CURRENT_POLICY_VERSIONS, over14Confirmed: true };
+    const consent = { ...CURRENT_POLICY_VERSIONS };
     expect((await put("https://attacker.example", consent)).status).toBe(403);
     expect((await put("", consent)).status).toBe(403);
     expect((await put(env.BETTER_AUTH_URL, { ...consent, termsVersion: "old" })).status).toBe(400);
@@ -136,9 +136,7 @@ test("consent routes forward sliding and expired cookies while preserving the ac
             origin: fixture.env.BETTER_AUTH_URL,
             "content-type": "application/json",
           },
-          ...(method === "PUT"
-            ? { body: JSON.stringify({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true }) }
-            : {}),
+          ...(method === "PUT" ? { body: JSON.stringify({ ...CURRENT_POLICY_VERSIONS }) } : {}),
         },
         fixture.env,
       );

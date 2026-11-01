@@ -130,7 +130,7 @@ export function createLawyerAssetsService(core: V2Core, deps: LawyerAssetDepende
         AND reserved_principal.owner_id=a.owner_id AND principal.owner_id=a.owner_id AND r.state!='released'
         AND b.state='stored' AND b.visibility='private' AND b.key_version='asset_binary_v1'
         AND b.kind IN ('verification','portfolio_original','profile_photo_original') AND b.logical_bytes=r.byte_length
-        AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=a.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)
+        AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=a.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=?)
         AND NOT EXISTS(SELECT 1 FROM v2_tombstones t WHERE (t.target_kind='account' AND t.target_id=a.owner_id) OR (t.target_kind='profile' AND t.target_id=p.id) OR (t.target_kind='asset' AND t.target_id=a.id))`,
         [
           id,

@@ -40,7 +40,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
       name: "이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.",
     })
     .check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,

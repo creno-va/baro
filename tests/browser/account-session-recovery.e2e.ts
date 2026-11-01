@@ -158,7 +158,7 @@ test("successful OAuth return consumes its selected role once and preserves retu
     if (path === "/api/me/consent")
       return route.fulfill({
         json: {
-          required: { ...CURRENT_POLICY_VERSIONS, over14Confirmed: true },
+          required: { ...CURRENT_POLICY_VERSIONS },
           consent: null,
           needsConsent: false,
         },
@@ -339,7 +339,6 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
       .toBe("lawyer");
     expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
     await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
-    await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
     await page.getByRole("button", { name: "동의하고 계속하기" }).click();
     await expect(page).toHaveURL(/\/settings$/);
   } finally {

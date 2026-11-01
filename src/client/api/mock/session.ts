@@ -35,7 +35,7 @@ registerMockHandlers({
   "session.saveConsent": (input) => {
     const parsed = consentInputSchema.safeParse(input);
     if (!parsed.success)
-      throw new ApiError("VALIDATION_ERROR", "필수 동의와 만 14세 이상 여부를 확인해 주세요.");
+      throw new ApiError("VALIDATION_ERROR", "필수 서비스 정책에 동의해 주세요.");
     const session = readStore("session", empty);
     if (!session.user) throw new ApiError("UNAUTHENTICATED", "로그인이 필요해요.");
     const consent = readStore<Record<string, unknown>>("consents", {});

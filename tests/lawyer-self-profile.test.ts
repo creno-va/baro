@@ -476,7 +476,7 @@ test("self directory adapter seeks indexed matches without enumerating unrelated
   // This directory fixture needs current consent for both publishing owners.
   f.db.sqlite
     .query(
-      "INSERT INTO user_consents SELECT ?,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at FROM user_consents WHERE user_id=?",
+      "INSERT INTO user_consents SELECT ?,terms_version,privacy_version,ai_notice_version,consented_at FROM user_consents WHERE user_id=?",
     )
     .run(f.noConsent.userId, f.owner.userId);
   for (const user of [f.owner, f.noConsent]) {

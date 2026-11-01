@@ -68,7 +68,7 @@ Origin/CSRF를 전역 해제하거나 WebView 안에 로그인 자격 증명 폼
    서로 다른 계정을 이메일 추정으로 합치지 않는다. 기존 사건은 처음 사용한 로그인 수단으로
    접근할 수 있음을 안내한다. 명시적 계정 연결/데이터 이관은 별도 인수 전 제공한다고 표시하지 않는다.
 4. **이름/메일/동의:** 최초에만 오는 이름·메일과 이후 누락, relay 메일을 검증한다.
-   BARO의 필수 정책/14세 이상 동의를 Apple 로그인 성공으로 대체하지 않는다.
+   BARO의 필수 정책 동의를 Apple 로그인 성공으로 대체하지 않는다.
 5. **삭제/revoke:** 아래 경계를 먼저 인수하고 로그인을 공개하지 않는다.
 6. **모바일 소비/실제 인수:** 서버 capability가 확인된 환경에만 Apple 선택지를 노출한다.
    Apple 버튼 가이드·취소/cold/warm·두 역할/동의·삭제·기존3사와 두 OS 회귀를 확인한다.
@@ -162,7 +162,7 @@ JWT에 email이 없을 때에만 서명/nonce 검증 뒤 `account.provider_id='a
 정확한 연결을 조회한다. 살아 있는 단일 owner와 유효한 저장 이메일만 사용하며 tombstone·
 연결 해제·잘못된 저장값은 거절한다. Google 등 다른 provider의 같은 account_id나 이메일
 유사성으로 owner를 찾지 않는다. 이름이 다시 오지 않아도 기존 이름·역할·필수 동의를 유지한다.
-최초 가입의 정책/14세 동의는 Apple 성공으로 대신하지 않는다.
+최초 가입의 정책 동의는 Apple 성공으로 대신하지 않는다.
 
 저장 이메일은 새로운 Apple email-verification claim이 아니다. fallback의 provider 정보는
 emailVerified=false로 두고, 기존 local verification 값은 수정하지 않는다. 처음부터 제공된

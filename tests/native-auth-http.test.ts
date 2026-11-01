@@ -69,7 +69,7 @@ for (const provider of ["google", "naver", "kakao"] as const)
           {
             method: "PUT",
             headers: { cookie, "content-type": "application/json", ...(origin ? { origin } : {}) },
-            body: JSON.stringify({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true }),
+            body: JSON.stringify({ ...CURRENT_POLICY_VERSIONS }),
           },
           f.env,
         );

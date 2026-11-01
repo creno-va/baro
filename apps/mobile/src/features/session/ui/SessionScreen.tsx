@@ -31,7 +31,7 @@ export function SessionScreen({
   onSignIn: (provider: MobileProvider) => void;
   onCancel: () => void;
   onRetry: () => void;
-  onConsent: (input: { policies: boolean; over14: boolean }) => void;
+  onConsent: (input: { policies: boolean }) => void;
   onSignOut: () => void;
   onBrowse: () => void;
   onPolicy: (policy: Policy) => void;
@@ -224,11 +224,10 @@ function ConsentChoices({
   onPolicy,
 }: {
   busy: boolean;
-  onConsent: (input: { policies: boolean; over14: boolean }) => void;
+  onConsent: (input: { policies: boolean }) => void;
   onPolicy: (policy: Policy) => void;
 }) {
-  const [policies, setPolicies] = useState(false),
-    [over14, setOver14] = useState(false);
+  const [policies, setPolicies] = useState(false);
   return (
     <Card>
       <Text>이용약관, 개인정보 처리방침과 AI 이용 고지를 확인해 주세요.</Text>
@@ -238,21 +237,14 @@ function ConsentChoices({
         disabled={busy}
         onPress={() => setPolicies(!policies)}
       />
-      <Choice
-        label="[필수] 만 14세 이상입니다"
-        checked={over14}
-        disabled={busy}
-        onPress={() => setOver14(!over14)}
-      />
-      <Text variant="muted">생년월일은 수집하지 않아요.</Text>
       <Button label="이용약관 읽기" disabled={busy} onPress={() => onPolicy("terms")} />
       <Button label="개인정보 처리방침 읽기" disabled={busy} onPress={() => onPolicy("privacy")} />
       <Button label="AI 이용 고지 읽기" disabled={busy} onPress={() => onPolicy("ai")} />
       <Button
         variant="primary"
         label={busy ? "동의 저장 중" : "동의하고 계속하기"}
-        disabled={busy || !policies || !over14}
-        onPress={() => onConsent({ policies, over14 })}
+        disabled={busy || !policies}
+        onPress={() => onConsent({ policies })}
       />
     </Card>
   );

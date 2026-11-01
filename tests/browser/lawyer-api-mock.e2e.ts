@@ -73,7 +73,6 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page).toHaveURL(/\/consent/);
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/app/);
   await page.getByRole("button", { name: "메뉴 열기" }).click();

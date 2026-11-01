@@ -37,9 +37,16 @@ export async function seedTestSession(
       options.oauthAuthenticatedAt ?? null,
     );
   if (options.consent) {
+    // Upgrade fixtures still exercise the original schema's historical age field.
+    const legacy = database.sqlite
+      .query("PRAGMA table_info(user_consents)")
+      .all()
+      .some((column) => (column as { name: string }).name === "over_14_confirmed");
     database.sqlite
       .query(
-        "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)",
+        legacy
+          ? "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)"
+          : "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) VALUES(?,?,?,?,?)",
       )
       .run(
         userId,

@@ -3,11 +3,10 @@ import { CURRENT_POLICY_VERSIONS, consentInputSchema } from "../../contracts/con
 import { hasAllowedOrigin } from "./me";
 
 describe("consent contract", () => {
-  test("accepts only the current policy versions and an over-14 confirmation", () => {
+  test("accepts current policy versions without an age field", () => {
     expect(
       consentInputSchema.safeParse({
         ...CURRENT_POLICY_VERSIONS,
-        over14Confirmed: true,
       }).success,
     ).toBe(true);
 
@@ -23,7 +22,6 @@ describe("consent contract", () => {
     expect(
       consentInputSchema.safeParse({
         ...CURRENT_POLICY_VERSIONS,
-        over14Confirmed: true,
         userId: "forged-user",
       }).success,
     ).toBe(false);

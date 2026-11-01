@@ -98,20 +98,15 @@ export const verification = sqliteTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const userConsents = sqliteTable(
-  "user_consents",
-  {
-    userId: text("user_id")
-      .primaryKey()
-      .references(() => user.id, { onDelete: "cascade" }),
-    termsVersion: text("terms_version").notNull(),
-    privacyVersion: text("privacy_version").notNull(),
-    aiNoticeVersion: text("ai_notice_version").notNull(),
-    over14Confirmed: integer("over_14_confirmed", { mode: "boolean" }).notNull(),
-    consentedAt: text("consented_at").notNull(),
-  },
-  (table) => [check("user_consents_over_14_check", sql`${table.over14Confirmed} = 1`)],
-);
+export const userConsents = sqliteTable("user_consents", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  termsVersion: text("terms_version").notNull(),
+  privacyVersion: text("privacy_version").notNull(),
+  aiNoticeVersion: text("ai_notice_version").notNull(),
+  consentedAt: text("consented_at").notNull(),
+});
 
 export const authSchema = { user, session, account, verification };
 

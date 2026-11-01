@@ -165,11 +165,7 @@ export async function transitionFreshBinding(
       schemaVersion: string;
       releaseSha: string;
     };
-    if (
-      !health.ok ||
-      ready.status !== "ready" ||
-      ready.schemaVersion !== "0019_self_profile_listing"
-    )
+    if (!health.ok || ready.status !== "ready" || ready.schemaVersion !== "0020_remove_consent_age")
       throw new Error("FRESH_READINESS_FAILED");
     const directory = await fetcher(`${origin}/api/v2/lawyers/self-service`, {
       cache: "no-store",

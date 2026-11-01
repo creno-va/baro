@@ -10,7 +10,6 @@ export function syntheticConsentStatus(needsConsent: boolean) {
       : {
           userId: "synthetic-owner",
           ...CURRENT_POLICY_VERSIONS,
-          over14Confirmed: true,
           consentedAt: "2026-10-22T00:00:00.000Z",
         },
     needsConsent,

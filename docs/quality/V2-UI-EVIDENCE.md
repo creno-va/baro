@@ -42,7 +42,7 @@ assertion만으로 시각적 품질을 완료하지 않고 대표 화면 screens
 
 | ID | 실제 browser 동작·지속 상태 | 실패/보안 경계 | owner |
 | --- | --- | --- | --- |
-| U01 | Google/Naver/Kakao 실제 성공→필수 동의·14세→dashboard | 취소·state mismatch·만료·정책 변경·cross origin | #27/#68/#69 |
+| U01 | Google/Naver/Kakao 실제 성공→필수 정책 동의→dashboard | 취소·state mismatch·만료·정책 변경·cross origin | #27/#68/#69 |
 | U02 | 개인/기업 사건 생성→저장 목록→새로고침·재접속 | 기업 단일owner, 중복 클릭·Turnstile·3/4번째 admission | #55/#57/#64/#65 |
 | U03 | 큰 틀 질문→답변 기반 새 묶음→unknown/skip→중단/재개 | 최대2차례×3문항, 질문 중복·invalid choice·오래된 revision; 기존 사건 읽기 호환 | #64/#65 |
 | U04 | 요약 수정→상충/불리한 사실 확인→최신 요약 confirm | 늦은 AI summary·확인 전 navigation·허구 사실 차단 | #64/#65 |

@@ -33,7 +33,7 @@ async function signedIn(origin?: string) {
   const consent = () => {
     fixture.database.sqlite
       .query(
-        "INSERT OR REPLACE INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)",
+        "INSERT OR REPLACE INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) VALUES(?,?,?,?,?)",
       )
       .run(
         user.id,

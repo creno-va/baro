@@ -8,7 +8,6 @@ try {
   await page.goto("http://127.0.0.1:4353/login");
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
-  await page.getByLabel("만 14세 이상입니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await page.goto("http://127.0.0.1:4353/cases/new");
   await page

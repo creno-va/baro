@@ -142,8 +142,8 @@ test("customer login consent logout share the product shell without external API
   await page.getByRole("button", { name: "Naver로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toBeDisabled();
+  await expect(page.getByRole("checkbox")).toHaveCount(1);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
@@ -173,7 +173,6 @@ test("customer completes intake workspace original PDF report and cascading dele
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await page
