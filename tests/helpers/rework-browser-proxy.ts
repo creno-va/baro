@@ -22,7 +22,7 @@ export async function openReworkBrowserFixture(
   const close = async () => {
     if (child.exitCode !== null || child.signalCode !== null) return;
     await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => child.kill("SIGTERM"), 5000);
+      const timeout = setTimeout(() => child.kill("SIGTERM"), 30000);
       child.once("exit", () => {
         clearTimeout(timeout);
         resolve();
@@ -34,16 +34,26 @@ export async function openReworkBrowserFixture(
     const info = await new Promise<ReworkBrowserInfo>((resolve, reject) => {
       let output = "";
       const timeout = setTimeout(() => reject(new Error("REWORK_BROWSER_START_TIMEOUT")), 30000);
-      child.stdout.on("data", (chunk) => {
+      const readInfo = (chunk: Buffer) => {
         output += String(chunk);
+        if (output.length > 65536) {
+          clearTimeout(timeout);
+          child.stdout.off("data", readInfo);
+          child.stdout.resume();
+          reject(new Error("REWORK_BROWSER_START_LIMIT"));
+          return;
+        }
         if (!output.includes("\n")) return;
         clearTimeout(timeout);
+        child.stdout.off("data", readInfo);
+        child.stdout.resume();
         try {
           resolve(JSON.parse(output.split("\n")[0] ?? ""));
         } catch {
           reject(new Error("REWORK_BROWSER_START_INVALID"));
         }
-      });
+      };
+      child.stdout.on("data", readInfo);
       child.on("error", () => {
         clearTimeout(timeout);
         reject(new Error("REWORK_BROWSER_START_FAILED"));

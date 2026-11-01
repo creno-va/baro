@@ -17,7 +17,7 @@ async function openAction(page: Page, name: string) {
 }
 
 /** The central fixture starts a real new case, not a pre-confirmed report. */
-async function enterWorkspace(page: Page, caseId: string) {
+async function enterWorkspace(page: Page, caseId: string, explanation?: string) {
   const path = `/cases/${encodeURIComponent(caseId)}`;
   await page.goto(`${path}/intake`);
   for (let index = 0; index < 6; index++) {
@@ -29,11 +29,20 @@ async function enterWorkspace(page: Page, caseId: string) {
     await page.getByRole("button", { name: "모름", exact: true }).click();
   }
   await expect(page).toHaveURL(new RegExp(`${path}/summary$`));
-  await page.getByRole("button", { name: "맞아요", exact: true }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "확인하고 계속", exact: true })
-    .click();
+  if (explanation) {
+    await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
+      .fill(explanation);
+    await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+    await page.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+  } else {
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "확인하고 계속", exact: true })
+      .click();
+  }
   await expect(
     page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
   ).toBeEnabled();
@@ -65,7 +74,7 @@ test("an actual action ACK lost after commit replays the identical input and ide
     },
   );
   try {
-    await enterWorkspace(page, f.info.caseId);
+    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
     await openAction(page, "법률·판례와 현재 약점 확인");
     const retry = page.getByRole("button", { name: "같은 요청 결과 확인", exact: true });
     await expect(retry).toBeVisible();
@@ -106,7 +115,7 @@ test("the report's own prepare button recovers an actual committed response loss
     },
   );
   try {
-    await enterWorkspace(page, f.info.caseId);
+    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
     await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}/reports`);
     await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
     const ready = page.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true });
@@ -138,7 +147,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       try {
         await page.setViewportSize({ width: 320, height: 844 });
         const path = `/cases/${encodeURIComponent(f.info.caseId)}`;
-        await enterWorkspace(page, f.info.caseId);
+        await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
         const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
         await expect(composer).toBeEnabled();
         await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");

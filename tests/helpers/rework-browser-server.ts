@@ -14,6 +14,8 @@ export type ReworkBrowserInfo = {
   purpose: "prepare_claim" | "respond_to_claim";
   ownerCookie: ReworkBrowserCookie;
   foreignCookie: ReworkBrowserCookie;
+  startUrl?: string;
+  reconciliationExplanation?: string;
 };
 export type ReworkBrowserComposition = {
   browserOrigin: string;
