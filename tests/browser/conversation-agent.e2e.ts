@@ -71,7 +71,8 @@ test("a newly completed intent runs once; rereading historical intents does not 
 for (const focusTarget of ["removed", "outside", "modal"] as const)
   test(`completed pane controls preserve focus (${focusTarget})`, async ({ page }) => {
     await page.goto("/__conversation-agent");
-    await page.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
+    const opener = page.getByRole("button", { name: "리포트 준비·검토", exact: true });
+    await opener.click();
     const panel = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
     await panel.getByRole("button", { name: "합성 비동기 작업", exact: true }).click();
     await expect(panel.getByRole("button", { name: "대화 작업 닫기", exact: true })).toBeDisabled();
@@ -100,11 +101,59 @@ for (const focusTarget of ["removed", "outside", "modal"] as const)
         page.getByRole("dialog", { name: "합성 내부 모달", exact: true }),
       ).not.toBeVisible();
       await expect(panel).toBeVisible();
-    } else
-      await expect(
-        panel.getByRole("heading", { name: "리포트 준비와 검토", exact: true }),
-      ).toBeFocused();
+    } else {
+      // A removed control can leave focus on the stable heading or WebKit's
+      // native keyboard-scrollable ancestor. Both must retain a working Escape
+      // path; body or an unrelated element is not a valid reading target.
+      await expect
+        .poll(() =>
+          panel.evaluate(
+            (element) =>
+              document.activeElement === element.querySelector("h3") ||
+              document.activeElement === element.closest(".workspace-messages"),
+          ),
+        )
+        .toBe(true);
+      await page.keyboard.press("Escape");
+      await expect(panel).not.toBeVisible();
+      await expect
+        .poll(() =>
+          opener.evaluate(
+            (element) =>
+              document.activeElement === element ||
+              !!document.activeElement?.closest(".workspace-composer"),
+          ),
+        )
+        .toBe(true);
+    }
   });
+
+test("Escape from the current conversation scroll area closes its idle pane and returns to the composer", async ({
+  page,
+}) => {
+  for (const origin of ["main", "scroll"] as const) {
+    await page.goto("/__conversation-agent");
+    await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeEnabled();
+    const messages = page.getByRole("log", { name: "사건 대화", exact: true });
+    // Reproduce WebKit's observed native reading target, independently from the
+    // real journey. Never insert this focus setup into that integration journey.
+    await (origin === "main" ? page.locator("#main-content") : messages).focus();
+    await page.evaluate(() => window.conversationFixture.emitIntent("prepare_report"));
+    const panel = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+    await panel.getByRole("button", { name: "합성 비동기 작업", exact: true }).click();
+    await messages.focus();
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeVisible();
+    await page.evaluate(() => window.conversationFixture.finishPaneTask());
+    await expect(panel.getByRole("button", { name: "대화 작업 닫기", exact: true })).toBeEnabled();
+    await expect(messages).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(panel).not.toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+    ).toBeFocused();
+  }
+});
 
 test("an ambiguous action keeps the same complete request when checking its result", async ({
   page,

@@ -186,7 +186,13 @@ export function ConversationAgentFixture() {
         합성 계정 전환
       </Button>
       <div className="workspace-main" style={{ height: "calc(100svh - 180px)" }}>
-        <div className="workspace-messages" role="log" aria-label="사건 대화">
+        <div
+          className="workspace-messages"
+          role="log"
+          aria-label="사건 대화"
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: Match the product's keyboard-scrollable conversation.
+          tabIndex={0}
+        >
           <p>합성 자료의 미확인 사항을 정리하고 있어요.</p>
           {visible && (
             <ConversationAgent

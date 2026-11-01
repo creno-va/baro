@@ -37,6 +37,28 @@ export function ConversationPanel({
     heading.current.focus({ preventScroll: true });
   }, [busy]);
   useEffect(() => {
+    const messages = heading.current?.closest<HTMLElement>(".workspace-messages");
+    if (!messages) return;
+    const handleScrollEscape = (event: KeyboardEvent) => {
+      if (
+        event.target !== messages ||
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        busy ||
+        document.querySelector("dialog[open]") ||
+        (restore.current && !restore.current())
+      )
+        return;
+      // Native WebKit button interactions can retain this keyboard-scrollable
+      // ancestor as their reading target. Close its current pane without moving
+      // focus away from any other control, pane, or native modal.
+      event.preventDefault();
+      onClose();
+    };
+    messages.addEventListener("keydown", handleScrollEscape);
+    return () => messages.removeEventListener("keydown", handleScrollEscape);
+  }, [busy, onClose]);
+  useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     const messages = heading.current?.closest(".workspace-messages");
     if (messages && heading.current)
@@ -57,6 +79,7 @@ export function ConversationPanel({
         target &&
         target !== document.body &&
         target !== document.documentElement &&
+        !target.matches(".workspace-messages, main, [role='main']") &&
         !target.matches(":disabled, [aria-disabled='true']") &&
         (target.tabIndex >= 0 || target.hasAttribute("tabindex") || target.isContentEditable);
       const visible =

@@ -87,6 +87,17 @@ export async function openReworkBrowserFixture(
         const request = route.request(),
           url = new URL(request.url());
         if (!url.pathname.startsWith("/api/")) return route.continue();
+        if (
+          request.method() === "PUT" &&
+          /^\/api\/v2\/cases\/[^/]+\/files\/[^/]+\/parts\/\d+$/.test(url.pathname) &&
+          request.postDataBuffer() === null
+        )
+          // WebKit hides Blob bytes from Playwright. The fixture dev server
+          // forwards the original same-origin HTTP stream without reading or
+          // recreating its body. All actual API authorization/hash checks run.
+          return route.continue({
+            headers: { ...request.headers(), "x-baro-rework-upstream": info.origin },
+          });
         const pending = context.request.fetch(
           new URL(url.pathname + url.search, info.origin).href,
           {

@@ -65,6 +65,24 @@ async function stableForeground(locator: Locator) {
     openDialogs: document.querySelectorAll("dialog[open]").length,
   }));
 }
+async function conversationFocus(page: Page) {
+  return page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    return {
+      tag: active?.tagName,
+      id: active?.id,
+      role: active?.getAttribute("role"),
+      tabIndex: active?.tabIndex,
+      editable: active?.isContentEditable,
+      disabled: active?.matches(":disabled, [aria-disabled='true']"),
+      inPane: !!active?.closest(".conversation-panel"),
+      isConversationScroll: active?.matches(".workspace-messages") ?? false,
+      containsPane: !!active?.querySelector(".conversation-panel"),
+      body: active === document.body,
+      dialogs: document.querySelectorAll("dialog[open]").length,
+    };
+  });
+}
 async function captureReadiness(page: Page, directory: string, phase: string) {
   const value = await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
@@ -827,6 +845,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         if (camera)
           expect(await readFile(join(directory, "report.html"), "utf8")).toContain(photoName);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
+        let beforeDraftDownload: Awaited<ReturnType<typeof conversationFocus>> | null = null;
         const pdfResponseIndex = f.pdfResponses.length;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
         if (followup === "직접 해결") {
@@ -858,6 +877,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             .check();
           await report.getByRole("button", { name: "검토한 초안 저장", exact: true }).click();
           const draftDownload = page.waitForEvent("download");
+          beforeDraftDownload = await conversationFocus(page);
           await report.getByRole("button", { name: "초안 다운로드", exact: true }).click();
           const artifact = await draftDownload;
           const file = await artifact.path();
@@ -909,39 +929,37 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         );
         await expect(composer).toBeInViewport();
         if (purpose === "prepare_claim" && followup === "직접 해결") {
-          const focusState = () =>
-            page.evaluate(() => ({
-              tag: document.activeElement?.tagName,
-              id: document.activeElement?.id,
-              inPane: !!document.activeElement?.closest(".conversation-panel"),
-              body: document.activeElement === document.body,
-              dialogs: document.querySelectorAll("dialog[open]").length,
-            }));
+          const focusState = () => conversationFocus(page);
           const beforeAudit = await focusState();
           expect(
             (await new AxeBuilder({ page }).include(".workspace").analyze()).violations.filter(
               (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
             ),
           ).toEqual([]);
+          const keyboardFocus = {
+            beforeDraftDownload,
+            beforeAudit,
+            afterAudit: await focusState(),
+            closingBlocked: await report
+              .getByRole("button", { name: "대화 작업 닫기", exact: true })
+              .isDisabled(),
+          };
           await writeFile(
             join(directory, "keyboard-focus.json"),
-            JSON.stringify(
-              {
-                beforeAudit,
-                afterAudit: await focusState(),
-                closingBlocked: await report
-                  .getByRole("button", { name: "대화 작업 닫기", exact: true })
-                  .isDisabled(),
-              },
-              null,
-              2,
-            ),
+            JSON.stringify(keyboardFocus, null, 2),
           );
           await page.keyboard.press("Escape");
           await expect(report).not.toBeVisible();
-          expect(
-            await page.evaluate(() => !!document.activeElement?.closest(".workspace-composer")),
-          ).toBe(true);
+          try {
+            // Unmount visibility precedes passive-effect focus restoration.
+            // Observe the actual input target without moving focus in the test.
+            await expect(composer).toBeFocused();
+          } finally {
+            await writeFile(
+              join(directory, "keyboard-focus.json"),
+              JSON.stringify({ ...keyboardFocus, afterClose: await focusState() }, null, 2),
+            );
+          }
         }
       } finally {
         try {
