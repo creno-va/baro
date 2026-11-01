@@ -21,7 +21,6 @@ import {
   v2AnswersForBatchSchema,
   v2CaseContextSchema,
   v2CreateCaseRequestSchema,
-  v2FileProbeSchema,
   v2IntakeSchema,
   v2MessageSchema,
   v2QuestionBatchSchema,
@@ -62,6 +61,7 @@ import {
   type WorkspaceGuard,
 } from "./v2-core";
 import { appendSummaryEntities, summaryAdditions } from "./v2-current-summary";
+import { storedFileMetadataSchema } from "./v2-file-metadata";
 import { type MutationReceipt, mutationTools } from "./v2-mutation-receipts";
 import { createV2StagingRepository } from "./v2-staging";
 import {
@@ -197,11 +197,7 @@ export async function referencesAuthorized(
       g.ownerId,
       row.revision,
       row.encrypted_payload,
-      z.strictObject({
-        name: z.string(),
-        declaredMediaType: z.string(),
-        probe: v2FileProbeSchema.nullable(),
-      }),
+      storedFileMetadataSchema,
     );
     const probe = metadata.probe;
     if (!probe) continue;

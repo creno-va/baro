@@ -6,7 +6,6 @@ import {
   type V2MessageRequest,
   type V2OperationQuota,
   type V2UserMessage,
-  v2FileProbeSchema,
   v2JobSchema,
   v2MessageRequestSchema,
   v2OperationQuotaSchema,
@@ -34,6 +33,7 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { storedFileMetadataSchema } from "./v2-file-metadata";
 import { v2JobRetryPredicate } from "./v2-job-retry";
 import {
   isPreparedPaidHold,
@@ -354,11 +354,7 @@ export function createV2JobsRepository(core: V2Core) {
           g.ownerId,
           input.fileRevision,
           row.encrypted_payload,
-          z.strictObject({
-            name: z.string(),
-            declaredMediaType: z.string(),
-            probe: v2FileProbeSchema.nullable(),
-          }),
+          storedFileMetadataSchema,
         );
         if (!metadata.probe) return false;
         const media = quotas.find((q) => q.kind === "media_processing");

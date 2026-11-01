@@ -5,7 +5,6 @@ import {
   type V2Report,
   type V2ReportCreateRequest,
   type V2ReportFileSelection,
-  v2FileProbeSchema,
   v2OriginalManifestSchema,
   v2PrivateArtifactSchema,
   v2ReportBodySchema,
@@ -29,6 +28,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { storedFileMetadataSchema } from "./v2-file-metadata";
 import { jobInsertStatements } from "./v2-jobs";
 import { isPreparedPaidHold, type PreparedPaidHold } from "./v2-paid-statements";
 import { createV2StagingRepository } from "./v2-staging";
@@ -283,11 +283,7 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
         g.ownerId,
         file.revision,
         actual.encrypted_payload,
-        z.strictObject({
-          name: z.string(),
-          declaredMediaType: z.string(),
-          probe: v2FileProbeSchema.nullable(),
-        }),
+        storedFileMetadataSchema,
       );
       const manifest = await readSnapshot(
         core,
@@ -449,11 +445,7 @@ export function createV2ReportsRepository(core: V2Core, guideHosts: readonly str
             g.ownerId,
             file.revision,
             actual.encrypted_payload,
-            z.strictObject({
-              name: z.string(),
-              declaredMediaType: z.string(),
-              probe: v2FileProbeSchema.nullable(),
-            }),
+            storedFileMetadataSchema,
           );
           const manifest = await readSnapshot(
             core,

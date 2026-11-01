@@ -1119,3 +1119,57 @@ test("file list processing lookup fails closed when the final database read fail
     code: "DB_OPERATION_FAILED",
   });
 });
+
+for (const path of ["direct", "staged"] as const) {
+  test(`verified original digest survives upload, ${path} processing and observation edits in metadata`, async () => {
+    const f = await fixture();
+    const u = await upload(f);
+    expect((await f.files.metadata(f.actor, u.value.id))?.contentHash).toBe(HASH);
+    const p = await processing(f, u);
+    if (path === "direct") {
+      expect(await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {})).toBe(
+        true,
+      );
+    } else {
+      const s = await coverageStage(f, p);
+      expect(
+        await f.fileStaging.stagePage(
+          s.g,
+          {
+            fileId: p.current.id,
+            fileRevision: 2,
+            coverageSnapshotId: s.id,
+            observationOrdinal: 0,
+            observations: [observation()],
+            derivativeOrdinal: 0,
+            derivatives: [],
+          },
+          p.lease,
+        ),
+      ).toBe(true);
+      expect(
+        await f.fileStaging.publish(
+          s.g,
+          {
+            fileId: p.current.id,
+            fileRevision: 2,
+            coverageSnapshotId: s.id,
+            observationCount: 1,
+            derivativeCount: 0,
+          },
+          p.lease,
+        ),
+      ).toBe(true);
+    }
+    expect((await f.files.metadata(f.actor, u.value.id))?.contentHash).toBe(HASH);
+    const before = (await f.files.read(f.actor, u.value.id))?.manifest;
+    expect(
+      await f.files.editObservations(guard(f), u.value.id, {
+        expectedRevision: 3,
+        edits: [{ observationId: observation().id, text: "사용자 합성 교정", included: true }],
+      }),
+    ).toBe(true);
+    expect((await f.files.metadata(f.actor, u.value.id))?.contentHash).toBe(HASH);
+    expect((await f.files.read(f.actor, u.value.id))?.manifest).toEqual(before);
+  });
+}

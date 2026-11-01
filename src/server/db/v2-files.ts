@@ -7,7 +7,6 @@ import {
   v2CoverageSchema,
   v2DerivativeSchema,
   v2FileObservationSchema,
-  v2FileProbeSchema,
   v2FileProcessingSchema,
   v2FileSchema,
   v2ObservationEditRequestSchema,
@@ -31,6 +30,7 @@ import {
   V2RepositoryError,
   type WorkspaceGuard,
 } from "./v2-core";
+import { storedFileMetadataSchema } from "./v2-file-metadata";
 import {
   abandonOriginalPart,
   type OriginalPartRegistration,
@@ -50,14 +50,8 @@ import {
   leasePredicate,
 } from "./v2-workspace";
 
-export const storedFileMetadataSchema = z.strictObject({
-  name: v2UploadReservationRequestSchema.shape.name,
-  declaredMediaType: v2UploadReservationRequestSchema.shape.mediaType,
-  probe: v2FileProbeSchema.nullable(),
-  contentHash: hashSchema.optional(),
-  // A format-admission result is not a completed upload or a processing job failure.
-  uploadRejection: z.literal("FILE_REJECTED").optional(),
-});
+export { storedFileMetadataSchema } from "./v2-file-metadata";
+
 const metadataSchema = storedFileMetadataSchema;
 type FileRow = {
   id: string;
@@ -258,10 +252,12 @@ export function createV2FilesRepository(core: V2Core) {
           sql: "EXISTS(SELECT 1 FROM v2_upload_sessions WHERE file_id=? AND state='open' AND expires_at>?)",
           values: [file.id, g.now],
         };
+    if (!file.manifest) return false;
     const metadata = await core.encrypt("v2_files", file.id, g.ownerId, file.revision, {
       name: file.name,
       declaredMediaType: file.declaredMediaType,
       probe: file.probe,
+      contentHash: file.manifest.contentHash,
     });
     const manifestId = lease ? old.manifest_snapshot_id : crypto.randomUUID();
     if (!manifestId) return false;
@@ -284,7 +280,6 @@ export function createV2FilesRepository(core: V2Core) {
         ],
       ),
     ];
-    if (!file.manifest) return false;
     if (!lease)
       statements.push(
         ...(await snapshotStatements(
@@ -877,6 +872,7 @@ export function createV2FilesRepository(core: V2Core) {
         const file = await read(g, fileId);
         if (
           file?.status !== "ready" ||
+          !file.manifest ||
           file.revision !== edit.expectedRevision ||
           edit.edits.some((e) => !file.observations.some((o) => o.id === e.observationId))
         )
@@ -887,6 +883,7 @@ export function createV2FilesRepository(core: V2Core) {
           name: file.name,
           declaredMediaType: file.declaredMediaType,
           probe: file.probe,
+          contentHash: file.manifest.contentHash,
         });
         const manifestId = crypto.randomUUID();
         const coverageId = crypto.randomUUID();
