@@ -427,6 +427,8 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         await expect(
           report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
         ).toBeVisible();
+        if (purpose === "prepare_claim" && followup === "직접 해결")
+          await page.screenshot({ path: "/tmp/baro-625-real-conversation-320.png" });
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
         if (followup === "직접 해결") {
