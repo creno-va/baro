@@ -3,6 +3,45 @@ import { expect, test } from "@playwright/test";
 test.beforeEach(async ({ request }) => {
   await request.post("/fixture/control", { data: { reset: true } });
 });
+test("limited official guide is a reading link without a verified claim; criminal defender guidance stays separate", async ({
+  page,
+  request,
+}) => {
+  await request.post("/fixture/control", {
+    data: { purpose: "respond_to_claim", criminal: true, limitedGuide: true },
+  });
+  await page.goto("/?default");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  const guide = page.getByRole("link", { name: "공식 안내 원문에서 확인" });
+  await expect(guide).toHaveAttribute(
+    "href",
+    "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=2&cnpClsNo=1",
+  );
+  expect(await guide.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(
+    44,
+  );
+  await expect(page.getByText("공식 근거 확인 · 사건에 맞는지 검토 필요")).toHaveCount(0);
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await expect(page.getByText(/확인 시점: 2026-11-01T10:00:00.000Z/)).toBeVisible();
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  await expect(page.getByRole("link", { name: "국선변호인제도 공식 안내" })).toHaveAttribute(
+    "href",
+    /csmSeq=538/,
+  );
+  await expect(page.getByRole("link", { name: "법률구조제도 공식 안내" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+    "href",
+    "/lawyers",
+  );
+  await expect(page.getByText(/자격·선정·선임을 보장하지 않아요/)).toBeVisible();
+  const calls = await (await request.get("/fixture/counts")).json();
+  expect(calls).toMatchObject({ draft: 0, saveReport: 0, observations: 0 });
+  await page.setViewportSize({ width: 320, height: 780 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: ".wrangler/resolution-official-mobile.png", fullPage: true });
+});
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   for (const path of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
     test(`${purpose} → ${path}`, async ({ page, request }) => {
@@ -20,10 +59,13 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           "href",
           "/lawyers",
         );
-        if (purpose === "respond_to_claim")
+        if (purpose === "respond_to_claim") {
           await expect(
             page.getByRole("heading", { name: "국선변호·법률구조 공식 안내" }),
           ).toBeVisible();
+          await expect(page.getByRole("link", { name: "국선변호인제도 공식 안내" })).toHaveCount(0);
+          await expect(page.getByRole("link", { name: "법률구조제도 공식 안내" })).toBeVisible();
+        }
       } else {
         await expect(page.getByRole("status")).toContainText("저장 요청");
         const calls = await (await request.get("/fixture/counts")).json();
@@ -185,4 +227,39 @@ test("the real default client peeks at existing reports and reads file metadata 
     saveReport: 0,
   });
   expect(calls.reportReads).toBeGreaterThanOrEqual(2);
+});
+
+test("consent withdrawal permits local historical path browsing and paused saved download without mutations", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/?default");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+  await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  await page.getByRole("button", { name: "잠시 중단" }).click();
+  await expect(page.getByRole("button", { name: "이어서 진행" })).toBeEnabled();
+  const before = await (await request.get("/fixture/counts")).json();
+  await request.post("/fixture/control", { data: { needsConsent: true } });
+  await page.reload();
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await expect(page.getByLabel("초안 검토·수정")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "검토용 초안 준비" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "이어서 진행" })).toBeDisabled();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/검토용\.txt$/);
+  await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^변호사와 해결/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const after = await (await request.get("/fixture/counts")).json();
+  expect(after.update).toBe(before.update);
+  expect(after.draft).toBe(before.draft);
+  expect(after.observations).toBe(0);
 });

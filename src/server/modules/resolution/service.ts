@@ -400,6 +400,7 @@ export function createResolutionService(deps: ResolutionDependencies) {
       if (
         latest.state.revision !== state.revision ||
         !sameResolutionBasis(latest.source.basis, source.basis) ||
+        !allowedKinds(latest.source).includes(request.documentKind) ||
         latest.source.report?.stale
       )
         throw new ResolutionError("STALE_REVISION");
