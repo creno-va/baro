@@ -64,6 +64,22 @@ export async function loadReconciliationSource(
     if (bytes > MAX_REHYDRATE_BYTES) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
     text += part.text;
   }
+  if (
+    !(await core
+      .statement(
+        `SELECT w.id FROM v2_workspaces w JOIN v2_intakes i ON i.id=w.id JOIN v2_summaries s ON s.id=i.summary_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND w.encrypted_payload=? AND i.summary_id=? AND s.snapshot_id=? AND ${aliveWorkspace}`,
+        [
+          actor.caseId,
+          actor.ownerId,
+          row.revision,
+          row.encrypted_payload,
+          row.summary_id,
+          row.snapshot_id,
+        ],
+      )
+      .first())
+  )
+    throw new ReworkError("STALE_REVISION");
   const summary: V2Summary = v2SummarySchema.parse(JSON.parse(text));
   let issued = options.requestMessage;
   let issuedProof: { sql: string; values: unknown[] } = { sql: "1", values: [] };

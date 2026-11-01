@@ -209,12 +209,29 @@ export function createReworkApi(
     const a = await access(c);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    const id = opaqueIdSchema.parse(c.req.param("id"));
-    const result = await (await runtime(c, a.ownerId, a.sessionId)).reconciliation.service.read({
-      ownerId: a.ownerId,
-      caseId: id,
-    });
-    return c.json(v2SummaryReconciliationSchema.parse(result.state));
+    const id = opaqueIdSchema.parse(c.req.param("id")),
+      reconciliation = (await runtime(c, a.ownerId, a.sessionId)).reconciliation.service;
+    for (let attempt = 0; ; attempt++) {
+      if (attempt) {
+        const fresh = await access(c);
+        if (fresh.response) return fresh.response;
+        if (fresh.ownerId !== a.ownerId || fresh.sessionId !== a.sessionId)
+          return c.json(errorBody(c, "UNAUTHENTICATED", "로그인 상태를 다시 확인해 주세요."), 401);
+      }
+      try {
+        const result = await reconciliation.read({ ownerId: a.ownerId, caseId: id });
+        return c.json(v2SummaryReconciliationSchema.parse(result.state));
+      } catch (error) {
+        if (
+          attempt >= 2 ||
+          !(
+            (error instanceof ReworkError || error instanceof SummaryReconciliationError) &&
+            error.code === "STALE_REVISION"
+          )
+        )
+          throw error;
+      }
+    }
   });
   for (const action of ["request", "confirm", "cancel"] as const)
     app.post(`/:id/rework/summary-reconciliation/${action}`, async (c) => {

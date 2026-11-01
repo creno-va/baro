@@ -54,3 +54,13 @@
 서명 session·실제 SQL 리포트의 80문단·여러 페이지 긴 문단·초 단위 출처·식별정보 삭제 검증도 실행했다. hash로 고정한 `tests/browser/requirements.txt`의 pypdf 6.20.1을 사용했다. 인쇄 PDF의 margin footer가 긴 문단 중간에 섞이는 추출 현상은 좌표로 footer band를 구분해 해결했다. 본문에서 BARO/숫자 문자열을 삭제하지 않으며, Chromium의 숫자 사이 en dash 추출 alias(U+00AD)만 1:1 변환한다. HTML 모든 원문/heading 검사와 함께 실제 다운로드 PDF의 모든 기대 문단도 exact 검사한다.
 
 합성 실제 다운로드 PDF와 실제 HTML 인쇄 PDF 각8쪽을 `pdftoppm`으로 전 페이지 렌더링하고 4개 contact sheet의 총16쪽을 육안 검토했다. 잘림·겹침·빈 페이지 없음. 현물은 `.wrangler/report-draft-wait/real-korean-report.{pdf,html}`, `real-html-printed.pdf`, `download-page-*.png`, `print-page-*.png`, `*-contact-*.png`에 보존한다. 이 검증은 기존 서명 SQL/legacy PDF 호환 검증이며 앞선 고정 WeasyPrint의 청구·방어·사진 28쪽 검증 및 중앙의 최종 실제 Hono 통합 인수와 구분한다.
+
+## 실제 PDF 저장 경로의 조회 통합 준비
+
+00의 PR667/669와 PR668 최신 통합 head d11c33ae를 소비한 실제 Astro 회귀는 22/22 통과했다. 48초 동기 생성·초과 자료 제외 복구·늦은 실패/로그아웃 응답을 포함하며 기존 owner·동의·draft·저장 bytes·삭제 보호를 유지한다.
+
+04의 실제 서명 Hono/DB/AES→2×3→확인→자동 분석/리포트→TXT 업로드/처리→실제 Docker PDF 여정에서 첫 PDF가 413으로 실패했다. 원본 limits 함수에 위임하는 임시 로컬 카운터로 측정한 결과 native PDF는 52,064 bytes로 정상 생성됐다. sourceRows11/reportFiles1/ZIP0의 기존 계획은 queries320/rowsRead979200/rowsWritten1000이고, 계획 적용 시점의 253회는 허용됐으나 이후 persist batch의 321번째에서 차단됐다. 실제 query/byte/lease/시도/원장 한도를 바꾸거나 unmetered 어댑터로 이 여정을 대체하지 않았다.
+
+`codex/626-report-scoped-read`는 optional private `readPreparedAnalysisForScope` 포트를 제공한다. current owner·감사된 결과·정확한 공식 원문·현재 및 요청 scope를 한 번의 authoritative read로 증명하는 포트다. 기존 read와 scope proof가 동일한 전체 분석을 두 번 읽는 부분만 통합하며, export 전과 비동기 렌더 후의 각각 새로운 검증은 유지한다. 기존 DI는 두 단계 검증을 그대로 사용한다. masked/excluded 범위의 이전 파생 설명을 제거하고 과거 본문을 보존하는 회귀, 렌더 중 새 분석으로 바뀌면 실제 PDF가 생성됐어도 저장 전에 거절하는 회귀를 추가했다. 새 proof 조회 실패 때 이전 unscoped 결과로 fallback하지 않는 검사도 포함해 reports 288 tests/3504 assertions가 통과했다.
+
+포트 제공만으로 실제 PDF 문제가 해결됐다고 표시하지 않는다. 00이 current `readAnalysisScope`의 전후 동일성과 전체 owner/source 검증을 구현하고 runtime factory를 연결하는 후속 PR의 CI/main 뒤 실제 metered 여정을 다시 검증한다. snapshot과 scope를 오래 캐시하거나 검증을 삭제하지 않는다.

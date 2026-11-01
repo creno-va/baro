@@ -172,3 +172,15 @@ PR665 exacte517d146d82773b45bddba90ecd90460d95b8498의 Quality41321332843 성공
 05의 shared mock 통합에서 ReportMockError가 generic WorkspaceMockError 경계에서 UNAVAILABLE로 바뀌는 추가 문제를 확인했다. 정식 typed export 두 code만413/409로 보존하며 arbitrary 오류를 공식 성공/실패 코드로 승격하지 않는다. 실제 explicit mock의 초과 자료→명시 report 준비에서 크기 오류 전달·빈 report 저장 없음·원본 내용 보존을 포함해 공통 focused38 tests333 assertions를 통과했다. mock에서도 분석 unavailable 고지는 유지한다.
 
 추가 단독 test 소유권:01은 customer-real/recovery-real/human-review와 test-only customer-browser-server의 실제 createReworkApi mount 조립,03은 workspace-shared/customer-completion,05는 report-draft-revision/retained-PDF/real-download/account-session-recovery/reports-integrated다.04의 Workspace 및 workspace.e2e.ts는 계속04 소유다.00은 app-experience/product-ui/shell-integration 등 공통 browser corpus를 정비한다. broad 사전 검사 중 같은 구형 UI 전제로 반복 대기하는 customer-recovery-real/product-ui batch는 실패를 보존하고 중단했으며, 미실행·중단을 성공으로 기록하지 않는다. 최종 manual full은 모든 수정 병합 후 별도 실행한다.
+
+### 실제 스트림 경합과 최종 소비 준비
+
+PR667 exact9661c52adb44542a9074efa63983324eb2eff94c의 Quality41322634194 성공 후 main1bfc35f479196bec34028a5ae0bec641bf4b706e, PR669 exactb844120ad7d1f11156f37e5f4fe16db96bdce77e의 Quality41323091671/Legal41323091688/nativePDF41323091692 성공 후 main929297bbaa440bae5a4cb78bcb901863f0b4630a에 병합했다. PR668 exactd11c33ae5d9dbdd5f0549f4045b3580b2cb4702f의 Quality41323480193/nativePDF41323480138 성공 후 main864f7994db7538898ae1cff6f8dcafe7e6339555, PR670 exact17f25796da42c4ea78c910a2f2d6291409607921의 Quality41324004833 성공 후 maind534c04ad1669fcac2fcbea91720ab66e48b279a에 병합했다.668의 공통 수정 의존 actual Astro22개가 모두 통과했다.670은 명시 peer 무효화 중 재조율 private Dialog를 숨기면서 동일 owner의 임시 장애 초안을 보존한다.
+
+04의 실제 runtime fixture PR672는 아직 draft다. 실제 TXT 처리/원본과 Docker의52,064 bytes PDF 렌더는 실행됐지만 PDF 저장은 계획320 queries/실제321번째 조회에서413으로 실패한다. 실제900 hard bound·물리 용량·lease·원장을 바꾸지 않고,05의 optional scoped authoritative read 포트 PR673과00 공통 binding으로 반복 full 조회를 줄이는 검증을 진행한다. 이 실패를 빈 PDF 성공이나 실제 공급자 인수로 표시하지 않는다.
+
+672의 Quality/Legal CI는 추가 source 조회 경합의400으로 실패했고 native PDF CI만 성공했다.04와 finite category 진단으로 summaryFragments가 revision 변경 시 stream을 중단하고 소비자가 빈/중간 JSON을 파싱하는 원인을 좁혔다. 진단은 원복했으며 원문·stack·SQL·민감 입력을 이슈에 게시하지 않는다.00의 `codex/621-rework-summary-read-fences`는 분석/재조율 소비자가 파싱 전에 실제 current owner/revision/summary source를 확인하게 한다. 재조율 passive GET도 STALE_REVISION만 최대3회 fresh session으로 재조회하고 다른 실패는 그대로 반환한다. 제품 stream·설치 client DTO·유료 admission을 변경하지 않는다.
+
+새 deterministic 회귀4개는 실제 암호화 요약 stream의 첫 fragment 전/중간에 SQLite revision을 변경한다. 수정 전 SyntaxError를 재현했고 수정 뒤 STALE_REVISION과 최신 상태 재읽기를 확인했다. 관련 source/state/actual Hono/runtime44 tests363 assertions, bun ci/validate:quick과 production build/dry-run/local workerd 부팅이 통과했다. 테스트 binding proxy의 타입 오류는 수정했고 검사 기대나 제품 보호를 완화하지 않았다.672의 실제 정상/검색실패 반복 안정성 검사는 이 변경의 CI/main 뒤 다시 수행한다.
+
+01의 key-order 동등 DTO와 실제 값/출처/revision 차이 거절 PR674,03의 shared originals/customer-completion corpus PR671,05의 scoped read PR673은 각각 최신 main CI 뒤 순차 통합한다. 최종 전체14 실제 브라우저 경로·actual PDF 전 페이지·exact main manual full은 계속 미완료로 보존한다.
