@@ -324,22 +324,37 @@ test("a newly published encrypted intent is a revision race rather than invalid 
           "INSERT INTO v2_messages(id,workspace_id,workspace_revision,operation_id,role,safety,encrypted_payload,created_at) VALUES(?,?,?,?,'assistant','validated',?,?)",
         )
         .run(messageId, f.workspaceId, revision, operationId, encrypted, f.actor.now);
+      const jobId = crypto.randomUUID();
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_jobs(id,operation_id,runtime_instance_id,workspace_id,target_kind,target_id,target_revision,kind,status,phase,progress,created_at,updated_at) VALUES(?,?,?,?,'workspace',?,?,'chat_response','completed','finished',100,?,?)",
+        )
+        .run(
+          jobId,
+          operationId,
+          `${jobId}-1`,
+          f.workspaceId,
+          f.workspaceId,
+          revision,
+          f.actor.now,
+          f.actor.now,
+        );
       f.db.sqlite
         .query("UPDATE v2_workspaces SET revision=? WHERE id=?")
-        .run(revision, f.workspaceId);
+        .run(revision + 1, f.workspaceId);
     }
     return null;
   };
   const response = await f.request("conversation");
   expect(response.status).toBe(200);
   const state = (await response.json()) as V2ConversationState;
-  expect(state.workspaceRevision).toBe(revision);
+  expect(state.workspaceRevision).toBe(revision + 1);
   expect(state.intents).toEqual([
     {
       messageId,
       requestId: `intent-${messageId}`,
       intent: "show_preparation",
-      workspaceRevision: revision,
+      workspaceRevision: revision + 1,
     },
   ]);
   expect(reads).toBe(2);

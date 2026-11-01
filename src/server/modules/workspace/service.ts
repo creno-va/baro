@@ -322,8 +322,12 @@ export function createWorkspaceService(core: V2Core, deps: WorkspaceDependencies
     },
     async latestJob(ownerId: string, id: string) {
       const current = await find(ownerId, id);
-      const job = await jobs.latestWorkspace(actor(ownerId), id);
-      const privateJob = job ? await isPrivateJob(ownerId, id, job) : false;
+      const { job, mayBePrivate } = await jobs.latestWorkspaceForProjection(actor(ownerId), id);
+      // The hint grants no authority: only actual candidates need the encrypted
+      // proof and its final owner read. Keep ordinary jobs on their original path.
+      if (!job || !mayBePrivate)
+        return job ? { ...job, retryable: canRetryV2Job(job, current) } : null;
+      const privateJob = await isPrivateJob(ownerId, id, job);
       await find(ownerId, id);
       return job && !privateJob ? { ...job, retryable: canRetryV2Job(job, current) } : null;
     },

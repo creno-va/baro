@@ -216,6 +216,7 @@ type ReportSummary = {
 };
 const intentSchema = z.object({
   id: opaqueIdSchema,
+  operationId: opaqueIdSchema,
   role: z.literal("assistant"),
   workspaceRevision: z.number().int().positive(),
   conversationIntent: v2ConversationIntentSchema.nullable().optional(),
@@ -372,10 +373,10 @@ export function createReworkStateService(
       const messages = (
         await core
           .statement(
-            "SELECT id,revision FROM v2_messages WHERE workspace_id=? AND role='assistant' ORDER BY created_at DESC,id DESC LIMIT 100",
-            [id],
+            "SELECT m.id,m.revision,m.workspace_revision,m.operation_id FROM v2_messages m JOIN v2_operations o ON o.id=m.operation_id JOIN v2_jobs j ON j.operation_id=o.id AND j.workspace_id=m.workspace_id AND j.target_kind='workspace' AND j.target_id=m.workspace_id AND j.target_revision=m.workspace_revision AND j.kind='chat_response' AND j.status='completed' WHERE m.workspace_id=? AND m.role='assistant' AND o.owner_id=? AND o.workspace_id=m.workspace_id AND o.kind='chat' ORDER BY m.created_at DESC,m.id DESC LIMIT 100",
+            [id, ownerId],
           )
-          .all<{ id: string; revision: number }>()
+          .all<{ id: string; revision: number; workspace_revision: number; operation_id: string }>()
       ).results;
       for (const row of messages) {
         const cipher = await core
@@ -393,12 +394,20 @@ export function createReworkStateService(
           cipher.encrypted_payload,
           intentSchema,
         );
+        if (
+          value.id !== row.id ||
+          value.operationId !== row.operation_id ||
+          value.workspaceRevision !== row.workspace_revision
+        )
+          throw new ReworkError("STALE_REVISION");
         if (value.conversationIntent)
           intents.push({
             messageId: value.id,
             requestId: `intent-${value.id}`,
             intent: value.conversationIntent,
-            workspaceRevision: value.workspaceRevision,
+            // Atomic response publication advances its admission revision once.
+            // Keep this immutable publication revision; never rebase old intents.
+            workspaceRevision: value.workspaceRevision + 1,
           });
       }
       // A newly published intent may belong to a later revision than the first
