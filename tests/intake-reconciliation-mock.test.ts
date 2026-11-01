@@ -91,6 +91,66 @@ describe("local synthetic reconciliation HTTP adapter", () => {
       f.item.summaryDetails?.facts,
     );
   });
+  test("confirms the same canonical facts even when nested object keys have a different order", async () => {
+    const f = fixture();
+    const state = v2SummaryReconciliationSchema.parse((await f.create()).data);
+    const item = f.state().cases[f.item.id];
+    if (!item?.summaryDetails) throw new Error("Missing synthetic summary");
+    const before = structuredClone(item.summaryDetails);
+    const reorder = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(reorder);
+      if (value && typeof value === "object")
+        return Object.fromEntries(
+          Object.entries(value)
+            .reverse()
+            .map(([key, value]) => [key, reorder(value)]),
+        );
+      return value;
+    };
+    item.summaryDetails = reorder(before) as typeof before;
+    expect(item.summaryDetails).toEqual(before);
+    expect(JSON.stringify(item.summaryDetails)).not.toBe(JSON.stringify(before));
+    expect(
+      (
+        await f.request("confirm", {
+          expectedRevision: state.workspaceRevision,
+          proposalId: state.proposal?.id,
+          summaryRevision: 3,
+        })
+      ).response.status,
+    ).toBe(200);
+    expect(f.invalidations()).toBe(1);
+    expect(f.state().cases[f.item.id]?.summaryDetails?.facts.slice(0, before.facts.length)).toEqual(
+      before.facts,
+    );
+  });
+  for (const difference of ["fact-text", "reference", "summary-revision", "fact-order"]) {
+    test(`rejects a different canonical ${difference} despite an unchanged workspace revision`, async () => {
+      const f = fixture();
+      const state = v2SummaryReconciliationSchema.parse((await f.create()).data);
+      const summary = f.state().cases[f.item.id]?.summaryDetails;
+      if (!summary) throw new Error("Missing synthetic summary");
+      const first = summary.facts[0];
+      if (!first) throw new Error("Missing synthetic fact");
+      if (difference === "fact-text") first.text = "원래 사실과 다른 합성 진술입니다.";
+      if (difference === "reference")
+        first.references = [{ kind: "intake_narrative", intakeRevision: 8 }];
+      if (difference === "summary-revision") summary.revision++;
+      if (difference === "fact-order") summary.facts.reverse();
+      const changed = structuredClone(summary);
+      expect(
+        (
+          await f.request("confirm", {
+            expectedRevision: state.workspaceRevision,
+            proposalId: state.proposal?.id,
+            summaryRevision: 3,
+          })
+        ).response.status,
+      ).toBe(409);
+      expect(f.state().cases[f.item.id]?.summaryDetails).toEqual(changed);
+      expect(f.invalidations()).toBe(0);
+    });
+  }
   test("a peer's revision prevents confirmation and projects a stale proposal", async () => {
     const f = fixture();
     const state = v2SummaryReconciliationSchema.parse((await f.create()).data);
