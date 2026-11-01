@@ -37,7 +37,7 @@ async function initializeHttpMocks() {
   if (import.meta.env.PUBLIC_API_MODE !== "mock") return;
   const { mockRuntime } = await import("./mock/runtime");
   const ready: import("./core").HttpMockHandler[] = [];
-  for (const name of ["workspace", "files", "reports", "account"]) {
+  for (const name of ["workspace", "files", "reports", "account", "rework"]) {
     const mockLoader = mockModules[`./mock/${name}.ts`];
     if (!mockLoader) continue;
     const mock = await mockLoader();
@@ -67,7 +67,7 @@ async function loadClient(name: string): Promise<Client> {
   const domain = await loader();
   if (
     import.meta.env.PUBLIC_API_MODE === "mock" &&
-    ["workspace", "files", "reports", "account"].includes(name)
+    ["workspace", "files", "reports", "account", "rework"].includes(name)
   ) {
     httpMocksReady ??= initializeHttpMocks().catch((error) => {
       httpMocksReady = undefined;
@@ -111,6 +111,7 @@ type Answers = {
 };
 export const api = {
   session: sessionApi,
+  rework: domain<import("@baro/api-client").ReworkClient>("rework"),
   cases: domain<{
     list(): Promise<CaseView[]>;
     create(input: {

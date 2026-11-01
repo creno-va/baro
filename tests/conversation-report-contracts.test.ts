@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import {
-  CONVERSATION_REPORT_VERSION,
   v2AnalysisBasisSchema,
   v2ConversationActionRequestSchema,
   v2LegalAnalysisSnapshotSchema,
   v2PreparationStateSchema,
   v2ResolutionDraftSchema,
+  v2ReworkVersionSchema,
   v2SummaryReconciliationProposalSchema,
   v2SummaryReconciliationSchema,
   v2WorkspaceSchema,
@@ -26,7 +26,7 @@ const procedure = {
   description: null,
 };
 const unavailable = () => ({
-  contractVersion: CONVERSATION_REPORT_VERSION,
+  contractVersion: v2ReworkVersionSchema.value,
   id: "analysis_1",
   basis,
   context: { casePurpose: "unconfirmed", subjectContext: "individual", procedure },
@@ -115,7 +115,7 @@ test("a reconciliation proposal preserves its exact base and identifies the next
     v2SummaryReconciliationProposalSchema.safeParse({ ...proposal, after: summary }).success,
   ).toBe(false);
   const state = {
-    contractVersion: CONVERSATION_REPORT_VERSION,
+    contractVersion: v2ReworkVersionSchema.value,
     workspaceRevision: 3,
     status: "proposed",
     request: {
