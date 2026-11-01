@@ -295,6 +295,7 @@ test("a real peer context edit preserves the user's draft and requires compariso
     await openPreparedWorkspace(page, f);
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+    await openAction(page, "사건 정리 재확인");
     await page.getByRole("button", { name: "입장·절차 확인", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "입장과 절차 확인", exact: true });
     const description = dialog.getByRole("textbox", {
