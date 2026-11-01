@@ -18,7 +18,7 @@ import { createPrecedentRelevance } from "../research/relevance";
 import { RESEARCH_CONCEPTS } from "../research/topics";
 import { textHash } from "../service";
 import type { Access, RetrievalOutput, RetrievalPlan, SourceChunk } from "../v2/contracts";
-import { safePermit } from "../v2/contracts";
+import { planSchema, safePermit } from "../v2/contracts";
 import { isWorkspacePublicQuery, workspaceRetrievalPlans } from "../v2/workspace-plans";
 import { projectWorkspaceSources } from "../v2/workspace-sources";
 import {
@@ -67,6 +67,19 @@ export class LegalAnalysisError extends Error {
   }
 }
 
+/** Trusted server injection only; never an HTTP/model extension. Freeze the
+ * validated projection for this admitted job, including normalized identities. */
+export function reviewedAdditionalGuidePlans(raw: readonly RetrievalPlan[] = []) {
+  if (!Array.isArray(raw) || raw.length > 2) throw new LegalAnalysisError("INVALID_PLAN");
+  const plans = Array.from(raw, (value) => {
+    const parsed = planSchema.safeParse(value);
+    if (!parsed.success || parsed.data.kind !== "official_guide")
+      throw new LegalAnalysisError("INVALID_PLAN");
+    return parsed.data;
+  });
+  return [...new Map(plans.map((plan) => [canonicalAnalysisJson(plan), plan])).values()];
+}
+
 /** Internal service for ONE admitted durable job. The caller owns the existing
  * quota/lease/attempt ledger, encrypted persistence and atomic publication fence.
  * Public reads/polls/export never call prepare. No model or legal fallback exists. */
@@ -79,10 +92,13 @@ export function createAutomaticLegalAnalysis(deps: {
   readBoundSources: (ids: readonly string[], now: string) => Promise<(SourceChunk | null)[]>;
   authorize: () => Promise<boolean>;
   reserveRequest: Access["reserveRequest"];
+  /** Root-selected reviewed procedure guides; shares the existing retrieval round. */
+  additionalPlans?: readonly RetrievalPlan[];
   clock?: () => string;
   signal?: AbortSignal;
   guideHosts?: readonly string[];
 }) {
+  const additionalPlans = reviewedAdditionalGuidePlans(deps.additionalPlans);
   const clock = () =>
     new Date(
       timestampSchema.parse((deps.clock ?? (() => new Date().toISOString()))()),
@@ -145,6 +161,17 @@ export function createAutomaticLegalAnalysis(deps: {
       ).values(),
     ];
     const plans = requests.flatMap((r) => workspaceRetrievalPlans([r]));
+    const identities = new Set(plans.map(canonicalAnalysisJson));
+    let omittedGuides = 0;
+    for (const guide of additionalPlans) {
+      const key = canonicalAnalysisJson(guide);
+      if (identities.has(key)) continue;
+      identities.add(key);
+      // Preserve the existing four distinct public requests, even though the
+      // lower-level retrieval schema can accept six. Never displace case issues.
+      if (plans.length >= 4) omittedGuides++;
+      else plans.push(structuredClone(guide));
+    }
     await authorize();
     let attempts = 0;
     const controller = new AbortController();
@@ -168,6 +195,19 @@ export function createAutomaticLegalAnalysis(deps: {
       clearTimeout(timer);
     }
     await authorize();
+    if (omittedGuides)
+      retrieval = {
+        ...retrieval,
+        outcomes: [
+          ...retrieval.outcomes,
+          ...Array.from({ length: omittedGuides }, () => ({
+            kind: "official_guide" as const,
+            availability: "not_requested" as const,
+            reason: "budget_exhausted" as const,
+            chunks: [],
+          })),
+        ],
+      };
     if (retrieval.outcomes.some((o) => o.reason === "not_authorized" || o.reason === "cancelled"))
       throw new LegalAnalysisError(
         controller.signal.aborted && !deps.signal?.aborted
@@ -216,6 +256,11 @@ export function createAutomaticLegalAnalysis(deps: {
     }));
     const limitations = [
       ...new Set([
+        ...(omittedGuides
+          ? [
+              `기술적 조사 한도인 최대 4개 계획에서 사건 법률 쟁점을 우선하여 공식 절차 안내 ${omittedGuides}개는 조회하지 않았어요. 제출처와 절차는 공식 기관에서 확인해 주세요.`,
+            ]
+          : []),
         ...retrieval.outcomes.flatMap((o) =>
           [o.reason, ...(o.sourceFailures ?? [])].flatMap((r) =>
             r ? [legalFailureMessages[r]] : [],
