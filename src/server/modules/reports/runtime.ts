@@ -9,7 +9,11 @@ import { namedProcessorPort } from "../file-processing/native-identity";
 import { createProcessorTransport } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
-import { preparedAnalysisMatchesScope, readPreparedAnalysis } from "../rework/state";
+import {
+  preparedAnalysisMatchesScope,
+  readPreparedAnalysis,
+  readPreparedAnalysisForScope,
+} from "../rework/state";
 import { REPORT_QUERY_LIMIT, REPORT_ROW_LIMIT } from "./limits";
 import { ReportError } from "./source";
 import type { ReportDependencies } from "./storage";
@@ -228,6 +232,8 @@ export async function createCaseReportDependencies(
     ...deps,
     guideHosts: GUIDE_HOSTS,
     readPreparedAnalysis: (actor, id) => readPreparedAnalysis(core, actor, id),
+    readPreparedAnalysisForScope: (actor, id, scope) =>
+      readPreparedAnalysisForScope(core, actor, id, scope),
     preparedAnalysisMatchesScope: (actor, id, snapshot, scope) =>
       preparedAnalysisMatchesScope(core, actor, id, snapshot, {
         ...scope,
