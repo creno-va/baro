@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { deleteAccount } from "../src/server/modules/deletion/service";
 import { createV2DeletionReconciler } from "../src/server/modules/deletion/v2-reconcile";
 import { profilePublicationInstanceId } from "../src/server/modules/lawyers/publication-execution";
@@ -11,7 +11,10 @@ import {
   missingCleanupWorkflow as missing,
 } from "./helpers/workflow-cleanup";
 
+afterEach(() => setSystemTime());
+
 test("actual physical writer and exhausted cleanup allowance prevent any R2 delete; expired lease cannot issue a receipt", async () => {
+  setSystemTime(new Date(NOW));
   const f = await ready({ deleteLimit: 5, headLimit: 5 }),
     i = await intent(f);
   expect(await admit(f, i)).toBe(true);
@@ -23,6 +26,10 @@ test("actual physical writer and exhausted cleanup allowance prevent any R2 dele
   const bucket = r2();
   bucket.objects.set(i.input.objectKey, new Uint8Array(100));
   f.db.sqlite.query("DELETE FROM user WHERE id=?").run(f.actor.ownerId);
+  // SQLite's SQL wall clock is independent of Bun's virtual clock. Anchor only
+  // this synthetic cleanup schedule to its declared fixture time; provider,
+  // funding and billing observations remain untouched.
+  f.db.sqlite.query("UPDATE v2_deletion_journals SET created_at=?,next_attempt_at=?").run(NOW, NOW);
   let at = new Date().toISOString();
   const deps = {
     environment: "preview" as const,
@@ -70,6 +77,9 @@ test("actual physical writer and exhausted cleanup allowance prevent any R2 dele
     empty = await intent(exhausted);
   expect(await admit(exhausted, empty)).toBe(true);
   exhausted.db.sqlite.query("DELETE FROM user WHERE id=?").run(exhausted.actor.ownerId);
+  exhausted.db.sqlite
+    .query("UPDATE v2_deletion_journals SET created_at=?,next_attempt_at=?")
+    .run(NOW, NOW);
   const denied = r2();
   await createV2DeletionReconciler(exhausted.core, {
     ...deps,

@@ -431,8 +431,10 @@ test("built public directory and detail hydrate under hash CSP with no case data
   const response = await page.goto("/lawyers?region=seoul");
   expect(response?.headers()["content-security-policy"]).toContain("sha256-");
   expect(response?.headers()["cache-control"]).toContain("no-transform");
-  await expect(page.getByRole("link", { name: "프로필과 연락처 보기" })).toBeVisible();
-  await page.getByRole("link", { name: "프로필과 연락처 보기" }).press("Enter");
+  const profileLink = page.getByRole("link", { name: publicLawyer.content.name, exact: true });
+  await expect(profileLink).toBeVisible();
+  await expect(profileLink).toHaveAttribute("href", `/lawyers/${publicLawyer.id}?region=seoul`);
+  await profileLink.press("Enter");
   await expect(
     page.getByRole("heading", { name: publicLawyer.content.name, exact: true }),
   ).toBeVisible();
@@ -533,7 +535,7 @@ test("built Worker mobile menu, brand, local font and error state work without C
     "img-src 'self' data: blob:",
   );
   await expect(page.getByRole("alert")).toContainText(
-    "요청을 완료하지 못했어요. 다시 시도해 주세요.",
+    "지금 요청을 처리할 수 없어요. 잠시 후 다시 시도해 주세요.",
   );
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.evaluate(() => {
