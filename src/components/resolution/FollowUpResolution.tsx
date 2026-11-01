@@ -126,7 +126,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const [pendingChoice, setPendingChoice] = useState<typeof selected>(null);
   const sequence = useRef(0),
     owner = useRef<string | null>(null),
-    lock = useRef(false);
+    lock = useRef<number | null>(null);
   const controller = useRef(new AbortController());
   const reloadRequested = useRef(false);
   const reload = useRef<() => void>(() => undefined);
@@ -170,6 +170,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     ++sequence.current;
     controller.current.abort();
     controller.current = new AbortController();
+    lock.current = null;
+    reloadRequested.current = false;
+    dirtyRef.current = false;
+    setBusy(false);
     owner.current = null;
     setNeedsConsent(false);
     setState(null);
@@ -229,15 +233,26 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         : "fact_statement",
     );
   }, []);
+  const finish = useCallback((epoch: number) => {
+    // A superseded promise may settle after a fresh owner has already loaded or
+    // started work. Only the operation owning this epoch may release its lock.
+    if (lock.current !== epoch) return;
+    lock.current = null;
+    setBusy(false);
+    if (reloadRequested.current) {
+      reloadRequested.current = false;
+      reload.current();
+    }
+  }, []);
   const load = useCallback(async () => {
-    if (lock.current) {
+    if (lock.current !== null) {
       reloadRequested.current = true;
       return;
     }
-    lock.current = true;
+    const epoch = sequence.current;
+    lock.current = epoch;
     setBusy(true);
     setError("");
-    const epoch = sequence.current;
     try {
       const options = await verify(epoch);
       const next = await client.getResolution(props.caseId, options);
@@ -257,14 +272,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     } catch (e) {
       if (epoch === sequence.current) handleFailure(e);
     } finally {
-      lock.current = false;
-      setBusy(false);
-      if (reloadRequested.current) {
-        reloadRequested.current = false;
-        reload.current();
-      }
+      finish(epoch);
     }
-  }, [client, props.caseId, verify, accept, handleFailure]);
+  }, [client, props.caseId, verify, accept, handleFailure, finish]);
   reload.current = () => void load();
   const previousReport = useRef({ id: props.reportId, revision: props.reportRevision });
   useEffect(() => {
@@ -311,12 +321,12 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     work: (options: Options, epoch: number) => Promise<V2ResolutionState | null>,
     write = true,
   ) {
-    if (lock.current) return;
-    lock.current = true;
+    if (lock.current !== null) return;
+    const epoch = sequence.current;
+    lock.current = epoch;
     setBusy(true);
     setError("");
     setNotice("");
-    const epoch = sequence.current;
     try {
       const options = await verify(epoch, write);
       const next = await work(options, epoch);
@@ -328,12 +338,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     } catch (e) {
       if (epoch === sequence.current) handleFailure(e);
     } finally {
-      lock.current = false;
-      setBusy(false);
-      if (reloadRequested.current) {
-        reloadRequested.current = false;
-        reload.current();
-      }
+      finish(epoch);
     }
   }
   async function choose(choice: NonNullable<typeof selected>) {

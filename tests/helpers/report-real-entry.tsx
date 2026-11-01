@@ -14,5 +14,8 @@ if (root)
       onBusyChange={(busy) => {
         document.documentElement.dataset.reportBusy = String(busy);
       }}
+      onViewed={(identity) => {
+        document.documentElement.dataset.reportViewed = JSON.stringify(identity);
+      }}
     />,
   );

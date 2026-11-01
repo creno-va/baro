@@ -11,12 +11,14 @@ import {
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createReworkApi } from "../src/server/api/v2/rework";
 import { createV2Core } from "../src/server/db/v2-core";
+import { ReportError } from "../src/server/modules/reports/source";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
 import { createReworkRuntime } from "../src/server/modules/rework/runtime";
 import {
   preparedAnalysisMatchesScope,
   readPreparedAnalysis,
 } from "../src/server/modules/rework/state";
+import { storedMessageSchema } from "../src/server/modules/workspace/stored-message";
 import { runWorkspaceRuntime } from "../src/server/runtime/workspace";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { syntheticGatewayInput } from "./helpers/gateway-input";
@@ -34,6 +36,7 @@ afterEach(() => {
 async function fixture(
   purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim",
   legalReady = false,
+  apiOptions: Pick<NonNullable<Parameters<typeof createReworkApi>[0]>, "stateDependencies"> = {},
 ) {
   const f = await reportFixture();
   fixtures.push(f);
@@ -182,7 +185,10 @@ async function fixture(
       c.set("requestId", "synthetic-central");
       await next();
     })
-    .route("/api/v2/cases", createReworkApi({ runtimeOptions: async () => options }));
+    .route(
+      "/api/v2/cases",
+      createReworkApi({ runtimeOptions: async () => options, ...apiOptions }),
+    );
   const cookie = await signedSessionCookie(session.token, env.BETTER_AUTH_SECRET);
   const request = async (
     path: string,
@@ -239,6 +245,127 @@ async function fixture(
     },
   };
 }
+test("passive conversation reads retry only a bounded moving snapshot and never admit paid work", async () => {
+  for (const writes of [2, 4]) {
+    let reads = 0;
+    let onPeek: () => Promise<null> = async () => null;
+    const f = await fixture("prepare_claim", false, {
+      stateDependencies: async () => ({ peekReport: () => onPeek() }),
+    });
+    onPeek = async () => {
+      if (++reads <= writes)
+        f.db.sqlite
+          .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+          .run(f.workspaceId);
+      return null;
+    };
+    const response = await f.request("conversation");
+    expect(response.status).toBe(writes === 2 ? 200 : 409);
+    expect(reads).toBe(3);
+    if (response.ok)
+      expect(((await response.json()) as V2ConversationState).workspaceRevision).toBe(f.rev());
+    else
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        "STALE_REVISION",
+      );
+    expect(f.calls).toHaveLength(0);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  }
+});
+test("a snapshot retry rechecks the signed session and cannot outlive logout", async () => {
+  let reads = 0;
+  let onPeek: () => Promise<null> = async () => null;
+  const f = await fixture("prepare_claim", false, {
+    stateDependencies: async () => ({ peekReport: () => onPeek() }),
+  });
+  onPeek = async () => {
+    reads++;
+    f.db.sqlite.query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?").run(f.workspaceId);
+    f.db.sqlite.query("DELETE FROM session WHERE user_id=?").run(f.actor.ownerId);
+    return null;
+  };
+  expect((await f.request("conversation")).status).toBe(401);
+  expect(reads).toBe(1);
+  expect(f.calls).toHaveLength(0);
+});
+test("a newly published encrypted intent is a revision race rather than invalid user input", async () => {
+  let reads = 0;
+  let onPeek: () => Promise<null> = async () => null;
+  const f = await fixture("prepare_claim", false, {
+    stateDependencies: async () => ({ peekReport: () => onPeek() }),
+  });
+  const messageId = crypto.randomUUID(),
+    operationId = crypto.randomUUID(),
+    revision = f.rev() + 1;
+  onPeek = async () => {
+    if (++reads === 1) {
+      const value = storedMessageSchema().parse({
+        schemaVersion: "2",
+        id: messageId,
+        workspaceRevision: revision,
+        operationId,
+        role: "assistant",
+        safety: "validated",
+        text: "합성 검증: 준비 상태를 확인할 수 있어요.",
+        conversationIntent: "show_preparation",
+        references: [],
+        citations: [],
+        warnings: [],
+        createdAt: f.actor.now,
+      });
+      const encrypted = await f.core.encrypt("v2_messages", messageId, f.actor.ownerId, 1, value);
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_operations(id,owner_id,workspace_id,kind,revision,created_at) VALUES(?,?,?,'chat',?,?)",
+        )
+        .run(operationId, f.actor.ownerId, f.workspaceId, revision, f.actor.now);
+      f.db.sqlite
+        .query(
+          "INSERT INTO v2_messages(id,workspace_id,workspace_revision,operation_id,role,safety,encrypted_payload,created_at) VALUES(?,?,?,?,'assistant','validated',?,?)",
+        )
+        .run(messageId, f.workspaceId, revision, operationId, encrypted, f.actor.now);
+      f.db.sqlite
+        .query("UPDATE v2_workspaces SET revision=? WHERE id=?")
+        .run(revision, f.workspaceId);
+    }
+    return null;
+  };
+  const response = await f.request("conversation");
+  expect(response.status).toBe(200);
+  const state = (await response.json()) as V2ConversationState;
+  expect(state.workspaceRevision).toBe(revision);
+  expect(state.intents).toEqual([
+    {
+      messageId,
+      requestId: `intent-${messageId}`,
+      intent: "show_preparation",
+      workspaceRevision: revision,
+    },
+  ]);
+  expect(reads).toBe(2);
+  expect(f.calls).toHaveLength(0);
+});
+test("report size and actual storage failures retain their HTTP boundary without snapshot replay", async () => {
+  for (const [code, status] of [
+    ["EXPORT_LIMIT_EXCEEDED", 413],
+    ["STORAGE_UNAVAILABLE", 503],
+  ] as const) {
+    let reads = 0;
+    const f = await fixture("prepare_claim", false, {
+      stateDependencies: async () => ({
+        peekReport: async () => {
+          reads++;
+          throw new ReportError(code);
+        },
+      }),
+    });
+    const response = await f.request("conversation");
+    expect(response.status).toBe(status);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(code);
+    expect(reads).toBe(1);
+    expect(f.calls).toHaveLength(0);
+  }
+});
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   for (const choice of ["self", "lawyer", "save_report"] as const)
     test(`signed real Hono ${purpose} -> analysis/report -> ${choice}`, async () => {

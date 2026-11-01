@@ -382,7 +382,15 @@ export function createReworkStateService(
             workspaceRevision: value.workspaceRevision,
           });
       }
-      const state = v2ConversationStateSchema(GUIDE_HOSTS).parse({
+      // A newly published intent may belong to a later revision than the first
+      // workspace read. Classify that race before validating one wire snapshot.
+      const final = await workspaces.findWorkspace({ ownerId, now: now() }, id);
+      if (
+        final?.workspaceRevision !== w.workspaceRevision ||
+        !(await reworkAccess(core, ownerId, id))
+      )
+        throw new ReworkError("STALE_REVISION");
+      return v2ConversationStateSchema(GUIDE_HOSTS).parse({
         contractVersion: v2ReworkVersionSchema.value,
         workspaceRevision: w.workspaceRevision,
         caseContext: context.context,
@@ -408,13 +416,6 @@ export function createReworkStateService(
         },
         intents,
       });
-      const final = await workspaces.findWorkspace({ ownerId, now: now() }, id);
-      if (
-        final?.workspaceRevision !== w.workspaceRevision ||
-        !(await reworkAccess(core, ownerId, id))
-      )
-        throw new ReworkError("STALE_REVISION");
-      return state;
     },
   };
 }

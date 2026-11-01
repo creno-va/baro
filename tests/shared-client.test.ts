@@ -10,6 +10,32 @@ import { createSessionScope } from "@baro/client-core";
 import { CURRENT_POLICY_VERSIONS } from "@baro/contracts/consent";
 import { ApiError as WebApiError } from "../src/client/api/errors";
 
+test("shared JSON reads preserve bounded export recovery codes without exposing server diagnostics or retrying", async () => {
+  for (const [code, status] of [
+    ["EXPORT_LIMIT_EXCEEDED", 413],
+    ["EXPORT_RETRY_EXHAUSTED", 409],
+  ] as const) {
+    let calls = 0;
+    const request = createJsonRequester({
+      newKey: () => "unused-read-key",
+      transport: async () => {
+        calls++;
+        return Response.json(
+          { error: { code, message: "private-provider-detail", retryable: true } },
+          { status },
+        );
+      },
+    });
+    const error = await request({ path: "/api/v2/cases/synthetic/rework/report" }).catch(
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ code, httpStatus: status, retryable: false });
+    expect((error as ApiError).message).not.toContain("private-provider-detail");
+    expect(calls).toBe(1);
+  }
+});
+
 test("domain revision headers cannot replace the captured operation key or expected owner", async () => {
   const input = {
     "if-match": "7",
