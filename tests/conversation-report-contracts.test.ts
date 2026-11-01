@@ -144,6 +144,20 @@ test("a reconciliation proposal preserves its exact base and identifies the next
   expect(v2SummaryReconciliationSchema.safeParse({ ...state, status: "confirmed" }).success).toBe(
     false,
   );
+  expect(
+    v2SummaryReconciliationSchema.safeParse({
+      ...state,
+      confirmedSummaryRevision: summary.revision + 1,
+    }).success,
+  ).toBe(false);
+  expect(
+    v2SummaryReconciliationSchema.safeParse({
+      ...state,
+      status: "confirmed",
+      confirmedSummaryRevision: summary.revision + 1,
+      confirmedWorkspaceRevision: 4,
+    }).success,
+  ).toBe(true);
 });
 test("action inputs cannot smuggle arbitrary tools, URLs or stale report choices", () => {
   const request = { requestId: "request", expectedRevision: 1, action: "resolve_followup" };

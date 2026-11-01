@@ -133,6 +133,9 @@ export const v2SummaryReconciliationSchema = z
       (s.proposal === null || s.proposal.requestId === s.request?.id) &&
       (s.proposal === null ||
         s.proposal.baseSummaryRevision === s.request?.input.summaryRevision) &&
+      (s.confirmedSummaryRevision === null) === (s.confirmedWorkspaceRevision === null) &&
+      (s.status !== "confirmed" ||
+        (s.proposal !== null && s.confirmedSummaryRevision === s.proposal.after.revision)) &&
       (s.status === "confirmed") ===
         (s.confirmedSummaryRevision !== null && s.confirmedWorkspaceRevision !== null) &&
       (s.status === "pending" || s.status === "running") === (s.currentJobId !== null) &&
