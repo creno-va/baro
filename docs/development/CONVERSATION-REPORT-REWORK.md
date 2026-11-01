@@ -41,13 +41,13 @@
 
 | 세션 제목 | thread ID / host | 이슈·브랜치 | 소유 범위 | PR/상태 |
 | --- | --- | --- | --- | --- |
-| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-state` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 계약/공통 저장/작업 admission·gateway 선행 병합; 실제 runtime·Hono 통합 중 |
-| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636 병합, PR646 암호화 storage adapter 최신 main CI 확인 중 |
-| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644 병합, 공식 binding·관찰 certainty 보존 |
+| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-execution` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 계약/공통 저장/작업 admission·gateway 선행 병합; 실제 runtime·Hono 통합 중 |
+| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636/646/649/654 병합; PR655 접근성 초점 보강 CI 중 |
+| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644/652 병합; 공식 binding·관찰 certainty·같은 bounded round의 절차 조회 보존 |
 | BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629/635 병합; 재사용 업로드·대화 callback·44px 검증, 실제 카메라 기기/provider 별도 |
 | BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-conversation-agent` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633 core 병합; PR642 Workspace·대화 실제 통합/6여정 harness 진행 중 |
-| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641 병합; 6문서28쪽 실제 PDF 렌더·고정 Linux CI 성공, 최종 통합 별도 |
-| BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632/639/643 병합; PR645 원문 링크·동의철회 저장본 읽기 보강 CI 중 |
+| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641 병합; 6문서28쪽 실제 PDF 렌더·고정 Linux CI 성공, 최종 통합·ACK 유실 retry 후속 별도 |
+| BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632/639/643/645/648/651/653 병합; 순수 source builder·실제 저장·위임 handler 준비 완료 |
 
 한 파일 한 소유자다.03/06은 Workspace.tsx·ReportReview.tsx를 수정하지 않는다. 공통 src/contracts/, src/server/db/, drizzle/, 공통 API/client·facade·export, gateway service/중앙 schemas/등록, router/runtime 조립은00만 변경한다. 기존 `src/server/api/v2/workspaces.ts`는00 소유이며01은 독립 재조율 서비스를 제공한다. handler 신설/위임은 정확 경로를 먼저 기록한다.
 
@@ -108,3 +108,14 @@ PR628 이후 실제 build 검사에서 export 문자열 상수가 Worker entry�
 후속 소유권: 06에 `src/server/modules/resolution/source-loader.ts`와 `tests/resolution-source-loader.test.ts`만 명시 위임했다. 네트워크/DB/Hono 조립 없이 authoritative analysis input·현재 snapshot·readonly report·재검증된 procedure 결과로 ResolutionSource를 만드는 pure helper이며 PR648로 제출됐다. fileNames/maskingTokens는00의 현재 owner 읽기에서 주입한다. 공통 기록/취소/receipt/실행·router는00 소유를 유지한다.
 
 PR645의 정확 업데이트 head09cd9790 CI41306228656 성공 뒤 병합했다. PR647 첫 통합 CI에서 HTML/PDF native rendering41306517710이 구형 report-download-work 2개 호환 회귀로 실패했다. 모든 사건에 prepared analysis DI를 연결한 root 분기 누락이었다. 기존 fixture 기대값과 저장된 본문은 보존하고, 실제 암호화 case context의 명시 purpose가 있는 사건에만 per-case factory가 새 DI를 선택하도록 수정했다. 구형 기본 factory는 기존 source format을 유지한다. native D1 billing metadata 누락은 STORAGE_UNAVAILABLE로 실패하며 계정/소유/CAS/처리 동의 gate를 완화하지 않는다. 실패 2개 포함21검사597 assertions 및 factory/동의철회/native meter8검사75 assertions 재통과했고 전체 report285 회귀·quick/build를 재검증한다. 최종 CI 성공 전 이 PR은 병합하지 않는다.
+
+
+### 중앙 실행 계층과 재개 검증
+
+PR647은 최종 head8302c034의 Quality41307390432/Legal41307390403/native PDF41307390421 성공 후 main43d21cff에 병합했다. 이어 PR648/650/649/651/652/654/653을 각각 exact head의 CI 성공 후 순차 병합했다. 현재 통합 기준 main은13f2d51276070549831d9dd251a9147d5e9ccf37이며 최종 main SHA는 아니다. 개별 담당의 메모리 공유를 가정하지 않고 확인한 인터페이스·검증·의존 main을 해당 채팅으로 전달했다.
+
+00의 codex/621-rework-execution은 실제 native gateway/원장에 분석 3단계와 재조율 생성·독립 감사를 연결한다. 예약과 실행이 같은 투영 입력·달력·고정 invocation을 사용하며, 원래 admission의 시간/금액을 새로 꾸미지 않는다. 재조율의 실제 발급 메시지 암호문·소유자·operation을 확인하고, 별도 isolate의 취소도 현재 job/lease/fencing과 정본 불변을 같은 claim에서 처리한다. summary 전체와 자료 coverage를 읽으며 일반 대화의 8개 fact window로 정본을 잘라내지 않는다.
+
+분석 완료 후 report continuation은 원래 report revision CAS를 암호화한 등록 영수증으로 보존한 뒤 기존 reports.generate를 호출한다. 모델/법률 API를 export에 넣지 않는다. ACK 유실 재요청은 원래 report를 반환하며 이후 사용자가 수정한 리포트는 덮어쓰지 않는다. unavailable/empty와 실제 provider failure를 분리하고, 법률 근거가 준비되지 않은 리포트에는 그 한계를 표시한다. 사용자 편집 보고서는 검증된 새 analysis report로 재승격하지 않는다.
+
+현재 focused 실행20 tests194 assertions, 기존 실제 workerd/D1/원장/업그레이드4 tests1480 assertions 통과. DB drift/fresh/upgrade 및 production build/local workerd 부팅 통과. quick 첫 검사에서 새 테스트의 nullable 타입 오류를 발견해 검사를 유지하며 명시적인 존재 확인으로 수정했고 quick 최종673 tests6286 assertions를 포함한 전체 profile이 성공했다. 이 계층의 callback/port 검증과 최종 중앙 Hono/브라우저 6여정 완료는 구분한다. 아직 중앙 action/후속 handler 조립·서버 자동 준비/재개·최종 browser/PDF/manual full은 남아 있다.
