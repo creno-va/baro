@@ -190,7 +190,15 @@ test("previous question navigation forgets a draft restored to its saved answer"
   await editor.fill(saved);
 
   await settleIntakeSave(page);
-  await expect(page.getByRole("status")).toContainText("저장됐어요.");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const records = JSON.parse(localStorage.getItem("baro-api-mock-v1:intake") ?? "{}");
+        return (Object.values(records) as { questions: { answer?: string }[] }[])[0]?.questions[1]
+          ?.answer;
+      }),
+    )
+    .toBe(saved);
 
   await editor.fill(discarded);
   await page.getByRole("button", { name: "이전으로", exact: true }).click();
@@ -286,171 +294,6 @@ test("acknowledged autosave recovery keeps the current question and earlier save
   await expect(editor).toHaveValue(hiddenDraft);
 });
 
-for (const operation of ["save", "confirm"] as const) {
-  test(`acknowledged summary ${operation} recovers after focus supersedes its session check`, async ({
-    page,
-  }) => {
-    await page.addInitScript(() =>
-      localStorage.setItem(
-        "baro-api-mock-v1:session",
-        JSON.stringify({
-          user: { id: "summary-focus-customer", name: "합성 검증 고객", accountType: "customer" },
-          needsConsent: false,
-        }),
-      ),
-    );
-    await page.goto("/cases/new");
-    await page
-      .getByLabel("지금까지 있었던 일")
-      .fill("요약 저장 이후 화면 복귀와 세션 확인의 경합을 검증하는 합성 사건입니다.");
-    await page.getByRole("button", { name: "저장하고 계속" }).click();
-    for (let i = 0; i < 6; i++)
-      await page.getByRole("button", { name: "모름", exact: true }).click();
-    await expect(page).toHaveURL(/\/summary$/);
-    const workspaceUrl = page.url().replace(/\/summary$/, "");
-    const editor = page.getByLabel("요약 편집");
-    await expect(editor).toBeVisible();
-    await page.evaluate(async (operation) => {
-      const apiPath = "/src/client/api/index.ts";
-      const casesPath = "/src/client/api/cases.ts";
-      const { api } = await import(apiPath);
-      const { casesApi } = await import(casesPath);
-      const state = {
-        writes: 0,
-        acknowledged: false,
-        held: false,
-        released: false,
-        release: () => {},
-      };
-      (window as unknown as { summaryFocusRecovery: typeof state }).summaryFocusRecovery = state;
-      const record = () =>
-        sessionStorage.setItem(
-          "summary-focus-recovery",
-          JSON.stringify({ writes: state.writes, released: state.released }),
-        );
-      const method = operation === "save" ? "saveSummary" : "confirmSummary";
-      const write = casesApi[method].bind(casesApi);
-      casesApi[method] = async (id: string, input: unknown) => {
-        ++state.writes;
-        record();
-        const next = await write(id, input);
-        state.acknowledged = true;
-        return next;
-      };
-      const session = api.session.get.bind(api.session);
-      api.session.get = async () => {
-        const owned = new Error().stack?.includes("SummaryReview.tsx");
-        const next = await session();
-        if (owned && state.acknowledged && !state.held) {
-          state.held = true;
-          await new Promise<void>((resolve) => {
-            state.release = () => {
-              state.released = true;
-              record();
-              resolve();
-            };
-          });
-        }
-        return next;
-      };
-    }, operation);
-    const savedSummary = "화면 복귀 이후에도 복구돼야 하는 최신 합성 요약입니다.";
-    if (operation === "save") {
-      await editor.fill(savedSummary);
-      await page.getByRole("button", { name: "수정 내용 저장" }).click();
-    } else {
-      await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-      await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
-    }
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (window as unknown as { summaryFocusRecovery: { held: boolean } }).summaryFocusRecovery
-              .held,
-        ),
-      )
-      .toBe(true);
-    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await expect(editor).toBeVisible();
-    await page.evaluate(async () => {
-      // Finish the focus refresh and its skipped load before releasing the write's check.
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-      (
-        window as unknown as { summaryFocusRecovery: { release: () => void } }
-      ).summaryFocusRecovery.release();
-    });
-    if (operation === "save") {
-      await expect(editor).toBeEnabled();
-      await expect(editor).toHaveValue(savedSummary);
-      await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
-    } else {
-      // The same-owner postflight now finishes normally instead of falling back
-      // to a manual link after a superseded check. Retain the one-write assertion.
-      await expect(page).toHaveURL(workspaceUrl);
-      await expect(page.getByLabel("추가 사실 또는 질문")).toBeVisible();
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-    }
-    await expect(page.getByRole("alert")).toHaveCount(0);
-    expect(
-      await page.evaluate(() =>
-        JSON.parse(sessionStorage.getItem("summary-focus-recovery") ?? "null"),
-      ),
-    ).toEqual({ writes: 1, released: true });
-  });
-}
-
-for (const focus of [false, true]) {
-  test(`peer summary edit with local draft; background refresh=${focus}`, async ({ page }) => {
-    await page.addInitScript(() =>
-      localStorage.setItem(
-        "baro-api-mock-v1:session",
-        JSON.stringify({
-          user: { id: "summary-recheck-customer", name: "합성 검증 고객", accountType: "customer" },
-          needsConsent: false,
-        }),
-      ),
-    );
-    await page.goto("/cases/new");
-    await page
-      .getByLabel("지금까지 있었던 일")
-      .fill(
-        "요약 충돌을 재검토하기 위한 합성 사건입니다. 서로 다른 화면에서 준비할 내용을 정리합니다.",
-      );
-    await page.getByRole("button", { name: "저장하고 계속" }).click();
-    for (let i = 0; i < 6; i++)
-      await page.getByRole("button", { name: "모름", exact: true }).click();
-    await expect(page).toHaveURL(/\/summary$/);
-    const editor = page.getByLabel("요약 편집");
-    const mine = "현재 탭에서 아직 저장하지 않은 합성 요약";
-    await editor.fill(mine);
-    await page.evaluate(async () => {
-      const modulePath = "/src/client/api/index.ts";
-      const { api } = await import(modulePath);
-      const id = location.pathname.split("/")[2];
-      const item = await api.cases.get(id);
-      await api.cases.saveSummary(id, {
-        expectedRevision: item.revision,
-        summary: "다른 탭이 먼저 저장한 합성 요약",
-      });
-    });
-    if (focus) {
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect(editor).toBeVisible();
-      await expect(page.getByRole("alert")).toContainText("다른 화면에서 요약이 바뀌었어요");
-    }
-    await expect(editor).toHaveValue(mine);
-    if (!focus) await page.getByRole("button", { name: "수정 내용 저장" }).click();
-    await expect(page.getByRole("alert")).toBeVisible();
-    const saved = await page.evaluate(async () => {
-      const p = "/src/client/api/index.ts",
-        { api } = await import(p);
-      return (await api.cases.get(location.pathname.split("/")[2])).summary;
-    });
-    expect(saved).toBe("다른 탭이 먼저 저장한 합성 요약");
-    await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
-    await expect(editor).toHaveValue("다른 탭이 먼저 저장한 합성 요약");
-  });
-}
+// The retired raw-summary save/confirm and peer-draft tests are replaced by
+// intake-reconfirmation.e2e.ts: explanation preservation, acknowledged/uncertain
+// confirmation recovery, late reads, owner purge and exact proposal CAS.

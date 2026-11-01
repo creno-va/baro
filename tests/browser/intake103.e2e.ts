@@ -218,8 +218,8 @@ async function recoveryWorkspace(page: Page) {
     .fill("합성 사건 복구 검증입니다. 계약 날짜와 준비할 자료를 정리합니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
-  await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("button", { name: "맞아요" }).click();
+  await page.getByRole("button", { name: "확인하고 계속" }).click();
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeVisible();
 }
 
@@ -756,7 +756,6 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("2026년 9월");
   await expect(page.getByRole("button", { name: "이전으로", exact: true })).toHaveCount(0);
   await settleIntakeSave(page);
-  await expect(page.getByRole("status").filter({ hasText: /저장됐어요/ })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue("2026년 9월");
   await page.getByRole("button", { name: "다음 질문", exact: true }).click();
@@ -804,9 +803,9 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(page.getByText("2차 질문 · 3 / 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  const summary = page.getByRole("textbox", { name: "요약 편집" });
-  await expect(summary).toHaveValue(/2026년 8월/);
-  await expect(summary).toHaveValue(/건너뛰기/);
+  const summary = page.locator(".summary-reading-overview").first();
+  await expect(summary).toContainText(/2026년 8월/);
+  await expect(summary).toContainText(/건너뛰기/);
   await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "수정 취소", exact: true })).toHaveCount(0);
   await capture(page, "summary-mobile");
@@ -821,23 +820,12 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
       );
     }),
   ).toEqual([6]);
-  const old = await summary.inputValue();
-  await summary.fill(`${old}\n수정 취소 확인`);
-  await page.getByRole("button", { name: "수정 취소", exact: true }).click();
-  await expect(summary).toHaveValue(old);
-  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
-  await summary.fill(`${old}\n합성 추가 사실입니다.`);
-  await page.getByRole("button", { name: "수정 내용 저장" }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "수정한 요약이 저장됐어요" }),
-  ).toBeVisible();
-  const confirmation = page.getByRole("button", { name: "요약 확인하고 계속", exact: true });
-  await expect(confirmation).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveCount(0);
   await page.reload();
-  await expect(summary).toHaveValue(/합성 추가 사실입니다/);
-  const reviewSummary = page.getByRole("button", { name: "요약 확인하고 계속" });
+  await expect(summary).toContainText(/2026년 8월/);
+  const reviewSummary = page.getByRole("button", { name: "맞아요" });
   await reviewSummary.click();
-  const confirmDialog = page.getByRole("dialog", { name: "이제 사건 정리를 시작할까요?" });
+  const confirmDialog = page.getByRole("dialog", { name: "이 내용으로 계속할까요?" });
   await expect(confirmDialog).toBeVisible();
   await expect(confirmDialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
@@ -849,7 +837,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(reviewSummary).toBeFocused();
   await reviewSummary.press("Enter");
-  await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+  await page.getByRole("button", { name: "확인하고 계속" }).click();
   await expect(page).toHaveURL(/\/cases\/[^/]+$/);
   await page.goto("/cases");
   await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
@@ -887,45 +875,8 @@ test("storage failure retains form input and retry completes exactly one creatio
   await page.goto("/cases");
   await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
 });
-test("stale summary cannot overwrite newer content; keyboard and 200 percent layout work", async ({
-  page,
-}) => {
-  await page.goto("/cases/new");
-  await page
-    .getByRole("textbox", { name: "지금까지 있었던 일" })
-    .fill("합성 충돌 테스트입니다. 서로 다른 화면에서 요약을 수정하는 상황입니다.");
-  await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
-  await expect(page).toHaveURL(/\/summary/);
-  const summary = page.getByRole("textbox", { name: "요약 편집" });
-  await summary.fill("현재 화면에서 수정한 합성 요약");
-  await page.evaluate(() => {
-    const key = "baro-api-mock-v1:cases",
-      items = JSON.parse(localStorage.getItem(key) ?? "{}");
-    for (const item of Object.values(items) as { revision: number; summary: string }[]) {
-      item.revision++;
-      item.summary = "다른 화면에서 저장한 합성 요약";
-    }
-    localStorage.setItem(key, JSON.stringify(items));
-  });
-  await page.getByRole("button", { name: "수정 내용 저장" }).click();
-  await expect(page.getByRole("alert")).toContainText("다른 화면에서 내용이 바뀌었어요");
-  await expect(summary).toHaveValue("현재 화면에서 수정한 합성 요약");
-  await page.getByRole("button", { name: "최신 내용 불러오기" }).click();
-  await expect(summary).toHaveValue("다른 화면에서 저장한 합성 요약");
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = "200%";
-  });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  );
-  await page.getByRole("button", { name: "요약 확인하고 계속", exact: true }).focus();
-  await page.keyboard.press("Space");
-  await expect(
-    page.getByRole("dialog", { name: "이제 사건 정리를 시작할까요?", exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-});
+// Retired raw-editor conflict/keyboard coverage is now exercised through
+// natural explanations and exact proposals in intake-reconfirmation.e2e.ts.
 
 test("saved intake remains addressable after summary without a previous-answer action", async ({
   page,
@@ -945,7 +896,9 @@ test("saved intake remains addressable after summary without a previous-answer a
     await page.getByRole("button", { name: "다음 질문", exact: true }).click();
   await page.getByRole("button", { name: "요약 보기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/2026년 7월로 수정/);
+  await expect(page.locator(".summary-reading-overview").first()).toContainText(
+    /2026년 7월로 수정/,
+  );
 });
 
 test("a new form with identical input creates a new case after the previous request completed", async ({
@@ -1012,7 +965,7 @@ test("new follow-up generation retains the submitted answer and polls past the s
   for (let index = 0; index < 3; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/2026년 8월/);
+  await expect(page.locator(".summary-reading-overview").first()).toContainText(/2026년 8월/);
 });
 
 for (const editing of [false, true]) {
@@ -1063,7 +1016,7 @@ for (const editing of [false, true]) {
     await expect(page).not.toHaveURL(/edit=1/);
     await finishGeneration(page);
     await expect(page).toHaveURL(/\/summary/, { timeout: 10000 });
-    await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/100만 원/);
+    await expect(page.locator(".summary-reading-overview").first()).toContainText(/100만 원/);
   });
 }
 
@@ -1118,7 +1071,6 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await answer.fill("처음에는 100만 원이라고 적었어요.");
   await expectAnswerNavigation(page);
   await settleIntakeSave(page);
-  await expect(page.getByRole("status").filter({ hasText: /저장됐어요/ })).toBeVisible();
   await holdGeneration(page, "summary", true);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("button", { name: "다시 시도", exact: true })).toBeVisible();
@@ -1130,8 +1082,8 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await expect(answer).toHaveValue("확인해 보니 200만 원이에요.");
   await finishGeneration(page);
   await expect(page).toHaveURL(/\/summary/, { timeout: 10000 });
-  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/200만 원/);
-  await expect(page.getByRole("textbox", { name: "요약 편집" })).not.toHaveValue(/100만 원/);
+  await expect(page.locator(".summary-reading-overview").first()).toContainText(/200만 원/);
+  await expect(page.locator(".summary-reading-overview").first()).not.toContainText(/100만 원/);
 });
 
 for (const reducedMotion of ["no-preference", "reduce"] as const) {
@@ -1213,87 +1165,8 @@ async function lastQuestion(page: Page) {
   await page.getByRole("textbox", { name: "답변", exact: true }).fill("보존할 합성 답변");
 }
 
-for (const action of ["refresh", "save"] as const) {
-  for (const outcome of ["success", "failure"] as const) {
-    test(`summary ${action} ignores an older ${outcome} after a newer snapshot`, async ({
-      page,
-    }) => {
-      await lastQuestion(page);
-      await page.getByRole("button", { name: "저장하고 요약 보기" }).click();
-      const editor = page.getByRole("textbox", { name: "요약 편집" });
-      await expect(editor).toHaveValue(/보존할 합성 답변/);
-      await page.evaluate(async (outcome) => {
-        const corePath = "/src/client/api/core.ts";
-        const mockPath = "/src/client/api/mock/cases.ts";
-        const { registerMockHandlers, ApiError } = await import(corePath);
-        const { casesMockHandlers: handlers } = await import(mockPath);
-        const state = { reads: 0, release: undefined as (() => void) | undefined };
-        (window as unknown as { summaryReadRace: typeof state }).summaryReadRace = state;
-        registerMockHandlers({
-          "cases.get": (input: unknown) => {
-            const snapshot = handlers["cases.get"](input);
-            if (++state.reads !== 1) return snapshot;
-            return new Promise((resolve, reject) => {
-              state.release = () =>
-                outcome === "success"
-                  ? resolve(snapshot)
-                  : reject(new ApiError("UNAVAILABLE", "합성 이전 조회 실패", true));
-            });
-          },
-        });
-      }, outcome);
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect
-        .poll(() =>
-          page.evaluate(
-            () =>
-              !!(window as unknown as { summaryReadRace: { release?: () => void } }).summaryReadRace
-                .release,
-          ),
-        )
-        .toBe(true);
-      if (action === "save") {
-        await editor.fill("다른 탭에서 저장한 최신 합성 요약입니다.");
-        await page.getByRole("button", { name: "수정 내용 저장" }).click();
-        await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
-      } else {
-        // A peer tab saves a newer revision while the first read is still pending.
-        await page.evaluate(async () => {
-          const mockPath = "/src/client/api/mock/cases.ts";
-          const { casesMockHandlers: handlers } = await import(mockPath);
-          const id = location.pathname.split("/")[2];
-          const item = handlers["cases.get"]({ id });
-          handlers["cases.saveSummary"](
-            {
-              id,
-              expectedRevision: item.revision,
-              summary: "다른 탭에서 저장한 최신 합성 요약입니다.",
-            },
-            { key: "synthetic-peer-summary-save" },
-          );
-          window.dispatchEvent(new Event("focus"));
-        });
-      }
-      await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
-      const confirmation = page.getByRole("button", {
-        name: "요약 확인하고 계속",
-      });
-      await expect(confirmation).toBeEnabled();
-      await page.evaluate(async () => {
-        (
-          window as unknown as { summaryReadRace: { release?: () => void } }
-        ).summaryReadRace.release?.();
-        // Let the old response and its React updates settle before asserting absence.
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-        );
-      });
-      await expect(editor).toHaveValue("다른 탭에서 저장한 최신 합성 요약입니다.");
-      await expect(confirmation).toBeEnabled();
-      await expect(page.getByRole("alert")).toHaveCount(0);
-    });
-  }
-}
+// Older summary-read success/failure races and mutation recovery are covered by
+// intake-reconfirmation.e2e.ts without reintroducing the removed raw save path.
 
 test("generation transport retry keeps the saved answer and never saves it twice", async ({
   page,
@@ -1332,7 +1205,7 @@ test("generation transport retry keeps the saved answer and never saves it twice
   );
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(/보존할 합성 답변/);
+  await expect(page.locator(".summary-reading-overview").first()).toContainText(/보존할 합성 답변/);
   expect(
     await page.evaluate(() =>
       JSON.parse(localStorage.getItem("synthetic-recovery-counts") ?? "{}"),
@@ -1403,7 +1276,7 @@ for (const recovery of [
       await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     }
     await expect(page).toHaveURL(/\/summary/);
-    await expect(page.getByRole("textbox", { name: "요약 편집" })).toHaveValue(
+    await expect(page.locator(".summary-reading-overview").first()).toContainText(
       retryable || canPrepareSummary ? /보존할 합성 답변/ : /수정한 합성 답변/,
     );
   });
@@ -1464,10 +1337,11 @@ test("summary retains choice fact provenance without exposing a separate fact ed
     );
   });
   await page.goto("/cases/synthetic-question-context/summary");
-  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
-  await expect(page.locator(".summary-facts")).toHaveCount(0);
+  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
+  await expect(page.getByText("작성하지 않았다", { exact: true })).toBeVisible();
+  await expect(page.getByText("차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toBeVisible();
+  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
