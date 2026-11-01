@@ -104,15 +104,26 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     if (!deps.readPreparedAnalysis)
       return { ...source, analysis: undefined, analysisIdentity: undefined };
     const snapshot = await deps.readPreparedAnalysis(a, caseId);
+    const scopeMatches =
+      snapshot && deps.preparedAnalysisMatchesScope
+        ? await deps.preparedAnalysisMatchesScope(a, caseId, snapshot, {
+            excludedFileIds: excluded,
+            maskIdentifiers: mask,
+          })
+        : false;
+    const needsScopeProof =
+      Boolean(deps.preparedAnalysisMatchesScope) || mask || excluded.length > 0;
+    const compatible = needsScopeProof && !scopeMatches ? null : snapshot;
     const bound = await bindPreparedReportAnalysis(
       core,
       a,
       caseId,
       source.body,
       source.current.confirmed_summary_revision ?? 0,
-      snapshot,
+      compatible,
       mask,
       deps.guideHosts,
+      Boolean(scopeMatches),
     );
     return { ...source, ...bound, analysisIdentity: reportAnalysisIdentity(snapshot) };
   };
@@ -128,6 +139,16 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     // still current; a later compatible snapshot makes it eligible for refresh.
     if (!current && review.analysis?.snapshot === null) return;
     if (review.analysisIdentity !== reportAnalysisIdentity(current))
+      throw new ReportError("STALE_REVISION");
+    if (
+      current &&
+      review.analysis?.snapshot &&
+      deps.preparedAnalysisMatchesScope &&
+      !(await deps.preparedAnalysisMatchesScope(a, caseId, current, {
+        excludedFileIds: review.excludedFileIds,
+        maskIdentifiers: review.maskIdentifiers,
+      }))
+    )
       throw new ReportError("STALE_REVISION");
   };
   const row = async (a: Actor, id: string, includeReview = false) => {

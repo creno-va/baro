@@ -1,23 +1,25 @@
+import type { ReworkReportView } from "@baro/api-client";
 import { Download, Pencil } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
-import type { V2ConversationState } from "../../contracts/v2";
-import type { ReportAnalysisSummary } from "../../server/modules/reports/analysis-review";
+import type { V2ConversationState, V2Fact } from "../../contracts/v2";
 import { reportPhotoIds } from "../../utils/report-markdown";
 import { Button } from "../ui/button";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
+import { EvidenceUpload } from "../workspace/EvidenceUpload";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { downloadBlob, maskReportText } from "./download";
+import { downloadReviewedReport } from "./download-reviewed";
 import { ReportReading } from "./ReportReading";
 import { withInlineReportPhotos } from "./review-sections";
 
 type ReportView = BaseReportView & {
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
   pdfAvailable?: boolean | undefined;
-  analysisReview?: ReportAnalysisSummary | undefined;
+  analysisReview?: ReworkReportView["analysisReview"];
 };
 
 export type ReportReviewProps = {
@@ -60,12 +62,20 @@ export function ReportReview({
   const [actionMissing, setActionMissing] = useState<string[]>([]);
   const [newReportAvailable, setNewReportAvailable] = useState(false);
   const [pollPaused, setPollPaused] = useState(false);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceFacts, setEvidenceFacts] = useState<V2Fact[]>([]);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const focusRequest = useRef(0);
   const refreshStatus = useRef<() => void>(() => {});
   const preparationAttempt = useRef<{ revision: number; requestId: string } | null>(null);
+  const reflectionAttempt = useRef<{
+    fileId: string;
+    expectedRevision: number;
+    text: string;
+    selectedFileIds: string[];
+  } | null>(null);
   const readReport = useCallback(
     () =>
       rework
@@ -119,6 +129,9 @@ export function ReportReview({
     setNewReportAvailable(false);
     setPollPaused(false);
     preparationAttempt.current = null;
+    reflectionAttempt.current = null;
+    setEvidenceBusy(false);
+    setEvidenceFacts([]);
     setEditing(false);
 
     setExcluded([]);
@@ -187,7 +200,7 @@ export function ReportReview({
       await verifyOwner(() => sequence === loadSequence.current);
       const [value, materials, state] = await Promise.allSettled([
         readReport(),
-        api.files.list(caseId),
+        api.files.list(caseId, { metadataOnly: true }),
         readPreparation(),
       ]);
       await verifyOwner(() => sequence === loadSequence.current);
@@ -253,7 +266,7 @@ export function ReportReview({
         if (!current() || lock.current) return;
         const [value, materials, state] = await Promise.all([
           readReport(),
-          api.files.list(caseId),
+          api.files.list(caseId, { metadataOnly: true }),
           readPreparation(),
         ]);
         await verifyOwner(current);
@@ -350,9 +363,9 @@ export function ReportReview({
     return () => onDirtyChange?.(false);
   }, [dirty, preservedEdit, onDirtyChange]);
   useEffect(() => {
-    onBusyChange?.(Boolean(busy) || accessChecking || exportingPdf);
+    onBusyChange?.(Boolean(busy) || accessChecking || exportingPdf || evidenceBusy);
     return () => onBusyChange?.(false);
-  }, [busy, accessChecking, exportingPdf, onBusyChange]);
+  }, [busy, accessChecking, exportingPdf, evidenceBusy, onBusyChange]);
   useEffect(() => {
     if (!dirty && !preservedEdit) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -362,7 +375,7 @@ export function ReportReview({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, preservedEdit]);
   async function run(label: string, action: () => Promise<void>) {
-    if (lock.current || accessChecking) return false;
+    if (lock.current || accessChecking || evidenceBusy) return false;
     const sequence = loadSequence.current;
     lock.current = true;
     setBusy("계정 접근 상태 확인 중…");
@@ -468,6 +481,101 @@ export function ReportReview({
     onChanged?.();
     return true;
   }
+  async function evidenceChanged() {
+    const sequence = loadSequence.current;
+    const current = () => sequence === loadSequence.current;
+    await verifyOwner(current);
+    const [latest, materials, state] = await Promise.all([
+      readReport(),
+      api.files.list(caseId, { metadataOnly: true }),
+      readPreparation(),
+    ]);
+    await verifyOwner(current);
+    if (!current()) return;
+    setFiles(materials);
+    setPreparation(state);
+    setReport((existing) =>
+      !existing
+        ? existing
+        : latest?.id === existing.id
+          ? { ...existing, stale: latest.stale }
+          : { ...existing, stale: true },
+    );
+    onChanged?.();
+  }
+  async function reflectEvidence(fileId: string) {
+    if (lock.current || accessChecking || dirty) return false;
+    const sequence = loadSequence.current;
+    lock.current = true;
+    setBusy("자료의 사건 반영 요청 중…");
+    setBusyStartedAt(performance.now());
+    try {
+      await verifyOwner();
+      const current = await ownedResult(api.workspace.get(caseId));
+      setEvidenceFacts(current.facts ?? []);
+      if (!reflectionAttempt.current || reflectionAttempt.current.fileId !== fileId)
+        reflectionAttempt.current = {
+          fileId,
+          expectedRevision: current.case.revision,
+          selectedFileIds: [fileId],
+          text: "선택한 자료의 포함된 관찰을 검토하고 출처와 위치를 유지하며 이 사건의 사실과 경위에 반영해 주세요. 사용자 교정과 미확인 사항을 구분하고 자료에 없는 내용은 추정하지 마세요.",
+        };
+      const { fileId: _, ...input } = reflectionAttempt.current;
+      const result = await ownedResult(api.workspace.sendMessage(caseId, input));
+      reflectionAttempt.current = null;
+      setEvidenceFacts(result.facts ?? []);
+      await evidenceChanged();
+      return true;
+    } finally {
+      lock.current = false;
+      if (sequence === loadSequence.current) {
+        setBusy("");
+        setBusyStartedAt(null);
+      }
+    }
+  }
+  async function downloadCurrentReport(): Promise<void> {
+    if (!report || exportingPdf) throw new Error("다운로드할 리포트를 다시 확인해 주세요.");
+    setExportingPdf(true);
+    try {
+      const succeeded = await run("PDF 준비 중…", async () => {
+        const value = dirty ? await save() : report;
+        if (rework && !(value.stale && value.pdfAvailable)) {
+          const sequence = loadSequence.current;
+          await downloadReviewedReport(
+            {
+              caseId,
+              reportId: value.id,
+              reportRevision: value.revision,
+              expectedOwner: owner.current ?? "",
+              verify: async () => {
+                await verifyOwner(() => sequence === loadSequence.current);
+              },
+            },
+            {
+              session: () => api.session.get(),
+              peekReport: api.rework.peekReport,
+              pdf: api.reports.pdf,
+            },
+          );
+        } else {
+          // Historical stored bytes and installed-client behavior keep their
+          // existing owner/deletion fence, without silently selecting a new ID.
+          const blob = await ownedResult(api.reports.pdf(value.id));
+          downloadBlob(blob, `BARO-${value.id}.pdf`);
+        }
+        setReport((current) =>
+          current?.id === value.id ? { ...current, pdfAvailable: true } : current,
+        );
+      });
+      if (!succeeded)
+        throw new Error(
+          "PDF 저장 요청을 완료하지 못했어요. 리포트의 오류와 접근 상태를 확인해 주세요.",
+        );
+    } finally {
+      setExportingPdf(false);
+    }
+  }
   const toggle = (values: string[], id: string) =>
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
@@ -498,7 +606,9 @@ export function ReportReview({
               <button
                 type="button"
                 className="report-edit-toggle"
-                disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
+                disabled={
+                  Boolean(busy) || accessChecking || accessUnknown || needsConsent || evidenceBusy
+                }
                 aria-expanded={editing}
                 aria-controls="report-edit-fields"
                 onClick={() => {
@@ -521,6 +631,7 @@ export function ReportReview({
                   accessChecking ||
                   accessUnknown ||
                   needsConsent ||
+                  evidenceBusy ||
                   Boolean(preservedEdit && dirty && report.stale)
                 }
                 onClick={() => setRegenerate(true)}
@@ -582,7 +693,13 @@ export function ReportReview({
                 <button
                   type="button"
                   className="primary"
-                  disabled={Boolean(busy) || accessChecking || needsConsent || Boolean(pendingJob)}
+                  disabled={
+                    Boolean(busy) ||
+                    accessChecking ||
+                    needsConsent ||
+                    Boolean(pendingJob) ||
+                    evidenceBusy
+                  }
                   onClick={() =>
                     void run("리포트 준비 요청 중…", async () => {
                       await prepareReport();
@@ -653,7 +770,7 @@ export function ReportReview({
                   const value = await ownedResult(api.reports.generate(caseId, excluded));
                   accept(value);
                   setBusy("자료 목록 확인 중…");
-                  setFiles(await ownedResult(api.files.list(caseId)));
+                  setFiles(await ownedResult(api.files.list(caseId, { metadataOnly: true })));
                 })
               }
             >
@@ -664,7 +781,7 @@ export function ReportReview({
         {report && (
           <fieldset
             className="report-controls"
-            disabled={Boolean(busy) || accessChecking || accessUnknown}
+            disabled={Boolean(busy) || accessChecking || accessUnknown || evidenceBusy}
           >
             {needsConsent && (
               <p className="report-callout" role="status">
@@ -826,20 +943,8 @@ export function ReportReview({
                     !content.trim() ||
                     ((report.stale || needsConsent) && (!report.pdfAvailable || dirty))
                   }
-                  onClick={async () => {
-                    setExportingPdf(true);
-                    try {
-                      await run("PDF 준비 중…", async () => {
-                        const value = dirty ? await save() : report;
-                        const blob = await ownedResult(api.reports.pdf(value.id));
-                        downloadBlob(blob, `BARO-${value.id}.pdf`);
-                        setReport((current) =>
-                          current?.id === value.id ? { ...current, pdfAvailable: true } : current,
-                        );
-                      });
-                    } finally {
-                      setExportingPdf(false);
-                    }
+                  onClick={() => {
+                    void downloadCurrentReport().catch(() => {});
                   }}
                 >
                   {exportingPdf ? <Spinner /> : <Download size={16} aria-hidden="true" />}
@@ -848,6 +953,33 @@ export function ReportReview({
               </div>
             </section>
           </fieldset>
+        )}
+        {rework && owner.current && (
+          <div className="report-evidence-entry">
+            <EvidenceUpload
+              caseId={caseId}
+              disabled={
+                Boolean(busy) ||
+                exportingPdf ||
+                needsConsent ||
+                dirty ||
+                accessChecking ||
+                accessUnknown
+              }
+              facts={evidenceFacts}
+              onUploaded={evidenceChanged}
+              onEvidenceChanged={evidenceChanged}
+              onReflect={reflectEvidence}
+              onBusyChange={setEvidenceBusy}
+              onError={(cause) =>
+                setError(cause instanceof Error ? cause.message : "자료 상태를 다시 확인해 주세요.")
+              }
+            />
+            <p className="report-option-note">
+              새 증거의 업로드 접수, 처리·관찰 검토, 사건 반영과 재분석은 각각 다른 단계예요. 기존
+              리포트는 바뀌지 않으며 최신 분석으로 새 버전을 만들어 주세요.
+            </p>
+          </div>
         )}
         {regenerate && report && (
           <ConfirmDialog
@@ -886,7 +1018,9 @@ export function ReportReview({
                       api.reports.generate(caseId, undefined, current.revision),
                     );
                     setBusy("자료 목록 확인 중…");
-                    const materials = await ownedResult(api.files.list(caseId));
+                    const materials = await ownedResult(
+                      api.files.list(caseId, { metadataOnly: true }),
+                    );
                     const latest = rework ? await ownedResult(readReport()) : value;
                     if (!latest || latest.id !== value.id)
                       throw new Error("새 리포트의 저장 상태를 다시 확인해 주세요.");

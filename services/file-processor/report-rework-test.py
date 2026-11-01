@@ -45,6 +45,8 @@ for name in ("claim", "response", "claim-masked", "response-masked", "prepared-p
     images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
     photo_count = sum(" jpeg " in line for line in images.splitlines())
     assert photo_count >= 2 if "masked" not in name and not name.startswith("prepared-") else photo_count == 0
+    for previous in root.glob(f"{name}-page-*.png"):
+        previous.unlink()
     subprocess.run([
         "pdftoppm", "-scale-to", "1600", "-png", str(output), str(root / f"{name}-page")
     ], check=True)

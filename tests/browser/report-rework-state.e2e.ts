@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { V2ConversationState, V2LegalAnalysisSnapshot } from "../../src/contracts/v2";
 
@@ -83,6 +84,274 @@ const preparedReport = () => ({
     userEdited: false,
     checkedAt: "2026-11-01T00:00:00Z" as string | null,
   },
+});
+
+test("report evidence uses the real upload and review components, requests case reflection, then prepares a new immutable report", async ({
+  page,
+}) => {
+  const state = conversationState();
+  state.snapshot = partialSnapshot(state.caseContext);
+  state.analysis = {
+    status: "partial",
+    basis,
+    currentJobId: null,
+    missingItems: ["반환 약정 원본 추가"],
+    failure: null,
+  };
+  let report = preparedReport();
+  const original = report.content;
+  state.report = {
+    status: "ready",
+    id: report.id,
+    revision: 1,
+    basis,
+    currentJobId: null,
+    failure: null,
+  };
+  const files: Record<string, unknown>[] = [];
+  let fileRevision = 2,
+    workspaceRevision = 7,
+    reflection = 0,
+    preparations = 0,
+    edited = "[문서 기재] 합성 반환 약정";
+  await page.route("**/api/**", async (route) => {
+    const request = route.request(),
+      path = new URL(request.url()).pathname;
+    if (!path.startsWith("/api/")) return route.continue();
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: "synthetic-report-owner", name: "합성", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+    if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
+    if (path.endsWith("/files") && request.method() === "GET")
+      return route.fulfill({ json: files });
+    if (path.endsWith("/files") && request.method() === "POST") {
+      const input = request.postDataJSON();
+      files.push({
+        id: "synthetic-added-photo",
+        revision: 1,
+        name: input.name,
+        declaredMediaType: input.mediaType,
+        byteLength: input.byteLength,
+        contentHash: input.contentHash,
+        status: "reserved",
+      });
+      return route.fulfill({
+        json: {
+          schemaVersion: "2",
+          fileId: "synthetic-added-photo",
+          uploadSession: "synthetic-report-upload",
+          chunkBytes: 8388608,
+          reservedBytes: input.byteLength,
+          expiresAt: "2099-01-01T00:00:00Z",
+        },
+      });
+    }
+    if (path.includes("/parts/")) return route.fulfill({ json: { accepted: true } });
+    if (path.endsWith("/complete")) {
+      if (!files[0]) throw new Error("Synthetic upload missing");
+      files[0].status = "uploaded";
+      files[0].revision = 2;
+      report = { ...report, stale: true };
+      workspaceRevision++;
+      state.workspaceRevision = workspaceRevision;
+      state.analysis.status = "stale";
+      state.pendingEvidenceIds = ["synthetic-added-photo"];
+      return route.fulfill({
+        json: {
+          fileId: "synthetic-added-photo",
+          revision: 2,
+          status: "uploaded",
+          processingQueued: false,
+        },
+      });
+    }
+    if (path.endsWith("/review"))
+      return route.fulfill({
+        json: {
+          file: {
+            id: "synthetic-added-photo",
+            revision: fileRevision,
+            name: "합성 반환 약정.jpg",
+            status: "ready",
+          },
+          workspaceRevision,
+          coverage: { category: "image", status: "complete", observation: "processed" },
+          observations: [
+            {
+              ordinal: 0,
+              original: {
+                id: "synthetic-report-observation",
+                text: "[문서 기재] 합성 반환 약정",
+                position: { kind: "image", region: null },
+                certainty: "uncertain",
+                userEdited: false,
+                included: true,
+              },
+              value: {
+                id: "synthetic-report-observation",
+                text: edited,
+                position: { kind: "image", region: null },
+                certainty: "uncertain",
+                userEdited: fileRevision > 2,
+                included: true,
+              },
+            },
+          ],
+          nextAfterOrdinal: null,
+          pendingReview: null,
+          recovery: null,
+        },
+      });
+    if (path.endsWith("/observations") && request.method() === "PATCH") {
+      edited = request.postDataJSON().edits[0].text;
+      fileRevision++;
+      workspaceRevision++;
+      state.workspaceRevision = workspaceRevision;
+      if (files[0]) files[0].revision = fileRevision;
+      return route.fulfill({
+        json: {
+          reviewId: "synthetic-report-review",
+          fileId: "synthetic-added-photo",
+          revision: fileRevision,
+          workspaceRevision,
+          status: "ready",
+          completed: 1,
+          total: 1,
+        },
+      });
+    }
+    if (path.endsWith("/workspace"))
+      return route.fulfill({
+        json: {
+          case: {
+            id: "synthetic-rework-case",
+            title: "합성 사건",
+            subjectContext: "individual",
+            stage: "active",
+            revision: workspaceRevision,
+            updatedAt: "2026-11-01T00:00:00Z",
+            summary: "합성 사건 요약",
+            schemaVersion: "2",
+          },
+          messages: [],
+          actions: [],
+          timeline: [],
+          files: [],
+        },
+      });
+    if (path.endsWith("/messages") && request.method() === "POST") {
+      reflection++;
+      expect(request.postDataJSON()).toMatchObject({
+        expectedRevision: workspaceRevision,
+        selectedFileIds: ["synthetic-added-photo"],
+      });
+      workspaceRevision++;
+      state.workspaceRevision = workspaceRevision;
+      return route.fulfill({
+        json: {
+          operationId: "synthetic-reflection-operation",
+          jobId: "synthetic-reflection-job",
+          status: "queued",
+          retryAfter: 1,
+        },
+      });
+    }
+    if (path.endsWith("/rework/actions")) {
+      preparations++;
+      const nextBasis = {
+        ...basis,
+        researchRevision: workspaceRevision,
+        evidenceHash: "b".repeat(64),
+      };
+      state.snapshot = {
+        ...partialSnapshot(state.caseContext),
+        id: "synthetic-new-analysis",
+        basis: nextBasis,
+      };
+      state.analysis = {
+        status: "partial",
+        basis: nextBasis,
+        currentJobId: null,
+        missingItems: ["판례 미확인 부분"],
+        failure: null,
+      };
+      state.pendingEvidenceIds = [];
+      report = {
+        ...report,
+        id: "synthetic-new-evidence-report",
+        revision: 2,
+        stale: false,
+        content:
+          "리포트 준비 상태\n보완 필요 · 현재 자료로 확인한 합성 리포트\n\n사건 개요\n새 약정 자료의 사용자 교정을 반영한 새 리포트입니다.",
+        analysisReview: { ...report.analysisReview, analysisId: "synthetic-new-analysis" },
+      };
+      state.report = {
+        status: "ready",
+        id: report.id,
+        revision: 2,
+        basis: nextBasis,
+        currentJobId: null,
+        failure: null,
+      };
+      return route.fulfill({
+        json: {
+          contractVersion: "conversation-report-v1",
+          requestId: request.postDataJSON().requestId,
+          workspaceRevision,
+          pane: "report",
+          status: "ready",
+          missingItems: [],
+          operationId: null,
+        },
+      });
+    }
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+  const upload = page.getByRole("region", { name: "새 증거 추가", exact: true });
+  await expect(upload.getByRole("button", { name: "촬영해서 추가", exact: true })).toBeEnabled();
+  const chooser = page.waitForEvent("filechooser");
+  await upload.getByRole("button", { name: "파일 선택", exact: true }).click();
+  await (await chooser).setFiles({
+    name: "합성 반환 약정.jpg",
+    mimeType: "image/jpeg",
+    buffer: readFileSync(new URL("../fixtures/media/image-markers.jpg", import.meta.url)),
+  });
+  await upload.getByLabel("추가한 자료의 자동 처리에 동의합니다.", { exact: true }).check();
+  await upload.getByRole("button", { name: "새 증거 업로드", exact: true }).click();
+  await expect(upload.getByRole("list", { name: "사건에 추가한 증거" })).toContainText(
+    "합성 반환 약정.jpg",
+  );
+  await expect(page.getByText("과거 기준의 리포트", { exact: true })).toBeVisible();
+  await expect(page.locator(".report-reading")).toContainText("제거할 파생 설명");
+  if (!files[0]) throw new Error("Synthetic upload absent");
+  files[0].status = "ready";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await upload.getByRole("button", { name: "관찰 검토", exact: true }).click();
+  await upload
+    .getByLabel("확인·교정한 내용", { exact: true })
+    .fill("[문서 기재] 사용자가 확인하고 고친 반환 약정");
+  await expect(
+    upload.getByRole("button", { name: "자료 내용 반영하기", exact: true }),
+  ).toBeDisabled();
+  await upload.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
+  await expect(
+    upload.getByRole("button", { name: "자료 내용 반영하기", exact: true }),
+  ).toBeEnabled();
+  await upload.getByRole("button", { name: "자료 내용 반영하기", exact: true }).click();
+  await expect(upload).toContainText("반영을 요청했어요");
+  expect(reflection).toBe(1);
+  expect(preparations).toBe(0);
+  await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
+  await expect(page.locator(".report-reading")).toContainText("사용자 교정을 반영한 새 리포트");
+  expect(preparations).toBe(1);
+  expect(original).toContain("제거할 파생 설명");
 });
 
 test("rework entry only reads; explicit preparation and scope save use the displayed owner and exact returned snapshot", async ({

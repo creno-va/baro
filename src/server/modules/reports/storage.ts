@@ -35,6 +35,12 @@ export type ReportDependencies = {
   /** Server-authorized immutable analysis only. Never dispatch a job, invoke a
    * model or perform external legal discovery from this callback. */
   readPreparedAnalysis?: (actor: Actor, caseId: string) => Promise<V2LegalAnalysisSnapshot | null>;
+  preparedAnalysisMatchesScope?: (
+    actor: Actor,
+    caseId: string,
+    snapshot: V2LegalAnalysisSnapshot,
+    scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean },
+  ) => Promise<boolean>;
   environment: "preview" | "production";
   bucket?: PrivateBucket;
   files: FilesService;

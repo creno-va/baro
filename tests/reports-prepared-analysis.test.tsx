@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ReportReading } from "../src/components/reports/ReportReading";
 import { type V2LegalAnalysisSnapshot, v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
+import { reportAnalysisReviewSchema } from "../src/server/modules/reports/analysis-review";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { reportPreparedAnalysisFixture } from "./helpers/report-prepared-analysis-fixture";
 
@@ -167,6 +168,65 @@ test("editing the body cannot keep the validated completion label, while the ori
   expect(edited.content).toContain("사용자가 수정한 리포트");
   expect(edited.content).not.toContain("완성 · 법 조항과 판례 비교를 확인한 리포트");
   expect(await f.reports.html(f.actor.ownerId, first.id)).not.toContain("직접 고친 인용");
+});
+
+test("only an explicit matching-scope receipt can include a freshly masked analysis", async () => {
+  const f = await reportPreparedAnalysisFixture();
+  let snapshot = v2LegalAnalysisSnapshotSchema().parse(f.snapshot);
+  let permit = true;
+  const reports = createReportsService(f.core, {
+    ...f.deps,
+    readPreparedAnalysis: async () => snapshot,
+    preparedAnalysisMatchesScope: async (_actor, caseId, analysis, scope) => {
+      expect(caseId).toBe(f.workspaceId);
+      return (
+        permit &&
+        !scope.excludedFileIds.length &&
+        (scope.maskIdentifiers
+          ? analysis.id === "synthetic-masked-analysis"
+          : analysis.id === f.snapshot.id)
+      );
+    },
+  });
+  const first = await reports.get(f.actor.ownerId, f.workspaceId);
+  const masked = await reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: first.revision,
+    content: first.content,
+    maskIdentifiers: true,
+    excludedFileIds: [],
+  });
+  expect((await reports.peek(f.actor.ownerId, f.workspaceId))?.analysisReview.status).toBe(
+    "review_required",
+  );
+  snapshot = v2LegalAnalysisSnapshotSchema().parse({
+    ...f.snapshot,
+    id: "synthetic-masked-analysis",
+    basis: { ...f.snapshot.basis, evidenceHash: "b".repeat(64) },
+    perspective: { ...f.snapshot.perspective, weaknesses: ["가림 범위로 다시 분석한 약점"] },
+  });
+  const fresh = await reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: masked.revision,
+  });
+  expect(fresh.maskIdentifiers).toBe(true);
+  expect(fresh.content).toContain("가림 범위로 다시 분석한 약점");
+  expect((await reports.peek(f.actor.ownerId, f.workspaceId))?.analysisReview.status).toBe("ready");
+  permit = false;
+  expect((await reports.peek(f.actor.ownerId, f.workspaceId))?.stale).toBe(true);
+  const rejected = await reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: fresh.revision,
+  });
+  expect(rejected.content).not.toContain("가림 범위로 다시 분석한 약점");
+});
+
+test("a missing snapshot or missing original excerpts cannot be persisted as complete analysis", () => {
+  expect(
+    reportAnalysisReviewSchema.safeParse({
+      snapshot: null,
+      status: "ready",
+      userEdited: false,
+      excerpts: [],
+    }).success,
+  ).toBe(false);
 });
 
 for (const status of ["empty", "unavailable"] as const)

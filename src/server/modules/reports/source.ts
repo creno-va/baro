@@ -590,9 +590,13 @@ export function reportText(
     body.overview,
     "",
     "당사자와 관계",
+    ...(body.parties.length ? [] : ["확인한 당사자·관계 정보가 없습니다. 추가 확인이 필요합니다."]),
     ...body.parties.map((party) => bullet(`${party.label} · ${party.role}`)),
     "",
     "주요 경위",
+    ...(body.timeline.length
+      ? []
+      : ["확인한 날짜·사건 순서가 없습니다. 경위와 시점을 추가로 확인해야 합니다."]),
     ...body.timeline.map((entry) => {
       const date =
         entry.datePrecision === "year"

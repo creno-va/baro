@@ -34,8 +34,10 @@ export async function bindPreparedReportAnalysis(
   input: V2LegalAnalysisSnapshot | null,
   maskIdentifiers = false,
   guideHosts: readonly string[] = GUIDE_HOSTS,
+  trustedScopeMatch = false,
 ) {
-  if (!input || maskIdentifiers) return { body, analysis: missingReportAnalysis() };
+  if (!input || (maskIdentifiers && !trustedScopeMatch))
+    return { body, analysis: missingReportAnalysis() };
   const snapshot = v2LegalAnalysisSnapshotSchema(guideHosts).parse(input);
   if (
     snapshot.basis.summaryRevision !== summaryRevision ||
