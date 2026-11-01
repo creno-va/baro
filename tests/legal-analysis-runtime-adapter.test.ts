@@ -19,6 +19,7 @@ import { createLlmGateway, ModelError } from "../src/server/modules/llm-gateway/
 import { workspaceModelInput } from "../src/server/modules/workspace/pipeline";
 import sample from "./fixtures/legal/analysis/scenarios.json";
 import { legalAnalysisFixture } from "./helpers/legal-analysis-fixture";
+import { syntheticLegalDraft, syntheticLegalPlan } from "./helpers/legal-analysis-model-fixture";
 import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 const NOW = "2026-10-06T00:00:00.000Z";
@@ -37,107 +38,6 @@ const fact: V2Fact = {
   conflictingFactIds: [],
   userEdited: false,
 };
-const plan = (many = false) => ({
-  issues: [
-    {
-      id: "loan_issue",
-      title: "대여 약정의 자료 확인",
-      factIds: [fact.id],
-      requests: [
-        {
-          kind: "statute",
-          lawTitle: "민법",
-          articles: many
-            ? [
-                { number: "598", branch: "0" },
-                { number: "600", branch: "0" },
-              ]
-            : [{ number: "598", branch: "0" }],
-        },
-        ...(many
-          ? [
-              {
-                kind: "statute",
-                lawTitle: "형법",
-                articles: [
-                  { number: "1", branch: "0" },
-                  { number: "2", branch: "0" },
-                ],
-              },
-            ]
-          : []),
-        { kind: "precedent", concept: "대여금" },
-      ],
-    },
-  ],
-});
-function draft(raw: unknown) {
-  const input = raw as {
-    citations: V2OfficialCitation[];
-    sourceTexts: { citationId: string; text: string }[];
-  };
-  const law = input.citations.find((c) => c.kind === "statute"),
-    precedent = input.citations.find((c) => c.kind === "precedent");
-  if (!law || !precedent) throw new Error("Missing synthetic source");
-  return {
-    issues: [
-      {
-        id: "loan_issue",
-        title: "대여 약정의 자료 확인",
-        requirements: [
-          {
-            id: "loan_requirement",
-            label:
-              "합성 약정 확인 요건에 문자의 반환 약속 진술이 대응하지만 원본 자료가 없어 추가 확인이 필요합니다.",
-            assessment: "insufficient",
-            sourceClaimIds: ["law_claim"],
-            factIds: [fact.id],
-            conflictingFactIds: [],
-            evidence: [],
-            gaps: ["문자 전체 대화 자료"],
-          },
-        ],
-      },
-    ],
-    precedents: [
-      {
-        citationId: precedent.id,
-        commonalities: [
-          {
-            text: "약정의 존재를 확인하는 자료가 쟁점인 점",
-            factIds: [fact.id],
-            sourceClaimIds: ["precedent_claim"],
-          },
-        ],
-        differences: [
-          {
-            text: "합성 판례는 서면 차용증, 이번 진술은 문자 약속을 언급하므로 원본 확인이 필요합니다.",
-            factIds: [fact.id],
-            sourceClaimIds: ["precedent_claim"],
-          },
-        ],
-        preparationMeaning: "문자 약속의 구체 내용과 원본을 구분해 확인합니다.",
-      },
-    ],
-    perspective: {
-      casePurpose: "prepare_claim",
-      weaknesses: ["현재 진술에 대응하는 원본 자료를 아직 포함하지 않았습니다."],
-      claimGaps: ["약정 내용과 교부·변제 자료 확인"],
-      responsePoints: [],
-      additionalMaterials: ["문자 전체 대화 자료"],
-    },
-    evidenceRequirements: [],
-    sourceClaims: [law, precedent].map((c, i) => ({
-      id: i === 0 ? "law_claim" : "precedent_claim",
-      kind: "quotation",
-      citationId: c.id,
-      text: input.sourceTexts.find((s) => s.citationId === c.id)?.text,
-      startUtf16: 0,
-      endUtf16: input.sourceTexts.find((s) => s.citationId === c.id)?.text.length,
-    })),
-    limitations: ["합성 공식 원문과 대역 gateway를 이용한 연결 검증입니다."],
-  };
-}
 async function fixture(
   options: {
     many?: boolean;
@@ -233,9 +133,9 @@ async function fixture(
           const projected = JSON.parse(value.contents[0]?.parts[0]?.text ?? "null").data;
           const output =
             phase === "workspace_legal_plan"
-              ? plan(options.many)
+              ? syntheticLegalPlan(projected, { many: options.many ?? false })
               : phase === "workspace_legal_analysis"
-                ? draft(projected)
+                ? syntheticLegalDraft(projected)
                 : {
                     pass: true,
                     findings: [],
@@ -299,9 +199,9 @@ async function fixture(
         providerDispatches++;
         const output =
           phase === "workspace_legal_plan"
-            ? plan(options.many)
+            ? syntheticLegalPlan(value, { many: options.many ?? false })
             : phase === "workspace_legal_analysis"
-              ? draft(value)
+              ? syntheticLegalDraft(value)
               : {
                   pass: true,
                   findings: [],
