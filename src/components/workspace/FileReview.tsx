@@ -8,7 +8,9 @@ import { secondsLabel } from "../../utils/time";
 import { ErrorPanel } from "../intake/common";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { Button } from "../ui/button";
+import { observationKind, observationKindLabels } from "./evidence-state";
 import { positionLabel } from "./source-label";
+import "../../styles/evidence.css";
 
 const status: Record<string, string> = {
   processed: "처리됨",
@@ -228,9 +230,20 @@ export function FileReview({
     }
   }
   const rows = review?.coverage ? coverageRows(review.coverage) : [];
+  const photo =
+    review?.coverage?.category === "image" ||
+    review?.observations.some(({ value }) => value.position.kind === "image");
+  const partial =
+    review?.coverage?.category === "audio"
+      ? review.coverage.audio.status === "partial"
+      : review?.coverage?.status === "partial";
   return (
-    <section aria-label="자료 내용 검토" aria-busy={busy || loadingAfter !== null}>
-      <h3>추출 내용 확인·수정</h3>
+    <section
+      className="evidence-file-review"
+      aria-label="자료 내용 검토"
+      aria-busy={busy || loadingAfter !== null}
+    >
+      <h3>{photo ? "사진 분석 결과 확인" : "추출 내용 확인·수정"}</h3>
       {error ? (
         <ErrorPanel
           error={error}
@@ -253,6 +266,17 @@ export function FileReview({
         ) : null
       ) : (
         <>
+          <p className="evidence-hint">
+            분석은 원본 진정성이나 사건의 확정 사실을 보장하지 않아요. 기재 내용·화면 관찰·불확실한
+            해석을 원본과 비교해 주세요. 교정·제외 후 사건에 반영할 수 있어요.
+          </p>
+          {partial && (
+            <p role="status" className="evidence-coverage-warning">
+              {photo
+                ? "일부만 분석했어요. 흐리거나 읽지 못한 위치는 원본으로 확인하고, 필요하면 선명한 전체 사진이나 확대 사진을 추가해 주세요."
+                : "일부만 분석했어요. 처리하지 못한 페이지·시간 구간을 원본과 확인해 주세요."}
+            </p>
+          )}
           {loadingAfter !== null && loadingAfter >= 0 && (
             <p role="status">
               {loadingAfter >= 0
@@ -302,6 +326,18 @@ export function FileReview({
                 disabled={busy || !canWrite || !!review.pendingReview}
               >
                 <legend>{positionLabel(value.position)}</legend>
+                <p className="evidence-observation-kind">
+                  {observationKindLabels[observationKind(value)]}
+                </p>
+                <p className="evidence-hint">
+                  {review.file.name} · 파일 v{review.file.revision} ·{" "}
+                  {positionLabel(value.position)}
+                </p>
+                {value.certainty === "uncertain" &&
+                  !value.userEdited &&
+                  observationKind(value) !== "uncertain" && (
+                    <p className="evidence-hint">불확실한 관찰 · 원본 확인 필요</p>
+                  )}
                 <details>
                   <summary>원본 추출 내용</summary>
                   <p style={{ whiteSpace: "pre-wrap" }}>{original.text}</p>
