@@ -24,7 +24,7 @@ for (const side of ["claim", "response"])
             .locator(".baro-report .hero")
             .evaluate(
               (hero) =>
-                hero.querySelector("h1")!.getBoundingClientRect().width /
+                (hero.querySelector("h1")?.getBoundingClientRect().width ?? 0) /
                 hero.getBoundingClientRect().width,
             );
           expect(ratio).toBeGreaterThan(0.95);

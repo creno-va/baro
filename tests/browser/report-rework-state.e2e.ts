@@ -394,6 +394,28 @@ test("report evidence uses the real upload and review components, requests case 
   await expect(page.locator(".report-reading")).toContainText("사용자 교정을 반영한 새 리포트");
   expect(preparations).toBe(1);
   expect(original).toContain("제거할 파생 설명");
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  const targets = await page.locator(".resolution-path").evaluateAll((buttons) =>
+    buttons.map((button) => ({
+      width: button.getBoundingClientRect().width,
+      height: button.getBoundingClientRect().height,
+    })),
+  );
+  expect(targets).toHaveLength(3);
+  expect(targets.every((target) => target.height >= 44 && target.width >= 44)).toBe(true);
+  const gap = await page.locator(".resolution").evaluate((section) => {
+    const controls = document.querySelector(".report-controls");
+    if (!controls) throw new Error("Synthetic report controls missing");
+    return section.getBoundingClientRect().top - controls.getBoundingClientRect().bottom;
+  });
+  expect(gap).toBeGreaterThanOrEqual(24);
+  await page.screenshot({
+    path: ".wrangler/report-rework/report-composed-mobile.png",
+    fullPage: true,
+  });
 });
 
 test("rework entry only reads; explicit preparation and scope save use the displayed owner and exact returned snapshot", async ({

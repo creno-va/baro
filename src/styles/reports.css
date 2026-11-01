@@ -1291,3 +1291,7 @@
   cursor: pointer;
   font-weight: 650;
 }
+
+.report-canvas > .resolution {
+  margin-top: 28px;
+}
