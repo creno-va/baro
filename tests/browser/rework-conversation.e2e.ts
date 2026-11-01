@@ -67,6 +67,7 @@ async function addMaterial(page: Page) {
 async function enterWorkspace(page: Page, caseId: string, explanation?: string) {
   const path = `/cases/${encodeURIComponent(caseId)}`;
   await page.goto(`${path}/intake`);
+  await page.getByRole("button", { name: "질문 시작하기", exact: true }).click();
   for (let index = 0; index < 6; index++) {
     await expect(
       page.getByText(`${Math.floor(index / 3) + 1}차 질문 · ${(index % 3) + 1} / 3`, {
@@ -96,6 +97,45 @@ async function enterWorkspace(page: Page, caseId: string, explanation?: string) 
   expect(new URL(page.url()).pathname).toBe(path);
 }
 
+/** Failure/permission cases begin with an existing confirmed case prepared by
+ * the real authenticated client. Full six journeys still exercise intake UI. */
+async function openPreparedWorkspace(page: Page, f: Fixture) {
+  await page.goto("/settings");
+  await page.evaluate(async (id) => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+    const wait = async (count: number, complete = false) => {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const value = await api.cases.getQuestions(id);
+        if (!value.processing && value.questions.length >= count && (!complete || value.complete))
+          return value;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("SYNTHETIC_CLIENT_PREPARATION_LIMIT");
+    };
+    let questions = await api.cases.getQuestions(id);
+    for (let round = 0; round < 2; round++) {
+      await api.cases.advance(id, { expectedRevision: questions.revision });
+      questions = await wait((round + 1) * 3);
+      const current = questions.questions.slice(round * 3, round * 3 + 3);
+      if (current.length !== 3) throw new Error("SYNTHETIC_QUESTION_BOUND");
+      questions = await api.cases.saveAnswers(id, {
+        expectedRevision: questions.revision,
+        answers: current.map((q) => ({ questionId: q.id, state: "unknown" as const })),
+      });
+    }
+    await api.cases.advance(id, { expectedRevision: questions.revision });
+    await wait(6, true);
+    const current = await api.cases.get(id);
+    await api.cases.confirmSummary(id, { expectedRevision: current.revision });
+  }, f.info.caseId);
+  expect((await f.control("settle", {})).ok()).toBe(true);
+  await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}`);
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).toBeEnabled();
+}
+
 test("official source failure stays explicit and reload does not start another search", async ({
   page,
   context,
@@ -107,7 +147,7 @@ test("official source failure stays explicit and reload does not start another s
   );
   try {
     expect((await f.control("sources", { mode: "failure" })).ok()).toBe(true);
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
     await openAction(page, "법률·판례와 현재 약점 확인");
@@ -139,7 +179,7 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     "prepare_claim",
   );
   try {
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
@@ -173,7 +213,7 @@ test("actual AI200 SQL admission rejects a new message without another model cal
     "prepare_claim",
   );
   try {
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     const before = await counters(f);
     expect((await f.control("quota", {})).ok()).toBe(true);
@@ -201,7 +241,7 @@ test("consent withdrawal preserves the stored report while disabling new work", 
     "respond_to_claim",
   );
   try {
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     const before = await counters(f);
     expect((await f.control("withdraw-consent", {})).ok()).toBe(true);
@@ -228,7 +268,7 @@ test("a foreign signed account cannot retain the previous conversation report or
     "prepare_claim",
   );
   try {
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     await context.clearCookies();
     await context.addCookies([f.info.foreignCookie]);
@@ -252,7 +292,7 @@ test("a real peer context edit preserves the user's draft and requires compariso
     "prepare_claim",
   );
   try {
-    await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
+    await openPreparedWorkspace(page, f);
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
     await page.getByRole("button", { name: "입장·절차 확인", exact: true }).click();
