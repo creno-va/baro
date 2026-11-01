@@ -375,6 +375,10 @@ export async function createReworkRuntimeFixture(options: {
   }
   const initial = v2ReworkCreateCaseResponseSchema.parse(await response.json()),
     caseId = initial.workspace.id;
+  async function settleTasks() {
+    for (let round = 0; tasks.size && round < 32; round++) await Promise.allSettled([...tasks]);
+    if (tasks.size) throw new Error("SYNTHETIC_WORKFLOW_DRAIN_LIMIT");
+  }
   return {
     browserOrigin: options.browserOrigin,
     info: {
@@ -453,6 +457,8 @@ export async function createReworkRuntimeFixture(options: {
           if (typeof input[key] === "boolean") processor.controls[key] = input[key];
         if (typeof input.delayMs === "number" && input.delayMs >= 0 && input.delayMs <= 5000)
           processor.controls.delayMs = input.delayMs;
+      } else if (path === "settle") {
+        await settleTasks();
       } else if (path === "quota") {
         // Explicit synthetic PRIOR usage condition. Never fabricate provider
         // calls, receipts, reservations, money or observation timestamps.
@@ -485,9 +491,8 @@ export async function createReworkRuntimeFixture(options: {
       return Response.json({ accepted: true });
     },
     async close() {
-      for (let round = 0; tasks.size && round < 32; round++) await Promise.allSettled([...tasks]);
+      await settleTasks();
       closed = true;
-      if (tasks.size) throw new Error("SYNTHETIC_WORKFLOW_DRAIN_LIMIT");
       f.db.close();
     },
   };

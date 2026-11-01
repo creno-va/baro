@@ -225,7 +225,7 @@ async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
   }
   throw new Error("SYNTHETIC_FIXTURE_WAIT_LIMIT");
 }
-async function prepare(f: Fixture) {
+async function prepare(f: Fixture, options: { reconcile?: boolean } = {}) {
   for (let round = 0; round < 2; round++) {
     const workspace = await json(f, "/workspace");
     await json(f, "/intake/advance", { expectedRevision: workspace.workspaceRevision });
@@ -257,6 +257,17 @@ async function prepare(f: Fixture) {
   );
   const before = await json(f, "/summary"),
     current = await json(f, "/workspace");
+  if (options.reconcile === false) {
+    await json(f, "/summary/confirm", {
+      expectedRevision: before.intakeRevision,
+      summaryRevision: before.revision,
+      workspaceRevision: current.workspaceRevision,
+    });
+    return until(
+      () => json(f, "/rework/conversation"),
+      (value) => value.report.status === "ready",
+    );
+  }
   await json(f, "/rework/summary-reconciliation/request", {
     expectedRevision: current.workspaceRevision,
     summaryRevision: before.revision,
@@ -318,6 +329,41 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       await f.close();
     }
   });
+
+test("an ordinary audited conversation without case changes preserves the analysis/report and starts no research", async () => {
+  const f = await createReworkRuntimeFixture({
+    browserOrigin: "http://127.0.0.1:4396",
+    purpose: "prepare_claim",
+    native: "unavailable",
+  });
+  try {
+    const state = await prepare(f, { reconcile: false });
+    const before = await stats(f);
+    const current = await json(f, "/workspace");
+    await json(f, "/messages", {
+      expectedRevision: current.workspaceRevision,
+      text: "현재 기록을 다시 읽어주세요.",
+      selectedFileIds: [],
+    });
+    expect(
+      (
+        await f.control(
+          new Request("http://127.0.0.1:4396/__rework-test/settle", { method: "POST", body: "{}" }),
+        )
+      )?.ok,
+    ).toBe(true);
+    const after = await stats(f);
+    expect(after.models.slice(before.models.length)).toEqual(["workspace_chat", "workspace_audit"]);
+    expect(after.sources).toBe(before.sources);
+    expect(after.reports.total).toBe(before.reports.total);
+    const currentState = await json(f, "/rework/conversation");
+    expect(currentState.snapshot?.id).toBe(state.snapshot?.id);
+    expect(currentState.analysis.status).toBe("ready");
+    expect(currentState.report.id).toBe(state.report.id);
+  } finally {
+    await f.close();
+  }
+});
 
 test("an unavailable official source gives a limited report and passive reads do not retry it", async () => {
   const f = await createReworkRuntimeFixture({
