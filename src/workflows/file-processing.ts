@@ -5,6 +5,7 @@ import {
   fileProcessingParamsSchema,
 } from "../server/modules/file-processing/execution";
 import { runFileProcessing } from "../server/modules/file-processing/runner";
+import { resumeReworkCase } from "../server/runtime/rework-recovery";
 
 export class FileProcessingWorkflow extends WorkflowEntrypoint<Env, FileProcessingParams> {
   override async run(event: WorkflowEvent<FileProcessingParams>, step: WorkflowStep) {
@@ -15,6 +16,15 @@ export class FileProcessingWorkflow extends WorkflowEntrypoint<Env, FileProcessi
       event.instanceId,
       (task) => this.ctx.waitUntil(task),
     );
-    return runFileProcessing(execution, step);
+    const result = await runFileProcessing(execution, step);
+    await step.do(
+      "resume confirmed case preparation",
+      { retries: { limit: 0, delay: "1 second" }, timeout: "5 minutes" },
+      async () => {
+        const resumed = await resumeReworkCase(this.env, params.ownerId, params.workspaceId);
+        return { status: resumed.status };
+      },
+    );
+    return result;
   }
 }

@@ -1,21 +1,38 @@
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
-import { v2ReworkCreateCaseRequestSchema } from "../../../contracts/v2";
+import {
+  v2ConversationActionRequestSchema,
+  v2ConversationActionResultSchema,
+  v2ReworkCreateCaseRequestSchema,
+  v2SummaryReconciliationSchema,
+} from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { verifyTurnstile } from "../../modules/intake/service";
+import { SummaryReconciliationError } from "../../modules/intake/summary-reconciliation";
 import { createCaseReportDependencies } from "../../modules/reports/runtime";
 import { createReportsService } from "../../modules/reports/service";
+import { ReportError } from "../../modules/reports/source";
+import { ResolutionError } from "../../modules/resolution/service";
 import { createReworkCaseService, ReworkError } from "../../modules/rework/case-context";
+import { createReworkRuntime, type ReworkRuntimeOptions } from "../../modules/rework/runtime";
 import { createReworkStateService } from "../../modules/rework/state";
+import { ConversationAgentError } from "../../modules/workspace/conversation-agent";
 import { abuseAllowed, caseAccess } from "../case-access";
 import { type ApiEnvironment, errorBody } from "../errors";
+import { createReworkResolutionApi } from "./rework-resolution";
 
 export function createReworkApi(
   options: {
     turnstile?: typeof verifyTurnstile;
+    runtimeOptions?: (
+      env: Env,
+      core: V2Core,
+      ownerId: string,
+      sessionId: string,
+    ) => Promise<ReworkRuntimeOptions>;
     stateDependencies?: (
       env: Env,
       core: V2Core,
@@ -39,17 +56,25 @@ export function createReworkApi(
       (error instanceof V2RepositoryError && error.code === "REPOSITORY_INPUT_INVALID")
     )
       return c.json(errorBody(c, "VALIDATION_ERROR", "입력과 요청 조건을 확인해 주세요."), 400);
-    if (error instanceof ReworkError) {
+    if (
+      error instanceof ReworkError ||
+      error instanceof ConversationAgentError ||
+      error instanceof SummaryReconciliationError ||
+      error instanceof ResolutionError ||
+      error instanceof ReportError
+    ) {
       const status =
         error.code === "NOT_FOUND"
           ? 404
           : error.code === "CONSENT_REQUIRED"
             ? 403
-            : error.code === "USER_QUOTA_EXCEEDED"
+            : error.code === "USER_QUOTA_EXCEEDED" || error.code === "RATE_LIMITED"
               ? 429
-              : error.code === "DEPENDENCY_UNAVAILABLE"
-                ? 503
-                : 409;
+              : error.code === "VALIDATION_ERROR" || error.code === "RESOLUTION_TOO_LARGE"
+                ? 400
+                : error.code === "DEPENDENCY_UNAVAILABLE" || error.code === "STORAGE_UNAVAILABLE"
+                  ? 503
+                  : 409;
       return c.json(
         errorBody(
           c,
@@ -70,6 +95,21 @@ export function createReworkApi(
       applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
       monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
     });
+  const runtime = async (c: Context<ApiEnvironment>, ownerId: string, sessionId: string) => {
+    const core = await domainCore(c);
+    return createReworkRuntime(core, c.env, {
+      ...(await options.runtimeOptions?.(c.env, core, ownerId, sessionId)),
+      waitUntil: (work) => {
+        try {
+          c.executionCtx.waitUntil(work);
+        } catch {
+          void work.catch(() => undefined);
+        }
+      },
+      admissionAllowed: () => abuseAllowed(c, ownerId, false),
+      sessionId,
+    });
+  };
   const service = async (c: Context<ApiEnvironment>) =>
     createReworkCaseService(await domainCore(c));
   app.post("/rework", async (c) => {
@@ -123,18 +163,82 @@ export function createReworkApi(
       }).peek(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
     );
   });
+  app.post("/:id/rework/actions", async (c) => {
+    const a = await access(c, true);
+    if (a.response) return a.response;
+    z.strictObject({}).parse(c.req.query());
+    const id = opaqueIdSchema.parse(c.req.param("id")),
+      key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
+    const input = v2ConversationActionRequestSchema.parse(await c.req.json());
+    const result = await (await runtime(c, a.ownerId, a.sessionId)).act(a.ownerId, id, input, key);
+    if (result.status === "pending") c.header("retry-after", "2");
+    return c.json(
+      v2ConversationActionResultSchema.parse(result),
+      result.status === "pending" ? 202 : 200,
+    );
+  });
+  app.get("/:id/rework/summary-reconciliation", async (c) => {
+    const a = await access(c);
+    if (a.response) return a.response;
+    z.strictObject({}).parse(c.req.query());
+    const id = opaqueIdSchema.parse(c.req.param("id"));
+    const result = await (await runtime(c, a.ownerId, a.sessionId)).reconciliation.service.read({
+      ownerId: a.ownerId,
+      caseId: id,
+    });
+    return c.json(v2SummaryReconciliationSchema.parse(result.state));
+  });
+  for (const action of ["request", "confirm", "cancel"] as const)
+    app.post(`/:id/rework/summary-reconciliation/${action}`, async (c) => {
+      const a = await access(c, true);
+      if (a.response) return a.response;
+      z.strictObject({}).parse(c.req.query());
+      const id = opaqueIdSchema.parse(c.req.param("id")),
+        key = idempotencyKeySchema.parse(c.req.header("idempotency-key"));
+      const input: unknown = await c.req.json(),
+        r = await runtime(c, a.ownerId, a.sessionId);
+      const result = await r.reconciliation.service[action](
+        { ownerId: a.ownerId, caseId: id },
+        key,
+        input,
+      );
+      if (action === "request") {
+        await r.analysis.dispatch();
+        c.header("retry-after", "2");
+      }
+      return c.json(v2SummaryReconciliationSchema.parse(result), action === "request" ? 202 : 200);
+    });
+  app.route(
+    "/",
+    createReworkResolutionApi({
+      runtime: async (env, owner, session) => {
+        const core = createV2Core(env.DB, await createCaseDataCipher(env), {
+          applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+        });
+        return createReworkRuntime(core, env, {
+          ...(await options.runtimeOptions?.(env, core, owner, session)),
+          sessionId: session,
+        }).resolution;
+      },
+    }),
+  );
   app.put("/:id/rework/context", async (c) => {
     const a = await access(c, true);
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
-    return c.json(
-      await (await service(c)).update(
-        a.ownerId,
-        opaqueIdSchema.parse(c.req.param("id")),
-        idempotencyKeySchema.parse(c.req.header("idempotency-key")),
-        await c.req.json(),
-      ),
+    const id = opaqueIdSchema.parse(c.req.param("id"));
+    const result = await (await service(c)).update(
+      a.ownerId,
+      id,
+      idempotencyKeySchema.parse(c.req.header("idempotency-key")),
+      await c.req.json(),
     );
+    const r = await runtime(c, a.ownerId, a.sessionId);
+    // Make the bounded admitted job visible to the immediate fresh read.
+    // A preparation failure cannot undo the already committed context change.
+    await r.resume(a.ownerId, id).catch(() => undefined);
+    return c.json(result);
   });
   return app;
 }

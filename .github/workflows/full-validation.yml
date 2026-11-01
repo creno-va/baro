@@ -47,7 +47,7 @@ jobs:
       - name: Install frozen dependencies and browser
         run: |
           bun ci
-          bunx playwright install --with-deps chromium
+          bunx playwright install --with-deps chromium webkit
       - name: Install pinned PDF verification dependency
         run: |
           python3 -m venv "$RUNNER_TEMP/baro-full-python"
