@@ -1,6 +1,7 @@
-import type { V2Core } from "../../db/v2-core";
+import { aliveWorkspace, type V2Core } from "../../db/v2-core";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2StorageCapacityRepository } from "../../db/v2-storage-capacity";
+import { storedWorkspaceContentSchema } from "../../db/v2-workspace";
 import { readProcessingProofs } from "../../runtime/processing-proofs";
 import { createProcessingBudgetService } from "../budget/processing-ledger";
 import { boundedProcessingResources } from "../budget/processing-runtime";
@@ -9,6 +10,7 @@ import { createProcessorTransport } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
 import { preparedAnalysisMatchesScope, readPreparedAnalysis } from "../rework/state";
 import { REPORT_QUERY_LIMIT, REPORT_ROW_LIMIT } from "./limits";
+import { ReportError } from "./source";
 import type { ReportDependencies } from "./storage";
 
 /** Real Workers bindings only. Report drafts need no model/provider calls.
@@ -23,12 +25,6 @@ export function createReportDependencies(
 ): ReportDependencies {
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const deps: ReportDependencies = {
-    readPreparedAnalysis: (actor, caseId) => readPreparedAnalysis(core, actor, caseId),
-    preparedAnalysisMatchesScope: (actor, caseId, snapshot, scope) =>
-      preparedAnalysisMatchesScope(core, actor, caseId, snapshot, {
-        ...scope,
-        excludedFileIds: [...scope.excludedFileIds],
-      }),
     environment,
     clock,
     bucket: env.CASE_PRIVATE_R2,
@@ -176,4 +172,64 @@ export function createReportDependencies(
     });
   };
   return deps;
+}
+
+/** Installed clients keep their legacy report source until this case explicitly
+ * opts into a confirmed purpose. No stored legacy body is silently rewritten. */
+export async function createCaseReportDependencies(
+  env: Env,
+  core: V2Core,
+  ownerId: string,
+  caseId?: string,
+  reportId?: string,
+  clock = () => new Date().toISOString(),
+): Promise<ReportDependencies> {
+  const deps = createReportDependencies(env, core, ownerId, clock);
+  const id =
+    caseId ??
+    (reportId
+      ? await core
+          .statement(
+            "SELECT r.workspace_id FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE r.id=? AND w.owner_id=?",
+            [reportId, ownerId],
+          )
+          .first<string>("workspace_id")
+      : null);
+  if (!id) return deps;
+  // Keep report request meter errors intact; repository safe() wrappers would
+  // otherwise replace a missing native D1 receipt with DB_OPERATION_FAILED.
+  const row = await core
+    .statement(
+      `SELECT w.revision,w.encrypted_payload FROM v2_workspaces w JOIN user u ON u.id=w.owner_id WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+      [id, ownerId],
+    )
+    .first<{ revision: number; encrypted_payload: string }>();
+  if (!row) return deps;
+  const content = await core.decrypt(
+    "v2_workspaces",
+    id,
+    ownerId,
+    1,
+    row.encrypted_payload,
+    storedWorkspaceContentSchema,
+  );
+  if (
+    !(await core
+      .statement(
+        `SELECT w.id FROM v2_workspaces w JOIN user u ON u.id=w.owner_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND w.encrypted_payload=? AND ${aliveWorkspace}`,
+        [id, ownerId, row.revision, row.encrypted_payload],
+      )
+      .first())
+  )
+    throw new ReportError("STALE_REVISION");
+  if (!content.reworkContext || content.reworkContext.casePurpose === "unconfirmed") return deps;
+  return {
+    ...deps,
+    readPreparedAnalysis: (actor, id) => readPreparedAnalysis(core, actor, id),
+    preparedAnalysisMatchesScope: (actor, id, snapshot, scope) =>
+      preparedAnalysisMatchesScope(core, actor, id, snapshot, {
+        ...scope,
+        excludedFileIds: [...scope.excludedFileIds],
+      }),
+  };
 }

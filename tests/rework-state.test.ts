@@ -3,6 +3,10 @@ import { type V2LegalAnalysisSnapshot, v2ReworkVersionSchema } from "../src/cont
 import { createV2ReworkRepository } from "../src/server/db/v2-rework";
 import { analysisBasis } from "../src/server/modules/legal-retrieval/analysis/context";
 import {
+  createCaseReportDependencies,
+  createReportDependencies,
+} from "../src/server/modules/reports/runtime";
+import {
   defaultAnalysisScope,
   loadAnalysisInput,
 } from "../src/server/modules/rework/analysis-input";
@@ -101,6 +105,57 @@ test("legacy context remains unconfirmed; local state reads neither create repor
   expect(state.report.status).toBe("not_started");
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_operations").get()).toEqual(before);
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_reports").get()).toEqual({ n: 0 });
+});
+test("report runtime selects prepared analysis only after this case explicitly confirms a purpose", async () => {
+  const f = await fixture();
+  const env = { APP_ENV: "preview" } as Env;
+  expect(
+    createReportDependencies(env, f.core, f.actor.ownerId).readPreparedAnalysis,
+  ).toBeUndefined();
+  expect(
+    (
+      await createCaseReportDependencies(
+        env,
+        f.core,
+        f.actor.ownerId,
+        f.workspaceId,
+        undefined,
+        () => f.actor.now,
+      )
+    ).readPreparedAnalysis,
+  ).toBeUndefined();
+  await createReworkCaseService(f.core, { clock: () => f.actor.now }).update(
+    f.actor.ownerId,
+    f.workspaceId,
+    crypto.randomUUID(),
+    {
+      expectedRevision: f.rev(),
+      casePurpose: "respond_to_claim",
+      subjectContext: "individual",
+      procedure: { kind: "civil", stage: "first_instance", description: null },
+    },
+  );
+  const { snapshot } = await publish(f);
+  const deps = await createCaseReportDependencies(
+    env,
+    f.core,
+    f.actor.ownerId,
+    f.workspaceId,
+    undefined,
+    () => f.actor.now,
+  );
+  expect(await deps.readPreparedAnalysis?.(f.actor, f.workspaceId)).toEqual(snapshot);
+  f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+  const readonly = await createCaseReportDependencies(
+    env,
+    f.core,
+    f.actor.ownerId,
+    f.workspaceId,
+    undefined,
+    () => f.actor.now,
+  );
+  expect(await readonly.readPreparedAnalysis?.(f.actor, f.workspaceId)).toEqual(snapshot);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
 });
 test("a current honest unavailable snapshot is preserved, and purpose/evidence changes invalidate its basis", async () => {
   const f = await fixture();

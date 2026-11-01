@@ -6,7 +6,7 @@ import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { verifyTurnstile } from "../../modules/intake/service";
-import { createReportDependencies } from "../../modules/reports/runtime";
+import { createCaseReportDependencies } from "../../modules/reports/runtime";
 import { createReportsService } from "../../modules/reports/service";
 import { createReworkCaseService, ReworkError } from "../../modules/rework/case-context";
 import { createReworkStateService } from "../../modules/rework/state";
@@ -102,11 +102,11 @@ export function createReworkApi(
       await createReworkStateService(
         core,
         (await options.stateDependencies?.(c.env, core, a.ownerId)) ?? {
-          peekReport: (ownerId, id) =>
-            createReportsService(core, createReportDependencies(c.env, core, ownerId)).peek(
-              ownerId,
-              id,
-            ),
+          peekReport: async (ownerId, id) =>
+            createReportsService(
+              core,
+              await createCaseReportDependencies(c.env, core, ownerId, id),
+            ).peek(ownerId, id),
         },
       ).get(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
     );
@@ -118,7 +118,7 @@ export function createReworkApi(
     const core = await domainCore(c);
     return c.json(
       await createReportsService(core, {
-        ...createReportDependencies(c.env, core, a.ownerId),
+        ...(await createCaseReportDependencies(c.env, core, a.ownerId, c.req.param("id"))),
         sessionId: a.sessionId,
       }).peek(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
     );
