@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema, revisionSchema } from "../../contracts/common";
 import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
+import { v2SummaryReconciliationSchema } from "../../contracts/v2/rework";
 import {
   type Actor,
   actorSchema,
@@ -31,6 +32,16 @@ export const reworkRecordKindSchema = z.enum([
 export type ReworkRecordKind = z.infer<typeof reworkRecordKindSchema>;
 export type ReworkRecord<T> = { id: string; revision: number; workspaceRevision: number; value: T };
 export type ReworkWriteGuard = { sql: string; values: unknown[] };
+export type ReworkCancellation = Readonly<{ jobId: string; requestId: string }>;
+const cancellations = new WeakMap<
+  ReworkCancellation,
+  {
+    core: V2Core;
+    guard: WorkspaceGuard;
+    recordRevision: number;
+    fence: ReworkWriteGuard;
+  }
+>();
 const MAX_BYTES = 4 * 1024 * 1024;
 const manifestSchema = z.strictObject({
   id: opaqueIdSchema,
@@ -167,6 +178,50 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
     });
   return {
     read,
+    /** Owner cancellation can fence a worker in another isolate. The capability
+     * is issued only after decrypting this case's current reconciliation; it is
+     * never reconstructed from a browser token or an in-memory worker lease. */
+    prepareCancellation: async (g: WorkspaceGuard, requestId: string) => {
+      g = parse(guardSchema, g);
+      opaqueIdSchema.parse(requestId);
+      const record = await read(
+        g,
+        g.workspaceId,
+        "reconciliation",
+        g.workspaceId,
+        z.object({
+          format: z.literal("summary-reconciliation-v1"),
+          state: v2SummaryReconciliationSchema,
+        }),
+      );
+      if (
+        !record ||
+        record.value.state.request?.id !== requestId ||
+        !["pending", "running"].includes(record.value.state.status) ||
+        !record.value.state.currentJobId
+      )
+        return null;
+      const jobId = record.value.state.currentJobId;
+      const job = await core
+        .statement(
+          `SELECT j.fencing,j.lease_token,j.target_revision FROM v2_jobs j JOIN v2_workspaces w ON w.id=j.workspace_id JOIN v2_operations o ON o.id=j.operation_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace} AND w.current_job_id=j.id AND j.id=? AND j.target_kind='workspace' AND j.target_id=w.id AND j.target_revision<=w.revision AND j.kind='chat_response' AND j.status IN ('queued','running','validating') AND o.owner_id=w.owner_id`,
+          [g.workspaceId, g.ownerId, g.expectedRevision, jobId],
+        )
+        .first<{ fencing: number; lease_token: string | null; target_revision: number }>();
+      if (!job || job.target_revision !== record.value.state.request.input.expectedRevision + 1)
+        return null;
+      const capability = Object.freeze({ jobId, requestId });
+      cancellations.set(capability, {
+        core,
+        guard: g,
+        recordRevision: record.revision,
+        fence: {
+          sql: "w.current_job_id=? AND EXISTS(SELECT 1 FROM v2_jobs j WHERE j.id=w.current_job_id AND j.target_revision=? AND j.fencing=? AND j.lease_token IS ? AND j.status IN ('queued','running','validating'))",
+          values: [jobId, job.target_revision, job.fencing, job.lease_token],
+        },
+      });
+      return capability;
+    },
     /** Opaque publication identity distinguishes no record from a read race. */
     head: async (actor: Actor, workspaceId: string, kind: ReworkRecordKind, entityId: string) => {
       const value = await row(actor, workspaceId, kind, entityId);
@@ -184,6 +239,7 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         value: T;
         schema: z.ZodType<T>;
         lease?: JobLease;
+        cancellation?: ReworkCancellation;
         /** Owner-requested UI receipts/continuations may accompany an existing
          * job. This capability cannot change facts, jobs or workspace revisions. */
         metadataJobId?: string;
@@ -212,6 +268,28 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         const parts = fragmentText(text),
           id = crypto.randomUUID(),
           revision = input.expectedVersion + 1;
+        const cancellation = input.cancellation ? cancellations.get(input.cancellation) : undefined;
+        if (input.cancellation) {
+          const state = z.object({ state: v2SummaryReconciliationSchema }).safeParse(value);
+          if (
+            !cancellation ||
+            cancellation.core !== core ||
+            cancellation.guard.ownerId !== g.ownerId ||
+            cancellation.guard.workspaceId !== g.workspaceId ||
+            cancellation.guard.expectedRevision !== g.expectedRevision ||
+            cancellation.recordRevision !== input.expectedVersion ||
+            input.kind !== "reconciliation" ||
+            entityId !== g.workspaceId ||
+            !input.bumpWorkspace ||
+            input.lease ||
+            input.metadataJobId ||
+            !state.success ||
+            state.data.state.status !== "cancelled" ||
+            state.data.state.currentJobId !== null ||
+            state.data.state.request?.id !== input.cancellation.requestId
+          )
+            throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
+        }
         if (input.metadataJobId !== undefined) {
           opaqueIdSchema.parse(input.metadataJobId);
           if (
@@ -224,14 +302,16 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         }
         const consent = reworkConsentGuard(g.ownerId);
         const lease = (now: string) =>
-          input.lease
-            ? leasePredicate(input.lease, g.workspaceId, g.expectedRevision, now)
-            : input.metadataJobId
-              ? {
-                  sql: "w.current_job_id=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=w.current_job_id AND j.workspace_id=w.id AND j.target_kind='workspace' AND j.target_id=w.id AND j.target_revision=w.revision AND j.status IN ('queued','running','validating') AND o.owner_id=w.owner_id)",
-                  values: [input.metadataJobId],
-                }
-              : { sql: "w.current_job_id IS NULL", values: [] };
+          cancellation
+            ? cancellation.fence
+            : input.lease
+              ? leasePredicate(input.lease, g.workspaceId, g.expectedRevision, now)
+              : input.metadataJobId
+                ? {
+                    sql: "w.current_job_id=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=w.current_job_id AND j.workspace_id=w.id AND j.target_kind='workspace' AND j.target_id=w.id AND j.target_revision=w.revision AND j.status IN ('queued','running','validating') AND o.owner_id=w.owner_id)",
+                    values: [input.metadataJobId],
+                  }
+                : { sql: "w.current_job_id IS NULL", values: [] };
         const version =
           "coalesce((SELECT max(revision) FROM v2_rework_records WHERE workspace_id=w.id AND kind=? AND entity_id=? AND state='published'),0)=?";
         const fence = () => {
@@ -330,6 +410,24 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
             `UPDATE v2_rework_records SET state='published',workspace_revision=? WHERE id=? AND ${sqlClaim}`,
             [g.expectedRevision + (input.bumpWorkspace ? 1 : 0), id, claimId],
           ),
+          ...(input.cancellation
+            ? [
+                core.statement(
+                  `UPDATE v2_jobs SET status='cancelled',failure_code=NULL,retryable=0,lease_token=NULL,lease_until=NULL,fencing=fencing+1,updated_at=? WHERE id=? AND ${sqlClaim}`,
+                  [final.now, input.cancellation.jobId, claimId],
+                ),
+                // Existing cancellation triggers release the visible quota and retain
+                // ambiguous cost observations. Never delete an unsettled execution hold.
+                core.statement(
+                  `UPDATE v2_operations SET state='cancelled' WHERE id=(SELECT operation_id FROM v2_jobs WHERE id=?) AND ${sqlClaim}`,
+                  [input.cancellation.jobId, claimId],
+                ),
+                core.statement(
+                  `UPDATE v2_workspaces SET current_job_id=NULL WHERE id=? AND current_job_id=? AND ${sqlClaim}`,
+                  [g.workspaceId, input.cancellation.jobId, claimId],
+                ),
+              ]
+            : []),
           ...(input.statements?.(claimId, id, revision) ?? []),
           ...(input.bumpWorkspace ? [core.bump(g, claimId)] : []),
           core.finish(claimId),
