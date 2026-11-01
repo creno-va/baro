@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createFilesApi } from "../src/client/api/files";
 import { createFilesMock } from "../src/client/api/mock/files";
 import { createWorkspaceMock, type WorkspaceMockRuntime } from "../src/client/api/mock/workspace";
+import { workspaceViewSchema } from "../src/client/api/workspace";
 
 async function fixture(text: string) {
   let raw = JSON.stringify({
@@ -54,8 +55,42 @@ async function fixture(text: string) {
     for (const pending of Object.values(state.fileProcessing ?? {})) pending.at = 0;
   });
   expect((await client.list("demo"))[0]?.status).toBe("ready");
-  return { client, uploaded, reconnect: () => createFilesApi(send) };
+  return { client, uploaded, send, reconnect: () => createFilesApi(send) };
 }
+
+test("mock upload identity stays consistent across completion, list, workspace and review edits", async () => {
+  const text = "Synthetic original with an unconfirmed date";
+  const f = await fixture(text);
+  const before = await f.client.review("demo", f.uploaded.id);
+  const listed = (await f.reconnect().list("demo"))[0];
+  const workspace = workspaceViewSchema.parse(
+    await (await f.send("/api/v2/cases/demo/workspace")).json(),
+  );
+  expect(f.uploaded.revision).toBe(1);
+  expect(listed?.revision).toBe(before.file.revision);
+  expect(workspace.files[0]?.revision).toBe(before.file.revision);
+  expect(listed?.uploadContentHash).toBe(f.uploaded.uploadContentHash);
+  const progress = await f.client.saveReview(
+    "demo",
+    f.uploaded.id,
+    {
+      expectedRevision: before.file.revision,
+      edits: [
+        { observationId: before.observations[0]?.value.id ?? "missing", text, included: false },
+      ],
+    },
+    before.workspaceRevision,
+  );
+  const after = await f.reconnect().review("demo", f.uploaded.id);
+  const current = (await f.client.list("demo"))[0];
+  expect(progress.revision).toBe(2);
+  expect(after.file.revision).toBe(progress.revision);
+  expect(current?.revision).toBe(progress.revision);
+  expect(current?.uploadContentHash).toBe(listed?.uploadContentHash);
+  expect(after.observations[0]?.value.included).toBe(false);
+  expect(after.observations[0]?.original).toEqual(before.observations[0]?.original);
+  expect(await (await f.client.original("demo", f.uploaded.id)).text()).toBe(text);
+});
 
 for (const text of [
   "a".repeat(5000),
