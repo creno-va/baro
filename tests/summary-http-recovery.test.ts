@@ -50,7 +50,13 @@ for (const variant of [
         calls.push(url);
         if (url === path)
           return unreadable(
-            variant === "missing-header" ? undefined : variant === "invalid-header" ? "1e0" : "1",
+            variant === "missing-header"
+              ? undefined
+              : variant === "invalid-header"
+                ? "1e0"
+                : variant === "older-revision"
+                  ? "2"
+                  : "1",
           );
         if (variant === "probe-network") throw new Error("synthetic-probe-fault");
         if (variant === "probe-json") return new Response("broken-json");
@@ -58,7 +64,7 @@ for (const variant of [
           variant === "invalid-workspace"
             ? { workspaceRevision: 2 }
             : workspace(
-                variant === "same-revision" ? 1 : variant === "older-revision" ? 0 : 2,
+                variant === "same-revision" || variant === "older-revision" ? 1 : 2,
                 variant === "wrong-case" ? "foreign_case" : "synthetic_case",
               ),
         );
