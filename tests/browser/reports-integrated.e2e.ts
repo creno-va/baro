@@ -146,7 +146,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     );
   expect(await originalCount()).toBe(0);
   await page.goto(`${casePath}/reports`);
-  await expect(page.getByRole("alert")).toContainText("찾을 수 없어요");
+  await expect(page.locator(".report-error")).toHaveAttribute("role", "alert");
+  await expect(page.locator(".report-error")).toContainText("요청한 내용을 찾지 못했어요.");
+  await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
   await page.goto("/cases");
   await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
   await page.goto("/cases/new");
@@ -185,7 +188,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await peer.bringToFront();
   await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
-  await expect(peer.getByRole("link", { name: "로그인", exact: true })).toBeVisible();
+  await expect(
+    peer.locator(".report-error").getByRole("link", { name: "로그인", exact: true }),
+  ).toBeVisible();
   await page.reload();
   expect(
     await page.evaluate(
