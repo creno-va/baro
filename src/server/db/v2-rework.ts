@@ -177,6 +177,9 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         value: T;
         schema: z.ZodType<T>;
         lease?: JobLease;
+        /** Owner-requested UI receipts/continuations may accompany an existing
+         * job. This capability cannot change facts, jobs or workspace revisions. */
+        metadataJobId?: string;
         authority?: ReworkWriteGuard | ((now: string) => ReworkWriteGuard);
         bumpWorkspace?: boolean;
         /** Existing operation/receipt writes share the exact final publication claim. */
@@ -202,11 +205,26 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         const parts = fragmentText(text),
           id = crypto.randomUUID(),
           revision = input.expectedVersion + 1;
+        if (input.metadataJobId !== undefined) {
+          opaqueIdSchema.parse(input.metadataJobId);
+          if (
+            input.lease ||
+            input.bumpWorkspace ||
+            input.statements ||
+            !["checkpoint", "action_receipt"].includes(input.kind)
+          )
+            throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
+        }
         const consent = reworkConsentGuard(g.ownerId);
         const lease = (now: string) =>
           input.lease
             ? leasePredicate(input.lease, g.workspaceId, g.expectedRevision, now)
-            : { sql: "w.current_job_id IS NULL", values: [] };
+            : input.metadataJobId
+              ? {
+                  sql: "w.current_job_id=? AND EXISTS(SELECT 1 FROM v2_jobs j JOIN v2_operations o ON o.id=j.operation_id WHERE j.id=w.current_job_id AND j.workspace_id=w.id AND j.target_kind='workspace' AND j.target_id=w.id AND j.target_revision=w.revision AND j.status IN ('queued','running','validating') AND o.owner_id=w.owner_id)",
+                  values: [input.metadataJobId],
+                }
+              : { sql: "w.current_job_id IS NULL", values: [] };
         const version =
           "coalesce((SELECT max(revision) FROM v2_rework_records WHERE workspace_id=w.id AND kind=? AND entity_id=? AND state='published'),0)=?";
         const fence = () => {

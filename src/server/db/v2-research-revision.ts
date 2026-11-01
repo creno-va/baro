@@ -1,5 +1,17 @@
+import { z } from "zod";
+import { opaqueIdSchema, revisionSchema } from "../../contracts";
 import { storedMessageSchema, storedUserMessageSchema } from "../modules/workspace/stored-message";
 import type { V2Core } from "./v2-core";
+import { createV2ReworkRepository } from "./v2-rework";
+
+const analysisTaskIdentity = z.object({
+  kind: z.enum(["legal_analysis", "summary_reconciliation"]),
+  jobId: opaqueIdSchema,
+  operationId: opaqueIdSchema,
+  beforeWorkspaceRevision: revisionSchema,
+  targetWorkspaceRevision: revisionSchema,
+  summaryRevision: revisionSchema,
+});
 
 /** Job admission/publication advance the CAS revision without changing case facts.
  * Only traverse server-authenticated comparison messages, never arbitrary chat jobs.
@@ -38,6 +50,33 @@ export async function researchRevisionBase(
     const published = job.target_revision === base - 1 && job.status === "completed";
     const failed = job.target_revision === base - 1 && job.status === "failed";
     if (!admitted && !published && !failed) break;
+    const taskRow = await core
+      .statement(
+        "SELECT id FROM v2_rework_records WHERE workspace_id=? AND kind='task' AND entity_id=? AND state='published'",
+        [workspaceId, job.id],
+      )
+      .first();
+    if (taskRow) {
+      const task = await createV2ReworkRepository(core).read(
+        { ownerId, now: new Date().toISOString() },
+        workspaceId,
+        "task",
+        job.id,
+        analysisTaskIdentity,
+      );
+      if (
+        task?.value.kind !== "legal_analysis" ||
+        task.value.jobId !== job.id ||
+        task.value.operationId !== job.operation_id ||
+        task.value.summaryRevision !== summaryRevision ||
+        task.value.targetWorkspaceRevision !== job.target_revision ||
+        task.value.beforeWorkspaceRevision !== job.target_revision - 1 ||
+        task.workspaceRevision !== job.target_revision
+      )
+        break;
+      base = task.value.beforeWorkspaceRevision;
+      continue;
+    }
     const rows = (
       await core
         .statement(
