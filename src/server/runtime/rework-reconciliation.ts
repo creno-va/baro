@@ -1,4 +1,8 @@
-import type { V2UserMessage } from "../../contracts/v2";
+import {
+  type V2UserMessage,
+  v2FailureCodeSchema,
+  v2SummaryReconciliationSchema,
+} from "../../contracts/v2";
 import {
   createV2AccountingRepository,
   operationStatements,
@@ -65,6 +69,7 @@ export function createReconciliationRuntime(
     clock?: () => string;
     waitUntil?: (work: Promise<void>) => void;
     confirmed?: (ownerId: string, caseId: string) => Promise<void>;
+    admissionAllowed?: () => Promise<boolean>;
   } = {},
 ) {
   const clock = deps.clock ?? (() => new Date().toISOString()),
@@ -249,6 +254,8 @@ export function createReconciliationRuntime(
     admitTask: async (args, commit) => {
       const r = await receipt(args, "request");
       if (r.response) return r.response;
+      if (deps.admissionAllowed && !(await deps.admissionAllowed()))
+        throw new ReworkError("RATE_LIMITED");
       const a = { ...args.actor, now: clock() },
         source = await loadReconciliationSource(core, a, { write: true });
       if (
@@ -458,6 +465,19 @@ export function createReconciliationRuntime(
       const p = await prepare(),
         proposal = p.state.proposal;
       if (!proposal) throw new ReworkError("REVIEW_REQUIRED");
+      const source = await loadReconciliationSource(
+        core,
+        { ...args.actor, now: clock() },
+        { write: true, requestMessage: p.record.value.requestMessage },
+      );
+      const sourceProof = await capturePublicationSourceAuthority(
+        core,
+        p.guard,
+        proposal.after.facts.flatMap((f) => f.references),
+        source.context.citations,
+        GUIDE_HOSTS,
+      );
+      if (!sourceProof) throw new ReworkError("STALE_REVISION");
       const plan = await prepareReconciledSummary(core, p.guard, {
         snapshotId: proposal.id,
         beforeRevision: proposal.before.revision,
@@ -467,27 +487,96 @@ export function createReconciliationRuntime(
       if (!plan) throw new ReworkError("STALE_REVISION");
       const once = receiptAuthority(args.actor.ownerId, r.name, args.key);
       const response = await p.commit({
-        authority: {
-          sql: `(${plan.authority.sql}) AND (${once.sql})`,
-          values: [...plan.authority.values, ...once.values],
-        },
+        authority: (now) => ({
+          sql: `(${plan.authority.sql}) AND (${once.sql}) AND (${sourceProof.sql})`,
+          values: [...plan.authority.values, ...once.values, ...sourceProof.values(now)],
+        }),
         statements: (claim, id) => [
           ...plan.statements(claim),
           ...receiptStatements(p.guard, r.name, args.key, r.requestHash, claim, id),
         ],
       });
-      await deps.confirmed?.(args.actor.ownerId, args.actor.caseId);
+      try {
+        await deps.confirmed?.(args.actor.ownerId, args.actor.caseId);
+      } catch {
+        /* confirmation is already durably committed; scheduler resumes preparation */
+      }
       return response;
     },
     cancelTaskAndPublish: async (args, prepare) => {
       const r = await receipt(args, "cancel");
       if (r.response) return r.response;
-      const p = await prepare(),
-        jobId = p.record.value.state.currentJobId;
+      let p: Awaited<ReturnType<typeof prepare>>;
+      try {
+        p = await prepare();
+      } catch (error) {
+        if (
+          !["STALE_REVISION", "REVIEW_REQUIRED"].includes((error as { code?: string })?.code ?? "")
+        )
+          throw error;
+        // Cancellation needs current owner/request/job authority, not expired or
+        // deleted source text. It never publishes the obsolete proposal.
+        const record = await records.read(
+          { ...args.actor, now: clock() },
+          args.actor.caseId,
+          "reconciliation",
+          args.actor.caseId,
+          summaryReconciliationRecordSchema,
+        );
+        const w = await workspace.findWorkspace({ ...args.actor, now: clock() }, args.actor.caseId);
+        if (
+          !record ||
+          !w ||
+          w.workspaceRevision !== args.input.expectedRevision ||
+          record.value.state.request?.id !== args.input.requestId ||
+          !["pending", "running", "proposed", "failed"].includes(record.value.state.status)
+        )
+          throw error;
+        const guard = {
+          ownerId: args.actor.ownerId,
+          workspaceId: args.actor.caseId,
+          expectedRevision: w.workspaceRevision,
+          now: clock(),
+        };
+        p = {
+          record,
+          guard,
+          authority: { sql: "1", values: [] },
+          state: v2SummaryReconciliationSchema.parse({
+            ...record.value.state,
+            status: "cancelled",
+            workspaceRevision: w.workspaceRevision + 1,
+            currentJobId: null,
+            failure: null,
+            confirmedSummaryRevision: null,
+            confirmedWorkspaceRevision: null,
+          }),
+        };
+      }
+      const jobId = p.record.value.state.currentJobId;
       const cancellation = jobId
         ? await records.prepareCancellation(p.guard, args.input.requestId)
         : null;
-      if (jobId && !cancellation) throw new ReworkError("STALE_REVISION");
+      let terminal: { sql: string; values: unknown[] } = { sql: "1", values: [] };
+      if (jobId && !cancellation) {
+        const job = await core
+          .statement(
+            "SELECT id,target_revision,status,fencing FROM v2_jobs WHERE id=? AND workspace_id=? AND target_kind='workspace' AND target_id=?",
+            [jobId, args.actor.caseId, args.actor.caseId],
+          )
+          .first<{ id: string; target_revision: number; status: string; fencing: number }>();
+        if (
+          !job ||
+          !p.record.value.state.request ||
+          !["completed", "failed", "cancelled"].includes(job.status) ||
+          job.target_revision !== p.record.value.state.request.input.expectedRevision + 1
+        )
+          throw new ReworkError("STALE_REVISION");
+        terminal = {
+          sql: "EXISTS(SELECT 1 FROM v2_jobs WHERE id=? AND workspace_id=w.id AND target_revision=? AND status=? AND fencing=?)",
+          values: [job.id, job.target_revision, job.status, job.fencing],
+        };
+      }
       const once = receiptAuthority(args.actor.ownerId, r.name, args.key);
       const saved = await records.write(p.guard, {
         kind: "reconciliation",
@@ -496,17 +585,56 @@ export function createReconciliationRuntime(
         schema: summaryReconciliationRecordSchema,
         bumpWorkspace: true,
         ...(cancellation ? { cancellation } : {}),
-        authority: once,
+        authority: {
+          sql: `(${once.sql}) AND (${terminal.sql})`,
+          values: [...once.values, ...terminal.values],
+        },
         statements: (claim, id) =>
           receiptStatements(p.guard, r.name, args.key, r.requestHash, claim, id),
       });
-      if (!saved) throw new ReworkError("STALE_REVISION");
+      if (!saved) {
+        const won = await receipt(args, "cancel");
+        if (won.response) return won.response;
+        throw new ReworkError("STALE_REVISION");
+      }
       return saved.value.state;
     },
   });
   const service = createSummaryReconciliationService(adapter);
   return {
-    service,
+    service: {
+      ...service,
+      async read(input: { ownerId: string; caseId: string }) {
+        const result = await service.read(input),
+          id = result.state.currentJobId;
+        if (id && ["pending", "running"].includes(result.state.status)) {
+          const job = await jobs.find({ ownerId: input.ownerId, now: clock() }, id);
+          if (job?.status === "failed")
+            return {
+              ...result,
+              state: v2SummaryReconciliationSchema.parse({
+                ...result.state,
+                status: "failed",
+                currentJobId: null,
+                proposal: null,
+                failure: job.failure ?? "JOB_TIMEOUT",
+              }),
+            };
+          if (job?.status === "cancelled")
+            return {
+              ...result,
+              state: v2SummaryReconciliationSchema.parse({
+                ...result.state,
+                status: "cancelled",
+                currentJobId: null,
+                proposal: null,
+                failure: null,
+              }),
+            };
+        }
+        return result;
+      },
+    },
     async execute(params: WorkspaceParams, instanceId: string) {
       const record = await records.read(
         { ownerId: params.ownerId, now: clock() },
@@ -548,6 +676,76 @@ export function createReconciliationRuntime(
                 ? ("failed" as const)
                 : ("stopped" as const),
         };
+      } catch (error) {
+        // Only retire metadata for this exact live request/worker. No changed
+        // fact, proposal, citation or canonical summary is published on failure.
+        const lease = leases.get(params.jobId);
+        const current = await records.read(
+          { ownerId: params.ownerId, now: clock() },
+          params.workspaceId,
+          "reconciliation",
+          params.workspaceId,
+          summaryReconciliationRecordSchema,
+        );
+        if (
+          lease &&
+          current?.value.state.request?.id === requestId &&
+          current.value.state.currentJobId === params.jobId &&
+          ["pending", "running"].includes(current.value.state.status)
+        ) {
+          const code = v2FailureCodeSchema.safeParse((error as { code?: string })?.code);
+          const failure = code.success ? code.data : "POLICY_REJECTED";
+          const saved = await records.write(
+            {
+              ownerId: params.ownerId,
+              workspaceId: params.workspaceId,
+              expectedRevision: params.workspaceRevision,
+              now: clock(),
+            },
+            {
+              kind: "reconciliation",
+              expectedVersion: current.revision,
+              lease,
+              bumpWorkspace: true,
+              schema: summaryReconciliationRecordSchema,
+              value: {
+                ...current.value,
+                state: v2SummaryReconciliationSchema.parse({
+                  ...current.value.state,
+                  workspaceRevision: params.workspaceRevision + 1,
+                  status: "failed",
+                  currentJobId: null,
+                  proposal: null,
+                  failure,
+                }),
+              },
+              statements: (claim) => [
+                core.statement(
+                  `UPDATE v2_jobs SET status='failed',failure_code=?,retryable=0,lease_token=NULL,lease_until=NULL,fencing=fencing+1,updated_at=? WHERE id=? AND ${sqlClaim}`,
+                  [failure, clock(), params.jobId, claim],
+                ),
+                core.statement(
+                  `UPDATE v2_operations SET state='failed' WHERE id=(SELECT operation_id FROM v2_jobs WHERE id=?) AND ${sqlClaim}`,
+                  [params.jobId, claim],
+                ),
+                ...quotaTransitionStatements(
+                  core,
+                  params.jobId,
+                  claim,
+                  "released",
+                  undefined,
+                  true,
+                ),
+                core.statement(
+                  `UPDATE v2_workspaces SET current_job_id=NULL WHERE id=? AND current_job_id=? AND ${sqlClaim}`,
+                  [params.workspaceId, params.jobId, claim],
+                ),
+              ],
+            },
+          );
+          if (saved) return { jobId: params.jobId, status: "failed" as const };
+        }
+        throw error;
       } finally {
         runs.delete(requestId);
         leases.delete(params.jobId);
