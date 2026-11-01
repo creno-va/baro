@@ -1,0 +1,183 @@
+{
+  "researchOnly": true,
+  "workspaceBinding": false,
+  "note": "Real public retrieval observations. Body omitted. Not a verified source fixture or a legal approval; synthetic verified test chunks are separate. No observation time/hash was rewritten.",
+  "observations": [
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "1",
+        "cciNo": "1",
+        "cnpClsNo": "2"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=1&cciNo=1&cnpClsNo=2",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:42.546Z",
+      "hash": "48ade0037bb453ac5dc59f944d1e83c92d37e1baa2116bf808e0b5a2feb83319"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "4",
+        "cciNo": "1",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=4&cciNo=1&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:42.797Z",
+      "hash": "31fb2469fbaf1c75f45f3795693d2b7fa3732d14b331ff6595549a5bfe45310b"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "5",
+        "cciNo": "1",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=1&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:42.958Z",
+      "hash": "6e9e3f4444c96a6c8e0deb7a9eea581ad3360fc6746d868fca93608828ad8c4a"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "5",
+        "cciNo": "2",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=2&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:43.149Z",
+      "hash": "7c09d90cf021d4b5680a50336f89aedc7a999dd75a372d44a6bc101334411c50"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "7",
+        "cciNo": "2",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=7&cciNo=2&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:43.318Z",
+      "hash": "5de984b59a0a424318e040fc8935f50fa74296d93d896885e1b1e9f4e68a3791"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "7",
+        "cciNo": "2",
+        "cnpClsNo": "2"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=7&cciNo=2&cnpClsNo=2",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:37:43.485Z",
+      "hash": "2d4f6fa182c930a48e32622f700902733d2e2eb474cd1a2301e0eb091e7b3955"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "734",
+        "ccfNo": "2",
+        "cciNo": "1",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=734&ccfNo=2&cciNo=1&cnpClsNo=1",
+      "reason": "image_omitted",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:41:28.693Z",
+      "hash": "207482b7566667d8a35be733cb00a817ee6856ff0caf9a991991139e268b1eaa"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "293",
+        "ccfNo": "4",
+        "cciNo": "2",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=293&ccfNo=4&cciNo=2&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-09-15",
+      "verifiedAt": "2026-11-01T11:41:28.914Z",
+      "hash": "34141feabeaaa7e1ff6c57d3ad1cfab8c5987027ff400a1c9bbed834e14f9494"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "538",
+        "ccfNo": "5",
+        "cciNo": "3",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=538&ccfNo=5&cciNo=3&cnpClsNo=1",
+      "reason": "image_omitted",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:41:29.083Z",
+      "hash": "652ef9406ef2a78e9368ad8f0962473389d19d00efde14529265a764e20c81a5"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "538",
+        "ccfNo": "3",
+        "cciNo": "1",
+        "cnpClsNo": "2"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=538&ccfNo=3&cciNo=1&cnpClsNo=2",
+      "reason": "image_omitted",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:41:29.246Z",
+      "hash": "3cd9425bf355bb8a9089940233bb1b68095f21dc3a511dbcd4788cee36338b01"
+    },
+    {
+      "plan": {
+        "kind": "official_guide",
+        "institutionId": "moleg_easylaw",
+        "endpointId": "easylaw_text_section",
+        "csmSeq": "568",
+        "ccfNo": "7",
+        "cciNo": "3",
+        "cnpClsNo": "1"
+      },
+      "url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=7&cciNo=3&cnpClsNo=1",
+      "reason": "update_pending",
+      "sourceDate": "2026-10-15",
+      "verifiedAt": "2026-11-01T11:48:25.431Z",
+      "hash": "75b2a3919ad30d617d7557f0de630ebd353a1fd3e61bf8e6421a4938f20ad5a0"
+    }
+  ]
+}
