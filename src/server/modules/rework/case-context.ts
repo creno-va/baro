@@ -24,6 +24,7 @@ export class ReworkError extends Error {
       | "IDEMPOTENCY_CONFLICT"
       | "REVIEW_REQUIRED"
       | "USER_QUOTA_EXCEEDED"
+      | "RATE_LIMITED"
       | "DEPENDENCY_UNAVAILABLE"
       | "CONSENT_REQUIRED",
   ) {

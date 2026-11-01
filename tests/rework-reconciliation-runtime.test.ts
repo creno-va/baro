@@ -3,13 +3,19 @@ import { modelBounds } from "../scripts/provision-ai-budget";
 import type { V2Summary } from "../src/contracts/v2";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2JobsRepository } from "../src/server/db/v2-jobs";
+import { createV2OfficialSourceRepository } from "../src/server/db/v2-official-sources";
 import { createV2WorkspaceRepository } from "../src/server/db/v2-workspace";
 import * as gatewayBudget from "../src/server/modules/budget/gateway-ledger";
+import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
+import { createV2LegalRetrieval } from "../src/server/modules/legal-retrieval/v2/service";
 import * as gatewayWire from "../src/server/modules/llm-gateway/service";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
+import { createWorkspaceDispatcher } from "../src/server/modules/workspace/dispatch";
+import { reconcileStoppedJobs } from "../src/server/runtime/job-recovery";
 import { createReconciliationRuntime } from "../src/server/runtime/rework-reconciliation";
 import { syntheticGatewayInput } from "./helpers/gateway-input";
 import observation from "./helpers/gemini-observation";
+import { createSyntheticLegalTransport } from "./helpers/legal-analysis-fixture";
 import { reportFixture } from "./helpers/report-fixture";
 
 const spies: { mockRestore(): void }[] = [];
@@ -376,4 +382,188 @@ test("a second request runtime cancels another isolate's actual paid worker and 
     n: 1,
   });
   expect((await next.service.read(f.owner)).summary.revision).toBe(1);
+});
+
+test("cancel retires its own live worker even when the issued correction source disappeared", async () => {
+  const f = await fixture();
+  const requested = await f.runtime.service.request(f.owner, crypto.randomUUID(), {
+    expectedRevision: f.rev(),
+    summaryRevision: 1,
+    kind: "correction",
+    explanation: "합성 진술의 날짜를 다시 확인해 주세요.",
+  });
+  if (!requested.request) throw new Error("Missing actual request");
+  const original = f.db.sqlite.query("SELECT * FROM v2_summaries").all();
+  f.db.sqlite.query("DELETE FROM v2_messages WHERE id=?").run(requested.request.id);
+  const cancelled = await createReconciliationRuntime(f.core, f.env, f.options).service.cancel(
+    f.owner,
+    crypto.randomUUID(),
+    { expectedRevision: f.rev(), requestId: requested.request.id },
+  );
+  expect(cancelled.status).toBe("cancelled");
+  expect(f.db.sqlite.query("SELECT * FROM v2_summaries").all()).toEqual(original);
+  expect(
+    f.db.sqlite.query("SELECT status FROM v2_jobs WHERE id=?").get(requested.currentJobId),
+  ).toEqual({ status: "cancelled" });
+  expect(f.calls).toEqual([]);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_job_holds").get()).toEqual({
+    n: 1,
+  });
+});
+
+test("terminal Workflow recovery does not offer a legacy chat retry and the request can be retired", async () => {
+  const f = await fixture();
+  const requested = await f.runtime.service.request(f.owner, crypto.randomUUID(), {
+    expectedRevision: f.rev(),
+    summaryRevision: 1,
+    kind: "addition",
+    explanation: "합성 반환 약속에 관한 자료를 다시 확인합니다.",
+  });
+  if (!requested.request || !requested.currentJobId) throw new Error("Missing actual request");
+  expect(
+    (
+      await createWorkspaceDispatcher(f.core, {
+        binding: f.env.WORKSPACE_PROCESSING,
+        clock: f.options.clock,
+      }).dispatch()
+    ).dispatched,
+  ).toBe(1);
+  const later = new Date(Date.parse(f.actor.now) + 360001).toISOString();
+  f.actor.now = later;
+  setSystemTime(new Date(later));
+  expect(
+    await reconcileStoppedJobs(f.core, {
+      clock: () => later,
+      workspaces: { get: async (id) => ({ id, status: async () => ({ status: "errored" }) }) },
+    }),
+  ).toEqual({ inspected: 1, recovered: 1 });
+  const job = await createV2JobsRepository(f.core).find(f.actor, requested.currentJobId);
+  expect(job).toMatchObject({ status: "failed", failure: "JOB_TIMEOUT", retryable: false });
+  const recreated = createReconciliationRuntime(f.core, f.env, f.options);
+  expect((await recreated.service.read(f.owner)).state).toMatchObject({
+    status: "failed",
+    failure: "JOB_TIMEOUT",
+    currentJobId: null,
+  });
+  expect(
+    (
+      await recreated.service.cancel(f.owner, crypto.randomUUID(), {
+        expectedRevision: f.rev(),
+        requestId: requested.request.id,
+      })
+    ).status,
+  ).toBe("cancelled");
+  expect(f.calls).toEqual([]);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_job_holds").get()).toEqual({
+    n: 1,
+  });
+});
+
+async function bindExistingStatute(
+  f: Awaited<ReturnType<typeof fixture>>,
+  observedAt = f.actor.now,
+) {
+  const sources = createV2OfficialSourceRepository(f.core, GUIDE_HOSTS),
+    guard = { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() };
+  const result = await createV2LegalRetrieval({ LAW_API_OC: "synthetic-only" }, sources, {
+    transport: createSyntheticLegalTransport(),
+    bindCitation: (c) => sources.bindCitation(guard, c),
+  }).retrieve(
+    {
+      asOfDate: new Date(Date.parse(observedAt) + 9 * 3600000).toISOString().slice(0, 10),
+      now: observedAt,
+      plans: [{ kind: "statute", lawTitle: "민법", articles: [{ number: "598", branch: "0" }] }],
+    },
+    {
+      authorize: async () => true,
+      authorizeQuery: async () => true,
+      reserveRequest: async () => true,
+    },
+  );
+  const chunk = result.chunks[0];
+  if (!chunk) throw new Error("Missing actual parsed/bound synthetic statute");
+  const row = crypto.randomUUID(),
+    fact = {
+      id: crypto.randomUUID(),
+      text: chunk.source.body,
+      attribution: "official_source",
+      certainty: "reported",
+      significance: "neutral",
+      conflictingFactIds: [],
+      userEdited: false,
+      references: [{ kind: "official_source", citationId: chunk.citation.id }],
+    };
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_facts(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) VALUES(?,?,?,1,1,?)",
+    )
+    .run(
+      row,
+      fact.id,
+      f.workspaceId,
+      await f.core.encrypt("v2_facts", row, f.actor.ownerId, 1, fact),
+    );
+  return chunk;
+}
+test("confirming a proposal rechecks the official source at the user's later confirmation time", async () => {
+  const f = await fixture(),
+    chunk = await bindExistingStatute(f);
+  const requested = await f.runtime.service.request(f.owner, crypto.randomUUID(), {
+    expectedRevision: f.rev(),
+    summaryRevision: 1,
+    kind: "addition",
+    explanation: "반환 약속에 관한 추가 합성 진술입니다.",
+  });
+  if (!requested.currentJobId) throw new Error("Missing actual job");
+  await f.execute(requested.currentJobId);
+  const proposed = await f.runtime.service.read(f.owner);
+  if (!proposed.state.proposal) throw new Error("Missing actual proposal");
+  const canonical = f.db.sqlite.query("SELECT * FROM v2_summaries").all();
+  f.actor.now = new Date(Date.parse(chunk.source.expiresAt) + 1).toISOString();
+  setSystemTime(new Date(f.actor.now));
+  await expect(
+    f.runtime.service.confirm(f.owner, crypto.randomUUID(), {
+      expectedRevision: f.rev(),
+      summaryRevision: 1,
+      proposalId: proposed.state.proposal.id,
+    }),
+  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  expect(f.db.sqlite.query("SELECT * FROM v2_summaries").all()).toEqual(canonical);
+  expect(f.calls).toHaveLength(2);
+});
+test("source expiry after audit records failure under the same live lease and leaves no pending proposal", async () => {
+  const f = await fixture(),
+    chunk = await bindExistingStatute(
+      f,
+      new Date(Date.parse(f.actor.now) - 86400000 + 30000).toISOString(),
+    ),
+    until = chunk.source.expiresAt;
+  expect((await f.runtime.service.read(f.owner)).context.citations).toHaveLength(1);
+  const ai = f.env.AI as unknown as { run: (...args: unknown[]) => Promise<unknown> },
+    original = ai.run;
+  ai.run = async (...args) => {
+    const result = await original(...args);
+    const { phase } = syntheticGatewayInput(args[1] as Record<string, unknown>);
+    if (phase === "workspace_summary_reconciliation_audit") {
+      f.actor.now = new Date(Date.parse(until) + 1).toISOString();
+      setSystemTime(new Date(f.actor.now));
+    }
+    return result;
+  };
+  const requested = await f.runtime.service.request(f.owner, crypto.randomUUID(), {
+    expectedRevision: f.rev(),
+    summaryRevision: 1,
+    kind: "addition",
+    explanation: "합성 반환 약속을 보완하는 추가 진술입니다.",
+  });
+  if (!requested.currentJobId) throw new Error("Missing actual job");
+  const canonical = f.db.sqlite.query("SELECT * FROM v2_summaries").all();
+  expect((await f.execute(requested.currentJobId))?.status).toBe("failed");
+  expect((await f.runtime.service.read(f.owner)).state).toMatchObject({
+    status: "failed",
+    currentJobId: null,
+    proposal: null,
+  });
+  expect(f.db.sqlite.query("SELECT * FROM v2_summaries").all()).toEqual(canonical);
+  expect(f.calls).toHaveLength(2);
 });

@@ -37,6 +37,7 @@ import {
 import { projectWorkspaceSources } from "../modules/legal-retrieval/v2/workspace-sources";
 import type { Phase } from "../modules/llm-gateway/prompts";
 import { ModelError } from "../modules/llm-gateway/service";
+import { createReworkRuntime, type ReworkRuntimeOptions } from "../modules/rework/runtime";
 import { readConversationModelContext } from "../modules/rework/state";
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { currentTime } from "../modules/workspace/current-time";
@@ -199,11 +200,28 @@ export async function runWorkspaceRuntime(
   params: WorkspaceParams,
   instanceId: string,
   waitUntil: (work: Promise<void>) => void,
-) {
+  options: ReworkRuntimeOptions = {},
+): Promise<
+  { jobId: string; status: "completed" | "failed" | "stopped" } & Partial<
+    Omit<
+      Extract<Awaited<ReturnType<typeof executeWorkspace>>, { status: "failed" }>,
+      "jobId" | "status"
+    >
+  > & {
+      legalRetrieval?: ReturnType<typeof reportLegalRetrieval>[];
+      quotationResolution?: QuotationResolution;
+      comparisonEvidence?: ComparisonEvidenceObservation[];
+    }
+> {
   const core = createV2Core(env.DB, await createCaseDataCipher(env), {
     applicationCostLimitsEnabled: env.APPLICATION_COST_LIMITS_ENABLED !== "false",
     monthlyBudgetCapEnabled: env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
   });
+  const rework = createReworkRuntime(core, env, { ...options, waitUntil });
+  const analysis = await rework.analysis.execute(params, instanceId);
+  if (analysis) return analysis;
+  const reconciliation = await rework.reconciliation.execute(params, instanceId);
+  if (reconciliation) return reconciliation;
   const legalRetrieval: ReturnType<typeof reportLegalRetrieval>[] = [];
   let quotationResolution: QuotationResolution | undefined;
   const comparisonEvidence: ComparisonEvidenceObservation[] = [];
@@ -401,6 +419,7 @@ export async function runWorkspaceRuntime(
               .first());
           };
           const retrieval = createV2LegalRetrieval(env, sourceRepository, {
+            ...(options.transport ? { transport: options.transport } : {}),
             observeRequest: reportLegalRequest,
             observeOutcome: reportLegalOutcome,
             observeUpstreamRejection: reportLegalRejection,
@@ -444,6 +463,15 @@ export async function runWorkspaceRuntime(
       });
     },
   });
+  if (result.status === "completed") {
+    // Existing cases stay unconfirmed/opt-out. A completed dialog turn in an
+    // opted-in case resumes only after any newly changed facts are confirmed.
+    try {
+      await rework.resume(params.ownerId, params.workspaceId);
+    } catch {
+      /* durable scheduler recovery */
+    }
+  }
   // The internal Workflow receipt remains inspectable when a console event is absent.
   // Public job responses still come from the unchanged repository contract.
   return {

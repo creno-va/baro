@@ -41,6 +41,7 @@ export function createWorkspacesApi(
   options: {
     dependencies?: (env: Env, core: V2Core, ownerId: string) => Promise<WorkspaceDependencies>;
     turnstile?: typeof verifyTurnstile;
+    afterConfirmed?: (env: Env, core: V2Core, ownerId: string, caseId: string) => Promise<void>;
   } = {},
 ) {
   const app = new Hono<ApiEnvironment>();
@@ -272,6 +273,15 @@ export function createWorkspacesApi(
         return c.json(await s[name](a.ownerId, id, key, body), 202);
       }
       const result = await s[name](a.ownerId, id, key, body);
+      if (name === "confirm" && options.afterConfirmed) {
+        const core = createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+          applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+          monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+        });
+        // Admission is bounded and does not call a model. Complete it before
+        // the client's fresh GET so its actual pending job is visible.
+        await options.afterConfirmed(c.env, core, a.ownerId, id).catch(() => undefined);
+      }
       if (result && "edit" in result) {
         c.header("retry-after", "1");
         return c.json(result, 202);

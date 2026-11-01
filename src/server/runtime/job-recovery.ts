@@ -125,7 +125,10 @@ export async function reconcileStoppedJobs(
         // A dispatched Workflow that ended before acquiring its lease still
         // consumed this runtime ordinal; retry must not reuse that terminal ID.
         core.statement(
-          `UPDATE v2_jobs SET status='failed',failure_code='JOB_TIMEOUT',retryable=CASE WHEN ${retry.sql} THEN 1 ELSE 0 END,
+          `UPDATE v2_jobs SET status='failed',failure_code='JOB_TIMEOUT',retryable=CASE WHEN (${retry.sql}) AND NOT EXISTS(
+            SELECT 1 FROM v2_rework_records r WHERE r.workspace_id=v2_jobs.workspace_id AND r.state='published' AND
+            ((r.kind='task' AND r.entity_id=v2_jobs.id) OR (r.kind='reconciliation' AND r.workspace_revision=v2_jobs.target_revision))
+          ) THEN 1 ELSE 0 END,
           attempts=attempts+CASE WHEN status='queued' THEN 1 ELSE 0 END,
           lease_token=NULL,lease_until=NULL,fencing=fencing+1,updated_at=? WHERE id=? AND ${sqlClaim}`,
           [...retry.values, observedAt, row.id, claim],

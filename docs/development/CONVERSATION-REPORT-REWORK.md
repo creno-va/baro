@@ -41,12 +41,12 @@
 
 | 세션 제목 | thread ID / host | 이슈·브랜치 | 소유 범위 | PR/상태 |
 | --- | --- | --- | --- | --- |
-| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-execution` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 계약/공통 저장/작업 admission·gateway 선행 병합; 실제 runtime·Hono 통합 중 |
-| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636/646/649/654 병합; PR655 접근성 초점 보강 CI 중 |
+| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-integration` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 계약/공통 저장/작업 admission·gateway 선행 병합; 실제 runtime·Hono 통합 중 |
+| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636/646/649/654/655 병합; failed primary 재설명 retire 보강 후속 중 |
 | BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644/652 병합; 공식 binding·관찰 certainty·같은 bounded round의 절차 조회 보존 |
 | BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629/635 병합; 재사용 업로드·대화 callback·44px 검증, 실제 카메라 기기/provider 별도 |
 | BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-conversation-agent` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633 core 병합; PR642 Workspace·대화 실제 통합/6여정 harness 진행 중 |
-| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641 병합; 6문서28쪽 실제 PDF 렌더·고정 Linux CI 성공, 최종 통합·ACK 유실 retry 후속 별도 |
+| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641 병합; 6문서28쪽 실제 PDF 렌더·고정 Linux CI 성공, PR657 ACK 유실 전체 요청 보존 병합; 최종 통합 별도 |
 | BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632/639/643/645/648/651/653 병합; 순수 source builder·실제 저장·위임 handler 준비 완료 |
 
 한 파일 한 소유자다.03/06은 Workspace.tsx·ReportReview.tsx를 수정하지 않는다. 공통 src/contracts/, src/server/db/, drizzle/, 공통 API/client·facade·export, gateway service/중앙 schemas/등록, router/runtime 조립은00만 변경한다. 기존 `src/server/api/v2/workspaces.ts`는00 소유이며01은 독립 재조율 서비스를 제공한다. handler 신설/위임은 정확 경로를 먼저 기록한다.
@@ -119,3 +119,24 @@ PR647은 최종 head8302c034의 Quality41307390432/Legal41307390403/native PDF41
 분석 완료 후 report continuation은 원래 report revision CAS를 암호화한 등록 영수증으로 보존한 뒤 기존 reports.generate를 호출한다. 모델/법률 API를 export에 넣지 않는다. ACK 유실 재요청은 원래 report를 반환하며 이후 사용자가 수정한 리포트는 덮어쓰지 않는다. unavailable/empty와 실제 provider failure를 분리하고, 법률 근거가 준비되지 않은 리포트에는 그 한계를 표시한다. 사용자 편집 보고서는 검증된 새 analysis report로 재승격하지 않는다.
 
 현재 focused 실행20 tests194 assertions, 기존 실제 workerd/D1/원장/업그레이드4 tests1480 assertions 통과. DB drift/fresh/upgrade 및 production build/local workerd 부팅 통과. quick 첫 검사에서 새 테스트의 nullable 타입 오류를 발견해 검사를 유지하며 명시적인 존재 확인으로 수정했고 quick 최종673 tests6286 assertions를 포함한 전체 profile이 성공했다. 이 계층의 callback/port 검증과 최종 중앙 Hono/브라우저 6여정 완료는 구분한다. 아직 중앙 action/후속 handler 조립·서버 자동 준비/재개·최종 browser/PDF/manual full은 남아 있다.
+
+
+### 실제 중앙 API·자동 준비 조립
+
+PR656 head6c148074f31ca801b6545a168c2cef4ba971b6cc의 Quality41313917239/Legal41313917258/nativePDF41313917231이 모두 성공해 mainb4c51583468c160d9b5b6277bed759decabea13a에 병합했다. PR657은85357f281b03b9c5bd2a0a40f6c9cb6f5ab7ee57의 Quality41314569832/nativePDF41314569810 성공 뒤 mainae054f493f1eb0ce64d739e15c7c874e8645fcdc, PR658은8299c97c8c91dcd475f3ee3a647d92eabd3878fd의 Quality41315267820/Legal41315267814 성공 뒤 main5a1e00748bddc2fcd1a285e2bb2375fc4d63c207, PR655는 최신 base 갱신 후 e40900d8e827286a8e8cb62a0741a0edc8546ecd의 Quality 성공 뒤 main708dbff143b8c42169a490f2e2a72435a3694083에 병합했다. PR659의374b05981846519cf8aec35783a73c02609b426b Quality41316730651/nativePDF41316730663 성공 뒤 main36211308eecc901a9ef5681d415c47cd1e9232ab에 병합했다. 모두00이 exact head로 순차 병합했으며 관리자 우회·main 직접 push·배포는 없다.
+
+00 단독 소유 중앙 파일은 modules/rework/runtime.ts·resolution-runtime.ts와 기존 rework API/workspace API/runtime/dispatch 조립이다. 실제 Workflow는 기존 chat_response DTO와 outbox를 유지하면서 private analysis/reconciliation record에 따라 실행을 분기한다. 목적 opt-in이 없는 옛 사건은 자동 분석 대상으로 추정하지 않는다. 최초 요약·재조율 확인, 목적/절차 변경과 자료 처리 완료 뒤 준비를 재개하고, 브라우저가 닫혀도 기존 제품 dispatch scheduler의 bounded4/rotating scan으로 미완료 의도를 복구한다. GET/poll은 새 작업을 접수하지 않는다.
+
+자동 의도는 사건 basis와 기술 설정만 구분한다. 가격/FX/funding/allocation 관측은 fingerprint나 실행 gate가 아니다. 같은 조건의 provider 실패는 자동 반복하지 않고 실제 AI 일일 한도 초기화만 새 일자의 별도 요청/CAS로 재개한다. 공급자 실패·필수 기술 설정 누락은 실패로 남기고, 준비 가능한 사실 리포트에는 법률 분석 미완료를 표시한다. 사용자 편집·추가 증거·절차/목적 변경은 원래 요청의 report CAS로 구분한다. 새 근거의 새 리포트와 이전 immutable 보고서를 보존한다.
+
+대화 actions는 owner/case/request 전체 hash와 HTTP key 바인딩을 유지하고 durable paid receipt를 expectedRevision보다 먼저 재확인한다. 후속 handler는 실제 resolution 저장 adapter, 현재 report/analysis/source/input/scope와 최종 시각의 binding·TTL·권한·session/CAS를 사용한다. 저장 citation·원문·리포트 snapshot identity를 그대로 동결하고 새 시각을 만들어 승격하지 않는다. 재조율의 늦은 사용자 확정도 공식 출처를 재검증하며, 감사 뒤 TTL이 만료되면 같은 live request/job/lease에서 실패 metadata만 기록한다. 삭제된 correction source의 취소와 terminal Workflow 실패 후 retire는 정본을 바꾸지 않는다. 해당 private job은 구형 chat retry로 다시 실행하지 않는다.
+
+현재 actual signed Hono/DB/AES의 두 입장×후속3선택, 실제 초안/저장 handler·멱등 replay·동의철회 저장본 읽기/새 쓰기 차단·계정 전환, 자동 준비/실패/AI 일자 복구·증거 변경·이전 report 보존·실제 native plan/analyze/independent audit/공식 파서·binding→report/HTML 일치15 tests162 assertions를 통과했다. 재조율 actual native·독립 audit·other-isolate cancel·issued source 삭제·actual terminal recovery·사용자 지연 확정 TTL·감사 뒤 자연 만료9 tests86 assertions를 통과했다. native workerd/기존 복구51 tests1896 assertions, quick 전체 profile(마지막673 tests6286 assertions 묶음 포함), DB drift/fresh/upgrade를 통과했다. 초기 중앙 분기 반환 type이 기존 내부 stageTimings 추론을 좁히는 typecheck 실패를 보존하고, 실제 metadata 타입을 유지하는 반환 선언으로 수정했다. 현재 tree production build/local workerd 재확인 중이다.
+
+최종 검증용 test-only 파일 소유권을 명시 배정했다.04는 tests/helpers/rework-native-model.ts(외부 모델 출력만)·rework-runtime-fixture.ts(같은 중앙 제품 factory에 서명 session/Hono/DB/AES/원장을 그대로 조립)·기존 loopback/browser harness를 소유한다.03은 tests/helpers/rework-native-processor.ts의 외부 native probe/process transport만 소유하고 DB/job/admission/cost를 대체하지 않는다.05는 tests/helpers/rework-pdf-processor.ts의 격리 Docker에서 제품 report.py를 실제 실행하는 PDF transport만 소유한다.04가03/05 helper를 재사용하며 도메인 로직·DTO 응답을 복제하지 않는다. 실제 PDF 파싱/카메라/provider 인수와 정확 bytes의 합성 upstream 처리를 구분한다. 중앙 제품 파일은 계속00 소유다.
+
+전체 intake2×3→재조율/확인→자료/사진→공식 근거 분석→report→후속6여정 browser와 실제 최종PDF 생성·렌더·검토, exact 최종 main manual validate:full은 아직 남아 있다. 합성 native/공식 source·model 검증은 실제 계정 provider/OAuth/법률 승인·공개 gate 성공이 아니다.
+
+중앙 Workflow dispatcher에 HTTP에서 선택할 수 없는 5번째 constructor options를 연결해 offline source transport와 같은 report factory를 실제 production dispatcher가 소비한다. 기본4인자 운영 동작은 같다. 최종 fixture가 private job 선택 분기를 복제하거나 실제 외부 법률 API로 유출되지 않도록 하는 포트이며, signed Hono 검사의 모든 job drain도 이 dispatcher로 바꿨다. 기존 runtime9+새중앙15 =24 tests240 assertions 재통과. PR661은 이 작은 포트까지 포함한 새 head로 CI를 다시 확인한다.
+
+자동 준비도 기존 ANALYSIS_ACCOUNT_LIMIT를 paid admission 전에 검사한다. 실제 rate 제한 중에는 미접수 의도를 보존해 다음 허용 시 재개하며 provider 호출/작업을 만들지 않는다. 이 검사 추가 뒤 중앙 actual dispatcher16 tests168 assertions 통과(기존 두 목적의 법령·판례/요건·비교/HTML 일치 포함). 가격·재원 관측을 이 경계에 섞지 않는다.
