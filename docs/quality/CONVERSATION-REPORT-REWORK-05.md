@@ -2,7 +2,7 @@
 
 ## 구현과 경계
 
-- #626, `codex/626-report-rework`. 계약 #628, shared client #630, 자료 #629/#635, DB #634, 대화 domain #633, 분석 domain #631, 해결 domain #632의 성공 CI와 main 병합을 확인한 뒤 통합했다. 중앙 composition·Workspace·병합·배포는 00/04 소유다.
+- #626, `codex/626-report-rework`. 계약 #628, shared client #630, 자료 #629/#635, DB #634, 대화 domain #633, 분석 domain #631/#638, 해결 domain #632/#639의 성공 CI와 main 병합을 확인한 뒤 통합했다. 중앙 composition·Workspace·병합·배포는 00/04 소유다.
 - 검증된 저장 분석과 연결된 공식 원문만 reports에서 읽는다. 리포트/PDF 다운로드는 모델·검색·법률 API를 실행하지 않는다. 준비는 명시적 `prepare_report`이며 진입은 read-only `peekReport`이다.
 - canonical V2ReportBody를 유지하고 private review snapshot에 검증된 분석·정확한 원문 excerpt를 보존한다. 웹·HTML·PDF는 같은 편집 가능한 본문/section parser를 사용한다. 사용자가 편집한 분석은 검증 완료 표시를 유지하지 않는다.
 - 법적 요건과 사실·증거 위치·미확인 부분, 판례 공통점·차이점·의미, 입장별 약점·자료·다음 행동과 원문/기준일을 표시한다. `ready/partial/empty/unavailable/review_required`를 구별한다. 출처 목록만으로 완성 처리하지 않는다.
@@ -18,7 +18,7 @@
 - `validate:quick`, `validate:build` 및 로컬 workerd의 실제 빌드 login HTML 검증.
 - `bun scripts/report-regressions.ts`: 39개 파일, 285 tests / 3449 assertions 통과. 암호화 저장소·권한·삭제·session·lease·HTML/PDF/ZIP·실패/재시도·선택 사진 및 새 분석 회귀 포함.
 - 실제 SQLite rework repository publish와 workerd D1에서 분석 원본 경합, 오래된 DI loader, 다른 entity, context 변경, legacy source bytes·digest·정렬을 확인했다.
-- 브라우저: rework read-only 진입, 명시적 생성과 실패/재시도, 실제 업로드 컴포넌트의 접수→처리→교정→사건 반영 요청→새 리포트, stale 편집 보관, 계정 전환, 웹/HTML 1440px·375px 줄바꿈, 기존 다운로드 상태와 inline 사진을 검사했다. API 응답은 합성 fixture이며 실제 외부 인수와 구분한다.
+- 브라우저: rework read-only 진입, 명시적 생성과 실패/재시도, 실제 업로드 컴포넌트의 접수→처리→교정→사건 반영 요청→새 리포트, stale 편집 보관, 계정 전환, 웹/HTML 1440px·375px 줄바꿈, 기존 다운로드 상태와 inline 사진을 검사했다. #639 main(8a5e1711) 통합 후 실제 ReportReview→FollowUpResolution 조립에서 청구·방어 양쪽×3개 경로가 모두 통과했다. self/lawyer도 legacy report GET 0, save_report는 PDF 실패→완료 표시 없음→명시적 재시도 다운로드 성공이며 새 분석/초안/해결 변경 요청은 0이다. 결합 화면의 375px 가로 넘침 없음·44px 터치 영역·섹션 간격도 확인했다. API 응답은 합성 fixture이며 실제 외부 인수와 구분한다.
 
 ## 실제 PDF와 시각 검증
 
@@ -35,4 +35,4 @@
 
 ## 통합·외부 인수
 
-중앙 runtime은 `readPreparedAnalysis`와 `preparedAnalysisMatchesScope`를 실제 analysis repository/current-scope 검사로 연결해야 한다. 04는 `embedded rework`를 명시해 read-only 진입을 사용한다. 06의 readonly peek/metadataOnly 후속 연결도 성공 CI/main 후 확인한다. 병합·preview/production·최종 main SHA의 validate:full·실제 외부 공급자 smoke와 공개/법률 승인 상태는 00의 별도 인수이며 이 합성 검증으로 완료 처리하지 않는다. 비용 관측 전용, AI200/일, 공급자/모델·권한·동의·암호화·삭제·lease·실제 용량 정책은 유지한다.
+중앙 runtime은 `readPreparedAnalysis`와 `preparedAnalysisMatchesScope`를 실제 analysis repository/current-scope 검사로 연결해야 한다. 04는 `embedded rework`를 명시해 read-only 진입을 사용한다. 06의 readonly peek/metadataOnly #639는 최신 CI 41303033100 성공·main 8a5e1711 병합 후 실제 조립으로 확인했다. 병합·preview/production·최종 main SHA의 validate:full·실제 외부 공급자 smoke와 공개/법률 승인 상태는 00의 별도 인수이며 이 합성 검증으로 완료 처리하지 않는다. 비용 관측 전용, AI200/일, 공급자/모델·권한·동의·암호화·삭제·lease·실제 용량 정책은 유지한다.
