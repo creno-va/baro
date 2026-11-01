@@ -264,7 +264,9 @@ test.each(["prepare_claim", "respond_to_claim", "unconfirmed"] as const)(
     const f = await setup(purpose);
     try {
       const { snapshot } = await f.service.prepare(f.input);
-      expect(snapshot.status).toBe("ready");
+      expect(snapshot.status).toBe(purpose === "unconfirmed" ? "partial" : "ready");
+      if (purpose === "unconfirmed")
+        expect(snapshot.limitations.some((text) => text.includes("입장별 분석"))).toBe(true);
       expect(snapshot.citations.map((c) => c.kind)).toEqual(["statute", "precedent"]);
       expect(snapshot.citations[0]).toMatchObject({ title: "민법", article: "제598조" });
       expect(snapshot.citations[1]).toMatchObject({

@@ -229,6 +229,11 @@ export function createAutomaticLegalAnalysis(deps: {
               "제한된 검색과 원문 일부를 바탕으로 확인했으며 모든 관련 자료를 찾았다는 뜻은 아니에요.",
             ]
           : []),
+        ...(input.context.casePurpose === "unconfirmed"
+          ? [
+              "고소·청구를 준비하는 쪽인지 상대방 주장에 대응하는 쪽인지 확인해야 입장별 분석을 완성할 수 있어요.",
+            ]
+          : []),
         "현재 법령 기준의 검토 자료예요. 사건 발생 시점의 적용과 최종 법적 판단은 별도로 확인해야 해요.",
       ]),
     ];
@@ -326,6 +331,7 @@ export function createAutomaticLegalAnalysis(deps: {
       throw new LegalAnalysisError("POLICY_REJECTED");
     await bound(retrieval);
     const complete =
+      input.context.casePurpose !== "unconfirmed" &&
       !projection.sourceCoverage.sourcesPartial &&
       availability.every((a) => a.status === "verified") &&
       draft.issues.length > 0 &&
