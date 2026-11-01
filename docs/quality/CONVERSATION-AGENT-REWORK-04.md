@@ -356,3 +356,18 @@ consumer의 선행 CI/main을 기다린다. 원래 실패의 PDF·HTML·protocol
 보존한다. 사건/자료 원문·절차 설명·토큰/쿠키·stack/SQL은 포함하지 않으며 CI artifact 수집
 대상에서도 제외한다. 일반 full을 원인 수정 전에 반복하지 않는다. main691 통합 및 이
 테스트 관측 보강 뒤 quick(Astro542 error0, 기존674 포함)가 통과했다.
+
+320px 자료 모달의 footer 아래20px에 원문이 드러나는 실제 배치도 측정해 수정했다. 수정 전
+scrollport bottom823/footer bottom803의 띠에서 FileReview fieldset/label/본문이 hit-test됐다.
+자료 전용 class의 bottom padding을 footer 내부로 옮긴 뒤 시작/중간/끝 모두 bottom823으로
+일치하고, 같은 버튼 top631·총scroll437·마지막본문 bottom619를 유지했다. 버튼3개는 각각
+44px 높이와44px 이상 너비이며 흰 opaque 배경이 하단까지 덮는다. 실제 route의 독립
+Chromium/WebKit 회귀는44px·본문 접근·Escape/초점 복귀까지 통과했다. global Dialog/token과
+03 FileReview는 수정하지 않았다.
+
+공통 표시 helper PR692 exact `695a70f2f91a90d14a5a1263b9433b4d294ce935`의
+Quality41347886953/nativePDF41347886991 성공/main `6869aa6c`,06 consumer PR693 exact
+`4a2e76cac7a220d182554a181b881d818522db2c`의 Quality41348655199 성공/main `38be24aa`를
+확인해 통합했다. photo 검증은 최종6여정의 respond_to_claim-save 한 경로만 기존 촬영 picker와
+실제 합성 PNG로 준비한다. 다른5경로와 claim-self의 실제 큐 ACK 유실 검사는 유지한다.
+실제 기기 카메라 성공이나 low_quality 관찰의 확정 사실 승격을 주장하지 않는다.

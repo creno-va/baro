@@ -2373,7 +2373,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       )}
       <dialog
         ref={dialog}
-        className="workspace-dialog"
+        className={`workspace-dialog${preview ? " workspace-dialog--material" : ""}`}
         onCancel={(event) => {
           event.preventDefault();
           closeDialog();

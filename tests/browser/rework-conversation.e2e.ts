@@ -18,6 +18,7 @@ async function openAction(page: Page, name: string) {
 }
 type Fixture = Awaited<ReturnType<typeof openReworkBrowserFixture>>;
 const materialText = "합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다.";
+const photoName = "synthetic-conversation-photo.png";
 async function counters(f: Fixture) {
   const response = await f.control("stats");
   expect(response.ok()).toBe(true);
@@ -179,22 +180,33 @@ async function addMaterial(
   page: Page,
   expectProcessingFailure = false,
   afterSend?: () => Promise<void>,
+  camera = false,
 ) {
+  const name = camera ? photoName : "synthetic-conversation-contract.txt";
   const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
   await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
   await expect(materials).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
-  await materials.getByRole("button", { name: "파일 선택", exact: true }).click();
-  await (await chooser).setFiles({
-    name: "synthetic-conversation-contract.txt",
-    mimeType: "text/plain",
-    buffer: Buffer.from(materialText),
+  await materials
+    .getByRole("button", { name: camera ? "촬영해서 추가" : "파일 선택", exact: true })
+    .click();
+  const picker = await chooser;
+  if (camera) {
+    expect(await picker.element().getAttribute("accept")).toBe("image/*");
+    expect(await picker.element().getAttribute("capture")).toBe("environment");
+  }
+  await picker.setFiles({
+    name,
+    mimeType: camera ? "image/png" : "text/plain",
+    buffer: camera
+      ? await readFile(new URL("../fixtures/media/image-markers.png", import.meta.url))
+      : Buffer.from(materialText),
   });
-  await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
-    "synthetic-conversation-contract.txt",
-  );
+  await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(name);
+  if (camera)
+    await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await afterSend?.();
@@ -202,7 +214,7 @@ async function addMaterial(
     await expect(materials.getByText("처리 실패 · 확인 필요", { exact: true })).toBeVisible();
     await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
     const original = materials.getByRole("button", {
-      name: "synthetic-conversation-contract.txt",
+      name,
       exact: true,
     });
     await expect(original).toBeVisible();
@@ -210,10 +222,68 @@ async function addMaterial(
   }
   const attachment = page
     .locator(".workspace-message-attachments")
-    .getByRole("link", { name: "synthetic-conversation-contract.txt", exact: true })
+    .getByRole("link", { name, exact: true })
     .last();
   await expect(attachment).toBeVisible();
   return attachment;
+}
+
+async function inspectCameraEvidence(page: Page, directory: string, fixture: Fixture) {
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.getByRole("heading", { name: "사진 분석 결과 확인", exact: true }),
+  ).toBeVisible();
+  await expect(dialog.getByText(/일부만 분석했어요\. 흐리거나 읽지 못한 위치/)).toBeVisible();
+  const proof = await page.evaluate(async (name) => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+    const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
+    const file = (await api.files.list(id, { metadataOnly: true })).find((f) => f.name === name);
+    if (!file) throw new Error("SYNTHETIC_CAMERA_FILE_MISSING");
+    const [review, original, item] = await Promise.all([
+      api.files.review(id, file.id),
+      api.files.original(id, file.id),
+      api.cases.get(id),
+    ]);
+    const originalHash = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", await original.arrayBuffer())),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+    const coverage = review.coverage;
+    return {
+      synthetic: true,
+      actualCameraDevice: false,
+      fileId: file.id,
+      metadataHash: file.uploadContentHash,
+      originalHash,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      revision: file.revision,
+      coverage: coverage?.category === "image" ? coverage : null,
+      positions: review.observations.map((o) => o.value.position.kind),
+      proposedCertainties: (item.summaryDetails?.facts ?? [])
+        .filter((fact) =>
+          fact.references.some((r) => r.kind === "user_material" && r.fileId === file.id),
+        )
+        .map((fact) => fact.certainty),
+    };
+  }, photoName);
+  const bytes = await readFile(new URL("../fixtures/media/image-markers.png", import.meta.url));
+  const originalHash = createHash("sha256").update(bytes).digest("hex");
+  expect(proof.metadataHash).toBe(originalHash);
+  expect(proof.originalHash).toBe(originalHash);
+  expect(proof.mimeType).toBe("image/png");
+  expect(proof.sizeBytes).toBe(bytes.byteLength);
+  expect(proof.coverage).toMatchObject({
+    category: "image",
+    status: "partial",
+    observation: "low_quality",
+  });
+  expect(proof.positions).toContain("image");
+  expect(proof.proposedCertainties.every((value) => value === "uncertain")).toBe(true);
+  expect((await counters(fixture)).models).toContain("vision");
+  await writeFile(join(directory, "photo-evidence.json"), JSON.stringify(proof, null, 2));
+  return proof.fileId;
 }
 
 /** The central fixture starts a real new case, not a pre-confirmed report. */
@@ -575,6 +645,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
       const queuedMessages: { body: string | null; key: string | undefined }[] = [];
       const loseQueuedAck = purpose === "prepare_claim" && followup === "직접 해결";
+      const camera = purpose === "respond_to_claim" && followup === "리포트만 저장";
+      const evidenceName = camera ? photoName : "synthetic-conversation-contract.txt";
+      const explanation = camera
+        ? "방금 올린 사진의 원본은 제가 보관하고 있습니다."
+        : "방금 올린 계약서의 원본은 제가 보관하고 있습니다.";
       const f = await openReworkBrowserFixture(context, browserOrigin, purpose, {
         dropResponse: (request, response) => {
           if (
@@ -618,6 +693,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
                 await page.getByRole("button", { name: "보내기", exact: true }).click();
               }
             : undefined,
+          camera,
         );
         if (loseQueuedAck) {
           expect(queuedMessages).toHaveLength(2);
@@ -633,10 +709,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         await attachment.click();
         await expect(
           page.getByRole("dialog").getByRole("heading", {
-            name: "synthetic-conversation-contract.txt",
+            name: evidenceName,
             exact: true,
           }),
         ).toBeVisible();
+        const photoId = camera ? await inspectCameraEvidence(page, directory, f) : null;
         await expect(page.getByRole("dialog")).toHaveCount(1);
         await writeFile(
           join(directory, "materials-visual.json"),
@@ -650,13 +727,14 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         const confirmation = page.getByRole("region", { name: "사건 정리 재확인", exact: true });
         // New material/facts invalidate the earlier immutable confirmation.
         // Consume 01's explicit stale recovery rather than bypassing it.
-        await expect(
-          confirmation.getByRole("region", { name: "사실과 출처", exact: true }),
-        ).toContainText(materialText);
+        if (!camera)
+          await expect(
+            confirmation.getByRole("region", { name: "사실과 출처", exact: true }),
+          ).toContainText(materialText);
         await confirmation.getByRole("button", { name: "다시 설명하기", exact: true }).click();
         await page
           .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
-          .fill("방금 올린 계약서의 원본은 제가 보관하고 있습니다.");
+          .fill(explanation);
         await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
         const confirmChange = confirmation.getByRole("button", {
           name: "변경안 확정하기",
@@ -673,13 +751,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         if (await refreshExplanation.isVisible()) {
           const beforeRefresh = f.observations.filter((item) => item.method === "POST").length;
           await refreshExplanation.click();
-          const explanation = page.getByRole("textbox", {
+          const explanationInput = page.getByRole("textbox", {
             name: "빠진 내용을 알려주세요",
             exact: true,
           });
-          await expect(explanation).toHaveValue(
-            "방금 올린 계약서의 원본은 제가 보관하고 있습니다.",
-          );
+          await expect(explanationInput).toHaveValue(explanation);
           const requestChange = page.getByRole("button", { name: "변경안 요청하기", exact: true });
           await expect(requestChange).toBeEnabled();
           expect(f.observations.filter((item) => item.method === "POST")).toHaveLength(
@@ -711,6 +787,27 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         await expect(analysis.getByText("법 조항·요건과 사건 근거", { exact: true })).toBeVisible();
         await expect(analysis.getByRole("link", { name: /공식 원문/ }).first()).toBeVisible();
+        if (photoId) {
+          const included = await page.evaluate(async (fileId) => {
+            const path = "/src/client/api/index.ts";
+            const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+            const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
+            const [state, item] = await Promise.all([
+              api.rework.getConversation(id),
+              api.cases.get(id),
+            ]);
+            return {
+              included: state.snapshot?.includedEvidence.some((e) => e.fileId === fileId),
+              certainties: (item.summaryDetails?.facts ?? [])
+                .filter((fact) =>
+                  fact.references.some((r) => r.kind === "user_material" && r.fileId === fileId),
+                )
+                .map((fact) => fact.certainty),
+            };
+          }, photoId);
+          expect(included.included).toBe(true);
+          expect(included.certainties.every((value) => value === "uncertain")).toBe(true);
+        }
         expect(new URL(page.url()).pathname).toBe(path);
 
         await composer.fill("현재 확인한 내용으로 보고서를 준비해 주세요.");
@@ -727,6 +824,8 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         );
         await page.screenshot({ path: join(directory, "report.png"), animations: "disabled" });
         const preservedPdf = await preserveReport(page, directory, f);
+        if (camera)
+          expect(await readFile(join(directory, "report.html"), "utf8")).toContain(photoName);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         const pdfResponseIndex = f.pdfResponses.length;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();

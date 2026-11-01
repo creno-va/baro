@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 
@@ -110,6 +110,70 @@ test("materials, review and preparation continue inside the actual workspace rou
   await expect(
     dialog.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
   ).toBeVisible();
+  await expect(dialog.locator(".file-review-item").first()).toBeVisible();
+  await expect
+    .poll(() =>
+      dialog.evaluate(
+        (node) =>
+          getComputedStyle(node).opacity === "1" &&
+          !node.getAnimations().some((a) => a.playState === "running" || a.pending),
+      ),
+    )
+    .toBe(true);
+  const footerGeometry = [];
+  for (const position of ["start", "middle", "end"] as const) {
+    const measured = await dialog.evaluate(async (node, position) => {
+      const max = node.scrollHeight - node.clientHeight;
+      node.scrollTop = position === "end" ? max : position === "middle" ? max / 2 : 0;
+      await new Promise(requestAnimationFrame);
+      const footer = node.querySelector<HTMLElement>(".workspace-preview > .workspace-buttons")!;
+      const box = node.getBoundingClientRect();
+      const actions = footer.getBoundingClientRect();
+      const bottom = box.top + node.clientTop + node.clientHeight;
+      const samples = [actions.left + 8, (actions.left + actions.right) / 2, actions.right - 8].map(
+        (x) => {
+          const target = document.elementFromPoint(x, bottom - 4);
+          return { covered: !!target && footer.contains(target), tag: target?.tagName };
+        },
+      );
+      const finalBody = node.querySelector(".workspace-material-apply")!.getBoundingClientRect();
+      return {
+        position,
+        scrollTop: node.scrollTop,
+        maxScroll: max,
+        dialogBottom: box.bottom,
+        scrollportBottom: bottom,
+        footerTop: actions.top,
+        footerBottom: actions.bottom,
+        paddingBottom: getComputedStyle(node).paddingBottom,
+        overflowY: getComputedStyle(node).overflowY,
+        background: getComputedStyle(footer).backgroundColor,
+        buttons: Array.from(footer.querySelectorAll("button"), (button) => {
+          const rect = button.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        }),
+        lastBodyBottom: finalBody.bottom,
+        samples,
+      };
+    }, position);
+    footerGeometry.push(measured);
+  }
+  await writeFile(
+    "/tmp/baro-625-material-footer-geometry.json",
+    JSON.stringify(footerGeometry, null, 2),
+  );
+  await dialog.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  await page.screenshot({ path: "/tmp/baro-625-material-footer-320.png", animations: "disabled" });
+  expect(footerGeometry.every((m) => m.samples.every((s) => s.covered))).toBe(true);
+  expect(footerGeometry.every((m) => m.buttons.every((b) => b.width >= 44 && b.height >= 44))).toBe(
+    true,
+  );
+  expect(footerGeometry.every((m) => /^rgb\(\d+, \d+, \d+\)$/.test(m.background))).toBe(true);
+  expect(footerGeometry.at(-1)!.lastBodyBottom).toBeLessThanOrEqual(
+    footerGeometry.at(-1)!.footerTop + 1,
+  );
   expect(new URL(page.url()).pathname).toBe(base);
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();

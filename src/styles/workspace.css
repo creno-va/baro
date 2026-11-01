@@ -986,6 +986,7 @@
   color: var(--muted-foreground);
 }
 .workspace-dialog {
+  --workspace-dialog-padding: 24px;
   position: fixed;
   inset: 0;
   margin: auto;
@@ -1220,6 +1221,7 @@
     padding-top: 24px;
   }
   .workspace-dialog {
+    --workspace-dialog-padding: 20px;
     padding: 20px;
   }
 }
@@ -1293,6 +1295,13 @@
   bottom: 0;
   padding-block: 12px;
   background: var(--card);
+}
+.workspace-dialog.workspace-dialog--material {
+  padding-bottom: 0;
+}
+.workspace-dialog--material .workspace-preview > .workspace-buttons {
+  z-index: 1;
+  padding-bottom: calc(12px + var(--workspace-dialog-padding));
 }
 
 @view-transition {
