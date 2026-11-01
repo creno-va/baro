@@ -113,7 +113,11 @@ async function preserveReport(page: Page, directory: string) {
   );
   return bytes;
 }
-async function addMaterial(page: Page, expectProcessingFailure = false) {
+async function addMaterial(
+  page: Page,
+  expectProcessingFailure = false,
+  afterSend?: () => Promise<void>,
+) {
   const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
   await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -131,6 +135,7 @@ async function addMaterial(page: Page, expectProcessingFailure = false) {
   );
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await afterSend?.();
   if (expectProcessingFailure) {
     await expect(materials.getByText("처리 실패 · 확인 필요", { exact: true })).toBeVisible();
     await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
@@ -506,7 +511,25 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       context,
     }, testInfo) => {
       const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
-      const f = await openReworkBrowserFixture(context, browserOrigin, purpose);
+      const queuedMessages: { body: string | null; key: string | undefined }[] = [];
+      const loseQueuedAck = purpose === "prepare_claim" && followup === "직접 해결";
+      const f = await openReworkBrowserFixture(context, browserOrigin, purpose, {
+        dropResponse: (request, response) => {
+          if (
+            !loseQueuedAck ||
+            request.method() !== "POST" ||
+            !new URL(request.url()).pathname.endsWith("/messages") ||
+            !request.postDataJSON()?.selectedFileIds?.length ||
+            !response.ok()
+          )
+            return false;
+          queuedMessages.push({
+            body: request.postData(),
+            key: request.headers()["idempotency-key"],
+          });
+          return queuedMessages.length === 1;
+        },
+      });
       const branch = { "직접 해결": "self", "변호사와 해결": "lawyer", "리포트만 저장": "save" }[
         followup
       ];
@@ -522,7 +545,29 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
         const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
         await expect(composer).toBeEnabled();
-        const attachment = await addMaterial(page);
+        const attachment = await addMaterial(
+          page,
+          false,
+          loseQueuedAck
+            ? async () => {
+                await expect.poll(() => queuedMessages.length).toBe(1);
+                await expect(page.locator(".workspace-error")).toBeVisible();
+                await expect(composer).toBeEnabled();
+                await page.getByRole("button", { name: "보내기", exact: true }).click();
+              }
+            : undefined,
+        );
+        if (loseQueuedAck) {
+          expect(queuedMessages).toHaveLength(2);
+          expect(queuedMessages[0]?.key).toBeTruthy();
+          expect(queuedMessages[1]).toEqual(queuedMessages[0]);
+          await expect(
+            page.locator(".workspace-message-attachments").getByRole("link", {
+              name: "synthetic-conversation-contract.txt",
+              exact: true,
+            }),
+          ).toHaveCount(1);
+        }
         await attachment.click();
         await expect(
           page.getByRole("dialog").getByRole("heading", {

@@ -300,3 +300,10 @@ POST200/W37, 새 요청은 expectedW37/S3의 POST202/W38/pending, 직후 GET200�
 실제 protocol을 전달했고 새 operation의 admission source와 옛 receipt의 immutable
 source를 구분하는 중앙 수정 전에는 같은 실패를 반복하지 않는다. 전체6여정/14개 통과는
 아직 기록하지 않는다. 독립 관련 검사169개와 검토 다운로드5개는 현재 main 통합 뒤 통과했다.
+
+검사 head `1d1431966c23fac07dddb827ca00d8d74c6d84d8`의 `bun ci`,
+`validate:quick`(Astro541파일 error0,534/415+4 opt-in skip/674개와 도구 검사),
+`validate:build`와 실제 local production workerd 부팅이 통과했다. 격리 에이전트는
+Chromium11개(7.2초)/WebKit11개(9.8초)를 다시 통과했다. 이 head의 Quality41341386680,
+Legal41341386716, nativePDF41341386787도 모두 성공했다. 수정 전 실제202→stale의 원본
+protocol/로그/화면은 `/tmp/baro-625-recon-202-stale-original`에 별도로 보존했다.
