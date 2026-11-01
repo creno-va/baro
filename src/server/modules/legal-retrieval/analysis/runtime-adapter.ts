@@ -5,13 +5,17 @@ import { invocationIdSchema } from "../../llm-gateway/attempts";
 import { workspaceModelInput } from "../../workspace/pipeline";
 import { createWorkspaceSourceAuthorization } from "../v2/authorization";
 import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../v2/bound-sources";
-import { type Access, type SourceChunk, safePermit } from "../v2/contracts";
+import { type Access, type RetrievalPlan, type SourceChunk, safePermit } from "../v2/contracts";
 import { GUIDE_HOSTS } from "../v2/registry";
 import { createV2LegalRetrieval } from "../v2/service";
 import type { Transport } from "../v2/transport";
 import { type LegalAnalysisInput, legalAnalysisInputSchema } from "./context";
 import { analysisPrecedentDiscovery } from "./discovery";
-import { createAutomaticLegalAnalysis, LegalAnalysisError } from "./service";
+import {
+  createAutomaticLegalAnalysis,
+  LegalAnalysisError,
+  reviewedAdditionalGuidePlans,
+} from "./service";
 
 // Central llm-gateway owns registration, schemas, LOW generation/MEDIUM audit,
 // native wire, timeout and the existing paid attempt ledger for these phases.
@@ -52,6 +56,8 @@ export type LegalAnalysisRuntimeDependencies = {
   /** Root owns current role, confirmed summary, job/lease/attempt and scope guards. */
   authorize: () => Promise<boolean>;
   reserveRequest: Access["reserveRequest"];
+  /** Server-reviewed guide plans only, never accepted from HTTP/model input. */
+  additionalPlans?: readonly RetrievalPlan[];
   /** Trusted current-case bound-source reader; receives at most four IDs. */
   readBoundSources?: (ids: readonly string[], now: string) => Promise<(SourceChunk | null)[]>;
   clock?: () => string;
@@ -63,6 +69,7 @@ export type LegalAnalysisRuntimeDependencies = {
  * Only existing public cache/citation-binding writes occur here. Root retains
  * analysis persistence, dispatch, quota, paid admission and final atomic publication. */
 export function createLegalAnalysisRuntimeAdapter(deps: LegalAnalysisRuntimeDependencies) {
+  const additionalPlans = reviewedAdditionalGuidePlans(deps.additionalPlans);
   const parsedGuard = guardSchema.safeParse(deps.guard);
   if (!parsedGuard.success || !/^[A-Za-z0-9_-]{1,128}$/.test(deps.requestId))
     throw new LegalAnalysisError("INVALID_INPUT");
@@ -172,6 +179,7 @@ export function createLegalAnalysisRuntimeAdapter(deps: LegalAnalysisRuntimeDepe
           readBoundSources: readBound,
           authorize,
           reserveRequest: deps.reserveRequest,
+          additionalPlans,
           clock,
           guideHosts: GUIDE_HOSTS,
           ...(deps.signal ? { signal: deps.signal } : {}),

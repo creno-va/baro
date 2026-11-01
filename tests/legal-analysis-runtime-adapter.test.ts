@@ -4,9 +4,12 @@ import type { LegalAnalysisInput } from "../src/server/modules/legal-retrieval/a
 import {
   createLegalAnalysisRuntimeAdapter,
   type LegalAnalysisGatewayPhase,
+  type LegalAnalysisRuntimeDependencies,
 } from "../src/server/modules/legal-retrieval/analysis/runtime-adapter";
 import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/bound-sources";
+import type { RetrievalPlan } from "../src/server/modules/legal-retrieval/v2/contracts";
 import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
+import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
 import type {
   GatewayAttemptRequest,
   GatewayTransportReceipt,
@@ -16,6 +19,7 @@ import { createLlmGateway, ModelError } from "../src/server/modules/llm-gateway/
 import { workspaceModelInput } from "../src/server/modules/workspace/pipeline";
 import sample from "./fixtures/legal/analysis/scenarios.json";
 import { legalAnalysisFixture } from "./helpers/legal-analysis-fixture";
+import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 const NOW = "2026-10-06T00:00:00.000Z";
 const phases: LegalAnalysisGatewayPhase[] = [
@@ -149,6 +153,8 @@ async function fixture(
     ) => void;
     rejectPlan?: boolean;
     stranger?: boolean;
+    additionalPlans?: readonly RetrievalPlan[];
+    guideLimited?: boolean;
   } = {},
 ) {
   const f = await legalAnalysisFixture();
@@ -327,6 +333,7 @@ async function fixture(
       attempts++;
       return true;
     },
+    ...(options.additionalPlans ? { additionalPlans: options.additionalPlans } : {}),
     clock: () => clock,
     ...(!options.defaultReader
       ? {
@@ -338,6 +345,16 @@ async function fixture(
         }
       : {}),
     transport: async (url, init) => {
+      if (new URL(url).hostname === "www.easylaw.go.kr")
+        return new Response(
+          options.guideLimited
+            ? syntheticGeneralGuide
+            : syntheticGeneralGuide.replace(
+                "개정 사항을 검토하여 향후 업데이트 예정입니다.",
+                "합성 안내",
+              ),
+          { headers: { "content-type": "text/html" } },
+        );
       const response = await f.transport(url, init);
       const u = new URL(url);
       if (!options.many || u.searchParams.get("target") !== "eflaw") return response;
@@ -577,5 +594,69 @@ test.each([
     } finally {
       f.db.close();
     }
+  },
+);
+
+test.each([false, true])(
+  "reviewed server guide reaches the same native gateway/retrieval job and retains limited=%s",
+  async (guideLimited) => {
+    const f = await fixture({
+      additionalPlans: [workspaceGuidePlans.legal_consultation],
+      nativeGateway: true,
+      defaultReader: true,
+      guideLimited,
+    });
+    try {
+      const result = await f.adapter.prepare(f.input);
+      const outcome = result.sourceRetrieval.outcomes.find((o) => o.kind === "official_guide");
+      expect(outcome?.availability).toBe(guideLimited ? "limited" : "verified");
+      expect(outcome?.reason).toBe(guideLimited ? "update_pending" : null);
+      expect(outcome?.chunks).toHaveLength(guideLimited ? 0 : 1);
+      expect(result.snapshot.status).toBe(guideLimited ? "partial" : "ready");
+      expect(f.counts().attempts).toBe(5);
+      expect(f.counts().providerDispatches).toBe(3);
+      expect(f.calls.map((c) => c.phase)).toEqual(phases);
+      expect(f.calls[0]?.input).not.toHaveProperty("additionalPlans");
+      const generation = f.calls[1]?.input as { citations: V2OfficialCitation[] };
+      expect(generation.citations.some((c) => c.kind === "official_guide")).toBe(!guideLimited);
+      const guide = outcome?.chunks[0];
+      if (guide) {
+        const restored = await readBoundSourceBatch(
+          f.core,
+          f.guard.workspaceId,
+          [guide.citation.id],
+          NOW,
+          GUIDE_HOSTS,
+        );
+        expect(restored[0]?.citation).toEqual(guide.citation);
+        expect(restored[0]?.source.body).toBe(guide.source.body);
+      }
+      await f.adapter.prepare(f.input);
+      expect(f.counts().attempts).toBe(5);
+      expect(f.counts().providerDispatches).toBe(3);
+      await Promise.all(f.settled);
+      expect(f.receipts).toHaveLength(3);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test.each([
+  [{ kind: "statute", lawTitle: "민법", articles: [{ number: "598" }] }],
+  [{ ...workspaceGuidePlans.legal_consultation, csmSeq: "not-an-identity" }],
+  [{ ...workspaceGuidePlans.legal_consultation, endpointId: "unreviewed_endpoint" }],
+  [{ ...workspaceGuidePlans.legal_consultation, url: "https://example.com" }],
+  Array.from({ length: 3 }, () => workspaceGuidePlans.legal_consultation),
+  null,
+])(
+  "invalid server-only guide plans fail before model/admission/retrieval: %j",
+  (additionalPlans) => {
+    // Only this port is evaluated: no database, model or transport may be needed.
+    expect(() =>
+      createLegalAnalysisRuntimeAdapter({
+        additionalPlans,
+      } as unknown as LegalAnalysisRuntimeDependencies),
+    ).toThrow("INVALID_PLAN");
   },
 );
