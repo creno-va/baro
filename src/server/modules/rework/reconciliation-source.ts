@@ -64,8 +64,8 @@ export async function loadReconciliationSource(
     if (bytes > MAX_REHYDRATE_BYTES) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
     text += part.text;
   }
-  if (
-    !(await core
+  const currentSummary = async () =>
+    !!(await core
       .statement(
         `SELECT w.id FROM v2_workspaces w JOIN v2_intakes i ON i.id=w.id JOIN v2_summaries s ON s.id=i.summary_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND w.encrypted_payload=? AND i.summary_id=? AND s.snapshot_id=? AND ${aliveWorkspace}`,
         [
@@ -77,9 +77,8 @@ export async function loadReconciliationSource(
           row.snapshot_id,
         ],
       )
-      .first())
-  )
-    throw new ReworkError("STALE_REVISION");
+      .first());
+  if (!(await currentSummary())) throw new ReworkError("STALE_REVISION");
   const summary: V2Summary = v2SummarySchema.parse(JSON.parse(text));
   let issued = options.requestMessage;
   let issuedProof: { sql: string; values: unknown[] } = { sql: "1", values: [] };
@@ -117,7 +116,15 @@ export async function loadReconciliationSource(
   // Admission inserts it atomically; execution always verifies the actual row.
   if (issued && options.admittingMessage && issued.workspaceRevision !== row.revision + 1)
     throw new ReworkError("STALE_REVISION");
-  const context = await readWorkspaceContext(core, actor, actor.caseId, issued, GUIDE_HOSTS);
+  let context: Awaited<ReturnType<typeof readWorkspaceContext>>;
+  try {
+    context = await readWorkspaceContext(core, actor, actor.caseId, issued, GUIDE_HOSTS);
+  } catch (error) {
+    // Its independently fenced intake read can disappear during publication.
+    // Reclassify only a proven source change; keep genuine unchanged-source errors.
+    if (!(await currentSummary())) throw new ReworkError("STALE_REVISION");
+    throw error;
+  }
   const caseContext = await createReworkCaseService(core, { clock: () => actor.now }).get(
     actor.ownerId,
     actor.caseId,
