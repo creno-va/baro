@@ -76,7 +76,8 @@ export type ReconciliationAuthority = {
   authority: ReworkWriteGuard;
 };
 export type ReconciliationWritePlan = {
-  authority: ReworkWriteGuard;
+  /** Time-sensitive proof values are resolved by the repository's final publication clock. */
+  authority: ReworkWriteGuard | ((now: string) => ReworkWriteGuard);
   statements: (claimId: string, recordId: string, revision: number) => D1PreparedStatement[];
 };
 export type ReconciliationStoredRecord = ReworkRecord<StoredSummaryReconciliation>;
@@ -139,10 +140,16 @@ export type SummaryReconciliationStoragePorts = {
 };
 
 const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
-const together = (left: ReworkWriteGuard, right: ReworkWriteGuard): ReworkWriteGuard => ({
-  sql: `(${left.sql}) AND (${right.sql})`,
-  values: [...left.values, ...right.values],
-});
+const together = (
+  left: ReworkWriteGuard,
+  right: ReconciliationWritePlan["authority"],
+): ReconciliationWritePlan["authority"] => {
+  const combine = (proof: ReworkWriteGuard): ReworkWriteGuard => ({
+    sql: `(${left.sql}) AND (${proof.sql})`,
+    values: [...left.values, ...proof.values],
+  });
+  return typeof right === "function" ? (now) => combine(right(now)) : combine(right);
+};
 const idle = (workspaceRevision: number): V2SummaryReconciliation => ({
   contractVersion: v2ReworkVersionSchema.value,
   workspaceRevision,
