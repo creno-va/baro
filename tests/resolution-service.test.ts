@@ -423,3 +423,45 @@ test("losing current analysis preserves the previous draft as unavailable for cu
   expect(next.draft).toEqual(state.draft);
   expect(resolutionDraftIsCurrent(next)).toBe(false);
 });
+test("a verified claim ID cannot authorize an unrelated invented submission office", async () => {
+  const source = resolutionSource();
+  source.citations = [
+    {
+      id: "guide",
+      sourceId: "source",
+      title: "합성 일반 안내",
+      verifiedAt: resolutionNow,
+      contentHash: "c".repeat(64),
+      kind: "official_guide",
+      institutionId: "moleg_easylaw",
+      endpointId: "easylaw_text_section",
+      section: "합성검증",
+      publishedDate: null,
+      url: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf",
+    },
+  ];
+  source.sourceClaims = [
+    {
+      id: "general",
+      text: "합성 일반 안내",
+      kind: "quotation",
+      citationId: "guide",
+      startUtf16: 0,
+      endUtf16: 8,
+    },
+  ];
+  source.procedureChecks = [
+    {
+      id: "institution",
+      label: "담당기관·부서",
+      detail: "추측으로 만든 합성기관에 제출",
+      status: "verified",
+      sourceClaimIds: ["general"],
+    },
+  ];
+  const state = await resolutionHarness(source).service.get("owner", "case");
+  expect(state.procedureChecks.find((check) => check.id === "institution")?.status).toBe(
+    "needs_confirmation",
+  );
+  expect(JSON.stringify(state.procedureChecks)).not.toContain("추측으로 만든 합성기관");
+});

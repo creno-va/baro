@@ -32,6 +32,7 @@ export interface ResolutionSource {
   citations: V2OfficialCitation[];
   sourceClaims: V2SourceClaim[];
   procedureChecks: V2ResolutionCheck[];
+  /** Loader-audited document/context support. A generic consultation guide is insufficient. */
   documentSupport: { documentKind: V2ResolutionDocumentKind; sourceClaimIds: string[] }[];
   /** Literal names/addresses/other private strings from the current authorized report. */
   maskingTokens: string[];

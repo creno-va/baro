@@ -154,6 +154,9 @@ function currentState(source: ResolutionSource, guideHosts: readonly string[]): 
     const valid =
       check.status !== "verified" ||
       (check.sourceClaimIds.length > 0 &&
+        check.sourceClaimIds.some((id) =>
+          visibleClaims.some((claim) => claim.id === id && claim.text === check.detail),
+        ) &&
         check.sourceClaimIds.every((id) =>
           visibleClaims.some(
             (claim) => claim.id === id && source.citations.some((c) => c.id === claim.citationId),
