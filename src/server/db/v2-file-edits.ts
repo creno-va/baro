@@ -4,7 +4,6 @@ import {
   type V2ObservationEditRequest,
   v2DerivativeSchema,
   v2FileObservationSchema,
-  v2FileSchema,
   v2ObservationEditRequestSchema,
   v2OriginalManifestSchema,
 } from "../../contracts/v2";
@@ -22,13 +21,9 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { storedFileMetadataSchema as metadataSchema } from "./v2-file-metadata";
 import { originalPartReceiptSchema } from "./v2-original-parts";
 
-const metadataSchema = z.strictObject({
-  name: v2FileSchema.shape.name,
-  declaredMediaType: v2FileSchema.shape.declaredMediaType,
-  probe: v2FileSchema.shape.probe,
-});
 const integritySchema = z.strictObject({
   format: z.literal("chain_v1"),
   digest: hashSchema,

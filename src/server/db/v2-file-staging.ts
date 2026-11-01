@@ -10,8 +10,6 @@ import {
   type V2FileObservation,
   v2DerivativeSchema,
   v2FileObservationSchema,
-  v2FileProbeSchema,
-  v2FileSchema,
 } from "../../contracts/v2";
 import {
   type Actor,
@@ -25,6 +23,7 @@ import {
   type V2Core,
   type WorkspaceGuard,
 } from "./v2-core";
+import { storedFileMetadataSchema as metadataSchema } from "./v2-file-metadata";
 import { jobAlive } from "./v2-jobs";
 import { completeLeaseStatements, type JobLease, leasePredicate } from "./v2-workspace";
 
@@ -62,11 +61,6 @@ const publicationScope = (context: FilePublicationContext | undefined, fileId: s
   };
 };
 
-const metadataSchema = z.strictObject({
-  name: v2FileSchema.shape.name,
-  declaredMediaType: v2FileSchema.shape.declaredMediaType,
-  probe: v2FileProbeSchema.nullable(),
-});
 type FileRow = {
   id: string;
   revision: number;

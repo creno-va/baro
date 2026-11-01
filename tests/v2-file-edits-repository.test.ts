@@ -322,6 +322,7 @@ async function copyAll(
 
 test("bounded edit preserves original pointer, coverage, untouched metadata and flags only edited observation", async () => {
   const f = await sourceFixture(7, 5, true);
+  expect((await f.files.metadata(f.actor, f.fileId))?.contentHash).toBe(HASH);
   const original = row(f);
   const quota = f.database.sqlite.query("SELECT * FROM v2_quota_reservations").all();
   const stage = await begin(f);
@@ -340,6 +341,7 @@ test("bounded edit preserves original pointer, coverage, untouched metadata and 
   expect(await f.edits.publish(stage.g, stage.input.id)).toBe(true);
   const actual = await f.files.read(f.actor, f.fileId);
   expect(actual?.revision).toBe(4);
+  expect((await f.files.metadata(f.actor, f.fileId))?.contentHash).toBe(HASH);
   expect(actual?.coverage).toEqual(f.value.coverage);
   expect(actual?.manifest).toEqual(f.value.manifest);
   expect(actual?.observations[0]).toEqual({
