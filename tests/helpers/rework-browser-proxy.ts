@@ -20,12 +20,13 @@ export async function openReworkBrowserFixture(
   // Provider diagnostics never become browser artifacts or fill a pipe.
   child.stderr.resume();
   let stopping = false;
+  const upstream = new Set<Promise<APIResponse>>();
   const close = async () => {
     stopping = true;
-    // Stop browser polling before removing its transport. Keep the page for
-    // failure snapshots, and drain existing handlers while Hono is still live.
-    await context.setOffline(true);
-    await context.unrouteAll({ behavior: "wait" });
+    // Keep the aborting route installed until Playwright closes its context.
+    // Waiting on offline WebKit route.fulfill can stall; only actual upstream
+    // fetches must drain before Hono/DB cleanup. Failure DOM stays inspectable.
+    await Promise.allSettled([...upstream]);
     if (child.exitCode !== null || child.signalCode !== null) return;
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => child.kill("SIGTERM"), 30000);
@@ -84,7 +85,7 @@ export async function openReworkBrowserFixture(
         const request = route.request(),
           url = new URL(request.url());
         if (!url.pathname.startsWith("/api/")) return route.continue();
-        const response = await context.request.fetch(
+        const pending = context.request.fetch(
           new URL(url.pathname + url.search, info.origin).href,
           {
             method: request.method(),
@@ -92,6 +93,13 @@ export async function openReworkBrowserFixture(
             data: request.postDataBuffer() ?? undefined,
           },
         );
+        upstream.add(pending);
+        let response: APIResponse;
+        try {
+          response = await pending;
+        } finally {
+          upstream.delete(pending);
+        }
         if (request.method() === "POST" && url.pathname.endsWith("/rework/actions"))
           actions.push({ body: request.postData(), key: request.headers()["idempotency-key"] });
         if (await options.dropResponse?.(request, response)) return route.abort("failed");
