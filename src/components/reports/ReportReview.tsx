@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
-import type { V2ConversationState, V2Fact } from "../../contracts/v2";
+import type { V2ConversationActionRequest, V2ConversationState, V2Fact } from "../../contracts/v2";
 import { reportPhotoIds } from "../../utils/report-markdown";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { Button } from "../ui/button";
@@ -89,7 +89,7 @@ export function ReportReview({
   const loadSequence = useRef(0);
   const focusRequest = useRef(0);
   const refreshStatus = useRef<() => void>(() => {});
-  const preparationAttempt = useRef<{ revision: number; requestId: string } | null>(null);
+  const preparationAttempt = useRef<V2ConversationActionRequest | null>(null);
   const reflectionAttempt = useRef<{
     fileId: string;
     expectedRevision: number;
@@ -476,28 +476,43 @@ export function ReportReview({
     const state = await ownedResult(readPreparation());
     if (!state) throw new Error("사건 준비 상태를 다시 확인해 주세요.");
     setPreparation(state);
-    if (
-      !preparationAttempt.current ||
-      preparationAttempt.current.revision !== state.workspaceRevision
-    )
+    if (!preparationAttempt.current)
       preparationAttempt.current = {
-        revision: state.workspaceRevision,
+        action: "prepare_report",
+        expectedRevision: state.workspaceRevision,
         requestId: crypto.randomUUID(),
       };
-    const result = await ownedResult(
-      api.rework.executeAction(
-        caseId,
-        {
-          action: "prepare_report",
-          expectedRevision: state.workspaceRevision,
-          requestId: preparationAttempt.current.requestId,
-        },
-        { expectedOwner: owner.current ?? "" },
-      ),
-    );
-    // A received receipt ends this attempt. Ambiguous request errors keep the
-    // same ID; a later explicit retry after an acknowledged job failure is new.
-    preparationAttempt.current = null;
+    const attempt = preparationAttempt.current;
+    let result: Awaited<ReturnType<typeof api.rework.executeAction>>;
+    try {
+      result = await ownedResult(
+        api.rework.executeAction(caseId, attempt, { expectedOwner: owner.current ?? "" }),
+      );
+    } catch (cause) {
+      const code = (cause as { code?: string })?.code;
+      if (
+        preparationAttempt.current === attempt &&
+        [
+          "CONFLICT",
+          "STALE_REVISION",
+          "VALIDATION_ERROR",
+          "IDEMPOTENCY_CONFLICT",
+          "CONSENT_REQUIRED",
+          "QUOTA_EXCEEDED",
+          "USER_QUOTA_EXCEEDED",
+          "RATE_LIMITED",
+          "INVALID_STATE",
+          "ROLE_REQUIRED",
+          "REVIEW_REQUIRED",
+        ].includes(code ?? "")
+      )
+        preparationAttempt.current = null;
+      throw cause;
+    }
+    // Admission can advance the case before its ACK arrives. Replay the entire
+    // original request after an ambiguous failure, including expectedRevision.
+    // A confirmed receipt/rejection ends it; a later explicit attempt is new.
+    if (preparationAttempt.current === attempt) preparationAttempt.current = null;
     setActionMissing(result.missingItems);
     if (result.status === "blocked" || result.status === "require_confirmation") {
       setPreparation(await ownedResult(readPreparation()));
