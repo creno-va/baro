@@ -11,6 +11,8 @@ on:
       - "src/utils/report-*.ts"
       - "src/styles/reports.css"
       - "scripts/report-regressions.ts"
+      - "tests/helpers/report*.ts*"
+      - "tests/**/*report*.test.*"
       - ".github/workflows/report-rendering.yml"
   push:
     branches: [main]
@@ -23,6 +25,8 @@ on:
       - "src/utils/report-*.ts"
       - "src/styles/reports.css"
       - "scripts/report-regressions.ts"
+      - "tests/helpers/report*.ts*"
+      - "tests/**/*report*.test.*"
       - ".github/workflows/report-rendering.yml"
 
 permissions:
