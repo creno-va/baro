@@ -13,6 +13,22 @@ export type AccountMockRuntime = Omit<ReportMockRuntime, "original"> & {
   removeOriginals?: (ownerId: string, caseId?: string) => Promise<void>;
 };
 function eraseCase(state: ReportMockState, id: string) {
+  const rework = state as unknown as Record<string, Record<string, unknown> | undefined>;
+  for (const name of [
+    "reworkContexts",
+    "reworkAnalyses",
+    "reworkResolutions",
+    "summaryReconciliations",
+  ])
+    if (rework[name]) delete rework[name][id];
+  for (const [key, value] of Object.entries(rework.reworkReceipts ?? {}))
+    if ((value as { caseId?: string }).caseId === id) delete rework.reworkReceipts?.[key];
+  for (const key of Object.keys(rework.summaryReconciliationReceipts ?? {}))
+    if (key.includes(`:${id}:`)) delete rework.summaryReconciliationReceipts?.[key];
+  for (const report of Object.values(state.reportHistory ?? {}))
+    if (report.caseId === id) delete rework.reworkReportBindings?.[report.id];
+  const latest = state.reports[id];
+  if (latest) delete rework.reworkReportBindings?.[latest.id];
   const fileIds = new Set((state.files[id] ?? []).map((file) => file.id));
   for (const [fileId, upload] of Object.entries(state.fileUploads ?? {}))
     if (upload.caseId === id) fileIds.add(fileId);
