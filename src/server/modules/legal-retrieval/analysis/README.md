@@ -22,6 +22,10 @@ and four reviewed public requests. Retrieval uses the existing official parser/c
 binding service, at most twelve actual attempts including retries and a 120-second
 retrieval signal. Arbitrary private searches, URLs and research readTokens are not
 inputs. The service never calls a model/provider directly or introduces a fallback.
+Pass `analysisPrecedentDiscovery(input)` from `discovery.ts` as the official retrieval
+factory's `precedentDiscovery` option: it ranks the existing title-first candidate
+pool locally before selecting originals. Names, narratives and material text remain
+inside the Worker. Verified bodies still undergo relevance checks and independent audit.
 Generation and independent audit run once each; schema/provider retries remain within
 the gateway's existing technical ledger. The owner/consent/revision/lease `authorize`
 closure runs before and after asynchronous stages. `reserveRequest` must be a technical

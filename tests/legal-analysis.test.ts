@@ -8,6 +8,7 @@ import {
   isAnalysisCurrent,
   type LegalAnalysisInput,
 } from "../src/server/modules/legal-retrieval/analysis/context";
+import { analysisPrecedentDiscovery } from "../src/server/modules/legal-retrieval/analysis/discovery";
 import {
   createAutomaticLegalAnalysis,
   type LegalAnalysisModelInput,
@@ -209,7 +210,11 @@ async function setup(
   };
   const counts = { plan: 0, analyze: 0, audit: 0, attempts: 0 };
   let time = now;
-  const retrieval = f.service(options.transport?.(f), !options.noBinding);
+  const retrieval = f.service(
+    options.transport?.(f),
+    !options.noBinding,
+    analysisPrecedentDiscovery(input),
+  );
   const controller = new AbortController();
   const service = createAutomaticLegalAnalysis({
     model: {
@@ -521,6 +526,47 @@ test("technical retries share twelve actual attempts and a fifth distinct plan i
         ],
       }).success,
     ).toBe(false);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("local title ranking chooses a related older original before an unrelated newer judgment", async () => {
+  const detailIds: string[] = [];
+  const f = await setup("prepare_claim", {
+    transport: (base) => async (url, init) => {
+      const u = new URL(url);
+      if (u.searchParams.get("target") === "prec" && u.pathname.endsWith("lawService.do"))
+        detailIds.push(u.searchParams.get("ID") ?? "");
+      const response = await base.transport(url, init);
+      if (u.searchParams.get("target") !== "prec" || !u.pathname.endsWith("lawSearch.do"))
+        return response;
+      expect(u.searchParams.get("query")).toBe("대여금");
+      expect(u.searchParams.get("search")).toBe("1");
+      expect(u.searchParams.get("display")).toBe("40");
+      const body = (await response.json()) as {
+        PrecSearch: { totalCnt: string; prec: Record<string, string>[] };
+      };
+      const related = body.PrecSearch.prec[0];
+      body.PrecSearch.totalCnt = "2";
+      body.PrecSearch.prec = [
+        {
+          ...related,
+          판례일련번호: sample.unrelatedPrecedent.officialId,
+          사건명: sample.unrelatedPrecedent.title,
+          선고일자: "20260501",
+        },
+        ...(related ? [related] : []),
+      ];
+      return Response.json(body);
+    },
+  });
+  try {
+    const { snapshot } = await f.service.prepare(f.input);
+    expect(detailIds).toEqual([sample.precedent.officialId]);
+    expect(snapshot.precedents).toHaveLength(1);
+    expect(snapshot.status).toBe("partial"); // Bounded discovery never claims the whole pool was reviewed.
+    expect(snapshot.limitations.some((s) => s.includes("제한된 검색"))).toBe(true);
   } finally {
     f.db.close();
   }

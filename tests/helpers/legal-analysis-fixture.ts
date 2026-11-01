@@ -81,10 +81,15 @@ export async function legalAnalysisFixture() {
     core,
     calls,
     transport,
-    service: (override?: Transport, bind = true) =>
+    service: (
+      override?: Transport,
+      bind = true,
+      precedentDiscovery?: Parameters<typeof createV2LegalRetrieval>[2]["precedentDiscovery"],
+    ) =>
       createV2LegalRetrieval({ LAW_API_OC: "synthetic-only" }, f.repo, {
         transport: override ?? transport,
         sleep: async () => {},
+        ...(precedentDiscovery ? { precedentDiscovery } : {}),
         bindCitation: bind
           ? (citation) => f.repo.bindCitation(f.guard, citation)
           : async () => true,
