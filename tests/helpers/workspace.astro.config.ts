@@ -14,6 +14,8 @@ export default {
           if (
             source === "../../client/api" &&
             (importer?.endsWith("/components/workspace/Workspace.tsx") ||
+              importer?.endsWith("/components/workspace/ConversationAgent.tsx") ||
+              importer?.endsWith("/components/workspace/useEvidenceUpload.ts") ||
               importer?.endsWith("/components/workspace/LookupDialog.tsx") ||
               importer?.endsWith("/components/workspace/FileReview.tsx") ||
               importer?.endsWith("/components/intake/useCustomerAccess.ts"))

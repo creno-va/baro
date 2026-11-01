@@ -196,6 +196,34 @@ test("quota and ambiguous timeouts are propagated and never silently replaced by
   }
 });
 
+test("an explicit analysis retry after failure admits once and replays the same request", async () => {
+  const f = fixture(limitedConversationState());
+  f.loaded.state.analysis = {
+    ...f.loaded.state.analysis,
+    status: "failed",
+    failure: "MODEL_UNAVAILABLE",
+    missingItems: ["공급자 응답을 확인하지 못했어요."],
+  };
+  const first = await f.execute("analyze_legal", {}, "explicit-retry");
+  expect(first).toMatchObject({ status: "pending", operationId: "analysis-operation" });
+  expect(await f.execute("analyze_legal", {}, "explicit-retry")).toEqual(first);
+  expect(f.calls).toHaveLength(1);
+  expect(f.calls[0]).toMatchObject({ input: { options: { continueWithReport: false } } });
+});
+
+test("a report request after analysis failure preserves its limits without another model call", async () => {
+  const f = fixture(limitedConversationState());
+  f.loaded.state.analysis.status = "failed";
+  f.loaded.state.analysis.failure = "MODEL_UNAVAILABLE";
+  f.loaded.state.analysis.missingItems = ["공급자 오류로 법률 조사를 완료하지 못했어요."];
+  expect(await f.execute("prepare_report")).toMatchObject({
+    pane: "report",
+    status: "ready",
+    missingItems: ["공급자 오류로 법률 조사를 완료하지 못했어요."],
+  });
+  expect(f.calls.map((call) => call.kind)).toEqual(["report"]);
+});
+
 for (const journey of conversationJourneyCases)
   test(`${journey.casePurpose} → limited report → ${journey.followup} preserves unknowns without re-search`, async () => {
     const f = fixture(limitedConversationState(journey.casePurpose));

@@ -78,3 +78,44 @@ main `3df82be8`를 확인해 통합했다. 별도 `codex/625-conversation-agent`
 이 선행 범위는 중앙 runtime 어댑터와 UI 조립을 위한 인터페이스다. 01~06의 실제 서비스·
 컴포넌트를 연결한 전체 여섯 경로와 원격 외부 인수는 아직 완료하지 않았다. 후속 PR에서
 Workspace와 동일 데이터를 사용하는 inline UI를 조립하고 검증 결과를 추가한다.
+
+## 2026-11-01 실행 기록: Workspace 조립
+
+별도 `codex/625-conversation-workspace`에서 코어 PR633의 main 병합 후 조립했다.
+재확인 PR636의 CI 성공/main `9597bc1e`, 법률 runtime PR638의 CI 성공/main `7f625a85`,
+후속 runtime PR639의 CI 성공/main `8a5e1711`을 확인해 통합했다.
+
+- 실제 Workspace의 자료 선택·촬영은03 EvidencePicker와 ChatAttachments를 사용한다.
+  로컬 미리보기·제거·명시 동의 후 기존 파일 서비스로 업로드한다. 원본 hash/manifest/ACK와
+  서버 처리 상태를 구분하고, 접수된 파일은 재전송하지 않는다. 자료 링크는 같은 대화 안의
+  FileReview를 열며, CaseMaterials·타임라인도 동일 파일/사실을 읽는다.
+- 사건 재확인은01 SummaryReconfirmation을 그대로 사용한다. 확인 후에는 fresh Workspace와
+  conversation 상태를 읽어 분석 영역을 열기만 한다. 자동 조사의 admission/continuation은
+  중앙 서버가 소유하며, 화면 재진입·polling은 모델/조사 실행을 추가하지 않는다.
+- 일반 대화 intent는 새로 완료된 assistant와 정확히 같은 게시 revision에서만 실행한다.
+  첫 진입의 과거 intent와 지연된 옛 revision intent는 자동 실행하지 않는다. timeout에서는
+  같은 request ID와 전체 입력을 유지해 결과를 확인한다. 현재 scope의 취소 신호와 전후
+  세션 검사, case별 remount로 다른 계정/사건의 지연 응답을 폐기한다.
+- 재확인·자료·준비 요약·법률 분석·후속 해결은 한 번에 하나의 읽기 영역을 사용한다.
+  초안이 있는 영역을 닫거나 바꾸기 전 확인하며, busy 중 닫기를 막는다. stale 상태에서는
+  초안을 보존하고 편집을 잠근다. v1은 새 rework API로 위장하지 않고 기존 읽기를 유지한다.
+- 공급자 오류 이후 명시적 `analyze_legal` 요청만 새 bounded admission을 허용한다.
+  동일 request replay는 중복 admission을 만들지 않으며, `prepare_report`는 실패한 조사를
+  자동 재호출하지 않고 한계가 표시된 리포트 준비로 이어간다.
+
+검증 증거:
+
+- 실제 Workspace route의 Chromium **90개 통과**. 자료 추가→inline 검토→준비 요약,
+  320/390/768/1440px, 키보드/axe, 선택 후 쓰기0회·미리보기·제거·동의·사진 전송 실패 복구,
+  업로드 ACK/부분 실패/원본 바이트 다운로드/삭제, quota/stale, 계정/동의/동시 세션 검사를
+  포함한다. 같은 소유자의 customer/lawyer 전환 허용은 기존 main 정책을 유지하며 이전
+  epoch의 작업/다운로드만 폐기한다.
+- 격리 ConversationAgent 브라우저 **6개 통과**. 초점 복귀/dirty 취소·새 intent1회·
+  timeout 동일 입력·옛 revision 무실행·계정 전환 abort·stale 초안 보존을 검사한다.
+- 코어/실제 암호화 게시/pipeline/분석 표시 **147개 통과**. 합성 자료를 사용하며 실제
+  외부 모델·공식 API·카메라 기기 성공을 주장하지 않는다.
+
+격리 브라우저는 명시적 테스트 adapter다. 제품 fallback이 아니며 기존 Workspace mock의
+실제 chunk/hash/원본 검증을 유지한다. WebKit의 IDB Blob 직렬화 문제는 테스트 DI에서
+ArrayBuffer를 저장해 검사했고 제품 R2나 중앙 mock 저장소는 변경하지 않았다.
+중앙 Hono/D1 orchestration 및 리포트 최종 조립과 전체 여섯 경로 결과는 후속 기록한다.

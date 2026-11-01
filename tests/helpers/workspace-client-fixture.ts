@@ -8,6 +8,8 @@ import {
   type WorkspaceMockState,
 } from "../../src/client/api/mock/workspace";
 import { createWorkspaceApi } from "../../src/client/api/workspace";
+import { byteOriginalStore } from "./byte-original-store";
+import { workspaceConversationFixture } from "./workspace-conversation-client-fixture";
 
 const key = "baro-c-contract-test-state";
 const initial: WorkspaceMockState = {
@@ -40,7 +42,7 @@ const runtime: WorkspaceMockRuntime = {
     return result;
   },
 };
-const handlers = [createWorkspaceMock(runtime), createFilesMock(runtime)];
+const handlers = [createWorkspaceMock(runtime), createFilesMock(runtime, byteOriginalStore)];
 async function request(path: string, init?: RequestInit) {
   if (path === "/api/v2/cases/synthetic-case/lookup-tools") return fetch(path, init);
   for (const handler of handlers) {
@@ -53,4 +55,5 @@ export const api = {
   session: { get: async () => runtime.read().session },
   workspace: createWorkspaceApi(request),
   files: createFilesApi(request),
+  rework: workspaceConversationFixture(runtime),
 };
