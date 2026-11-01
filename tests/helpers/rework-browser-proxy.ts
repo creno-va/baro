@@ -19,7 +19,13 @@ export async function openReworkBrowserFixture(
   });
   // Provider diagnostics never become browser artifacts or fill a pipe.
   child.stderr.resume();
+  let stopping = false;
   const close = async () => {
+    stopping = true;
+    // Stop browser polling before removing its transport. Keep the page for
+    // failure snapshots, and drain existing handlers while Hono is still live.
+    await context.setOffline(true);
+    await context.unrouteAll({ behavior: "wait" });
     if (child.exitCode !== null || child.signalCode !== null) return;
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => child.kill("SIGTERM"), 30000);
@@ -73,21 +79,26 @@ export async function openReworkBrowserFixture(
     await context.addCookies([info.ownerCookie]);
     const actions: { body: string | null; key: string | undefined }[] = [];
     await context.route("**/api/**", async (route) => {
-      const request = route.request(),
-        url = new URL(request.url());
-      if (!url.pathname.startsWith("/api/")) return route.continue();
-      const response = await context.request.fetch(
-        new URL(url.pathname + url.search, info.origin).href,
-        {
-          method: request.method(),
-          headers: { ...request.headers(), origin: browserOrigin },
-          data: request.postDataBuffer() ?? undefined,
-        },
-      );
-      if (request.method() === "POST" && url.pathname.endsWith("/rework/actions"))
-        actions.push({ body: request.postData(), key: request.headers()["idempotency-key"] });
-      if (await options.dropResponse?.(request, response)) return route.abort("failed");
-      await route.fulfill({ response });
+      if (stopping) return route.abort("aborted").catch(() => undefined);
+      try {
+        const request = route.request(),
+          url = new URL(request.url());
+        if (!url.pathname.startsWith("/api/")) return route.continue();
+        const response = await context.request.fetch(
+          new URL(url.pathname + url.search, info.origin).href,
+          {
+            method: request.method(),
+            headers: { ...request.headers(), origin: browserOrigin },
+            data: request.postDataBuffer() ?? undefined,
+          },
+        );
+        if (request.method() === "POST" && url.pathname.endsWith("/rework/actions"))
+          actions.push({ body: request.postData(), key: request.headers()["idempotency-key"] });
+        if (await options.dropResponse?.(request, response)) return route.abort("failed");
+        await route.fulfill({ response });
+      } catch (cause) {
+        if (!stopping) throw cause;
+      }
     });
     return {
       info,
