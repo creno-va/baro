@@ -66,7 +66,20 @@ const request: OperationRequest = async <T>(
   );
   if (response) {
     if (!response.ok) throw await responseError(response);
-    const value = await response.json();
+    let value = v2SummaryReconciliationSchema.parse(await response.json());
+    // Actual runtime can expose a terminal job as failed while the immutable
+    // private request remains pending/running. Reads must not retire that record.
+    if (
+      options.method === "GET" &&
+      localStorage.getItem("synthetic-reconciliation-terminal-job") === "true" &&
+      ["pending", "running"].includes(value.status)
+    )
+      value = {
+        ...value,
+        status: "failed",
+        currentJobId: null,
+        failure: "JOB_TIMEOUT",
+      };
     if (fault === `${suffix}-peer-after` && ["request", "cancel"].includes(suffix)) {
       localStorage.removeItem("synthetic-reconciliation-fault");
       let saved = v2SummaryReconciliationSchema.parse(value);
@@ -89,7 +102,8 @@ const request: OperationRequest = async <T>(
         });
       await peer("request", {
         expectedRevision: saved.workspaceRevision,
-        summaryRevision: saved.proposal?.baseSummaryRevision,
+        summaryRevision:
+          saved.proposal?.baseSummaryRevision ?? saved.request?.input.summaryRevision,
         kind: "addition",
         explanation: "다른 탭에서 요청한 합성 보완 내용입니다.",
       });
