@@ -190,7 +190,15 @@ test("previous question navigation forgets a draft restored to its saved answer"
   await editor.fill(saved);
 
   await settleIntakeSave(page);
-  await expect(page.getByRole("status")).toContainText("저장됐어요.");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const records = JSON.parse(localStorage.getItem("baro-api-mock-v1:intake") ?? "{}");
+        return (Object.values(records) as { questions: { answer?: string }[] }[])[0]?.questions[1]
+          ?.answer;
+      }),
+    )
+    .toBe(saved);
 
   await editor.fill(discarded);
   await page.getByRole("button", { name: "이전으로", exact: true }).click();
