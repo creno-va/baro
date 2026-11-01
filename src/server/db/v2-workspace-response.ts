@@ -309,6 +309,26 @@ export function createV2WorkspaceResponseRepository(
           ...(toolResults.length ? { toolResults } : {}),
           ...(comparison ? { precedentComparison: comparison } : {}),
           ...(conversationIntent ? { conversationIntent } : {}),
+          // Only this atomic publication creates the private proof. A model or
+          // request cannot supply it, and every case-changing delta excludes it.
+          ...(!facts.length &&
+          !parties.length &&
+          unknowns === null &&
+          !actions.length &&
+          !completions.length &&
+          !timeline.length &&
+          !toolResults.length &&
+          !comparison &&
+          !message.citations.length &&
+          !message.references.some((reference) => reference.kind === "official_source")
+            ? {
+                unchangedResearch: {
+                  format: "unchanged-research-v1",
+                  beforeWorkspaceRevision: g.expectedRevision - 1,
+                  summaryRevision: revision,
+                },
+              }
+            : {}),
         });
         statements.push(
           core.statement(
