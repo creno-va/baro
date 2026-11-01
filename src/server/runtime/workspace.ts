@@ -37,6 +37,7 @@ import {
 import { projectWorkspaceSources } from "../modules/legal-retrieval/v2/workspace-sources";
 import type { Phase } from "../modules/llm-gateway/prompts";
 import { ModelError } from "../modules/llm-gateway/service";
+import { readConversationModelContext } from "../modules/rework/state";
 import { readWorkspaceContext, workspaceCalendar } from "../modules/workspace/context";
 import { currentTime } from "../modules/workspace/current-time";
 import { createWorkspaceDispatcher } from "../modules/workspace/dispatch";
@@ -126,6 +127,12 @@ export function createWorkspaceDependencies(core: V2Core, env: Env): WorkspaceDe
         input.chat?.precedentComparisonRequest ? "precedent_comparison" : "full",
       );
       const comparison = input.chat?.precedentComparisonRequest;
+      if (!comparison)
+        context.conversation = await readConversationModelContext(
+          core,
+          { ownerId: input.ownerId, now },
+          input.caseId,
+        );
       if (comparison) {
         if (
           comparison.expectedRevision !== input.revision - 1 ||
@@ -205,6 +212,12 @@ export async function runWorkspaceRuntime(
     authorize: (ownerId) => hasCustomerWorkspaceAccess(core, ownerId),
     pipeline: async (job, lease, context, progress, latest) => {
       const comparison = latest?.precedentComparisonRequest;
+      if (!comparison)
+        context.conversation = await readConversationModelContext(
+          core,
+          { ownerId: params.ownerId, now: new Date().toISOString() },
+          params.workspaceId,
+        );
       if (comparison) {
         const source = await createPrecedentResearchService(core, env).readForExecution(
           params.ownerId,

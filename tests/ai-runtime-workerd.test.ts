@@ -676,7 +676,15 @@ async function exerciseNativeRuntime(
           `SELECT ${
             columnsByTable
               .get(name)
-              ?.map((column) => `"${column}"`)
+              ?.map((column) =>
+                name === "user_consents" && column === "over_14_confirmed"
+                  ? // The source account is explicitly synthetic and already uses
+                    // the age-free schema. Supply the retired field only in this
+                    // old-schema fixture; 0020/0021 must remove it without changing
+                    // the source's original consent versions or consented_at.
+                    '1 AS "over_14_confirmed"'
+                  : `"${column}"`,
+              )
               .join(",") ?? "*"
           } FROM "${name}"`,
         ),
@@ -688,6 +696,14 @@ async function exerciseNativeRuntime(
       const sourceRows = source[index]?.results;
       if (!targetRows || !sourceRows) throw new Error("Synthetic fixture rows missing");
       if (targetRows.length) {
+        if (name === "v2_directory_epoch") {
+          // 0020 invalidates the public directory exactly once. Keep the real
+          // old-schema seed and let that migration advance it; copying a newer
+          // seed into 0013 would apply the invalidation twice.
+          expect(targetRows).toEqual([{ id: 1, revision: 1 }]);
+          expect(sourceRows).toEqual([{ id: 1, revision: 2 }]);
+          continue;
+        }
         expect(sourceRows).toEqual(targetRows);
         continue;
       }
@@ -715,7 +731,13 @@ async function exerciseNativeRuntime(
       const actualRows = actual?.[index]?.results;
       const expectedRows = expected?.[index]?.results;
       if (!actualRows || !expectedRows) throw new Error("Synthetic fixture final rows missing");
-      expect(actualRows).toEqual(expectedRows);
+      const name = oldTables[index]?.name;
+      const copiedIndex = copyTables.findIndex((table) => table.name === name);
+      const projected = copiedIndex >= 0 ? source[copiedIndex]?.results : expectedRows;
+      if (!projected) throw new Error("Synthetic projected fixture rows missing");
+      expect(actualRows).toEqual(
+        name === "v2_directory_epoch" ? [{ id: 1, revision: 1 }] : projected,
+      );
     }
     console.info(
       "Synthetic native fixture copy measurements",
@@ -790,6 +812,16 @@ async function exerciseNativeRuntime(
       expect((await upgrade.prepare("PRAGMA foreign_key_check").all()).results).toEqual([]);
     }
     expect(await schema(upgrade)).toEqual(await schema(production));
+    // The historical-only age fixture is removed by the real migrations; all
+    // actual consent versions and observation timestamps remain byte-identical.
+    expect(
+      (await upgrade.prepare("SELECT * FROM user_consents ORDER BY user_id").all()).results,
+    ).toEqual(
+      (await preview.prepare("SELECT * FROM user_consents ORDER BY user_id").all()).results,
+    );
+    expect((await upgrade.prepare("SELECT * FROM v2_directory_epoch").all()).results).toEqual(
+      (await preview.prepare("SELECT * FROM v2_directory_epoch").all()).results,
+    );
     // Exercise observation mode on the current schema while retaining every
     // earlier paid plan, hold and receipt from the same product database.
     progress.enter("advance", "readback");

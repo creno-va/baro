@@ -1,0 +1,358 @@
+import { z } from "zod";
+import { opaqueIdSchema } from "../../../contracts";
+import {
+  type V2ConversationState,
+  type V2LegalAnalysisSnapshot,
+  v2ConversationIntentSchema,
+  v2ConversationStateSchema,
+  v2ReworkVersionSchema,
+} from "../../../contracts/v2";
+import { readCustomerConsentSnapshot } from "../../auth/account-type";
+import { type Actor, aliveWorkspace, type V2Core } from "../../db/v2-core";
+import { createV2ReworkRepository } from "../../db/v2-rework";
+import { createV2WorkspaceRepository } from "../../db/v2-workspace";
+import {
+  analysisBasis,
+  canonicalAnalysisJson,
+  isAnalysisCurrent,
+} from "../legal-retrieval/analysis/context";
+import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
+import { capturePublicationSourceAuthority } from "../legal-retrieval/v2/publication-authority";
+import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
+import type { WorkspaceContext } from "../workspace/pipeline";
+import { type AnalysisScope, loadAnalysisInput, readAnalysisScope } from "./analysis-input";
+import { createReworkCaseService, ReworkError } from "./case-context";
+import { analysisTaskSchema, preparedAnalysisRecordSchema } from "./records";
+
+/** Stable admission/execution projection for the incoming dialog turn. The new
+ * message requires refreshing prior analysis; it never marks that analysis fresh. */
+export async function readConversationModelContext(
+  core: V2Core,
+  a: Actor,
+  id: string,
+): Promise<NonNullable<WorkspaceContext["conversation"]>> {
+  const context = await createReworkCaseService(core, { clock: () => a.now }).get(a.ownerId, id);
+  const raw = await createV2ReworkRepository(core).read(
+    a,
+    id,
+    "analysis",
+    id,
+    preparedAnalysisRecordSchema,
+  );
+  const report = await core
+    .statement(
+      "SELECT r.id FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE w.id=? AND w.owner_id=? AND r.id NOT LIKE 'export-%' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) ORDER BY r.revision DESC LIMIT 1",
+      [id, a.ownerId],
+    )
+    .first();
+  const pending = (
+    await core
+      .statement(
+        "SELECT id FROM v2_files WHERE workspace_id=? AND state NOT IN ('ready','failed','deleting') AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=v2_files.id) ORDER BY id LIMIT 101",
+        [id],
+      )
+      .all<{ id: string }>()
+  ).results;
+  if (pending.length > 100) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
+  return {
+    caseContext: context.context,
+    preparation: raw
+      ? {
+          status: raw.value.failure ? "failed" : "stale",
+          basis: raw.value.basis,
+          currentJobId: null,
+          failure: raw.value.failure,
+          missingItems: [
+            raw.value.failure
+              ? "이전 분석을 완료하지 못했어요. 저장된 사건과 자료는 보존돼요."
+              : "새 대화 내용을 반영해 분석과 리포트를 현재 기준으로 갱신해야 해요.",
+          ],
+        }
+      : { status: "not_started", basis: null, currentJobId: null, failure: null, missingItems: [] },
+    report: { status: report ? "stale" : "not_started", basis: null, currentJobId: null },
+    pendingEvidenceIds: pending.map((r) => r.id),
+  };
+}
+
+export async function reworkAccess(core: V2Core, ownerId: string, id: string, write = false) {
+  opaqueIdSchema.parse(ownerId);
+  opaqueIdSchema.parse(id);
+  const owned = await core
+    .statement(
+      `SELECT w.id FROM v2_workspaces w JOIN user u ON u.id=w.owner_id WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+      [id, ownerId],
+    )
+    .first();
+  if (!owned) return false;
+  const access = await readCustomerConsentSnapshot(core.binding, ownerId);
+  return ["customer", "lawyer"].includes(access.accountType) && (!write || access.currentConsent);
+}
+/** Current case/scope proof plus exact official bindings. All reads remain local. */
+export async function readPreparedAnalysis(
+  core: V2Core,
+  a: Actor,
+  id: string,
+  desiredScope?: AnalysisScope,
+) {
+  // Currentness is a local owner read. A withdrawn processing consent blocks
+  // admission/publication, while the previously stored report remains readable.
+  if (!(await reworkAccess(core, a.ownerId, id))) return null;
+  const repo = createV2ReworkRepository(core);
+  const before = await core
+    .statement(
+      "SELECT id FROM v2_rework_records WHERE workspace_id=? AND kind='analysis' AND entity_id=? AND state='published' ORDER BY revision DESC LIMIT 1",
+      [id, id],
+    )
+    .first<{ id: string }>();
+  if (!before) return null;
+  const record = await repo.read(a, id, "analysis", id, preparedAnalysisRecordSchema);
+  if (!record) throw new ReworkError("STALE_REVISION");
+  if (!record.value.snapshot) return null;
+  const scope = desiredScope ?? (await readAnalysisScope(core, a, id));
+  const normalizedScope = (scope: AnalysisScope) => ({
+    ...scope,
+    excludedFileIds: [...scope.excludedFileIds].sort(),
+  });
+  if (
+    canonicalAnalysisJson(normalizedScope(scope)) !==
+    canonicalAnalysisJson(normalizedScope(record.value.scope))
+  )
+    return null;
+  const current = await loadAnalysisInput(core, a, id, scope),
+    snapshot = record.value.snapshot;
+  if (
+    !current.input ||
+    current.pendingEvidenceIds.length ||
+    !(await isAnalysisCurrent(snapshot, current.input))
+  )
+    return null;
+  for (let index = 0; index < snapshot.citations.length; index += BOUND_SOURCE_BATCH_SIZE) {
+    const expected = snapshot.citations.slice(index, index + BOUND_SOURCE_BATCH_SIZE);
+    const actual = await readBoundSourceBatch(
+      core,
+      id,
+      expected.map((c) => c.id),
+      a.now,
+      GUIDE_HOSTS,
+    );
+    if (
+      actual.some(
+        (s, i) => !s || canonicalAnalysisJson(s.citation) !== canonicalAnalysisJson(expected[i]),
+      )
+    )
+      return null;
+  }
+  const endNow = new Date().toISOString();
+  const sourceAuthority = await capturePublicationSourceAuthority(
+    core,
+    { ...a, now: endNow, workspaceId: id, expectedRevision: current.workspace.workspaceRevision },
+    snapshot.citations.map((c) => ({ kind: "official_source" as const, citationId: c.id })),
+    snapshot.citations,
+    GUIDE_HOSTS,
+  );
+  if (
+    !sourceAuthority ||
+    !(await core
+      .statement(
+        `SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace} AND (${sourceAuthority.sql})`,
+        [id, a.ownerId, current.workspace.workspaceRevision, ...sourceAuthority.values(endNow)],
+      )
+      .first())
+  )
+    return null;
+  const after = await core
+    .statement(
+      `SELECT r.id FROM v2_rework_records r JOIN v2_workspaces w ON w.id=r.workspace_id WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace} AND r.kind='analysis' AND r.entity_id=w.id AND r.state='published' ORDER BY r.revision DESC LIMIT 1`,
+      [id, a.ownerId, current.workspace.workspaceRevision],
+    )
+    .first<{ id: string }>();
+  if (
+    after?.id !== record.id ||
+    before.id !== record.id ||
+    !(await reworkAccess(core, a.ownerId, id))
+  )
+    throw new ReworkError("STALE_REVISION");
+  return snapshot;
+}
+export async function preparedAnalysisMatchesScope(
+  core: V2Core,
+  a: Actor,
+  id: string,
+  snapshot: V2LegalAnalysisSnapshot,
+  scope: AnalysisScope,
+) {
+  const current = await readPreparedAnalysis(core, a, id, scope);
+  return current !== null && canonicalAnalysisJson(current) === canonicalAnalysisJson(snapshot);
+}
+type ReportSummary = {
+  id: string;
+  revision: number;
+  stale: boolean;
+  analysisReview?: { analysisId: string | null } | undefined;
+};
+const intentSchema = z.object({
+  id: opaqueIdSchema,
+  role: z.literal("assistant"),
+  workspaceRevision: z.number().int().positive(),
+  conversationIntent: v2ConversationIntentSchema.nullable().optional(),
+});
+export function createReworkStateService(
+  core: V2Core,
+  deps: {
+    clock?: () => string;
+    peekReport?: (ownerId: string, id: string) => Promise<ReportSummary | null>;
+  } = {},
+) {
+  const now = deps.clock ?? (() => new Date().toISOString()),
+    records = createV2ReworkRepository(core),
+    workspaces = createV2WorkspaceRepository(core.binding, core.cipher);
+  return {
+    async get(ownerId: string, id: string) {
+      const a = { ownerId, now: now() };
+      if (!(await reworkAccess(core, ownerId, id))) throw new ReworkError("NOT_FOUND");
+      const w = await workspaces.findWorkspace(a, id);
+      if (!w) throw new ReworkError("NOT_FOUND");
+      const context = await createReworkCaseService(core, { clock: now }).get(ownerId, id);
+      const scope = await readAnalysisScope(core, a, id),
+        loaded = await loadAnalysisInput(core, a, id, scope);
+      const raw = await records.read(a, id, "analysis", id, preparedAnalysisRecordSchema);
+      const task = w.currentJobId
+        ? await records.read(a, id, "task", w.currentJobId, analysisTaskSchema)
+        : null;
+      const job = task
+        ? await core
+            .statement(
+              "SELECT status,failure_code FROM v2_jobs WHERE id=? AND operation_id=? AND target_revision=?",
+              [task.value.jobId, task.value.operationId, w.workspaceRevision],
+            )
+            .first<{ status: string; failure_code: string | null }>()
+        : null;
+      let snapshot = raw?.value.snapshot ?? null;
+      let analysis: V2ConversationState["analysis"] = {
+        status: "not_started",
+        basis: null,
+        currentJobId: null,
+        failure: null,
+        missingItems: [],
+      };
+      if (raw) {
+        const current = await readPreparedAnalysis(core, a, id, scope);
+        const failureCurrent =
+          loaded.input &&
+          canonicalAnalysisJson(await analysisBasis(loaded.input)) ===
+            canonicalAnalysisJson(raw.value.basis);
+        analysis =
+          raw.value.failure && failureCurrent
+            ? {
+                status: "failed",
+                basis: raw.value.basis,
+                currentJobId: null,
+                failure: raw.value.failure,
+                missingItems: [
+                  "분석을 완료하지 못했어요. 저장된 사건과 자료는 보존돼요.",
+                  ...loaded.limits,
+                ],
+              }
+            : current
+              ? {
+                  status: current.status,
+                  basis: current.basis,
+                  currentJobId: null,
+                  failure: null,
+                  missingItems: current.limitations,
+                }
+              : {
+                  status: "stale",
+                  basis: raw.value.basis,
+                  currentJobId: null,
+                  failure: null,
+                  missingItems: [
+                    "사건 내용·자료·표시 범위가 바뀌었어요. 현재 기준으로 분석을 다시 준비해 주세요.",
+                  ],
+                };
+        if (current) snapshot = current;
+      }
+      if (
+        task &&
+        job &&
+        task.value.jobId === w.currentJobId &&
+        task.value.targetWorkspaceRevision === w.workspaceRevision &&
+        task.workspaceRevision === w.workspaceRevision &&
+        ["queued", "running", "validating"].includes(job.status)
+      )
+        analysis = {
+          status: job.status === "queued" ? "pending" : "running",
+          basis: await analysisBasis(task.value.input),
+          currentJobId: task.value.jobId,
+          failure: null,
+          missingItems: [],
+        };
+      const report = (await deps.peekReport?.(ownerId, id)) ?? null;
+      const reportReady =
+        !!report &&
+        !report.stale &&
+        !!snapshot &&
+        report.analysisReview?.analysisId === snapshot.id &&
+        canonicalAnalysisJson(snapshot.basis) === canonicalAnalysisJson(analysis.basis) &&
+        !["pending", "running", "stale", "failed"].includes(analysis.status);
+      const intents: V2ConversationState["intents"] = [];
+      const messages = (
+        await core
+          .statement(
+            "SELECT id,revision FROM v2_messages WHERE workspace_id=? AND role='assistant' ORDER BY created_at DESC,id DESC LIMIT 100",
+            [id],
+          )
+          .all<{ id: string; revision: number }>()
+      ).results;
+      for (const row of messages) {
+        const cipher = await core
+          .statement(
+            "SELECT encrypted_payload FROM v2_messages WHERE id=? AND workspace_id=? AND revision=?",
+            [row.id, id, row.revision],
+          )
+          .first<{ encrypted_payload: string }>();
+        if (!cipher) throw new ReworkError("STALE_REVISION");
+        const value = await core.decrypt(
+          "v2_messages",
+          row.id,
+          ownerId,
+          row.revision,
+          cipher.encrypted_payload,
+          intentSchema,
+        );
+        if (value.conversationIntent)
+          intents.push({
+            messageId: value.id,
+            requestId: `intent-${value.id}`,
+            intent: value.conversationIntent,
+            workspaceRevision: value.workspaceRevision,
+          });
+      }
+      const state = v2ConversationStateSchema(GUIDE_HOSTS).parse({
+        contractVersion: v2ReworkVersionSchema.value,
+        workspaceRevision: w.workspaceRevision,
+        caseContext: context.context,
+        summaryConfirmed: !!w.confirmedSummaryRevision,
+        pendingEvidenceIds: loaded.pendingEvidenceIds,
+        analysis,
+        snapshot,
+        report: {
+          status: report ? (reportReady ? "ready" : "stale") : "not_started",
+          id: report?.id ?? null,
+          revision: report?.revision ?? null,
+          basis: reportReady ? (snapshot?.basis ?? null) : null,
+          currentJobId: null,
+          failure: null,
+        },
+        intents,
+      });
+      const final = await workspaces.findWorkspace({ ownerId, now: now() }, id);
+      if (
+        final?.workspaceRevision !== w.workspaceRevision ||
+        !(await reworkAccess(core, ownerId, id))
+      )
+        throw new ReworkError("STALE_REVISION");
+      return state;
+    },
+  };
+}
