@@ -39,6 +39,9 @@ export type ReportMockState = {
     { reportId: string; caseId: string; ownerId: string; fileIds: string[] }
   >;
   reportSources?: Record<string, number>;
+  /** Private prepared-analysis identity, never part of the installed report DTO. */
+  reworkReportBindings?: Record<string, string>;
+  reworkEditedReports?: Record<string, true>;
   deletedCaseIds?: string[];
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
@@ -312,6 +315,19 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             current.reportHistory[next.id] = structuredClone(next);
             current.reportSources ??= {};
             current.reportSources[next.id] = item.revision;
+            const parentBinding = current.reworkReportBindings?.[prior.id];
+            if (
+              parentBinding &&
+              !prior.stale &&
+              !exclusionsChanged &&
+              input.maskIdentifiers === prior.maskIdentifiers &&
+              current.reportSources[prior.id] === item.revision
+            ) {
+              current.reworkReportBindings ??= {};
+              current.reworkReportBindings[next.id] = parentBinding;
+              current.reworkEditedReports ??= {};
+              current.reworkEditedReports[next.id] = true;
+            }
           }
         });
         value = structuredClone(runtime.read().reports[id] as ReportView);
