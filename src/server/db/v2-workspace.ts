@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../contracts";
+import { CURRENT_POLICY_VERSIONS } from "../../contracts/consent";
 import {
   caseDisplayTitle,
   caseTitleSchema,
   V2_INTAKE_POLICY,
   type V2Action,
+  type V2CaseContext,
   type V2CreateCaseRequest,
   type V2FactReference,
   type V2Intake,
@@ -17,6 +19,7 @@ import {
   type V2Workspace,
   v2ActionSchema,
   v2AnswersForBatchSchema,
+  v2CaseContextSchema,
   v2CreateCaseRequestSchema,
   v2FileProbeSchema,
   v2IntakeSchema,
@@ -71,6 +74,11 @@ export const intakeContentSchema = z.strictObject({
   narrative: v2CreateCaseRequestSchema.shape.narrative,
   caseTitle: caseTitleSchema.optional(),
   caseTitleEdited: z.boolean().optional(),
+});
+export const storedWorkspaceContentSchema = z.strictObject({
+  subjectContext: z.enum(["individual", "company"]),
+  jurisdiction: z.literal("KR"),
+  reworkContext: v2CaseContextSchema.optional(),
 });
 export type WorkspaceCreateData = z.infer<typeof workspaceCreateDataSchema>;
 // Existing server callers may still supply the full validated HTTP input. The
@@ -265,16 +273,14 @@ export function createV2WorkspaceRepository(
       actor.ownerId,
       1,
       row.encrypted_payload,
-      z.strictObject({
-        subjectContext: z.enum(["individual", "company"]),
-        jurisdiction: z.literal("KR"),
-      }),
+      storedWorkspaceContentSchema,
     );
     const value = parse(v2WorkspaceSchema, {
       schemaVersion: "2",
       id,
       title: "사건 작업 공간",
-      ...content,
+      subjectContext: content.subjectContext,
+      jurisdiction: content.jurisdiction,
       status: row.status,
       archivedFrom: row.archived_from,
       workspaceRevision: row.revision,
@@ -576,18 +582,38 @@ export function createV2WorkspaceRepository(
       request: WorkspaceCreateData | V2CreateCaseRequest,
       admission: Admission,
       source?: WorkspaceCreationSource,
+      initialContext?: V2CaseContext,
     ) {
       return safe(async () => {
         actor = parse(actorSchema, { ownerId: actor.ownerId, now: actor.now });
         parse(opaqueIdSchema, id);
         const body = parse(repositoryCreateSchema, request);
+        const context =
+          initialContext === undefined ? undefined : parse(v2CaseContextSchema, initialContext);
+        if (
+          context &&
+          (context.subjectContext !== body.subjectContext || context.casePurpose === "unconfirmed")
+        )
+          throw new V2RepositoryError("REPOSITORY_INPUT_INVALID");
+        const route = context ? "/api/v2/cases/rework" : "/api/v2/cases";
         parse(admissionSchema, admission);
         const fence = source
           ? workspaceCreationSourcePredicate(source, actor.ownerId)
           : { sql: "1", values: [] };
+        const contextConsent = context
+          ? {
+              sql: "EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=?)",
+              values: [
+                actor.ownerId,
+                CURRENT_POLICY_VERSIONS.termsVersion,
+                CURRENT_POLICY_VERSIONS.privacyVersion,
+                CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+              ],
+            }
+          : { sql: "1", values: [] };
         const replay = await accounting.findOperation(
           actor,
-          "/api/v2/cases",
+          route,
           admission.key,
           admission.requestHash,
         );
@@ -598,13 +624,14 @@ export function createV2WorkspaceRepository(
         const workspaceCipher = await core.encrypt("v2_workspaces", id, actor.ownerId, 1, {
           subjectContext: body.subjectContext,
           jurisdiction: body.jurisdiction,
+          ...(context ? { reworkContext: context } : {}),
         });
         const narrativeCipher = await core.encrypt("v2_intakes", id, actor.ownerId, 1, {
           narrative: body.narrative,
         });
         const success = await core.changed([
           core.statement(
-            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,id,?,1 FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE ((target_kind='account' AND target_id=?) OR (target_kind='workspace' AND target_id=?))) AND (${predicate.sql}) AND (${fence.sql}) AND NOT EXISTS(SELECT 1 FROM v2_workspaces WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_operations WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=? AND route='/api/v2/cases' AND key=? AND expires_at>?)`,
+            `INSERT INTO v2_mutation_claims(id,owner_id,target_id,revision) SELECT ?,id,?,1 FROM user WHERE id=? AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE ((target_kind='account' AND target_id=?) OR (target_kind='workspace' AND target_id=?))) AND (${predicate.sql}) AND (${fence.sql}) AND (${contextConsent.sql}) AND NOT EXISTS(SELECT 1 FROM v2_workspaces WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_operations WHERE id=?) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=? AND route=? AND key=? AND expires_at>?)`,
             [
               claimId,
               id,
@@ -613,9 +640,11 @@ export function createV2WorkspaceRepository(
               id,
               ...predicate.values,
               ...fence.values,
+              ...contextConsent.values,
               id,
               admission.operationId,
               actor.ownerId,
+              route,
               admission.key,
               actor.now,
             ],
@@ -640,7 +669,7 @@ export function createV2WorkspaceRepository(
               workspaceId: id,
               kind: "new_case",
               revision: 1,
-              route: "/api/v2/cases",
+              route,
               key: admission.key,
               requestHash: admission.requestHash,
             },
@@ -665,7 +694,7 @@ export function createV2WorkspaceRepository(
             }
           : ((await accounting.findOperation(
               actor,
-              "/api/v2/cases",
+              route,
               admission.key,
               admission.requestHash,
             )) ?? { kind: "rejected" as const });
@@ -904,17 +933,15 @@ export function createV2WorkspaceRepository(
             actor.ownerId,
             1,
             row.encrypted_payload,
-            z.strictObject({
-              subjectContext: z.enum(["individual", "company"]),
-              jurisdiction: z.literal("KR"),
-            }),
+            storedWorkspaceContentSchema,
           );
           values.push(
             parse(v2WorkspaceSchema, {
               schemaVersion: "2",
               id: row.id,
               title: "사건 작업 공간",
-              ...content,
+              subjectContext: content.subjectContext,
+              jurisdiction: content.jurisdiction,
               status: row.status,
               archivedFrom: row.archived_from,
               workspaceRevision: row.revision,
