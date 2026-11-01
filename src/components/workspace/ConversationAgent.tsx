@@ -124,6 +124,7 @@ export function ConversationAgent({
   const dirty = useRef(false);
   const paneLocked = useRef(false);
   const locked = useRef(false);
+  const readError = useRef(false);
   const mounted = useRef(false);
   const reads = useRef(0);
   const owner = useRef<string | null>(null);
@@ -198,6 +199,10 @@ export function ConversationAgent({
       setState(value);
       setAcceptedRefresh(hint);
       setReadFailures(0);
+      if (readError.current && !attempt.current && !locked.current) {
+        readError.current = false;
+        setError("");
+      }
       if (
         value.workspaceRevision > workspace.case.revision &&
         !["pending", "running"].includes(value.analysis.status) &&
@@ -207,6 +212,7 @@ export function ConversationAgent({
       return value;
     } catch (cause) {
       if (mounted.current && current(epoch) && serial === reads.current) {
+        if (!attempt.current && !locked.current) readError.current = true;
         const code = (cause as { code?: string })?.code;
         setReadFailures((n) => (["CONFLICT", "STALE_REVISION"].includes(code ?? "") ? n + 1 : 3));
         setError(failureMessage(cause));
@@ -271,6 +277,7 @@ export function ConversationAgent({
       locked.current = true;
       setBusy(true);
       setError("");
+      readError.current = false;
       callbacks.current.onBusyChange(true);
       ++reads.current;
       try {
