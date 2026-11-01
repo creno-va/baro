@@ -52,3 +52,50 @@ test("one failed original preserves independently verified law and identifies fa
     f.db.close();
   }
 });
+
+test.each(["expired", "corrupt", "limited"])(
+  "an official original that becomes %s loses current binding authority",
+  async (mode) => {
+    const f = await legalAnalysisFixture();
+    try {
+      const output = await f.service().retrieve(f.input(plans), f.access);
+      const citation = output.chunks[0]?.citation;
+      if (!citation) throw new Error("Missing synthetic citation");
+      if (mode === "expired") f.guard.now = "2026-10-07T00:00:00.001Z";
+      if (mode === "corrupt")
+        f.db.sqlite
+          .query("UPDATE v2_official_sources SET body=? WHERE source_id=?")
+          .run("altered synthetic body", citation.sourceId);
+      if (mode === "limited")
+        f.db.sqlite
+          .query("UPDATE v2_citation_bindings SET citation_json=? WHERE id=?")
+          .run(JSON.stringify({ ...citation, _availability: "limited" }), citation.id);
+      expect(await f.bound([citation.id])).toEqual([null]);
+    } finally {
+      f.db.close();
+    }
+  },
+);
+
+test("a list identity and a different detail cannot produce a citation", async () => {
+  const f = await legalAnalysisFixture();
+  try {
+    const output = await f
+      .service(async (url, init) => {
+        const response = await f.transport(url, init);
+        if (new URL(url).searchParams.get("target") !== "prec" || !url.includes("lawService.do"))
+          return response;
+        const body = (await response.json()) as { PrecService: { 판례정보일련번호: string } };
+        body.PrecService.판례정보일련번호 = "99999999999";
+        return Response.json(body);
+      })
+      .retrieve(f.input([plans[1]]), f.access);
+    expect(output.chunks).toEqual([]);
+    expect(output.outcomes[0]?.reason).toBe("identity_mismatch");
+    expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
+      n: 0,
+    });
+  } finally {
+    f.db.close();
+  }
+});
