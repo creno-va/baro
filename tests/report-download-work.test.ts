@@ -648,6 +648,20 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
     f.select("pdf_first");
     const first = await f.client.pdf(reviewed.id);
     expect(first.size).toBeGreaterThan(1000);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT count(*) n FROM v2_rework_records WHERE kind='checkpoint' AND entity_id=? AND state='published'",
+        )
+        .get(reviewed.id),
+    ).toEqual({ n: 2 });
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT count(*) n FROM v2_rework_parts p JOIN v2_rework_records r ON r.id=p.record_id WHERE r.kind='checkpoint' AND r.entity_id=? AND r.state='published'",
+        )
+        .get(reviewed.id),
+    ).toEqual({ n: 2 });
     f.select("pdf_saved");
     const retained = await f.client.pdf(reviewed.id);
     expect(await retained.arrayBuffer()).toEqual(await first.arrayBuffer());
@@ -663,7 +677,9 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
       { operation: "get_initial", calls: 61, statements: 85 },
       { operation: "save_review", calls: 69, statements: 95 },
       { operation: "get_saved", calls: 15, statements: 17 },
-      { operation: "pdf_first", calls: 99, statements: 126 },
+      // One owned report capture + two atomic (header/part/publish) proofs.
+      // Existing request/plan/row/byte limits are unchanged.
+      { operation: "pdf_first", calls: 100, statements: 133 },
       { operation: "pdf_saved", calls: 32, statements: 34 },
       { operation: "html", calls: 20, statements: 24 },
       { operation: "generate", calls: 61, statements: 85 },

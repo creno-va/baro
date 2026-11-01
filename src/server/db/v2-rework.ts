@@ -43,7 +43,7 @@ const cancellations = new WeakMap<
   }
 >();
 const MAX_BYTES = 4 * 1024 * 1024;
-const manifestSchema = z.strictObject({
+export const reworkManifestSchema = z.strictObject({
   id: opaqueIdSchema,
   workspaceId: opaqueIdSchema,
   entityId: opaqueIdSchema,
@@ -120,7 +120,7 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         actor.ownerId,
         header.revision,
         header.encrypted_payload,
-        manifestSchema,
+        reworkManifestSchema,
       );
       if (
         manifest.id !== header.id ||
