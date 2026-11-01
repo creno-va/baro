@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { displayText, hasUniqueIds, opaqueIdSchema, revisionSchema } from "../../../../contracts";
 import { v2FactSchema, v2MaterialReferenceSchema, v2SummarySchema } from "../../../../contracts/v2";
+import { v2FileObservationSchema } from "../../../../contracts/v2/files";
 import type { V2LegalAnalysisSnapshot } from "../../../../contracts/v2/legal-analysis";
 import {
   type V2AnalysisBasis,
@@ -18,7 +19,20 @@ export const legalAnalysisInputSchema = z.strictObject({
     .max(100)
     .refine((rows) => new Set(rows.map((r) => r.fileId)).size === rows.length),
   materials: z
-    .array(z.strictObject({ reference: v2MaterialReferenceSchema, text: displayText(20000) }))
+    .array(
+      z.strictObject({
+        reference: v2MaterialReferenceSchema,
+        text: displayText(20000),
+        // Internal projection of the actual readMaterialWindow coverage. Omission
+        // stays unknown; never fill it with an asserted observed/default state.
+        coverage: z
+          .object({
+            observationCertainty: v2FileObservationSchema.shape.certainty,
+            userEdited: v2FileObservationSchema.shape.userEdited,
+          })
+          .optional(),
+      }),
+    )
     .max(100),
   researchRevision: revisionSchema,
   scope: z.strictObject({
@@ -37,6 +51,7 @@ export function canonicalAnalysisJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalAnalysisJson).join(",")}]`;
   if (value !== null && typeof value === "object")
     return `{${Object.keys(value)
+      .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
       .sort()
       .map(
         (key) =>
@@ -50,6 +65,32 @@ export function analysisCaseFacts(input: LegalAnalysisInput) {
   return input.facts.filter(
     (f) => f.attribution === "user_statement" || f.attribution === "user_material",
   );
+}
+
+export function analysisMaterialIsObserved(material: LegalAnalysisInput["materials"][number]) {
+  return (
+    material.coverage?.observationCertainty === "observed" && material.coverage.userEdited === false
+  );
+}
+
+/** A stored verified fact outside the supplied window is not newly downgraded.
+ * But a supplied uncertain/edited/unknown observation at that EXACT current
+ * reference cannot be promoted by labelling its derived fact 'observed'. */
+export function analysisFactHasIndependentSupport(
+  fact: LegalAnalysisInput["facts"][number],
+  input: LegalAnalysisInput,
+) {
+  if (fact.certainty === "uncertain" || fact.certainty === "conflicting") return false;
+  if (fact.attribution === "user_statement") return true; // Still a qualified statement, never independent proof.
+  if (fact.attribution !== "user_material" || fact.certainty !== "observed" || fact.userEdited)
+    return false;
+  return fact.references.every((reference) => {
+    if (reference.kind !== "user_material") return false;
+    const matching = input.materials.filter(
+      (material) => canonicalAnalysisJson(material.reference) === canonicalAnalysisJson(reference),
+    );
+    return matching.every(analysisMaterialIsObserved);
+  });
 }
 
 /** Inputs are current server-authorized observations, already filtered/masked by scope.

@@ -467,6 +467,40 @@ test("registered native gateway and its attempt ledger execute the adapter's thr
   }
 });
 
+test("native planning/generation/audit all retain actual observation uncertainty and correction flags", async () => {
+  const f = await fixture({ nativeGateway: true, defaultReader: true });
+  try {
+    const coverage = { observationCertainty: "uncertain" as const, userEdited: true };
+    f.input.includedEvidence = [
+      { fileId: "corrected_material", fileRevision: 2, contentHash: "d".repeat(64) },
+    ];
+    f.input.materials = [
+      {
+        reference: {
+          kind: "user_material",
+          fileId: "corrected_material",
+          fileRevision: 2,
+          position: { kind: "image", region: null },
+        },
+        text: "사용자가 교정한 합성 관찰이며 원본 확인이 필요합니다.",
+        coverage,
+      },
+    ];
+    const result = await f.adapter.prepare(f.input);
+    for (const call of f.calls) {
+      const input =
+        call.phase === "workspace_legal_audit"
+          ? (call.input as { context: unknown }).context
+          : call.input;
+      expect(input).toMatchObject({ materials: [{ coverage }] });
+    }
+    expect(result.snapshot.limitations.some((text) => text.includes("사용자가 교정"))).toBe(true);
+    expect(f.counts().providerDispatches).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+
 test("bound-reader failure exposes a finite error and never reaches analysis generation", async () => {
   const f = await fixture({ readerError: true });
   try {

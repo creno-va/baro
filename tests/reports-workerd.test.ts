@@ -506,8 +506,19 @@ test("workerd source rows preserve legacy bytes, digest and binary citation orde
   await nativeFixture(lifetime, f, async (core) => {
     for (const date of [now, "2027-10-06T00:00:00.000Z"]) {
       const expected = f.db.sqlite.query(legacySql).all(...args(id, date)) as SourceRow[];
-      const actual = (await core.statement(REPORT_SOURCE_SQL, args(id, date)).all<SourceRow>())
-        .results;
+      const actual = (
+        await core
+          .statement(REPORT_SOURCE_SQL, [
+            ...args(id, date),
+            0,
+            id,
+            f.actor.ownerId,
+            0,
+            id,
+            f.actor.ownerId,
+          ])
+          .all<SourceRow>()
+      ).results;
       expect(JSON.stringify(actual)).toBe(JSON.stringify(expected));
       expect([...new Set(actual.map((r) => r.kind))]).toEqual([
         "action",

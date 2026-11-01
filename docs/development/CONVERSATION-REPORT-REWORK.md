@@ -18,6 +18,10 @@
 - 중앙 gateway는 02의 `workspace_legal_plan / workspace_legal_analysis / workspace_legal_audit` 세 단계를 등록한다. 동일 모델·기존 attempt ledger를 유지하며 generation LOW / 독립 audit MEDIUM이다. 04의 trusted conversation prompt는 중앙 registry에서만 선택한다. 신규 strict provider wire는 `conversationIntent: null` 또는 허용 intent를 필수로 보내되 구형 저장 parser는 누락을 계속 읽는다.
 -02 후속 `analysis/runtime-adapter.ts`는 실제 gateway/retrieval adapter(게시/DB 저장/dispatch 없음),06 후속 `resolution/runtime-adapter.ts`는 주입된 trusted source/authority와 실제 암호화 record adapter만 소유한다. DB/Hono/runtime 조립과 최종 source/basis CAS는00 소유를 유지한다. 각 후속은 선행 CI/main 뒤 별도 PR이다.
 
+- 후속 해결 PR632: 최신 head `295c3f5edc882aad9a9f0c40e36049b470bbb52e`, Quality41300962279 SUCCESS → main `bcd37aea`. 자료 연결 PR635: 최신 head `a358ab1b2dd0c4b510607be1b26970e001a02948`, Quality41301290682 SUCCESS → main `11f398fba847f55634634babf339e5b4bf0bf8db`. 공통 API PR637: 최신 head `477ea968f352af964f2fa7b17e59e773faf96875`, Quality41301615008·Legal41301614807 SUCCESS → main `c629d6cc`.
+-00 `codex/621-rework-orchestration`의 공통 저장 포트: `prepareReworkJobAdmission`이 기존 chat_response DTO를 유지하며 domain record/job/quota/paid hold/outbox를 같은 최종 claim에 게시한다. 분석은 active/confirmed, 재조율은 최초 reviewing_summary와 active/confirmed 양쪽을 허용한다. `prepareReconciledSummary`는 큰 요약을 봉인한 뒤 canonical 요약과 확인 영수증을 같은 claim에 게시한다. 취소·실패한 이전 미게시 staging은 정본·이전 리포트와 구분하며 폐기된 staging이 다음 확인을 막지 않는다. 구형 정본과 immutable 제안 이력은 보존한다.
+- 분석 task는 서버가 암호화한 job/operation/target/before/summary identity가 일치할 때만 technical revision을 연구 기준에서 제외한다. 다른 mutation·요약/자료 변경·구형 일반 chat은 제외하지 않는다. queued/running 작업 중 UI receipt/continuation은 제한된 metadata capability만 쓰며 analysis/정본 게시, revision bump, SQL hook에는 사용할 수 없다. 재조율 취소의 job/hold/receipt 원자 처리는00 runtime 포트가 전담한다.
+
 ## 요구사항과 유지 경계
 
 1. `/app` 주 선택은 고소·청구 준비 / 상대방 주장 대응이다. `subjectContext` 개인/기업, 사건 분야·형민사, 절차 단계와 별개다. 옛 사건의 목적·단계를 추정해 확정하지 않는다.
