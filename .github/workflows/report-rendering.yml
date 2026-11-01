@@ -7,7 +7,12 @@ on:
       - "src/components/reports/**"
       - "src/server/modules/reports/**"
       - "scripts/report-native-fixture.ts"
+      - "scripts/report-rework-fixture.ts"
+      - "src/utils/report-*.ts"
+      - "src/styles/reports.css"
       - "scripts/report-regressions.ts"
+      - "tests/helpers/report*.ts*"
+      - "tests/**/*report*.test.*"
       - ".github/workflows/report-rendering.yml"
   push:
     branches: [main]
@@ -16,7 +21,12 @@ on:
       - "src/components/reports/**"
       - "src/server/modules/reports/**"
       - "scripts/report-native-fixture.ts"
+      - "scripts/report-rework-fixture.ts"
+      - "src/utils/report-*.ts"
+      - "src/styles/reports.css"
       - "scripts/report-regressions.ts"
+      - "tests/helpers/report*.ts*"
+      - "tests/**/*report*.test.*"
       - ".github/workflows/report-rendering.yml"
 
 permissions:
@@ -44,7 +54,9 @@ jobs:
       - name: Prepare synthetic application HTML
         run: |
           bun scripts/report-native-fixture.ts
+          bun scripts/report-rework-fixture.ts
           chmod a+rwx .wrangler/report-native
+          chmod a+rwx .wrangler/report-rework
       - name: Install pinned offline PDF verification dependency
         run: |
           python3 -m venv "$RUNNER_TEMP/baro-report-python"
@@ -55,11 +67,14 @@ jobs:
       - name: Render and inspect offline PDF
         run: |
           docker run --rm --network none --user node --memory 6g --cpus 1 --pids-limit 128 --cap-drop ALL --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            -e XDG_CACHE_HOME=/tmp \
             -v "$PWD/.wrangler/report-native:/report-fixture" \
+            -v "$PWD/.wrangler/report-rework:/report-rework" \
             -v "$PWD/services/file-processor/report.py:/app/report.py:ro" \
             -v "$PWD/services/file-processor/server.mjs:/app/server.mjs:ro" \
             -v "$PWD/services/file-processor/report-test.py:/app/report-test.py:ro" \
-            baro-report-rendering python3 /app/report-test.py
+            -v "$PWD/services/file-processor/report-rework-test.py:/app/report-rework-test.py:ro" \
+            baro-report-rendering sh -c 'python3 /app/report-test.py && python3 /app/report-rework-test.py'
       - name: Report domain and export regressions on Linux
         run: bun scripts/report-regressions.ts
       - name: Retain synthetic PDF and rendered pages for visual review
@@ -70,5 +85,7 @@ jobs:
           path: |
             .wrangler/report-native/report.pdf
             .wrangler/report-native/report-page-*.png
+            .wrangler/report-rework/*.pdf
+            .wrangler/report-rework/*-page-*.png
           if-no-files-found: error
           retention-days: 7

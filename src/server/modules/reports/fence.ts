@@ -10,6 +10,7 @@ import {
   ownedWorkspace,
   REPORT_SOURCE_SQL,
   ReportError,
+  type ReportSourceOptions,
   reportSourceDigest,
   reportSourceRows,
   sourceDigest,
@@ -43,24 +44,35 @@ export async function exportFence(
   clock: () => string,
   sessionId?: string,
   requiredCitationIds?: readonly string[],
+  options?: ReportSourceOptions,
 ) {
   const workspace = await ownedWorkspace(core, actor, report.workspace_id);
   const verifiedOriginals: string[] = [];
   const verifiedCitationIds = new Set<string>();
   let originalBytes = 0;
-  const rows = await reportSourceRows(core, actor, report.workspace_id, (id, body) => {
-    verifiedCitationIds.add(id);
-    const value = JSON.stringify([id, body]);
-    originalBytes += new TextEncoder().encode(value).byteLength;
-    // One bound value per original, with room for the source JSON and all other
-    // fence parameters. Never aggregate unbounded original bodies into a SQL row.
-    if (originalBytes > 1048576 || verifiedOriginals.length >= 50)
-      throw new ReportError("EXPORT_LIMIT_EXCEEDED");
-    verifiedOriginals.push(value);
-  });
+  const rows = await reportSourceRows(
+    core,
+    actor,
+    report.workspace_id,
+    (id, body) => {
+      verifiedCitationIds.add(id);
+      const value = JSON.stringify([id, body]);
+      originalBytes += new TextEncoder().encode(value).byteLength;
+      // One bound value per original, with room for the source JSON and all other
+      // fence parameters. Never aggregate unbounded original bodies into a SQL row.
+      if (originalBytes > 1048576 || verifiedOriginals.length >= 50)
+        throw new ReportError("EXPORT_LIMIT_EXCEEDED");
+      verifiedOriginals.push(value);
+    },
+    options,
+  );
   if (
-    (await reportSourceDigest(workspace.confirmed_summary_revision, workspace.status, rows)) !==
-    digest
+    (await reportSourceDigest(
+      workspace.confirmed_summary_revision,
+      workspace.status,
+      rows,
+      options,
+    )) !== digest
   )
     throw new ReportError("STALE_REVISION");
   // The immutable, schema-validated report body supplies its complete citation
@@ -113,7 +125,7 @@ export async function exportFence(
   }
   if (
     unverifiedOriginals.length &&
-    (await sourceDigest(core, actor, report.workspace_id)) !== digest
+    (await sourceDigest(core, actor, report.workspace_id, options)) !== digest
   )
     throw new ReportError("STALE_REVISION");
   const json = JSON.stringify(
@@ -157,6 +169,12 @@ export async function exportFence(
             now,
             now,
             id,
+            options?.includeAnalysis ? 1 : 0,
+            id,
+            actor.ownerId,
+            options?.includeAnalysis ? 1 : 0,
+            id,
+            actor.ownerId,
             ...verifiedOriginals,
             JSON.stringify(unverifiedOriginals),
             report.id,
