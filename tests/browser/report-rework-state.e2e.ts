@@ -622,12 +622,6 @@ test("a failed preparation stays failed, retries only on request, and pending da
     page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeDisabled();
-  owner = "synthetic-different-owner";
-  await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
-  await expect(page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" })).toHaveCount(
-    0,
-  );
-  await expect(page.locator(".report-reading")).toHaveCount(0);
   expect(requests).toBe(2);
   expect(requestIds[1]).toBe(requestIds[0]);
   state.analysis = {
@@ -645,6 +639,12 @@ test("a failed preparation stays failed, retries only on request, and pending da
   ).toBeVisible();
   expect(requests).toBe(3);
   expect(requestIds[2]).not.toBe(requestIds[1]);
+  owner = "synthetic-different-owner";
+  await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+  await expect(page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" })).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".report-reading")).toHaveCount(0);
 });
 
 test("embedded report preserves stale edits before generating a new snapshot and clears all content on account change", async ({
@@ -867,3 +867,98 @@ test("report assembly failure remains visible over an existing report with ready
   await expect(page.locator("body")).not.toContainText("STORAGE_UNAVAILABLE");
   expect(mutations).toBe(0);
 });
+
+for (const outcome of ["lost_ack", "rejected"] as const)
+  test(`report preparation ${outcome}: retry preserves an unknown admission or starts after a confirmed rejection`, async ({
+    page,
+  }) => {
+    const state = conversationState();
+    const requests: {
+      body: { action: string; expectedRevision: number; requestId: string };
+      key: string | undefined;
+    }[] = [];
+    const receipts = new Map<string, { body: string; operationId: string }>();
+    const readRevisions: number[] = [];
+    let admissions = 0;
+    await page.route("**/api/**", async (route) => {
+      const request = route.request(),
+        path = new URL(request.url()).pathname;
+      if (path === "/api/me/session")
+        return route.fulfill({
+          json: {
+            user: { id: "synthetic-report-owner", name: "합성", accountType: "customer" },
+            needsConsent: false,
+          },
+        });
+      if (path.endsWith("/files")) return route.fulfill({ json: [] });
+      if (path.endsWith("/rework/report")) return route.fulfill({ json: null });
+      if (path.endsWith("/rework/conversation")) {
+        readRevisions.push(state.workspaceRevision);
+        return route.fulfill({ json: state });
+      }
+      if (path.endsWith("/rework/actions")) {
+        const body = request.postDataJSON(),
+          key = request.headers()["idempotency-key"];
+        requests.push({ body, key });
+        if (requests.length === 1 && outcome === "rejected") {
+          state.workspaceRevision = 8;
+          return route.fulfill({
+            status: 409,
+            json: { error: { code: "STALE_REVISION", message: "합성 사건 변경" } },
+          });
+        }
+        const serialized = JSON.stringify(body),
+          existing = receipts.get(key ?? "");
+        if (existing && existing.body !== serialized)
+          return route.fulfill({ status: 409, json: { error: { code: "IDEMPOTENCY_CONFLICT" } } });
+        const operationId = existing?.operationId ?? `synthetic-admission-${++admissions}`;
+        receipts.set(key ?? "", { body: serialized, operationId });
+        state.workspaceRevision = 8;
+        state.analysis = {
+          status: "running",
+          basis,
+          currentJobId: "synthetic-admitted-job",
+          missingItems: [],
+          failure: null,
+        };
+        if (requests.length === 1)
+          return route.fulfill({
+            status: 503,
+            json: { error: { code: "INTERNAL_ERROR", message: "합성 ACK 유실" } },
+          });
+        return route.fulfill({
+          json: {
+            contractVersion: "conversation-report-v1",
+            requestId: body.requestId,
+            workspaceRevision: 8,
+            pane: "report",
+            status: "pending",
+            missingItems: [],
+            operationId,
+          },
+        });
+      }
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+    await expect(page.getByRole("alert")).toBeVisible();
+    expect(requests).toHaveLength(1);
+    expect(state.workspaceRevision).toBe(8);
+    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
+    ).toBeVisible();
+    expect(requests).toHaveLength(2);
+    expect(readRevisions).toContain(8);
+    expect(requests[0]?.key).toBeTruthy();
+    expect(admissions).toBe(1);
+    if (outcome === "lost_ack") {
+      expect(requests[1]).toEqual(requests[0]);
+      expect(requests[1]?.body.expectedRevision).toBe(7);
+    } else {
+      expect(requests[1]?.body.expectedRevision).toBe(8);
+      expect(requests[1]?.body.requestId).not.toBe(requests[0]?.body.requestId);
+      expect(requests[1]?.key).not.toBe(requests[0]?.key);
+    }
+  });

@@ -36,3 +36,9 @@
 ## 통합·외부 인수
 
 중앙 runtime은 `readPreparedAnalysis`와 `preparedAnalysisMatchesScope`를 실제 analysis repository/current-scope 검사로 연결해야 한다. 04는 `embedded rework`를 명시해 read-only 진입을 사용한다. 06의 readonly peek/metadataOnly #639는 최신 CI 41303033100 성공·main 8a5e1711 병합 후 실제 조립으로 확인했다. 병합·preview/production·최종 main SHA의 validate:full·실제 외부 공급자 smoke와 공개/법률 승인 상태는 00의 별도 인수이며 이 합성 검증으로 완료 처리하지 않는다. 비용 관측 전용, AI200/일, 공급자/모델·권한·동의·암호화·삭제·lease·실제 용량 정책은 유지한다.
+
+## ACK 유실 뒤 revision 변경 재시도 보완
+
+04의 후속 통합 검토에서, 접수 뒤 응답만 유실되고 workspace revision이 증가하면 ReportReview가 기존 request ID를 새 ID로 바꾸는 경계를 발견했다. `codex/626-report-preparation-retry`는 준비 요청의 action·expectedRevision·requestId 전체를 보존한다. 이후 조회한 revision이 달라도 응답이 불명확한 동안에는 같은 본문과 멱등 키로 결과를 확인한다. 확정 거절이나 정상 응답을 받은 뒤 사용자가 다시 요청할 때 새 시도를 만든다. 계정·사건 변경은 기존 접근 경계에서 요청을 폐기한다.
+
+합성 HTTP 브라우저 회귀에서 서버 접수로 revision 7→8 후 ACK503을 반환하고, 재조회가 8을 반환해도 재전송 본문/키는 최초와 같으며 접수는 1회인 것을 확인했다. 별도 409 확정 거절 뒤에는 revision8과 새 ID/키로 한 번만 접수한다. 기존 접수 후 작업 실패의 명시적 재시도·계정 전환을 포함해 ReportReview 13개 브라우저 검사가 통과했다. 이 검사는 실제 클라이언트와 UI에 합성 HTTP 응답을 연결한 검증이며, 04의 실제 Hono/D1 전체 경로 검증과 구분한다.
