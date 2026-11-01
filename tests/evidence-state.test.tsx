@@ -124,4 +124,5 @@ test("CaseMaterials shows processing independently from old facts and directs su
   expect(html).not.toContain("사실에 연결된 자료");
   expect(html).not.toContain("요약 본문은 직접 수정");
   expect(html).toContain("사건 정리 재확인");
+  expect(html).toContain("/cases/synthetic-case/files?file=synthetic-file");
 });

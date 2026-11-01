@@ -328,7 +328,8 @@ test("Gemini thinking policy separates bounded generation from independent audit
   expect(MODEL_ID).toBe("google/gemini-3.8-flash");
   for (const phase of Object.keys(prompts) as (keyof typeof prompts)[]) {
     const wire = prepareGatewayWireInput(phase, {});
-    const audit = phase === "workspace_audit" || phase === "validation";
+    const audit =
+      phase === "workspace_audit" || phase === "workspace_legal_audit" || phase === "validation";
     expect("reasoning_effort" in wire ? wire.reasoning_effort : undefined).toBe(
       audit ? undefined : "low",
     );
