@@ -20,6 +20,7 @@ import {
   v2CaseContextUpdateSchema,
   v2ReworkCreateCaseRequestSchema,
   v2ReworkVersionSchema,
+  v2SummaryReconciliationSchema,
 } from "../../src/contracts/v2";
 
 const runtime: WorkspaceMockRuntime = {
@@ -66,6 +67,33 @@ const request: OperationRequest = async <T>(
   if (response) {
     if (!response.ok) throw await responseError(response);
     const value = await response.json();
+    if (fault === `${suffix}-peer-after` && ["request", "cancel"].includes(suffix)) {
+      localStorage.removeItem("synthetic-reconciliation-fault");
+      let saved = v2SummaryReconciliationSchema.parse(value);
+      const base = path.replace(/\/(?:request|cancel)$/, "");
+      const peer = async (action: string, body: unknown) => {
+        const response = await reconcile(
+          new Request(new URL(`${base}/${action}`, location.origin), {
+            method: "POST",
+            headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+            body: JSON.stringify(body),
+          }),
+        );
+        if (!response?.ok) throw new Error("Synthetic peer mutation failed");
+        return v2SummaryReconciliationSchema.parse(await response.json());
+      };
+      if (suffix === "request")
+        saved = await peer("cancel", {
+          expectedRevision: saved.workspaceRevision,
+          requestId: saved.request?.id,
+        });
+      await peer("request", {
+        expectedRevision: saved.workspaceRevision,
+        summaryRevision: saved.proposal?.baseSummaryRevision,
+        kind: "addition",
+        explanation: "다른 탭에서 요청한 합성 보완 내용입니다.",
+      });
+    }
     if (fault === `${suffix}-lost-after`) {
       localStorage.removeItem("synthetic-reconciliation-fault");
       throw new ApiError("UNAVAILABLE", "합성 응답 유실", true);

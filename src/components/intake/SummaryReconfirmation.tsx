@@ -387,6 +387,27 @@ function SummaryReconfirmationScene({
       if (!(await verify()) || !current(epoch)) return false;
       const snapshot = await readSnapshot();
       if (!(await verify()) || !current(epoch)) return false;
+      if (
+        operation.kind === "request" &&
+        (snapshot.reconciliation?.request?.input.expectedRevision !==
+          operation.input.expectedRevision ||
+          snapshot.reconciliation.request.input.kind !== operation.input.kind ||
+          snapshot.reconciliation.request.input.explanation !== operation.input.explanation ||
+          !["pending", "running", "proposed", "failed"].includes(snapshot.reconciliation.status))
+      )
+        throw new ApiError(
+          "CONFLICT",
+          "요청 이후 다른 화면에서 변경 요청이 바뀌었어요. 작성한 설명을 남겨뒀어요.",
+        );
+      if (
+        operation.kind === "cancel" &&
+        (snapshot.reconciliation?.request?.id !== operation.input.requestId ||
+          snapshot.reconciliation.status !== "cancelled")
+      )
+        throw new ApiError(
+          "CONFLICT",
+          "취소 이후 다른 화면에서 새 요청이 생겼어요. 최신 내용을 확인해 주세요.",
+        );
       accept(snapshot);
       if (operation.kind === "context") {
         if (!finishContext(snapshot))

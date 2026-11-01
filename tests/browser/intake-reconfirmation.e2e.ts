@@ -428,3 +428,40 @@ test("an early summary bookmark returns to saved questions without requiring a s
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toHaveCount(0);
 });
+
+test("a peer replacing an acknowledged request cannot clear this tab's explanation", async ({
+  page,
+}) => {
+  const item = await seed(page);
+  await page.goto(`/cases/${item.id}/summary`);
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+  await input.fill("이 탭에서 설명한 내용을 보존해야 합니다.");
+  await page.evaluate(() =>
+    localStorage.setItem("synthetic-reconciliation-fault", "request-peer-after"),
+  );
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "최신 내용 불러오기", exact: true }),
+  ).toBeVisible();
+  await expect(input).toHaveValue("이 탭에서 설명한 내용을 보존해야 합니다.");
+  expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+});
+
+test("a peer's new request after cancellation requires an explicit fresh read", async ({
+  page,
+}) => {
+  const item = await seed(page);
+  await page.goto(`/cases/${item.id}/summary`);
+  await propose(page);
+  await page.evaluate(() =>
+    localStorage.setItem("synthetic-reconciliation-fault", "cancel-peer-after"),
+  );
+  await page.getByRole("button", { name: "변경안 취소", exact: true }).click();
+  await expect(page.getByRole("button", { name: "최신 내용 불러오기", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await expect(
+    page.getByText("다른 탭에서 요청한 합성 보완 내용입니다.", { exact: true }),
+  ).toBeVisible();
+  expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
+});
