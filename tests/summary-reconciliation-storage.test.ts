@@ -421,6 +421,80 @@ test("record replacement during decryption is retried instead of exposing a fals
   }
 });
 
+test("a source proof expiring during fragmented encryption rejects final publication using its final clock", async () => {
+  const f = await fixture();
+  const encrypt = f.core.cipher.encrypt.bind(f.core.cipher);
+  const expiresAt = new Date(Date.parse(f.now) + 1000).toISOString();
+  const expiredAt = new Date(Date.parse(f.now) + 2000).toISOString();
+  let now = f.now;
+  let armed = false;
+  let encryptedParts = 0;
+  const proofClocks: string[] = [];
+  try {
+    const pending = await f.request();
+    f.core.cipher.encrypt = async (value, context) => {
+      const result = await encrypt(value, context);
+      if (armed && context.table === "v2_rework_parts") {
+        encryptedParts++;
+        now = expiredAt;
+      }
+      return result;
+    };
+    const service = createSummaryReconciliationService(
+      createSummaryReconciliationStorage(f.core, {
+        ...f.ports,
+        clock: () => now,
+        generate: async (input) => ({
+          ...(await f.ports.generate(input)),
+          reasons: Array.from({ length: 60 }, () => "관측 근거는 합성입니다. ".repeat(40)),
+        }),
+        settleTask: (args, prepare) =>
+          f.ports.settleTask(args, async () => {
+            const publication = await prepare();
+            return {
+              ...publication,
+              commit: (plan) => {
+                armed = true;
+                return publication.commit({
+                  ...plan,
+                  authority: (at) => {
+                    proofClocks.push(at);
+                    const original =
+                      typeof plan.authority === "function" ? plan.authority(at) : plan.authority;
+                    return {
+                      sql: `(${original.sql}) AND ? < ?`,
+                      values: [...original.values, at, expiresAt],
+                    };
+                  },
+                });
+              },
+            };
+          }),
+      }),
+    );
+    await expect(service.execute(f.actor, pending.request?.id ?? "missing")).rejects.toMatchObject({
+      code: "STALE_REVISION",
+    });
+    expect(encryptedParts).toBeGreaterThan(1);
+    expect(proofClocks).toEqual([expiredAt]);
+    expect((await f.service.read(f.actor)).summary).toEqual(f.original.summary);
+    expect(
+      (
+        await f.records.read(
+          f.actor,
+          f.actor.caseId,
+          "reconciliation",
+          f.actor.caseId,
+          summaryReconciliationRecordSchema,
+        )
+      )?.value.state.status,
+    ).toBe("running");
+  } finally {
+    f.core.cipher.encrypt = encrypt;
+    f.db.close();
+  }
+});
+
 test("repeated publication-head drift is bounded and returns stale rather than an idle/new request", async () => {
   const f = await fixture();
   try {
