@@ -301,6 +301,9 @@ export async function executeWorkspace(
             : {}),
           timeline: response.timeline,
           toolResults: response.toolResults,
+          ...("conversationIntent" in response && response.conversationIntent
+            ? { conversationIntent: response.conversationIntent }
+            : {}),
           ...("precedentComparison" in response
             ? { precedentComparison: response.precedentComparison }
             : {}),

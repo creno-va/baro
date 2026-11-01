@@ -31,6 +31,7 @@ export async function readWorkspaceContext(
   latest?: V2UserMessage,
   guideHosts: readonly string[] = [],
   profile: "full" | "precedent_comparison" = "full",
+  conversation?: WorkspaceContext["conversation"],
 ): Promise<WorkspaceContext> {
   const repo = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
   const metadata = await repo.metadata(actor, id);
@@ -264,6 +265,7 @@ export async function readWorkspaceContext(
     createdAt: "1970-01-01T00:00:00.000Z",
   });
   return {
+    ...(conversation ? { conversation } : {}),
     subjectContext: workspace.subjectContext,
     intake,
     confirmedSummary: intake.status === "confirmed" ? summary : null,

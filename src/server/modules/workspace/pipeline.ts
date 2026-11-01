@@ -1,13 +1,16 @@
 import type { z } from "zod";
 import type {
   V2Action,
+  V2CaseContext,
   V2Fact,
   V2FactReference,
   V2Intake,
   V2LookupToolId,
   V2Message,
   V2OfficialCitation,
+  V2PreparationState,
   V2ReferenceContext,
+  V2ReworkReportState,
   V2Summary,
   V2TimelineEntry,
   V2ToolResult,
@@ -61,6 +64,14 @@ import { normalizeIntakeQuestion } from "./questions";
 import { normalizeTimelineDates } from "./timeline-dates";
 
 export type WorkspaceContext = {
+  /** Trusted opt-in context injected identically at admission and execution.
+   * User text and stored assistant text cannot enable this scope. */
+  conversation?: {
+    caseContext: V2CaseContext;
+    preparation: V2PreparationState;
+    report?: Pick<V2ReworkReportState, "status" | "basis" | "currentJobId">;
+    pendingEvidenceIds?: string[];
+  };
   subjectContext?: "individual" | "company";
   /** Server clock only; never derived from user text or persisted event timestamps. */
   calendar?: { localDate: string; timeZone: "Asia/Seoul" };
@@ -139,14 +150,16 @@ const unavailableSourceWarning =
 
 const privateIdentifiers = (text: string) =>
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|01[016789][- ]?\d{3,4}[- ]?\d{4}/i.test(text);
-const prohibited = (text: string) =>
+const unsafeText = (text: string) =>
   privateIdentifiers(text) ||
-  /승소\s*(확률|가능성\s*\d|보장)|반드시\s*승소|변호사로서|무조건\s*(승소|이깁)|(?:고소|소송|협상)\s*전략/i.test(
-    text,
-  );
+  /승소\s*(확률|가능성\s*\d|보장)|반드시\s*승소|변호사로서|무조건\s*(승소|이깁)/i.test(text);
+const prohibited = (text: string) => unsafeText(text) || /(?:고소|소송|협상)\s*전략/i.test(text);
+const prohibitedInContext = (context: WorkspaceContext, text: string) =>
+  context.conversation ? unsafeText(text) : prohibited(text);
 
 const factualPreparationRefusal = workspaceStrategyRefusal;
-function prohibitedChatText(text: string) {
+function prohibitedChatText(context: WorkspaceContext, text: string) {
+  if (context.conversation) return unsafeText(text);
   if (privateIdentifiers(text)) return true;
   const [opening, ...remaining] = text.trim().split(/\r?\n/u);
   // Only this exact standalone opening is a known refusal, not strategy.
@@ -193,16 +206,17 @@ function chatContentFailure(
     if (action.status !== "todo") return entity("action_state", "invalid_status");
     if (action.factIds.some((id) => !ids.has(id))) return entity("action_relation", "unknown_fact");
     const text = `${action.title} ${action.instructions} ${action.caution}`;
-    if (prohibited(text)) return textFailure("action_text", text, canonical);
+    if (prohibitedInContext(context, text)) return textFailure("action_text", text, canonical);
   }
   for (const entry of draft.timeline) {
     if (entry.revision !== 1) return entity("timeline_state", "invalid_revision");
     if (entry.userEdited) return entity("timeline_state", "user_edited");
     if (entry.factIds.some((id) => !ids.has(id)))
       return entity("timeline_relation", "unknown_fact");
-    if (prohibited(entry.event)) return textFailure("timeline_event", entry.event, canonical);
+    if (prohibitedInContext(context, entry.event))
+      return textFailure("timeline_event", entry.event, canonical);
   }
-  if (prohibitedChatText(draft.text))
+  if (prohibitedChatText(context, draft.text))
     return textFailure(
       "chat_text",
       privateIdentifiers(draft.text) || !canonical ? draft.text : remaining.join("\n"),
@@ -210,10 +224,10 @@ function chatContentFailure(
     );
   for (const party of draft.parties) {
     const text = JSON.stringify(party);
-    if (prohibited(text)) return textFailure("party", text, canonical);
+    if (prohibitedInContext(context, text)) return textFailure("party", text, canonical);
   }
   for (const unknown of draft.unknowns ?? [])
-    if (prohibited(unknown)) return textFailure("unknown", unknown, canonical);
+    if (prohibitedInContext(context, unknown)) return textFailure("unknown", unknown, canonical);
   return entity("chat_draft", "unclassified");
 }
 
@@ -310,7 +324,7 @@ export function assertWorkspaceFacts(
         matchingClaims.length ? "claim_reference_mismatch" : "claim_text_missing",
         matchingClaims.length,
       );
-    } else if (prohibited(fact.text)) {
+    } else if (prohibitedInContext(context, fact.text)) {
       throw new WorkspaceOutputPolicyError(
         "prohibited_content",
         undefined,
@@ -647,7 +661,19 @@ export function createWorkspacePipeline(
         sourceLookupPerformed: false,
         ...(context.lookupTools ? { toolLookupPerformed: false, toolResults: [] } : {}),
       };
-      let draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+      const parseChat = (raw: unknown) => {
+        const parsed = workspaceChatOutputSchema.parse(raw);
+        if (!context.conversation) delete parsed.conversationIntent;
+        // These intents schedule the dedicated bounded research job. The chat
+        // must not also spend a public-source round to duplicate that research.
+        if (
+          parsed.conversationIntent === "analyze_legal" ||
+          parsed.conversationIntent === "prepare_report"
+        )
+          parsed.requestedSources = [];
+        return parsed;
+      };
+      let draft = parseChat(await call("workspace_chat", context, requestId));
       const timeRequested = draft.requestedCurrentTime;
       if (timeRequested) {
         if (!context.clockTool || !deps.currentTime)
@@ -689,11 +715,11 @@ export function createWorkspacePipeline(
           ...(await deps.readMaterials(context, draft.requestedMaterials)),
           materialLookupPerformed: true,
         };
-        draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+        draft = parseChat(await call("workspace_chat", context, requestId));
         if (draft.requestedMaterials.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
       } else if (toolsRequested || timeRequested) {
-        draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+        draft = parseChat(await call("workspace_chat", context, requestId));
       }
       if (draft.requestedSources.length) {
         context = (await deps.retrieve?.(context, draft.requestedSources)) ?? {
@@ -701,7 +727,7 @@ export function createWorkspacePipeline(
           sourceStatus: "unavailable",
         };
         context.sourceLookupPerformed = true;
-        draft = workspaceChatOutputSchema.parse(await call("workspace_chat", context, requestId));
+        draft = parseChat(await call("workspace_chat", context, requestId));
         if (draft.requestedSources.length)
           throw new WorkspaceOutputPolicyError("unauthorized_reference");
       }
@@ -772,7 +798,7 @@ export function createWorkspacePipeline(
             action.status !== "todo" ||
             action.revision !== completion.expectedRevision ||
             !supported ||
-            prohibited(completion.quote)
+            prohibitedInContext(context, completion.quote)
           )
             throw new WorkspaceOutputPolicyError("unsupported_fact");
           completedIds.add(completion.actionId);
@@ -797,18 +823,21 @@ export function createWorkspacePipeline(
               action.revision !== 1 ||
               action.status !== "todo" ||
               action.factIds.some((id) => !ids.has(id)) ||
-              prohibited(`${action.title} ${action.instructions} ${action.caution}`),
+              prohibitedInContext(
+                context,
+                `${action.title} ${action.instructions} ${action.caution}`,
+              ),
           ) ||
           draft.timeline.some(
             (entry) =>
               entry.revision !== 1 ||
               entry.userEdited ||
               entry.factIds.some((id) => !ids.has(id)) ||
-              prohibited(entry.event),
+              prohibitedInContext(context, entry.event),
           ) ||
-          prohibitedChatText(draft.text) ||
-          draft.parties.some((party) => prohibited(JSON.stringify(party))) ||
-          draft.unknowns?.some(prohibited)
+          prohibitedChatText(context, draft.text) ||
+          draft.parties.some((party) => prohibitedInContext(context, JSON.stringify(party))) ||
+          draft.unknowns?.some((unknown) => prohibitedInContext(context, unknown))
         )
           throw new WorkspaceOutputPolicyError(
             "prohibited_content",
@@ -1040,7 +1069,7 @@ export function createWorkspacePipeline(
           throw error;
         // One shared newly admitted correction for these narrow failures. Never expose the
         // rejected draft, repeat lookup side effects, or relax the full validation/audit.
-        draft = workspaceChatOutputSchema.parse(
+        draft = parseChat(
           await call(
             "workspace_chat",
             {
