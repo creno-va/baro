@@ -1,5 +1,17 @@
+import { z } from "zod";
+import { opaqueIdSchema, revisionSchema } from "../../contracts";
 import { storedMessageSchema, storedUserMessageSchema } from "../modules/workspace/stored-message";
 import type { V2Core } from "./v2-core";
+import { createV2ReworkRepository } from "./v2-rework";
+
+const analysisTaskIdentity = z.object({
+  kind: z.enum(["legal_analysis", "summary_reconciliation"]),
+  jobId: opaqueIdSchema,
+  operationId: opaqueIdSchema,
+  beforeWorkspaceRevision: revisionSchema,
+  targetWorkspaceRevision: revisionSchema,
+  summaryRevision: revisionSchema,
+});
 
 /** Job admission/publication advance the CAS revision without changing case facts.
  * Only traverse server-authenticated comparison messages, never arbitrary chat jobs.
@@ -30,7 +42,30 @@ export async function researchRevisionBase(
       }>()
   ).results;
   let base = revision;
-  for (const job of jobs) {
+  for (let steps = 0; steps < 64 && base > 1; steps++) {
+    // Report drafting/export creates a CAS version without changing source
+    // facts. Require its real operation, report job and published body before
+    // traversing that one revision. Report scope remains in the analysis hash.
+    const report = await core
+      .statement(
+        `SELECT r.id FROM v2_reports r
+      JOIN v2_operations o ON o.id=r.operation_id JOIN v2_jobs j ON j.operation_id=o.id
+      JOIN v2_private_snapshots s ON s.id=r.snapshot_id
+      WHERE r.workspace_id=? AND r.workspace_revision=? AND r.summary_revision=?
+      AND o.owner_id=? AND o.workspace_id=r.workspace_id AND o.kind='report' AND o.revision=r.workspace_revision
+      AND j.target_kind='report' AND j.target_id=r.id AND j.target_revision=r.workspace_revision AND j.kind='report_build'
+      AND s.owner_id=o.owner_id AND s.workspace_id=r.workspace_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision AND s.state='published' LIMIT 1`,
+        [workspaceId, base - 1, summaryRevision, ownerId],
+      )
+      .first();
+    if (report) {
+      base--;
+      continue;
+    }
+    const job = jobs.find(
+      (job) => job.target_revision === base || job.target_revision === base - 1,
+    );
+    if (!job) break;
     const admitted =
       job.target_revision === base &&
       job.current_job_id === job.id &&
@@ -38,6 +73,33 @@ export async function researchRevisionBase(
     const published = job.target_revision === base - 1 && job.status === "completed";
     const failed = job.target_revision === base - 1 && job.status === "failed";
     if (!admitted && !published && !failed) break;
+    const taskRow = await core
+      .statement(
+        "SELECT id FROM v2_rework_records WHERE workspace_id=? AND kind='task' AND entity_id=? AND state='published'",
+        [workspaceId, job.id],
+      )
+      .first();
+    if (taskRow) {
+      const task = await createV2ReworkRepository(core).read(
+        { ownerId, now: new Date().toISOString() },
+        workspaceId,
+        "task",
+        job.id,
+        analysisTaskIdentity,
+      );
+      if (
+        task?.value.kind !== "legal_analysis" ||
+        task.value.jobId !== job.id ||
+        task.value.operationId !== job.operation_id ||
+        task.value.summaryRevision !== summaryRevision ||
+        task.value.targetWorkspaceRevision !== job.target_revision ||
+        task.value.beforeWorkspaceRevision !== job.target_revision - 1 ||
+        task.workspaceRevision !== job.target_revision
+      )
+        break;
+      base = task.value.beforeWorkspaceRevision;
+      continue;
+    }
     const rows = (
       await core
         .statement(
