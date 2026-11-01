@@ -48,7 +48,7 @@ type Mutation =
 type Completion =
   | { kind: "proposal"; proposalId: string; summaryRevision: number }
   | { kind: "initial"; revision: number; summaryRevision: number | null };
-function matches(item: CaseView, state: V2SummaryReconciliation, intent: Completion) {
+function matches(item: CaseView, state: V2SummaryReconciliation | null, intent: Completion) {
   if (item.stage !== "active") return false;
   if (intent.kind === "initial")
     return (
@@ -56,7 +56,7 @@ function matches(item: CaseView, state: V2SummaryReconciliation, intent: Complet
       (item.summaryDetails?.revision ?? null) === intent.summaryRevision
     );
   return (
-    state.status === "confirmed" &&
+    state?.status === "confirmed" &&
     state.proposal?.id === intent.proposalId &&
     state.confirmedWorkspaceRevision === item.revision &&
     state.confirmedSummaryRevision === intent.summaryRevision &&
@@ -191,8 +191,11 @@ function SummaryReconfirmationScene({
   );
   const readSnapshot = useCallback(async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const [next, reconciliation, contextView] = await Promise.all([
-        api.cases.get(caseId),
+      const next = await api.cases.get(caseId);
+      // Legacy summary routes remain readable without requiring a v2 rework record.
+      if (next.schemaVersion === "1" || next.stage === "archived")
+        return { next, reconciliation: null, context: null };
+      const [reconciliation, contextView] = await Promise.all([
         api.rework.getReconciliation(caseId, { expectedOwner: access.ownerId() ?? "" }),
         api.rework.getContext(caseId, { expectedOwner: access.ownerId() ?? "" }).catch(() => null),
       ]);
@@ -227,7 +230,7 @@ function SummaryReconfirmationScene({
     const saved = requestIntent.current;
     if (
       saved &&
-      snapshot.reconciliation.request?.input.explanation === saved.explanation &&
+      snapshot.reconciliation?.request?.input.explanation === saved.explanation &&
       snapshot.reconciliation.request.input.kind === saved.kind &&
       snapshot.reconciliation.request.input.expectedRevision === saved.expectedRevision
     ) {
@@ -301,8 +304,8 @@ function SummaryReconfirmationScene({
           if (matches(snapshot.next, snapshot.reconciliation, intent)) finish(snapshot.next);
           else if (
             snapshot.next.stage === "active" &&
-            snapshot.reconciliation.status !== "pending" &&
-            snapshot.reconciliation.status !== "running"
+            snapshot.reconciliation?.status !== "pending" &&
+            snapshot.reconciliation?.status !== "running"
           ) {
             completion.current = null;
             throw new ApiError(
@@ -517,7 +520,13 @@ function SummaryReconfirmationScene({
               )}
             </>
           ) : (
-            <p role="status">사건 입장 정보를 불러오지 못했어요.</p>
+            <p role="status">
+              {item.schemaVersion === "1"
+                ? "미확인 입장"
+                : item.stage === "archived"
+                  ? "보관한 사건이에요. 저장한 정리를 읽을 수 있어요."
+                  : "사건 입장 정보를 불러오지 못했어요."}
+            </p>
           )}
           {item.schemaVersion === "1" || item.stage === "archived" ? (
             <>

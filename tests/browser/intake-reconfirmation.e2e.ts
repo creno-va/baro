@@ -390,3 +390,24 @@ for (const outcome of ["success", "failure"] as const)
     await expect(page.getByText("새로 확인한 최신 합성 정리", { exact: true })).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
   });
+
+for (const mode of ["legacy", "archived"] as const)
+  test(`${mode} summary routes remain read-only without a new rework record`, async ({ page }) => {
+    const item = await seed(page);
+    await page.addInitScript(
+      ({ id, mode }) => {
+        const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+        if (mode === "legacy") cases[id].schemaVersion = "1";
+        else cases[id].stage = "archived";
+        localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+      },
+      { id: item.id, mode },
+    );
+    await page.goto(`/cases/${item.id}/summary`);
+    await expect(page.getByText(item.summary, { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "사건 열기", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "맞아요", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "입장 확인하기", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });
