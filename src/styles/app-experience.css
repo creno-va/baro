@@ -603,7 +603,10 @@
   margin-block: auto;
   display: flex;
   align-items: center;
+  gap: 0;
   height: 44px;
+  padding-inline-end: 4px;
+  border-radius: 0 8px 8px 0;
   background: var(--muted);
   opacity: 0;
   pointer-events: none;
@@ -612,7 +615,7 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 44px;
+  width: 32px;
   height: 44px;
   min-height: 44px;
   padding: 0;
@@ -652,6 +655,9 @@
   .app-frame .sidebar-story-actions {
     opacity: 1;
     pointer-events: auto;
+  }
+  .app-frame :is(.sidebar-story-delete, .sidebar-story-edit) {
+    width: 44px;
   }
 }
 
