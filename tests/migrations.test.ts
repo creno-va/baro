@@ -253,7 +253,7 @@ test("fresh migrations retain consent FK and cascade without an age field", asyn
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0021_drop_consent_age" },
+      { value: "0022_conversation_rework" },
     );
   } finally {
     database.close();

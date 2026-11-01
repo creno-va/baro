@@ -7,6 +7,8 @@
 - 기존 #600은 CLOSED, 열린 PR0개 확인. PR618/619까지의 UI·동의·DB 전환 변경을 보존한다. 다른 worktree·secret·이전 리포트·원장을 초기화하지 않는다.
 - `bun run work:next`: 56 tasks, no cycles. pinned Bun1.4.0 설치 후 `bun ci` 통과.
 - 계약 PR628: exact head `faa7bbd96256ee5e2439ad2e7ff28ee5aec23657`, CI41297706438·Legal41297706429 SUCCESS → main `b5b7de06554fa939bf4b61448240227c4008d311` 정상 병합.01~06에 전달하고 각 의존 구현을 시작했다.00 후속 브랜치는 `codex/621-rework-runtime`.
+- 공통 client/intent·Worker 부팅 수정 PR630: head `3d517033fe596556d814335e27006eacab03a3a9`, CI41298727259 SUCCESS → main `3df82be88250aba72b9b8018c668e4e7a46f1d55`, main CI41299045604 SUCCESS. 자료 PR629: head `dec7cc2f1e66ab087fe22535ef205d73be07e470`, CI41299129134 SUCCESS → main `b56c000b55c65e42aef23038e162fdaa2cc1c677` 정상 병합.04/05에 실제 재사용 컴포넌트 import 선행 충족을 전달했다.
+-00의 저장 후속 브랜치: `codex/621-rework-storage`, 원격 main의 위 두 PR을 통합했다.0022는00만 배정한다. 기존 목적 enum을 무관한 report/summary snapshot으로 위장하지 않기 위해 필요한 암호화 메타데이터 기록/조각 두 테이블만 추가한다. 기존 사실·자료·리포트 DB를 복제하지 않는다.
 - 새 채팅·하위 에이전트·자동화 생성 없음. 사용자가 만든 아래 여섯 채팅과 이번 개편 메시지 교환만 허용된다. 메모리 자동 공유를 가정하지 않는다.
 - GitHub 커넥터 이슈 생성은403, 인증된 GitHub CLI로 이슈를 생성했다. 채팅 도구가 불가하면 각 하위 이슈 댓글로 조율하고 개인정보는 쓰지 않는다.
 
@@ -31,13 +33,15 @@
 | --- | --- | --- | --- | --- |
 | BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-conversation-report-contract` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 인터페이스 조율·계약 준비 |
 | BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | 인터페이스 회신·fixture 준비 |
-| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | 공식 원문/binding/분석 인터페이스 회신 |
-| BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | 기존 upload/vision 재사용·인터페이스 회신 |
+| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631·CI/구형 미확정 입장 보강 검토 중 |
+| BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629 병합·단위147/브라우저22·기존 FileReview10·실제 Astro2, 실제 카메라 기기/provider 별도 |
 | BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-conversation-agent` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | 인터페이스 수용·독립 fixture/UI 준비 |
 | BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | 인터페이스 수용·독립 PDF20쪽 렌더 검증 |
 | BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | 인터페이스 수용·fixture/quick 통과 |
 
 한 파일 한 소유자다.03/06은 Workspace.tsx·ReportReview.tsx를 수정하지 않는다. 공통 src/contracts/, src/server/db/, drizzle/, 공통 API/client·facade·export, gateway service/중앙 schemas/등록, router/runtime 조립은00만 변경한다. 기존 `src/server/api/v2/workspaces.ts`는00 소유이며01은 독립 재조율 서비스를 제공한다. handler 신설/위임은 정확 경로를 먼저 기록한다.
+
+전용 `llm-gateway/intake-prompts.ts`는01, `conversation-prompts.ts`는04, `analysis-prompts.ts`/analysis-schema.ts는02, resolution-prompts.ts는06이다. Phase/중앙 registry가 섞인 기존 `prompts.ts`는00 소유로 정리하고04가 작성한 일반 prompt 변경은 독립 helper와 패치 명세로 전달받는다.05는 `scripts/report-regressions.ts`·합성 리포트 QA script/Python과 `.github/workflows/report-rendering.yml` 단일 파일도 소유하며 기존 고정 Linux/PDF 보안 검사를 유지한다.
 
 ## 계약과 의존성
 
@@ -70,6 +74,7 @@ ADR-0006의 사실 준비 전용/완성 문서 일괄 거절, PRD/MVP·AI prompt
 | 시작 상태 | main SHA/CI·열린 PR0·#600 CLOSED·work:next·clean branch·bun ci 확인 | 계약 구현/담당 확인 |
 | 계약 PR | bun ci·validate:quick exit0. 계약/기존 v2 44개422assertions, 관련 retrieval/설치 cases/reports client135개729assertions 통과. 계약 타입·lint·diff 통과 | CI/main 병합 뒤 제품 구현 시작; build/DB 변경 없음 |
 | 클라이언트/실행 연결 선행 | bun ci·validate:quick·validate:build 및 실제 local workerd 익명 로그인 부팅 통과. scope/owner/동의/취소/요청 복구·challenge 회전 검증 | PR CI/main 후 담당 UI가 새 namespace를 사용한다. 실제 서버 조립은 다음 PR |
+| 암호화 상태 저장 선행 | bun ci·validate:quick·validate:build·validate:db 통과. drift/fresh/upgrade·실제 local D1 import/재적용 확인. multi-part/CAS/소유/철회/삭제/변조/lease 만료/원자 receipt·0021→0022 보존9개34 assertions, 관련 저장/fixture72개436 assertions 통과 | PR CI/main 뒤 도메인 adapter 연결. 실제 원격 DB 변경/배포 없음 |
 | 최종 통합 | 미실행 | 양쪽 목적·후속3경로·자료/재조율/revision·실패/계정 전환·삭제를 브라우저 확인 |
 | 실제 PDF | 미실행 | 웹/HTML/PDF 근거 일치·전체 페이지 렌더/시각 검토 |
 | 최종 main | 미정 | 정확 SHA의 수동 validate:full, 기존 운영 증거·필요 제한 preview smoke. production 배포 없음 |
