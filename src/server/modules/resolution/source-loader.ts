@@ -2,7 +2,11 @@ import type { ReworkReportView } from "@baro/api-client";
 import { maskReportText } from "../../../components/reports/download";
 import { revisionSchema } from "../../../contracts";
 import type { V2CaseContext, V2Fact, V2LegalAnalysisSnapshot } from "../../../contracts/v2";
-import { v2CaseContextSchema, v2LegalAnalysisSnapshotSchema } from "../../../contracts/v2";
+import {
+  v2CaseContextSchema,
+  v2LegalAnalysisSnapshotSchema,
+  v2ReportAnalysisStatus,
+} from "../../../contracts/v2";
 import { resolutionKindFits } from "../../../utils/resolution";
 import {
   analysisScopeValid,
@@ -175,7 +179,7 @@ export async function buildResolutionSource(
     report.basis.workspaceRevision <= workspaceRevision &&
     report.analysisReview?.analysisId === snapshot.id &&
     !report.analysisReview.userEdited &&
-    report.analysisReview.status === snapshot.status &&
+    report.analysisReview.status === v2ReportAnalysisStatus(snapshot) &&
     report.analysisReview.checkedAt === snapshot.checkedAt &&
     facts.filter((f) => f.confirmed).length ===
       input.facts.filter(
