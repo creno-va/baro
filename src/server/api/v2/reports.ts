@@ -5,7 +5,7 @@ import { createCaseDataCipher } from "../../crypto";
 import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportReadFailure } from "../../modules/reports/diagnostics";
 import { reportRequestCore } from "../../modules/reports/limits";
-import { createReportDependencies } from "../../modules/reports/runtime";
+import { createCaseReportDependencies } from "../../modules/reports/runtime";
 import { createReportsService } from "../../modules/reports/service";
 import { ReportError } from "../../modules/reports/source";
 import type { ReportDependencies } from "../../modules/reports/storage";
@@ -97,7 +97,12 @@ export function createReportsApi(
       503,
     );
   });
-  const service = async (env: Env, ownerId: string, sessionId: string) => {
+  const service = async (
+    env: Env,
+    ownerId: string,
+    sessionId: string,
+    target: Record<string, string>,
+  ) => {
     if (options.testOnlyMissingD1Meta && env.APP_ENV !== "preview")
       throw new ReportError("STORAGE_UNAVAILABLE");
     const core = reportRequestCore(
@@ -109,7 +114,7 @@ export function createReportsApi(
     );
     return createReportsService(core, {
       ...((await options.dependencies?.(env, core, ownerId)) ??
-        createReportDependencies(env, core, ownerId)),
+        (await createCaseReportDependencies(env, core, ownerId, target.caseId, target.reportId))),
       sessionId,
     });
   };
@@ -118,7 +123,7 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     return c.json(
-      await (await service(c.env, access.ownerId, access.sessionId)).get(
+      await (await service(c.env, access.ownerId, access.sessionId, c.req.param())).get(
         access.ownerId,
         c.req.param("caseId"),
       ),
@@ -128,7 +133,7 @@ export function createReportsApi(
     const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     return c.json(
-      await (await service(c.env, access.ownerId, access.sessionId)).save(
+      await (await service(c.env, access.ownerId, access.sessionId, c.req.param())).save(
         access.ownerId,
         c.req.param("caseId"),
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
@@ -140,7 +145,7 @@ export function createReportsApi(
     const access = await caseAccess(c, true, true, true, { customerConsentSnapshot: true });
     if (access.response) return access.response;
     return c.json(
-      await (await service(c.env, access.ownerId, access.sessionId)).generate(
+      await (await service(c.env, access.ownerId, access.sessionId, c.req.param())).generate(
         access.ownerId,
         c.req.param("caseId"),
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),
@@ -153,7 +158,9 @@ export function createReportsApi(
     const access = await caseAccess(c);
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
-    const photo = await (await service(c.env, access.ownerId, access.sessionId)).photo(
+    const photo = await (
+      await service(c.env, access.ownerId, access.sessionId, c.req.param())
+    ).photo(
       access.ownerId,
       opaqueIdSchema.parse(c.req.param("reportId")),
       opaqueIdSchema.parse(c.req.param("fileId")),
@@ -171,10 +178,9 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId"));
-    const document = await (await service(c.env, access.ownerId, access.sessionId)).html(
-      access.ownerId,
-      id,
-    );
+    const document = await (
+      await service(c.env, access.ownerId, access.sessionId, c.req.param())
+    ).html(access.ownerId, id);
     return new Response(document, {
       headers: {
         "content-type": "text/html; charset=utf-8",
@@ -191,7 +197,7 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId, access.sessionId)).pdf(
+      result = await (await service(c.env, access.ownerId, access.sessionId, c.req.param())).pdf(
         access.ownerId,
         id,
       );
@@ -210,10 +216,9 @@ export function createReportsApi(
     if (access.response) return access.response;
     z.strictObject({}).parse(c.req.query());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId, access.sessionId)).savedZip(
-        access.ownerId,
-        id,
-      );
+      result = await (
+        await service(c.env, access.ownerId, access.sessionId, c.req.param())
+      ).savedZip(access.ownerId, id);
     return new Response(result.body, {
       headers: {
         "content-type": "application/zip",
@@ -237,7 +242,7 @@ export function createReportsApi(
       })
       .parse(await c.req.json());
     const id = opaqueIdSchema.parse(c.req.param("reportId")),
-      result = await (await service(c.env, access.ownerId, access.sessionId)).zip(
+      result = await (await service(c.env, access.ownerId, access.sessionId, c.req.param())).zip(
         access.ownerId,
         id,
         idempotencyKeySchema.parse(c.req.header("idempotency-key")),

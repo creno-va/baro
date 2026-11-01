@@ -16,6 +16,10 @@ import {
 import { sourceClaimSchema } from "../../citation/v2-validate";
 import { workspaceSourceRequestSchema } from "../../legal-retrieval/v2/workspace-plans";
 import { materialWindowRequestSchema } from "../../workspace/materials";
+export const summaryReconciliationOutputSchema = z.strictObject({
+  after: v2SummarySchema,
+  reasons: z.array(displayText(1000)).min(1).max(100),
+});
 
 export const workspaceQuestionsOutputSchema = z.strictObject({
   questions: v2QuestionsSchema.max(V2_INTAKE_POLICY.questionsPerBatch),

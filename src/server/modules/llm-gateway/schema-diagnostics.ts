@@ -52,6 +52,8 @@ const schema = z.object({
     "workspace_legal_plan",
     "workspace_legal_analysis",
     "workspace_legal_audit",
+    "workspace_summary_reconciliation",
+    "workspace_summary_reconciliation_audit",
   ]),
   reason: z.enum(["completion_invalid", "incomplete_output", "invalid_json", "schema_invalid"]),
   field: z.enum(fields),

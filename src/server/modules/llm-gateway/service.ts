@@ -38,6 +38,7 @@ import { providerWire } from "./provider-wire";
 import { type ModelSchemaFailure, modelSchemaValidationFailure } from "./schema-diagnostics";
 import { gatewayRequestIssue, gatewayResponse } from "./transport";
 import {
+  summaryReconciliationOutputSchema,
   workspaceAuditOutputSchema,
   workspaceChatOutputSchema,
   workspaceQuestionsOutputSchema,
@@ -45,6 +46,8 @@ import {
 } from "./v2/schemas";
 
 const schemas = {
+  workspace_summary_reconciliation: summaryReconciliationOutputSchema,
+  workspace_summary_reconciliation_audit: workspaceAuditOutputSchema,
   workspace_legal_plan: legalAnalysisPlanSchema,
   workspace_legal_analysis: legalAnalysisOutputSchema,
   workspace_legal_audit: legalAnalysisAuditSchema,
@@ -65,6 +68,8 @@ const schemas = {
   workspace_audit: workspaceAuditOutputSchema,
 };
 const limits = {
+  workspace_summary_reconciliation: 10000,
+  workspace_summary_reconciliation_audit: 8000,
   workspace_legal_plan: 2400,
   workspace_legal_analysis: 10000,
   workspace_legal_audit: 8000,
@@ -200,7 +205,10 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
         }),
       },
     ],
-    ...(phase === "workspace_audit" || phase === "workspace_legal_audit" || phase === "validation"
+    ...(phase === "workspace_audit" ||
+    phase === "workspace_legal_audit" ||
+    phase === "workspace_summary_reconciliation_audit" ||
+    phase === "validation"
       ? {
           extra_body: {
             google: { thinking_config: { thinking_level: "medium", include_thoughts: false } },
