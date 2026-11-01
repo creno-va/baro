@@ -487,6 +487,11 @@ test("the inline file callback preserves the conversation route and dirty callba
   ];
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByRole("button", { name: "관찰 검토", exact: true }).click();
+  await expect(page.locator(".evidence-file-review textarea")).toHaveCount(6);
+  const fieldIds = await page
+    .locator(".evidence-file-review textarea")
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(new Set(fieldIds).size).toBe(fieldIds.length);
   const editor = page.getByRole("region", { name: "새 증거 추가", exact: true });
   await editor.getByLabel("확인·교정한 내용").first().fill("합성 미저장 교정");
   await expect(page.getByTestId("upload-dirty")).toHaveText("true");
