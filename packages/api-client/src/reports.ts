@@ -53,6 +53,8 @@ const reportSchema = z.object({
     })
     .optional(),
 });
+
+export { reportSchema as reportViewSchema };
 export const reportSaveSchema = z.object({
   content: z.string().trim().min(1, "내용을 입력해 주세요.").max(30000),
   maskIdentifiers: z.boolean(),

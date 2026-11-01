@@ -5,6 +5,7 @@ import {
   V2_INTAKE_POLICY,
   v2ActionCompletionSchema,
   v2ActionSchema,
+  v2ConversationIntentSchema,
   v2FactReferenceSchema,
   v2FactSchema,
   v2LookupToolIdSchema,
@@ -29,6 +30,8 @@ export const workspaceSummaryOutputSchema = v2SummarySchema
   .extend({ caseTitle: caseTitleSchema.nullable().default(null) });
 export const workspaceChatOutputSchema = z.strictObject({
   text: displayText(10000),
+  // A proposal only; public legacy message DTOs remain unchanged.
+  conversationIntent: v2ConversationIntentSchema.nullable().optional(),
   references: z.array(v2FactReferenceSchema).max(100),
   warnings: z.array(displayText(500)).max(20),
   // Chat is a delta: conflicts may point to facts in the current summary.
