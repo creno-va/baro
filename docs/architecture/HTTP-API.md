@@ -64,10 +64,9 @@ production의 `PUBLIC_BETA_ENABLED=false`에서는 health 외 API는 503 BETA_NO
 
 ```json
 {
-  "termsVersion": "2026-10-04",
-  "privacyVersion": "2026-10-04",
-  "aiNoticeVersion": "2026-10-04",
-  "over14Confirmed": true
+  "termsVersion": "2026-11-01",
+  "privacyVersion": "2026-11-01",
+  "aiNoticeVersion": "2026-10-31"
 }
 ```
 

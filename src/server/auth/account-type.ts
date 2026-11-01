@@ -25,7 +25,7 @@ export async function readCustomerConsentSnapshot(db: D1Database, ownerId: strin
     .prepare(
       `SELECT coalesce((SELECT value FROM app_metadata WHERE key=? AND value IN ('customer','lawyer')),
         CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=? AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END) AS account_type,
-        EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1) AS current_consent`,
+        EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=?) AS current_consent`,
     )
     .bind(
       preferenceKey(ownerId),

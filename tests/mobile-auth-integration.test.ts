@@ -225,7 +225,7 @@ for (const provider of ["google", "naver", "kakao"] as const)
         role: "lawyer",
         session: { needsConsent: true },
       });
-      await model.acceptConsent({ policies: true, over14: true });
+      await model.acceptConsent({ policies: true });
       expect(model.getSnapshot()).toMatchObject({
         phase: "ready",
         role: "lawyer",

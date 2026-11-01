@@ -136,7 +136,7 @@ export async function exportFence(
         WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND w.owner_id=? AND w.status='active'
         AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)
         AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer')
-        AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
+        AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=?)
         AND w.confirmed_summary_revision=?
         AND coalesce((SELECT json_group_array(json_object('kind',kind,'id',id,'revision',revision,'snapshot',snapshot || CASE WHEN kind='citation' THEN CASE WHEN id IN (SELECT value FROM json_each(?)) THEN ':invalid' ELSE ':verified' END ELSE '' END)) FROM source),'[]')=?
         AND NOT EXISTS(SELECT 1 FROM verified_originals v LEFT JOIN v2_citation_bindings c ON c.workspace_id=w.id AND c.id=json_extract(v.value,'$[0]') LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE s.body IS NOT json_extract(v.value,'$[1]'))
@@ -220,7 +220,7 @@ export function storedReportFence(
 export async function requireReportConsent(core: V2Core, actor: Actor) {
   const ok = await core
     .statement(
-      `SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1`,
+      `SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=?`,
       [
         actor.ownerId,
         CURRENT_POLICY_VERSIONS.termsVersion,

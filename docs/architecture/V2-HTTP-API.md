@@ -60,7 +60,7 @@ idempotency를 동일 guarded batch로 승인한다. 202에는 `{operationId,job
 
 | Method/path | 업무 계약 | Gate |
 | --- | --- | --- |
-| `POST /cases` | `{narrative,partyContext:"individual"|"company",jurisdiction:"KR",turnstileToken}` → intake workspace | 현재 동의·14세·일일3개·Turnstile |
+| `POST /cases` | `{narrative,partyContext:"individual"|"company",jurisdiction:"KR",turnstileToken}` → intake workspace | 현재 동의·일일3개·Turnstile |
 | `GET /cases` | 자신의 v1/v2 목록, contractVersion, generic title, 상태·갱신일 | session·owner; 민감 원문을 card에서 추출하지 않음 |
 | `GET /cases/:caseId/workspace` | revision, intake 상태, 확정 요약과 최신 작업 상태, quota 상태 | owner; v1은 명시적 legacy 응답 |
 | `POST /cases/:caseId/upgrade` | v1 snapshot을 보존한 명시적 v2 시작 | owner·현재 동의. 자동 재분석/old result 교체 없음 |

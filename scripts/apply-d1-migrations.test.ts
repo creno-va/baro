@@ -96,6 +96,17 @@ test("applied history is an ordered known prefix and retries skip recorded files
   expect(() => migrationImport("../invalid.sql", "SELECT 1;")).toThrow();
 });
 
+test("pre-cutover migrations stop at a known boundary without weakening history validation", () => {
+  const files = ["0019_prior.sql", "0020_expand.sql", "0021_contract.sql"];
+  expect(pendingMigrations(files, [files[0]!], files[2])).toEqual([files[1]!]);
+  expect(pendingMigrations(files, files.slice(0, 2))).toEqual([files[2]!]);
+  expect(pendingMigrations(files, files, files[2])).toEqual([]);
+  expect(() => pendingMigrations(files, [files[1]!], files[2])).toThrow("MIGRATION_HISTORY_GAP");
+  expect(() => pendingMigrations(files, [], "9999_missing.sql")).toThrow(
+    "MIGRATION_CUTOFF_UNKNOWN",
+  );
+});
+
 test("remote file-import progress cannot mask success, while query receipts remain strict", () => {
   const progress =
     "│ Checking if file needs uploading\n│ Uploading complete.\n[unknown import summary]";

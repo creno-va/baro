@@ -304,19 +304,17 @@ export function createSessionModel(dependencies: {
         fail(captured, error);
       }
     },
-    async acceptConsent(input: { policies: boolean; over14: boolean }) {
+    async acceptConsent(input: { policies: boolean }) {
       if (state.phase !== "consent" || state.busy || !state.session?.user || !state.consent) return;
       const parsed = consentInputSchema.safeParse({
         ...state.consent.required,
-        over14Confirmed: input.over14,
       });
       if (!input.policies || !parsed.success) {
         publish({
           ...state,
-          error:
-            input.policies && input.over14
-              ? "현재 정책을 확인할 수 없어요. 앱 업데이트를 확인해 주세요."
-              : "필수 정책과 만 14세 이상 여부를 확인해 주세요.",
+          error: input.policies
+            ? "현재 정책을 확인할 수 없어요. 앱 업데이트를 확인해 주세요."
+            : "필수 서비스 정책에 동의해 주세요.",
         });
         return;
       }

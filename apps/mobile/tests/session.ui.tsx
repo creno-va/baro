@@ -91,28 +91,27 @@ test("finishing customer login and consent exposes the case flow without offerin
   expect(screen.queryByRole("button", { name: "내 사건 정리 계속하기" })).toBeNull();
 });
 
-test("policy and age controls are independent requirements; busy submission disables them", async () => {
+test("policy consent alone enables submission; busy submission disables the control", async () => {
   const p = props(consent),
     view = await render(<SessionScreen {...p} />, { wrapper });
   const submit = () => screen.getByRole("button", { name: "동의하고 계속하기" });
   expect(submit()).toBeDisabled();
   await fireEvent.press(screen.getByRole("checkbox", { name: "[필수] 서비스 정책에 동의합니다" }));
-  expect(submit()).toBeDisabled();
-  await fireEvent.press(screen.getByRole("checkbox", { name: "[필수] 만 14세 이상입니다" }));
+  expect(submit()).not.toBeDisabled();
+  expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   await fireEvent.press(submit());
-  expect(p.onConsent).toHaveBeenCalledWith({ policies: true, over14: true });
+  expect(p.onConsent).toHaveBeenCalledWith({ policies: true });
   await fireEvent.press(screen.getByRole("button", { name: "개인정보 처리방침 읽기" }));
   expect(p.onPolicy).toHaveBeenCalledWith("privacy");
   await view.rerender(<SessionScreen {...p} state={{ ...consent, busy: true }} />);
   expect(screen.getByRole("button", { name: "동의 저장 중" })).toBeDisabled();
-  expect(screen.getByRole("checkbox", { name: "[필수] 만 14세 이상입니다" })).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "[필수] 서비스 정책에 동의합니다" })).toBeDisabled();
 });
 
 test("changing the owner resets consent choices and checking/authorization hides private identity", async () => {
   const p = props(consent),
     view = await render(<SessionScreen {...p} />, { wrapper });
-  for (const label of ["[필수] 서비스 정책에 동의합니다", "[필수] 만 14세 이상입니다"])
-    await fireEvent.press(screen.getByRole("checkbox", { name: label }));
+  await fireEvent.press(screen.getByRole("checkbox", { name: "[필수] 서비스 정책에 동의합니다" }));
   await view.rerender(
     <SessionScreen
       {...p}

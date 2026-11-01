@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
 
 test("reviewed policies explain dataflow and confirmed operator details without anchor navigation at 320px/200%", async ({
   page,
@@ -9,7 +10,11 @@ test("reviewed policies explain dataflow and confirmed operator details without 
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     if (path.startsWith("/policies/")) {
-      await expect(page.locator(".policy-heading")).toContainText("2026-10-31");
+      await expect(page.locator(".policy-heading")).toContainText(
+        path.endsWith("/ai")
+          ? CURRENT_POLICY_VERSIONS.aiNoticeVersion
+          : CURRENT_POLICY_VERSIONS.termsVersion,
+      );
       await expect(page.getByRole("navigation", { name: "문서 목차" })).toHaveCount(0);
       await expect(page.locator('.policy-document a[href^="#"]')).toHaveCount(0);
       await expect(page.locator("article")).toContainText("hechec3534@naver.com");

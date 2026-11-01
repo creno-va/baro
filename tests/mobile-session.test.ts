@@ -85,15 +85,14 @@ test("anonymous role selection invokes login and consent is not inferred from a 
   });
 });
 
-test("both policy and age confirmation plus the actual owner's readback are required to leave consent", async () => {
+test("policy consent and the actual owner's readback are required to leave consent", async () => {
   const f = fixture(owner("a", true)),
     model = createSessionModel(f.dependencies);
   await model.refresh();
   expect(model.getSnapshot().phase).toBe("consent");
-  await model.acceptConsent({ policies: false, over14: true });
-  await model.acceptConsent({ policies: true, over14: false });
+  await model.acceptConsent({ policies: false });
   expect(f.stats().saves).toBe(0);
-  await model.acceptConsent({ policies: true, over14: true });
+  await model.acceptConsent({ policies: true });
   expect(f.stats().saves).toBe(1);
   expect(model.getSnapshot().phase).toBe("ready");
   const g = fixture(owner("a", true));
@@ -102,7 +101,7 @@ test("both policy and age confirmation plus the actual owner's readback are requ
   g.dependencies.saveConsent = async () => {
     g.setSession(owner("b"));
   };
-  await swapped.acceptConsent({ policies: true, over14: true });
+  await swapped.acceptConsent({ policies: true });
   expect(swapped.getSnapshot()).toMatchObject({ phase: "error", session: null });
 });
 
@@ -115,7 +114,7 @@ test("policy versions unknown to the installed app cannot be silently accepted",
   });
   const model = createSessionModel(f.dependencies);
   await model.refresh();
-  await model.acceptConsent({ policies: true, over14: true });
+  await model.acceptConsent({ policies: true });
   expect(f.stats().saves).toBe(0);
   expect(model.getSnapshot().phase).toBe("consent");
   expect(model.getSnapshot().error).toContain("업데이트");

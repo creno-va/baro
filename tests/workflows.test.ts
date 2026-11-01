@@ -334,6 +334,7 @@ test("CD validates config and selected build before migrations and verifies endp
   );
   const migration = steps.findIndex((step) => step.name === "Apply validated migrations");
   const deploy = steps.findIndex((step) => step.uses?.startsWith("cloudflare/"));
+  const contract = steps.findIndex((step) => step.name === "Apply post-cutover migrations");
   const smoke = steps.findIndex(
     (step) => step.name === "Verify release, schema and endpoint behavior",
   );
@@ -342,7 +343,10 @@ test("CD validates config and selected build before migrations and verifies endp
   expect(current).toBeGreaterThan(build);
   expect(migration).toBeGreaterThan(current);
   expect(deploy).toBeGreaterThan(migration);
-  expect(smoke).toBeGreaterThan(deploy);
+  expect(contract).toBeGreaterThan(deploy);
+  expect(smoke).toBeGreaterThan(contract);
+  expect(steps[migration]?.run).toContain("--before 0021_drop_consent_age.sql");
+  expect(steps[contract]?.run).toBe('bun scripts/apply-d1-migrations.ts "$DEPLOY_ENVIRONMENT"');
   expect(steps[preflight]?.run).toContain('bun scripts/check-deployment.ts "$DEPLOY_ENVIRONMENT"');
   expect(steps[preflight]?.run).toContain(
     'bun scripts/check-runtime-secrets.ts "$DEPLOY_ENVIRONMENT"',

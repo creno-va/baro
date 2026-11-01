@@ -32,7 +32,7 @@ export const meApi = new Hono<ApiEnvironment>()
         `account-type:${session.user.id}`,
       ),
       context.env.DB.prepare(
-        "SELECT user_id FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1",
+        "SELECT user_id FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=?",
       ).bind(
         session.user.id,
         CURRENT_POLICY_VERSIONS.termsVersion,
@@ -105,11 +105,7 @@ export const meApi = new Hono<ApiEnvironment>()
     const input = consentInputSchema.safeParse(await context.req.json().catch(() => null));
     if (!input.success) {
       return context.json(
-        errorBody(
-          context,
-          "INVALID_CONSENT",
-          "현재 정책 전체와 만 14세 이상 여부를 확인해 주세요.",
-        ),
+        errorBody(context, "INVALID_CONSENT", "현재 서비스 정책 전체에 동의해 주세요."),
         400,
       );
     }

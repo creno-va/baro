@@ -26,7 +26,7 @@ export function workspaceCreationSourcePredicate(source: WorkspaceCreationSource
       AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE (target_kind='profile' AND target_id=p.id) OR (target_kind='account' AND target_id=p.owner_id)))
       AND coalesce((SELECT value FROM app_metadata WHERE key=? AND value IN ('customer','lawyer')),
         CASE WHEN EXISTS(SELECT 1 FROM v2_role_bindings WHERE owner_id=? AND role IN ('lawyer_applicant','verified_lawyer')) THEN 'lawyer' ELSE 'customer' END)='customer'
-      AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=? AND over_14_confirmed=1)`,
+      AND EXISTS(SELECT 1 FROM user_consents WHERE user_id=? AND terms_version=? AND privacy_version=? AND ai_notice_version=?)`,
     values: [
       value.profileId,
       ownerId,

@@ -207,10 +207,8 @@ test("session and directory validate canonical wire data and reject invalid cons
     },
   });
   const session = createSessionClient(http);
-  await session.saveConsent({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true });
-  expect(calls[0]?.init.body).toBe(
-    JSON.stringify({ ...CURRENT_POLICY_VERSIONS, over14Confirmed: true }),
-  );
+  await session.saveConsent({ ...CURRENT_POLICY_VERSIONS });
+  expect(calls[0]?.init.body).toBe(JSON.stringify({ ...CURRENT_POLICY_VERSIONS }));
   const directory = createDirectoryClient(http);
   expect(
     (await directory.listPage({ query: "  합성 이름  ", region: "seoul", practiceArea: "civil" }))

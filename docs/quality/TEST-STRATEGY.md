@@ -55,7 +55,7 @@ non-critical 표현 품질 점수는 추세를 보되 위 안전 게이트를 �
 ### 인증·권한
 
 - Google/Naver/Kakao 성공, 취소, state 불일치, 만료 세션
-- 미동의·정책 버전 변경·만 14세 확인 실패
+- 미동의·정책 버전 변경
 - 사건 ID, analysis ID, cursor, retry endpoint의 교차 사용자 접근
 
 ### 데이터

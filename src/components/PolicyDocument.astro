@@ -10,10 +10,10 @@ const { kind } = Astro.props;
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads policy.
 const policy = drafts.policyDrafts[kind];
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads the versions.
-const { POLICY_VERSION } = drafts;
+const version = drafts.POLICY_VERSIONS[kind];
 ---
 <article class="policy-document">
-  <header class="policy-heading"><span class="policy-eyebrow">이용 안내 · {POLICY_VERSION}</span><h1>{policy.title}</h1><p>{policy.description}</p></header>
+  <header class="policy-heading"><span class="policy-eyebrow">이용 안내 · {version}</span><h1>{policy.title}</h1><p>{policy.description}</p></header>
   {policy.sections.map((section) => <section class="policy-card" id={section.id}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</section>)}
   <nav class="policy-links" aria-label="다른 이용 안내"><a href="/help">도움말</a><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a><LawyerProfileLink client:load>내 프로필</LawyerProfileLink></nav>
 </article>

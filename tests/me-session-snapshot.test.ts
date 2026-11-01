@@ -78,7 +78,7 @@ for (const [preference, role] of [
     });
   });
 
-for (const change of ["terms", "privacy", "ai_notice", "missing", "over14"] as const)
+for (const change of ["terms", "privacy", "ai_notice", "missing"] as const)
   test(`session requires current consent after ${change} changes before its batch`, async () => {
     const f = await fixture();
     let changed = false;
@@ -87,14 +87,7 @@ for (const change of ["terms", "privacy", "ai_notice", "missing", "over14"] as c
       changed = true;
       if (change === "missing")
         f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.owner.userId);
-      else if (change === "over14") {
-        // Simulate a malformed legacy row in this isolated database only.
-        f.db.sqlite.exec("PRAGMA ignore_check_constraints = ON");
-        f.db.sqlite
-          .query("UPDATE user_consents SET over_14_confirmed=0 WHERE user_id=?")
-          .run(f.owner.userId);
-        f.db.sqlite.exec("PRAGMA ignore_check_constraints = OFF");
-      } else
+      else
         f.db.sqlite
           .query(`UPDATE user_consents SET ${change}_version='stale' WHERE user_id=?`)
           .run(f.owner.userId);

@@ -19,7 +19,6 @@ export async function hasCurrentConsent(database: Database, userId: string): Pro
       eq(userConsents.termsVersion, CURRENT_POLICY_VERSIONS.termsVersion),
       eq(userConsents.privacyVersion, CURRENT_POLICY_VERSIONS.privacyVersion),
       eq(userConsents.aiNoticeVersion, CURRENT_POLICY_VERSIONS.aiNoticeVersion),
-      eq(userConsents.over14Confirmed, true),
     ),
   });
 

@@ -39,7 +39,7 @@ bun run test:ui
 실제 Better Auth route/state/cookie/hook과 SQLite SQL은 그대로 실행해 세 공급자의 성공,
 취소, state mismatch, cookie 누락, state 만료·재사용, 세션 만료를 확인한다.
 추가 테스트는 token create/update 제거, metadata 최소화, 최근 인증 불변성, 7일/1일 수명,
-CSRF, 로그아웃 폐기, 정책 변경·만 14세 gate, fresh/upgrade migration과 drift를 확인한다.
+CSRF, 로그아웃 폐기, 현재 정책 버전 gate, fresh/upgrade migration과 drift를 확인한다.
 
 Playwright는 로컬 페이지의 API 응답만 합성하여 network/provider/callback/loading 오류와
 Tab/Space/Enter 흐름, 제출 중 비활성화, 재시도 초점 복귀를 검증한다. 실제 OAuth 성공을

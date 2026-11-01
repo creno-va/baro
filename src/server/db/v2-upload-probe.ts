@@ -225,7 +225,7 @@ export function createV2UploadProbeRepository(core: V2Core) {
               sql: `AND f.encrypted_payload=?
             AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer')
             AND EXISTS(SELECT 1 FROM user_consents c WHERE c.user_id=w.owner_id
-              AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=? AND c.over_14_confirmed=1)
+              AND c.terms_version=? AND c.privacy_version=? AND c.ai_notice_version=?)
             AND EXISTS(SELECT 1 FROM v2_consents WHERE file_id=f.id AND owner_id=w.owner_id
               AND kind='auto_processing' AND version IN (?, '${COMPATIBLE_FILE_AI_NOTICE_VERSION}'))
             ${sessionId ? `AND EXISTS(SELECT 1 FROM session s WHERE s.id=? AND s.user_id=w.owner_id AND s.expires_at>? AND s.created_at>?)` : ""}`,

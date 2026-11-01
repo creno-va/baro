@@ -17,9 +17,11 @@ export function migrationImport(name: string, sql: string): string {
   return `${sql}\nINSERT INTO d1_migrations (name) VALUES ('${name}');\n`;
 }
 
-export function pendingMigrations(files: string[], applied: string[]): string[] {
+export function pendingMigrations(files: string[], applied: string[], before?: string): string[] {
   const ordered = files.map((name) => migrationName.parse(name)).sort();
   const known = new Set(ordered);
+  if (before !== undefined && !known.has(migrationName.parse(before)))
+    throw new Error("MIGRATION_CUTOFF_UNKNOWN");
   if (applied.some((name) => !known.has(name))) throw new Error("MIGRATION_HISTORY_UNKNOWN");
   const done = new Set(applied);
   let missing = false;
@@ -27,7 +29,7 @@ export function pendingMigrations(files: string[], applied: string[]): string[] 
     if (!done.has(name)) missing = true;
     else if (missing) throw new Error("MIGRATION_HISTORY_GAP");
   }
-  return ordered.filter((name) => !done.has(name));
+  return ordered.filter((name) => !done.has(name) && (before === undefined || name < before));
 }
 
 const resultsSchema = z.array(
@@ -56,6 +58,7 @@ const failureCodes = new Set([
   "D1_QUERY_OUTPUT_INVALID",
   "MIGRATION_HISTORY_UNKNOWN",
   "MIGRATION_HISTORY_GAP",
+  "MIGRATION_CUTOFF_UNKNOWN",
   "MIGRATION_RECEIPT_MISSING",
   "REMOTE_PERSIST_NOT_ALLOWED",
 ]);
@@ -149,7 +152,9 @@ async function main() {
     result.results.map((row) => migrationName.parse(row.name)),
   );
   const files = (await readdir("drizzle")).filter((name) => name.endsWith(".sql"));
-  const pending = pendingMigrations(files, applied);
+  const beforeIndex = process.argv.indexOf("--before");
+  const before = beforeIndex < 0 ? undefined : migrationName.parse(process.argv[beforeIndex + 1]);
+  const pending = pendingMigrations(files, applied, before);
   const directory = await mkdtemp(join(tmpdir(), "baro-d1-migrations-"));
   try {
     for (const name of pending) {

@@ -397,7 +397,7 @@ test("fixture-only Apple registration uses real SDK POST/GET state and RSA valid
     await saveAccountType(db.binding, session.user.id, "lawyer");
     db.sqlite
       .query(
-        "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)",
+        "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) VALUES(?,?,?,?,?)",
       )
       .run(
         session.user.id,

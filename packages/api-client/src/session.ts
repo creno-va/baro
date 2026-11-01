@@ -46,7 +46,7 @@ export function createSessionClient(request: JsonRequest, scope?: SessionScope) 
     async saveConsent(input: ConsentInput) {
       const parsed = consentInputSchema.safeParse(input);
       if (!parsed.success)
-        throw new ApiError("VALIDATION_ERROR", "현재 정책과 만 14세 이상 여부를 확인해 주세요.");
+        throw new ApiError("VALIDATION_ERROR", "현재 서비스 정책을 확인해 주세요.");
       return decode(
         consentStatusSchema,
         await request({

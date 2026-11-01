@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, Check, FileText, UserRound, WalletCards } from "lucide-react";
+import { ArrowRight, Building2, FileText, UserRound, WalletCards } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
@@ -228,10 +228,6 @@ export function CaseInput({
             <br />
             필요한 내용은 BARO가 함께 정리할게요.
           </p>
-          <div className="conversation-effort">
-            <Check size={15} aria-hidden="true" />
-            질문은 두 차례, 한 번에 최대 3개예요
-          </div>
         </header>
         {created && canCreate && !loading && !sessionError ? (
           <div className="conversation-saved" role="status">

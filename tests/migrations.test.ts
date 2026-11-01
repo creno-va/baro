@@ -1,12 +1,119 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/d1";
+import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { emptySelfProfile } from "../src/contracts/v2/self-profile";
 import { createCaseDataCipher } from "../src/server/crypto";
+import * as schema from "../src/server/db/schema";
 import { createV2Core } from "../src/server/db/v2-core";
+import { hasCurrentConsent, saveConsent } from "../src/server/modules/consent/service";
 import { createSelfProfileService } from "../src/server/modules/lawyers/self-profile";
 import { createTestDatabase } from "./helpers/d1";
 import { seedLegacySelfProfile } from "./helpers/legacy-self-profile";
 import { seedTestSession } from "./helpers/session";
+
+test("age removal upgrade preserves policy receipts and auth rows, restores directory triggers and requires actual new consent", async () => {
+  const db = await createTestDatabase({ throughMigration: "0019_self_profile_listing" });
+  try {
+    const owner = await seedTestSession(db, { consent: true });
+    const historicalTime = "2026-10-31T00:00:00.000Z";
+    db.sqlite
+      .query(
+        "UPDATE user_consents SET terms_version='2026-10-31',privacy_version='2026-10-31',consented_at=? WHERE user_id=?",
+      )
+      .run(historicalTime, owner.userId);
+    const receipts = db.sqlite
+      .query(
+        "SELECT user_id,terms_version,privacy_version,ai_notice_version,consented_at FROM user_consents",
+      )
+      .all();
+    const untouched = [
+      "user",
+      "session",
+      "account",
+      "verification",
+      "v2_workspaces",
+      "v2_jobs",
+      "v2_assets",
+    ];
+    const before = untouched.map((table) => db.sqlite.query(`SELECT * FROM ${table}`).all());
+    const epoch = db.sqlite.query("SELECT revision FROM v2_directory_epoch WHERE id=1").get() as {
+      revision: number;
+    };
+    const migration = await Bun.file("drizzle/0020_remove_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(migration))();
+    const contract = await Bun.file("drizzle/0021_drop_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(contract))();
+    expect(db.sqlite.query("SELECT * FROM user_consents").all()).toEqual(receipts);
+    expect(untouched.map((table) => db.sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(
+      before,
+    );
+    expect(
+      db.sqlite
+        .query(
+          "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='user_consents' ORDER BY name",
+        )
+        .all(),
+    ).toEqual([{ name: "v2_directory_policy_delete" }, { name: "v2_directory_policy_update" }]);
+    expect(db.sqlite.query("SELECT revision FROM v2_directory_epoch WHERE id=1").get()).toEqual({
+      revision: epoch.revision + 1,
+    });
+    expect(db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    const database = drizzle(db.binding, { schema });
+    expect(await hasCurrentConsent(database, owner.userId)).toBe(false);
+    await saveConsent(database, owner.userId, CURRENT_POLICY_VERSIONS);
+    expect(await hasCurrentConsent(database, owner.userId)).toBe(true);
+    expect(db.sqlite.query("SELECT * FROM user_consents").get()).toMatchObject({
+      user_id: owner.userId,
+      terms_version: CURRENT_POLICY_VERSIONS.termsVersion,
+      privacy_version: CURRENT_POLICY_VERSIONS.privacyVersion,
+      ai_notice_version: CURRENT_POLICY_VERSIONS.aiNoticeVersion,
+    });
+    expect(
+      db.sqlite.query("SELECT sql FROM sqlite_master WHERE name='user_consents'").get(),
+    ).not.toBeNull();
+    expect(
+      db.sqlite.query("SELECT sql FROM sqlite_master WHERE name='user_consents'").get() as {
+        sql: string;
+      },
+    ).toMatchObject({ sql: expect.not.stringContaining("over_14_confirmed") });
+  } finally {
+    db.close();
+  }
+});
+
+test("consent expansion supports the old reader and new age-free writes until Worker cutover", async () => {
+  const db = await createTestDatabase({ throughMigration: "0019_self_profile_listing" });
+  try {
+    const old = await seedTestSession(db, { consent: true });
+    const fresh = await seedTestSession(db);
+    const expand = await Bun.file("drizzle/0020_remove_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(expand))();
+    expect(
+      db.sqlite.query("SELECT user_id FROM user_consents WHERE over_14_confirmed=1").all(),
+    ).toEqual([{ user_id: old.userId }]);
+    const database = drizzle(db.binding, { schema });
+    await saveConsent(database, fresh.userId, CURRENT_POLICY_VERSIONS);
+    expect(
+      db.sqlite
+        .query("SELECT over_14_confirmed FROM user_consents WHERE user_id=?")
+        .get(fresh.userId),
+    ).toEqual({ over_14_confirmed: null });
+    expect(await hasCurrentConsent(database, fresh.userId)).toBe(true);
+    const receipts = db.sqlite
+      .query(
+        "SELECT user_id,terms_version,privacy_version,ai_notice_version,consented_at FROM user_consents ORDER BY user_id",
+      )
+      .all();
+    const contract = await Bun.file("drizzle/0021_drop_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(contract))();
+    expect(db.sqlite.query("SELECT * FROM user_consents ORDER BY user_id").all()).toEqual(receipts);
+    expect(await hasCurrentConsent(database, fresh.userId)).toBe(true);
+    expect(db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally {
+    db.close();
+  }
+});
 
 test("public-on-save upgrade preserves encrypted drafts, linked assets and reviewed history", async () => {
   const db = await createTestDatabase({ throughMigration: "0018_external_lookup_admission" });
@@ -125,7 +232,7 @@ test("cleanup upgrade preserves opaque journals and auth/domain data with safe s
   }
 });
 
-test("fresh migrations enforce auth FK, cascade and consent age constraints", async () => {
+test("fresh migrations retain consent FK and cascade without an age field", async () => {
   const database = await createTestDatabase();
   try {
     const { sqlite } = database;
@@ -133,17 +240,20 @@ test("fresh migrations enforce auth FK, cascade and consent age constraints", as
     sqlite.exec(
       "INSERT INTO user(id,name,email,created_at,updated_at) VALUES('u','Synthetic','synthetic@example.test',1,1)",
     );
+    expect(
+      sqlite
+        .query("PRAGMA table_info(user_consents)")
+        .all()
+        .map((column) => (column as { name: string }).name),
+    ).toEqual(["user_id", "terms_version", "privacy_version", "ai_notice_version", "consented_at"]);
     expect(() =>
-      sqlite.exec("INSERT INTO user_consents VALUES('u','v','v','v',0,'2026-10-05')"),
+      sqlite.exec("INSERT INTO user_consents VALUES('missing','v','v','v','2026-10-05')"),
     ).toThrow();
-    expect(() =>
-      sqlite.exec("INSERT INTO user_consents VALUES('missing','v','v','v',1,'2026-10-05')"),
-    ).toThrow();
-    sqlite.exec("INSERT INTO user_consents VALUES('u','v','v','v',1,'2026-10-05')");
+    sqlite.exec("INSERT INTO user_consents VALUES('u','v','v','v','2026-10-05')");
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0019_self_profile_listing" },
+      { value: "0021_drop_consent_age" },
     );
   } finally {
     database.close();

@@ -9,7 +9,6 @@ async function login(page: Page, role: "고객" | "변호사" = "고객") {
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page).toHaveURL(/\/consent$/);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
 }
 async function createActiveCase(page: Page, confirm = true) {
@@ -37,7 +36,6 @@ async function changeToLawyer(page: Page) {
   await page.getByRole("radio", { name: /변호사/ }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
-  await page.getByRole("checkbox", { name: "만 14세 이상입니다." }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
 }
 test.beforeEach(async ({ page }) => {

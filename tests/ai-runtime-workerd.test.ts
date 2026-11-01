@@ -223,7 +223,7 @@ async function exerciseNativeRuntime(
         .bind(sessionId, ownerId, sessionToken, Date.now() + 3600000, Date.now(), Date.now()),
       preview
         .prepare(
-          "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,over_14_confirmed,consented_at) VALUES(?,?,?,?,1,?)",
+          "INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) VALUES(?,?,?,?,?)",
         )
         .bind(
           ownerId,

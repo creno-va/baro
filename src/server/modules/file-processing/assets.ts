@@ -83,7 +83,7 @@ export function createAssetProcessingService(
       AND j.status IN ('running','validating') AND o.state IN ('admitted','ambiguous') AND ${jobAlive}
       AND a.owner_id=o.owner_id AND p.owner_id=o.owner_id AND a.state='sanitizing' AND a.purpose IN ('profile_photo','portfolio')
       AND original.state='stored' AND original.visibility='private' AND principal.owner_id=o.owner_id
-      AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=? AND consent.over_14_confirmed=1)
+      AND EXISTS(SELECT 1 FROM user_consents consent WHERE consent.user_id=o.owner_id AND consent.terms_version=? AND consent.privacy_version=? AND consent.ai_notice_version=?)
       AND ((a.purpose='profile_photo' AND original.kind='profile_photo_original') OR (a.purpose='portfolio' AND original.kind='portfolio_original'))`,
         [
           params.jobId,

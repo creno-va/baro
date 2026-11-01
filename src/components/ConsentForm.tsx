@@ -9,7 +9,6 @@ type ConsentState = "loading" | "required" | "redirecting";
 export function ConsentForm() {
   const [state, setState] = useState<ConsentState>("loading");
   const [accepted, setAccepted] = useState(false);
-  const [over14, setOver14] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submitButton = useRef<HTMLButtonElement | null>(null);
@@ -55,7 +54,7 @@ export function ConsentForm() {
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!accepted || !over14) return;
+    if (!accepted) return;
 
     setSubmitting(true);
     setError(null);
@@ -63,7 +62,6 @@ export function ConsentForm() {
     try {
       const session = await api.session.saveConsent({
         ...CURRENT_POLICY_VERSIONS,
-        over14Confirmed: true,
       });
       if (!session.user || session.needsConsent) {
         setError("동의 저장 상태를 확인하지 못했어요. 다시 시도해 주세요.");
@@ -120,7 +118,7 @@ export function ConsentForm() {
           확인해 주세요
         </h1>
         <p>
-          서비스 정책과 이용 연령을 확인해 주세요.
+          서비스 정책을 확인해 주세요.
           <br />
           동의를 마치면 이용하던 화면으로 이어집니다.
         </p>
@@ -141,18 +139,6 @@ export function ConsentForm() {
             </span>
           </span>
         </label>
-        <label>
-          <input
-            checked={over14}
-            disabled={submitting}
-            onChange={(event) => setOver14(event.currentTarget.checked)}
-            type="checkbox"
-          />
-          <span>
-            <strong>[필수] 만 14세 이상입니다.</strong>
-            <span className="consent-description">생년월일은 수집하지 않아요.</span>
-          </span>
-        </label>
         <nav className="consent-policy-links" aria-label="정책 원문">
           <a href="/policies/terms" target="_blank" rel="noopener noreferrer">
             이용약관<span className="sr-only"> (새 창)</span>
@@ -167,7 +153,7 @@ export function ConsentForm() {
         <button
           className="primary-action"
           ref={submitButton}
-          disabled={!accepted || !over14 || submitting}
+          disabled={!accepted || submitting}
           type="submit"
         >
           {submitting ? "저장 중…" : "동의하고 계속하기"}
