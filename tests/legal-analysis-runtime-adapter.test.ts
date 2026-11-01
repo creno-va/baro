@@ -642,16 +642,19 @@ test.each([false, true])(
   },
 );
 
-test.each([
-  [{ kind: "statute", lawTitle: "민법", articles: [{ number: "598" }] }],
-  [{ ...workspaceGuidePlans.legal_consultation, csmSeq: "not-an-identity" }],
-  [{ ...workspaceGuidePlans.legal_consultation, endpointId: "unreviewed_endpoint" }],
-  [{ ...workspaceGuidePlans.legal_consultation, url: "https://example.com" }],
-  Array.from({ length: 3 }, () => workspaceGuidePlans.legal_consultation),
-  null,
-])(
+test.each(
+  [
+    [{ kind: "statute", lawTitle: "민법", articles: [{ number: "598" }] }],
+    [{ ...workspaceGuidePlans.legal_consultation, csmSeq: "not-an-identity" }],
+    [{ ...workspaceGuidePlans.legal_consultation, endpointId: "unreviewed_endpoint" }],
+    [{ ...workspaceGuidePlans.legal_consultation, url: "https://example.com" }],
+    Array.from({ length: 3 }, () => workspaceGuidePlans.legal_consultation),
+    new Array(1),
+    null,
+  ].map((additionalPlans) => ({ additionalPlans })),
+)(
   "invalid server-only guide plans fail before model/admission/retrieval: %j",
-  (additionalPlans) => {
+  ({ additionalPlans }) => {
     // Only this port is evaluated: no database, model or transport may be needed.
     expect(() =>
       createLegalAnalysisRuntimeAdapter({
