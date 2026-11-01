@@ -2,6 +2,7 @@ import { z } from "zod";
 import { opaqueIdSchema, revisionSchema } from "../../contracts";
 import { storedMessageSchema, storedUserMessageSchema } from "../modules/workspace/stored-message";
 import type { V2Core } from "./v2-core";
+import { readReportRevision, reportRevisionId } from "./v2-report-revision";
 import { createV2ReworkRepository } from "./v2-rework";
 
 const analysisTaskIdentity = z.object({
@@ -48,19 +49,46 @@ export async function researchRevisionBase(
     // traversing that one revision. Report scope remains in the analysis hash.
     const report = await core
       .statement(
-        `SELECT r.id FROM v2_reports r
+        `SELECT r.id,'draft' AS kind FROM v2_reports r
       JOIN v2_operations o ON o.id=r.operation_id JOIN v2_jobs j ON j.operation_id=o.id
       JOIN v2_private_snapshots s ON s.id=r.snapshot_id
       WHERE r.workspace_id=? AND r.workspace_revision=? AND r.summary_revision=?
       AND o.owner_id=? AND o.workspace_id=r.workspace_id AND o.kind='report' AND o.revision=r.workspace_revision
       AND j.target_kind='report' AND j.target_id=r.id AND j.target_revision=r.workspace_revision AND j.kind='report_build'
-      AND s.owner_id=o.owner_id AND s.workspace_id=r.workspace_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision AND s.state='published' LIMIT 1`,
-        [workspaceId, base - 1, summaryRevision, ownerId],
+      AND s.owner_id=o.owner_id AND s.workspace_id=r.workspace_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision AND s.state='published'
+      UNION ALL SELECT id,'export' AS kind FROM v2_rework_records WHERE owner_id=? AND workspace_id=? AND kind='checkpoint'
+      AND id=? AND workspace_revision=? AND revision=? AND state='published' LIMIT 1`,
+        [
+          workspaceId,
+          base - 1,
+          summaryRevision,
+          ownerId,
+          ownerId,
+          workspaceId,
+          await reportRevisionId(workspaceId, base),
+          base,
+          base,
+        ],
       )
-      .first();
+      .first<{ id: string; kind: string }>();
     if (report) {
-      base--;
-      continue;
+      if (report.kind === "draft") {
+        base--;
+        continue;
+      }
+      const before = await readReportRevision(
+        core,
+        ownerId,
+        workspaceId,
+        base,
+        summaryRevision,
+        report.id,
+      );
+      if (before !== null) {
+        base = before;
+        continue;
+      }
+      break;
     }
     const job = jobs.find(
       (job) => job.target_revision === base || job.target_revision === base - 1,
