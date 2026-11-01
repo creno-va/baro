@@ -12,10 +12,42 @@ from weasyprint import HTML
 from weasyprint.formatting_structure.boxes import TextBox
 
 root = Path("/report-rework")
-for name in ("claim", "response", "claim-masked", "response-masked"):
+for name in ("claim", "response", "claim-masked", "response-masked", "prepared-prepare_claim", "prepared-respond_to_claim"):
     source = (root / f"{name}.html").read_text(encoding="utf-8")
     document = HTML(string=source, url_fetcher=resource).render()
     assert 2 <= len(document.pages) <= 20
+    output = root / f"{name}.pdf"
+    output.write_bytes(render(source))
+    text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decode("utf-8")
+    compact = re.sub(r"\s+", "", text)
+    phrases = (
+        "합성 조항 원문: 당사자가 합의한 반환 조건을 확인한다.",
+        "합성 판례 원문: 송금 사실과 반환 약정의 존재는 구별하여 살핀다.",
+        "반환 약정의 해석을 다투는 점이 같습니다.",
+        "이 사건에서는 같은 자료를 확인하지 못했습니다.",
+        "긴 조항 검증 35",
+        "증거 1 · 1쪽",
+        "출처와 분석 기준",
+    ) if not name.startswith("prepared-") else (
+        "합성 조항 원문: 반환 조건의 **원문 기호**와 `코드 기호`를 그대로 확인한다.",
+        "합성 판례 원문: 송금 기록과 반환 약정은 ~~서로 구별~~하여 확인한다.",
+        "증거 1 · 1쪽", "반환 약정과 이행 조건", "송금 경위가 공통입니다.",
+        "판례에는 서명 원본이 있으나 사건에는 원본을 확인하지 못했습니다.",
+        "출처와 분석 기준",
+    )
+    for phrase in phrases:
+        assert re.sub(r"\s+", "", phrase) in compact, (name, phrase)
+    if not name.startswith("prepared-"):
+        assert ("인정하는사실과다투는사실" in compact) == name.startswith("response")
+    else:
+        expected = "증여또는정산이었다는우리설명" if name.endswith("respond_to_claim") else "청구할반환조건과이행기"
+        assert expected in compact
+    images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
+    photo_count = sum(" jpeg " in line for line in images.splitlines())
+    assert photo_count >= 2 if "masked" not in name and not name.startswith("prepared-") else photo_count == 0
+    subprocess.run([
+        "pdftoppm", "-scale-to", "1600", "-png", str(output), str(root / f"{name}-page")
+    ], check=True)
     for number, page in enumerate(document.pages, start=1):
         text_boxes = [
             box for box in page._page_box.descendants()
@@ -28,25 +60,4 @@ for name in ("claim", "response", "claim-masked", "response-masked"):
             assert box.position_x + box.width <= page.width - 45, (name, number, box.text, "right overflow")
             assert box.position_y >= 20, (name, number, box.text, "top overflow")
             assert box.position_y + box.height <= page.height - 20, (name, number, box.text, "bottom overflow")
-    output = root / f"{name}.pdf"
-    output.write_bytes(render(source))
-    text = subprocess.check_output(["pdftotext", "-layout", str(output), "-"]).decode("utf-8")
-    compact = re.sub(r"\s+", "", text)
-    for phrase in (
-        "합성 조항 원문: 당사자가 합의한 반환 조건을 확인한다.",
-        "합성 판례 원문: 송금 사실과 반환 약정의 존재는 구별하여 살핀다.",
-        "반환 약정의 해석을 다투는 점이 같습니다.",
-        "이 사건에서는 같은 자료를 확인하지 못했습니다.",
-        "긴 조항 검증 35",
-        "증거 1 · 1쪽",
-        "출처와 분석 기준",
-    ):
-        assert re.sub(r"\s+", "", phrase) in compact, (name, phrase)
-    assert ("인정하는사실과다투는사실" in compact) == name.startswith("response")
-    images = subprocess.check_output(["pdfimages", "-list", str(output)]).decode("utf-8")
-    photo_count = sum(" jpeg " in line for line in images.splitlines())
-    assert photo_count >= 2 if "masked" not in name else photo_count == 0
-    subprocess.run([
-        "pdftoppm", "-scale-to", "1600", "-png", str(output), str(root / f"{name}-page")
-    ], check=True)
     print(f"{name}: {len(document.pages)} pages; exact quotes, comparison, evidence, bounds and photos passed")

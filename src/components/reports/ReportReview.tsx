@@ -3,26 +3,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
+import type { ReportAnalysisSummary } from "../../server/modules/reports/analysis-review";
 import { reportPhotoIds } from "../../utils/report-markdown";
 import { Button } from "../ui/button";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { downloadBlob } from "./download";
+import { downloadBlob, maskReportText } from "./download";
 import { ReportReading } from "./ReportReading";
 import { withInlineReportPhotos } from "./review-sections";
 
 type ReportView = BaseReportView & {
   basis?: { workspaceRevision: number; summaryRevision: number; generatedAt: string } | undefined;
   pdfAvailable?: boolean | undefined;
+  analysisReview?: ReportAnalysisSummary | undefined;
 };
 
-export function ReportReview({ caseId }: { caseId: string }) {
+export type ReportReviewProps = {
+  caseId: string;
+  embedded?: boolean;
+  onChanged?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onBusyChange?: (busy: boolean) => void;
+};
+export function ReportReview({
+  caseId,
+  embedded = false,
+  onChanged,
+  onDirtyChange,
+  onBusyChange,
+}: ReportReviewProps) {
   const [report, setReport] = useState<ReportView | null>(null);
   const [files, setFiles] = useState<FileView[]>([]);
   const [content, setContent] = useState("");
   const [excluded, setExcluded] = useState<string[]>([]);
   const [includedPhotos, setIncludedPhotos] = useState<string[]>([]);
+  const [maskIdentifiers, setMaskIdentifiers] = useState(false);
   const [busy, setBusy] = useState("");
   const [busyStartedAt, setBusyStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -36,6 +52,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const [initialLimit, setInitialLimit] = useState(false);
   const [exportExhausted, setExportExhausted] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [preservedEdit, setPreservedEdit] = useState("");
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
   const loadSequence = useRef(0);
@@ -53,6 +70,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setReport({ ...value, content: positioned });
     setEditing(false);
     setIncludedPhotos(value.includedPhotoIds ?? []);
+    setMaskIdentifiers(value.maskIdentifiers);
 
     setContent(positioned);
 
@@ -71,10 +89,12 @@ export function ReportReview({ caseId }: { caseId: string }) {
     setFiles([]);
     setExportingPdf(false);
     setContent("");
+    setPreservedEdit("");
     setEditing(false);
 
     setExcluded([]);
     setIncludedPhotos([]);
+    setMaskIdentifiers(false);
 
     setRegenerate(false);
     setReloadConfirm(false);
@@ -251,6 +271,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const dirty = Boolean(
     report &&
       (content !== report.content ||
+        maskIdentifiers !== report.maskIdentifiers ||
         JSON.stringify(includedPhotos) !== JSON.stringify(report.includedPhotoIds ?? []) ||
         JSON.stringify(excluded) !== JSON.stringify(report.excludedFileIds)),
   );
@@ -261,13 +282,21 @@ export function ReportReview({ caseId }: { caseId: string }) {
       byteLength: files.find((file) => file.id === photo.id)?.sizeBytes ?? 0,
     }));
   useEffect(() => {
-    if (!dirty) return;
+    onDirtyChange?.(dirty || Boolean(preservedEdit));
+    return () => onDirtyChange?.(false);
+  }, [dirty, preservedEdit, onDirtyChange]);
+  useEffect(() => {
+    onBusyChange?.(Boolean(busy) || accessChecking || exportingPdf);
+    return () => onBusyChange?.(false);
+  }, [busy, accessChecking, exportingPdf, onBusyChange]);
+  useEffect(() => {
+    if (!dirty && !preservedEdit) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  }, [dirty, preservedEdit]);
   async function run(label: string, action: () => Promise<void>) {
     if (lock.current || accessChecking) return;
     const sequence = loadSequence.current;
@@ -323,7 +352,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
         caseId,
         {
           content,
-          maskIdentifiers: false,
+          maskIdentifiers,
           includedPhotoIds: includedPhotos,
           excludedFileIds: excluded,
         },
@@ -331,6 +360,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
       ),
     );
     accept(value);
+    onChanged?.();
     return value;
   }
   const toggle = (values: string[], id: string) =>
@@ -338,19 +368,26 @@ export function ReportReview({ caseId }: { caseId: string }) {
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
   const initialLoading = !report && !error && Boolean(busy || accessChecking);
   return (
-    <div className="report-review report-workspace" aria-busy={Boolean(busy) || accessChecking}>
-      <CaseNavigation
-        caseId={caseId}
-        title={report ? report.title : "사건 정리"}
-        active="reports"
-        {...(report ? { fileCount: files.length } : {})}
-      />
+    <div
+      className={`report-review report-workspace${embedded ? " report-embedded" : ""}`}
+      aria-busy={Boolean(busy) || accessChecking}
+    >
+      {!embedded && (
+        <CaseNavigation
+          caseId={caseId}
+          title={report ? report.title : "사건 정리"}
+          active="reports"
+          {...(report ? { fileCount: files.length } : {})}
+        />
+      )}
       <div className="report-canvas">
         <header className="report-heading">
-          <div className="report-heading-copy">
-            <h2>전달할 리포트를 준비해요</h2>
-            <p>내용을 확인하고, 필요한 부분을 고쳐 다운로드하세요.</p>
-          </div>
+          {!embedded && (
+            <div className="report-heading-copy">
+              <h2>전달할 리포트를 준비해요</h2>
+              <p>내용을 확인하고, 필요한 부분을 고쳐 다운로드하세요.</p>
+            </div>
+          )}
           {report && (
             <div className="report-heading-actions">
               <button
@@ -374,7 +411,13 @@ export function ReportReview({ caseId }: { caseId: string }) {
               <button
                 type="button"
                 className="report-regenerate primary"
-                disabled={Boolean(busy) || accessChecking || accessUnknown || needsConsent}
+                disabled={
+                  Boolean(busy) ||
+                  accessChecking ||
+                  accessUnknown ||
+                  needsConsent ||
+                  Boolean(preservedEdit && dirty && report.stale)
+                }
                 onClick={() => setRegenerate(true)}
               >
                 새 버전 만들기
@@ -448,15 +491,68 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 PDF·ZIP은 계속 확인할 수 있어요. <a href="/consent">동의 확인</a>
               </p>
             )}
+            <section
+              className={`report-snapshot${report.stale ? " report-snapshot--stale" : ""}`}
+              aria-label="리포트 생성 기준"
+            >
+              <strong>
+                {report.stale
+                  ? "과거 기준의 리포트"
+                  : report.analysisReview?.userEdited
+                    ? "사용자가 수정한 리포트 · 원문 재확인 필요"
+                    : report.analysisReview?.status === "ready"
+                      ? "검증된 분석으로 준비한 리포트"
+                      : "사건 리포트 · 분석 상태와 보완 항목을 확인해 주세요"}
+              </strong>
+              <p>
+                리포트 버전 {report.revision}
+                {report.basis
+                  ? ` · 요약 ${report.basis.summaryRevision} · 사건 ${report.basis.workspaceRevision}`
+                  : ""}{" "}
+                ·{" "}
+                {new Date(report.basis?.generatedAt ?? report.updatedAt).toLocaleString("ko-KR", {
+                  timeZone: "Asia/Seoul",
+                })}
+              </p>
+              {report.stale && (
+                <p>
+                  이후 사건·증거·분석 변경은 이 리포트를 바꾸지 않습니다. 최신 내용을 반영하려면 새
+                  버전을 만들어 주세요.
+                </p>
+              )}
+              {dirty && <p>저장하지 않은 수정이 있습니다.</p>}
+            </section>
+            {preservedEdit && (
+              <details className="report-preserved-edit">
+                <summary>새 버전을 만들기 전의 편집 내용 보관</summary>
+                <p>
+                  저장하지 않았던 내용을 이 화면에 보관했어요. 필요한 내용을 새 리포트에 옮겨
+                  주세요.
+                </p>
+                <textarea aria-label="보관한 리포트 편집 내용" readOnly value={preservedEdit} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    downloadBlob(
+                      new Blob([preservedEdit], { type: "text/plain;charset=utf-8" }),
+                      `BARO-${report.id}-편집보관.txt`,
+                    );
+                    setPreservedEdit("");
+                  }}
+                >
+                  보관한 편집 내용 저장
+                </button>
+              </details>
+            )}
             <section className="report-read-content" aria-label="리포트 검토 본문">
               <div id="report-edit-fields">
                 <ReportReading
-                  content={content}
+                  content={maskIdentifiers && !editing ? maskReportText(content) : content}
                   editing={editing}
                   disabled={Boolean(busy) || needsConsent}
                   reportId={report.id}
-                  photoCandidates={photoCandidates}
-                  savedPhotoIds={report.maskIdentifiers ? [] : (report.includedPhotoIds ?? [])}
+                  photoCandidates={maskIdentifiers ? [] : photoCandidates}
+                  savedPhotoIds={maskIdentifiers ? [] : (report.includedPhotoIds ?? [])}
                   onChange={(next) => {
                     setContent(next);
                     setIncludedPhotos(reportPhotoIds(next));
@@ -542,6 +638,7 @@ export function ReportReview({ caseId }: { caseId: string }) {
                 disabled={Boolean(busy) || needsConsent}
                 onClick={() =>
                   void run("새 버전 생성 중…", async () => {
+                    if (dirty && report.stale) setPreservedEdit(content);
                     const current = dirty && !report.stale ? await save() : report;
                     const value = await ownedResult(
                       api.reports.generate(caseId, undefined, current.revision),
@@ -549,8 +646,8 @@ export function ReportReview({ caseId }: { caseId: string }) {
                     setBusy("자료 목록 확인 중…");
                     const materials = await ownedResult(api.files.list(caseId));
                     accept(value);
+                    onChanged?.();
                     setFiles(materials);
-                    setIncludedPhotos([]);
                     setRegenerate(false);
                   })
                 }

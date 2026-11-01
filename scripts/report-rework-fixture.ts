@@ -1,6 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import sharp from "sharp";
 import { createReportHtml } from "../src/components/reports/document";
+import { v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2";
+import { createReportsService } from "../src/server/modules/reports/service";
 import { reportReworkLayoutFixture } from "../tests/helpers/report-rework-layout-fixture";
 
 const root = ".wrangler/report-rework";
@@ -25,6 +27,25 @@ for (const side of ["claim", "response"] as const) {
       `${root}/${name}.html`,
       createReportHtml({ ...report, photos, maskIdentifiers: masked }, font),
     );
+  }
+}
+// Exercise the actual encrypted report service projection as well as layout stress.
+Bun.env.BARO_SYNTHETIC_REPORT_SERVER = "true";
+const { reportPreparedAnalysisFixture } = await import(
+  "../tests/helpers/report-prepared-analysis-fixture"
+);
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const) {
+  const fixture = await reportPreparedAnalysisFixture(purpose);
+  try {
+    const snapshot = v2LegalAnalysisSnapshotSchema().parse(fixture.snapshot);
+    const reports = createReportsService(fixture.core, {
+      ...fixture.deps,
+      readPreparedAnalysis: async () => snapshot,
+    });
+    const report = await reports.get(fixture.actor.ownerId, fixture.workspaceId);
+    await Bun.write(`${root}/prepared-${purpose}.html`, createReportHtml(report, font));
+  } finally {
+    fixture.db.close();
   }
 }
 console.info("Synthetic rework HTML prepared for the actual offline PDF engine.");

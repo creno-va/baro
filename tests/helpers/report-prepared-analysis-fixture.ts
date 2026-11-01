@@ -22,7 +22,7 @@ export async function reportPreparedAnalysisFixture(
     kind: "user_material" as const,
     fileId,
     fileRevision: 2,
-    position: { kind: "document" as const, page: 1 },
+    position: { kind: "document" as const, page: 1, paragraph: null, table: null },
   };
   await f.core.binding.batch([
     f.core.claim({ ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() }, claim),

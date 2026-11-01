@@ -23,6 +23,14 @@ import { jobInsertStatements } from "../../db/v2-jobs";
 import { runtimeDigest } from "../../db/v2-paid-runtime";
 import { createV2ReportsRepository } from "../../db/v2-reports";
 import { createV2StagingRepository } from "../../db/v2-staging";
+import {
+  bindPreparedReportAnalysis,
+  markReportAnalysisEdited,
+  missingReportAnalysis,
+  reportAnalysisIdentity,
+  reportAnalysisSummary,
+  reportAnalysisText,
+} from "./analysis";
 import { reportReadStep } from "./diagnostics";
 import { reportSessionFence, requireReportConsent } from "./fence";
 import { loadReportPhotos, photoCandidates, validatePhotos } from "./photos";
@@ -86,6 +94,42 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
   const accounting = createV2AccountingRepository(core);
+  const preparedSource = async (
+    a: Actor,
+    caseId: string,
+    excluded: readonly string[],
+    mask = false,
+  ) => {
+    const source = await buildReportSource(core, a, caseId, excluded, deps.guideHosts);
+    if (!deps.readPreparedAnalysis)
+      return { ...source, analysis: undefined, analysisIdentity: undefined };
+    const snapshot = await deps.readPreparedAnalysis(a, caseId);
+    const bound = await bindPreparedReportAnalysis(
+      core,
+      a,
+      caseId,
+      source.body,
+      source.current.confirmed_summary_revision ?? 0,
+      snapshot,
+      mask,
+      deps.guideHosts,
+    );
+    return { ...source, ...bound, analysisIdentity: reportAnalysisIdentity(snapshot) };
+  };
+  const sourceContent = (source: Awaited<ReturnType<typeof preparedSource>>) => {
+    const base = reportText(source.body, source.coverage, source.display);
+    return source.analysis ? reportAnalysisText(source.body, base, source.analysis) : base;
+  };
+  const checkAnalysis = async (a: Actor, caseId: string, review: ReportReviewData) => {
+    if (review.analysisIdentity === undefined || !deps.readPreparedAnalysis) return;
+    const current = await deps.readPreparedAnalysis(a, caseId);
+    // A scope change can make the authorized loader return null immediately
+    // after saving. A report that intentionally omitted all derived analysis is
+    // still current; a later compatible snapshot makes it eligible for refresh.
+    if (!current && review.analysis?.snapshot === null) return;
+    if (review.analysisIdentity !== reportAnalysisIdentity(current))
+      throw new ReportError("STALE_REVISION");
+  };
   const row = async (a: Actor, id: string, includeReview = false) => {
     opaqueIdSchema.parse(id);
     const session = reportSessionFence(deps.sessionId);
@@ -155,7 +199,13 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   };
   const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
-    const stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
+    let stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
+    try {
+      await checkAnalysis(a, data.row.workspace_id, data.review);
+    } catch (error) {
+      if (error instanceof ReportError && error.code === "STALE_REVISION") stale = true;
+      else throw error;
+    }
     const saved = await core
       .statement(
         "SELECT r.id,r.created_at,(SELECT count(*) FROM v2_report_selections WHERE report_id=r.id AND original_selected=1) AS file_count FROM v2_reports r JOIN v2_blobs b ON b.id=r.zip_blob_id WHERE r.workspace_id=? AND r.revision=? AND r.id LIKE 'export-%' AND r.state='ready' AND b.state='stored' AND b.kind='original_zip' ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1",
@@ -252,6 +302,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       throw new ReportError("REVIEW_REQUIRED");
     if (review.sourceDigest !== (await sourceDigest(core, a, caseId)))
       throw new ReportError("STALE_REVISION");
+    await checkAnalysis(a, caseId, review);
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
     const snapshotId = await stage(a, caseId, current.revision, id, body);
     const request = v2ReportCreateRequestSchema.parse({
@@ -406,23 +457,33 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     }
     return id;
   }
-  const exports = createReportExports(core, deps, { row, read, canonical, actor });
+  const exports = createReportExports(core, deps, { row, read, canonical, actor, checkAnalysis });
   return {
+    /** Opt-in, read-only entry point. Opening a conversation panel creates nothing. */
+    async peek(ownerId: string, caseId: string) {
+      const a = actor(ownerId),
+        prior = await latest(a, caseId);
+      if (!prior) return null;
+      const value = await view(a, prior.id),
+        data = await read(a, prior.id);
+      return { ...value, analysisReview: reportAnalysisSummary(data.review.analysis) };
+    },
     async get(ownerId: string, caseId: string) {
       const a = actor(ownerId),
         prior = await reportReadStep("latest", () => latest(a, caseId));
       if (prior) return reportReadStep("view", () => view(a, prior.id));
-      const source = await reportReadStep("source", () =>
-        buildReportSource(core, a, caseId, [], deps.guideHosts),
-      );
+      const source = await reportReadStep("source", () => preparedSource(a, caseId, []));
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
-        content: reportText(source.body, source.coverage, source.display),
+        content: sourceContent(source),
         excludedFileIds: [],
         maskIdentifiers: false,
         sourceDigest: source.digest,
         parentReportId: null,
+        ...(source.analysis
+          ? { analysis: source.analysis, analysisIdentity: source.analysisIdentity }
+          : {}),
       };
       const id = await reportReadStep("create", () =>
         createRecord(
@@ -474,26 +535,27 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const old = await read(a, prior.id);
       if (old.review.sourceDigest !== (await sourceDigest(core, a, caseId)))
         throw new ReportError("STALE_REVISION");
-      const source = await buildReportSource(
-        core,
-        a,
-        caseId,
-        value.excludedFileIds,
-        deps.guideHosts,
-      );
+      await checkAnalysis(a, caseId, old.review);
+      const source = await preparedSource(a, caseId, value.excludedFileIds, value.maskIdentifiers);
       // Exclusions rebuild source-derived text so material cannot survive in a stale free-text
       // copy. The previous immutable report retains any earlier manual editing.
       const exclusionsChanged =
         JSON.stringify([...value.excludedFileIds].sort()) !==
         JSON.stringify([...old.review.excludedFileIds].sort());
-      if (exclusionsChanged && value.content !== old.review.content)
+      const maskingChanged =
+        old.review.analysis !== undefined && value.maskIdentifiers !== old.review.maskIdentifiers;
+      const scopeChanged = exclusionsChanged || maskingChanged;
+      if (scopeChanged && value.content !== old.review.content)
         throw new ReportError("EDITS_REQUIRE_SAVE");
-      const inlinePhotos = reportMarkdownBlocks(value.content).filter(
-        (block) => block.kind === "photo",
-      );
-      const includedPhotoIds =
+      const inlinePhotos = reportMarkdownBlocks(
+        scopeChanged ? sourceContent(source) : value.content,
+      ).filter((block) => block.kind === "photo");
+      const requestedPhotoIds =
         value.includedPhotoIds ??
         (inlinePhotos.length ? reportPhotoIds(value.content) : (old.review.includedPhotoIds ?? []));
+      const includedPhotoIds = scopeChanged
+        ? requestedPhotoIds.filter((id) => !value.excludedFileIds.includes(id))
+        : requestedPhotoIds;
       if (inlinePhotos.some((photo) => !includedPhotoIds.includes(photo.id)))
         throw new ReportError("VALIDATION_ERROR");
       if (
@@ -506,15 +568,31 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       )
         throw new ReportError("EXPORT_LIMIT_EXCEEDED");
       await validatePhotos(core, a, source.body, includedPhotoIds, value.excludedFileIds);
+      const analysis = scopeChanged
+        ? (source.analysis ?? (old.review.analysis ? missingReportAnalysis() : undefined))
+        : old.review.analysis
+          ? {
+              ...old.review.analysis,
+              userEdited: old.review.analysis.userEdited || value.content !== old.review.content,
+            }
+          : source.analysis
+            ? missingReportAnalysis()
+            : undefined;
       const review = {
         ...old.review,
         ...value,
         includedPhotoIds,
-        content: exclusionsChanged
-          ? reportText(source.body, source.coverage, source.display)
-          : value.content,
+        content: scopeChanged
+          ? sourceContent(source)
+          : old.review.analysis && value.content !== old.review.content
+            ? markReportAnalysisEdited(value.content)
+            : value.content,
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
+        ...(analysis ? { analysis } : {}),
+        ...(source.analysisIdentity !== undefined
+          ? { analysisIdentity: source.analysisIdentity }
+          : {}),
       };
       const { expectedRevision: _, ...persisted } = review;
       const id = await createRecord(
@@ -551,21 +629,35 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
           value.expectedRevision !== prior?.revision)
       )
         throw new ReportError("STALE_REVISION");
-      const source = await buildReportSource(
-        core,
-        a,
-        caseId,
-        value.excludedFileIds ?? [],
-        deps.guideHosts,
-      );
+      const old = prior && deps.readPreparedAnalysis ? await read(a, prior.id) : null;
+      const excludedFileIds = value.excludedFileIds ?? old?.review.excludedFileIds ?? [];
+      const maskIdentifiers = old?.review.maskIdentifiers ?? false;
+      const source = await preparedSource(a, caseId, excludedFileIds, maskIdentifiers);
+      const retainedPhotoIds =
+        old?.review.includedPhotoIds?.filter((id) => {
+          const previous = old.body.selectedFiles.find((file) => file.id === id);
+          return (
+            previous &&
+            source.body.selectedFiles.some(
+              (file) =>
+                file.id === id &&
+                file.revision === previous.revision &&
+                file.contentHash === previous.contentHash,
+            )
+          );
+        }) ?? [];
       const review: ReportReviewData = {
         format: "client_review_v1",
         title: "사건 상담 준비 리포트",
-        content: reportText(source.body, source.coverage, source.display),
-        excludedFileIds: value.excludedFileIds ?? [],
-        maskIdentifiers: false,
+        content: sourceContent(source),
+        excludedFileIds,
+        maskIdentifiers,
+        ...(old ? { includedPhotoIds: retainedPhotoIds } : {}),
         sourceDigest: source.digest,
         parentReportId: null,
+        ...(source.analysis
+          ? { analysis: source.analysis, analysisIdentity: source.analysisIdentity }
+          : {}),
       };
       const id = await createRecord(
         a,

@@ -17,6 +17,7 @@ import { digest } from "../files/binary";
 import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../legal-retrieval/v2/source-authority";
+import { reportAnalysisReviewSchema } from "./analysis-review";
 import type { ZipSource } from "./zip";
 
 export class ReportError extends Error {
@@ -48,6 +49,9 @@ export const reportReviewSchema = z.strictObject({
   includedPhotoIds: z.array(opaqueIdSchema).max(12).optional(),
   sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   parentReportId: opaqueIdSchema.nullable(),
+  analysis: reportAnalysisReviewSchema.optional(),
+  /** Exact current analysis identity, including a filtered result that cannot be displayed. */
+  analysisIdentity: z.string().max(5000).nullable().optional(),
 });
 export type ReportReviewData = z.infer<typeof reportReviewSchema>;
 function coverageText(value: V2Coverage | null) {
@@ -394,7 +398,12 @@ export async function buildReportSource(
     scanned += page.length;
     timeline.push(
       ...page.filter(
-        (entry) => allowed(entry.references) && entry.factIds.every((fid) => factIds.has(fid)),
+        (entry) =>
+          allowed(entry.references) &&
+          entry.factIds.every((fid) => factIds.has(fid)) &&
+          (!filtered ||
+            entry.factIds.length > 0 ||
+            entry.references.some((ref) => ref.kind === "user_material")),
       ),
     );
     after = page.length === 8 ? page.at(-1)?.id : undefined;
@@ -407,7 +416,12 @@ export async function buildReportSource(
     scanned += page.length;
     actions.push(
       ...page.filter(
-        (entry) => allowed(entry.references) && entry.factIds.every((fid) => factIds.has(fid)),
+        (entry) =>
+          allowed(entry.references) &&
+          entry.factIds.every((fid) => factIds.has(fid)) &&
+          (!filtered ||
+            entry.factIds.length > 0 ||
+            entry.references.some((ref) => ref.kind === "user_material")),
       ),
     );
     after = page.length === 8 ? page.at(-1)?.id : undefined;
