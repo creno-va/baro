@@ -9,6 +9,7 @@ import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { Textarea } from "../ui/form";
+import { casePurposeLabels } from "./CaseContextNote";
 import { ErrorPanel } from "./common";
 
 // A web entry requirement; saved narratives and installed clients keep their read contracts.
@@ -50,6 +51,41 @@ const companyExamples = [
   },
 ];
 
+const responseExamples = [
+  {
+    label: "돈을 갚으라는 연락을 받았어요",
+    text: "상대방에게서 돈을 갚으라는 연락을 받았어요. 상대방의 주장과 제가 기억하는 일을 구분해 정리하고 싶어요. ",
+    Icon: WalletCards,
+  },
+  {
+    label: "고소했다는 연락을 받았어요",
+    text: "상대방이 고소했다고 알려왔어요. 어떤 일이 있었는지와 제가 받은 연락, 확인된 진행 상황을 정리하고 싶어요. ",
+    Icon: FileText,
+  },
+  {
+    label: "계약 책임을 묻는 연락을 받았어요",
+    text: "상대방이 계약을 지키지 않았다고 주장해요. 당시 약속과 실제로 한 일, 서로 다르게 기억하는 부분을 정리하고 싶어요. ",
+    Icon: Building2,
+  },
+];
+const companyResponseExamples = [
+  {
+    label: "거래처가 계약 책임을 묻고 있어요",
+    text: "회사 거래처에서 계약상 책임이 있다고 주장해요. 회사에서 맡은 역할과 실제 거래 내역, 받은 요청을 정리하고 싶어요. ",
+    Icon: FileText,
+  },
+  {
+    label: "대금을 돌려달라는 요청을 받았어요",
+    text: "거래처에서 회사에 대금 반환을 요청했어요. 어떤 약속을 했고 실제로 무엇을 이행했는지 정리하고 싶어요. ",
+    Icon: WalletCards,
+  },
+  {
+    label: "직원에게 지급 요청을 받았어요",
+    text: "직원이 회사에 지급을 요청했어요. 제가 맡은 역할, 상대방의 주장과 회사의 기록을 구분해 정리하고 싶어요. ",
+    Icon: Building2,
+  },
+];
+
 export function CaseInput({
   siteKey: _siteKey,
   requireSession = false,
@@ -61,6 +97,9 @@ export function CaseInput({
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState<unknown>(null);
   const [narrative, setNarrative] = useState("");
+  const [casePurpose, setCasePurpose] = useState<"prepare_claim" | "respond_to_claim">(
+    "prepare_claim",
+  );
   const [subjectContext, setContext] = useState<"individual" | "company">("individual");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -82,6 +121,7 @@ export function CaseInput({
     setBusy(false);
     setNarrative("");
     setContext("individual");
+    setCasePurpose("prepare_claim");
     setCreated(null);
     setError(null);
     setLengthError("");
@@ -187,7 +227,14 @@ export function CaseInput({
     try {
       const fresh = await loadSession();
       if (!current() || !fresh?.user || fresh.needsConsent) return;
-      const item = await api.cases.create({ narrative: narrative.trim(), subjectContext });
+      const item = await api.rework.createCase(
+        {
+          narrative: narrative.trim(),
+          subjectContext,
+          casePurpose,
+        },
+        { expectedOwner: fresh.user.id },
+      );
       // A completed request must not restore a prior owner's UI after an account switch.
       await loadSession();
       if (!current()) return;
@@ -239,6 +286,24 @@ export function CaseInput({
         ) : (
           <>
             <form className="conversation-entry" onSubmit={(event) => void create(event)}>
+              <fieldset
+                className="conversation-purpose"
+                disabled={busy || loading || !!sessionError || !canCreate}
+              >
+                <legend>어떤 입장에서 정리하고 싶나요?</legend>
+                {(["prepare_claim", "respond_to_claim"] as const).map((purpose) => (
+                  <label key={purpose}>
+                    <input
+                      type="radio"
+                      name="case-purpose"
+                      value={purpose}
+                      checked={!loading && !sessionError && casePurpose === purpose}
+                      onChange={() => setCasePurpose(purpose)}
+                    />
+                    <span>{casePurposeLabels[purpose]}</span>
+                  </label>
+                ))}
+              </fieldset>
               <label className="conversation-field-label" htmlFor="narrative">
                 지금까지 있었던 일
               </label>
@@ -252,9 +317,13 @@ export function CaseInput({
                   aria-describedby="subject-context-help narrative-minimum"
                   aria-invalid={count > 5000 || Boolean(lengthError)}
                   placeholder={
-                    subjectContext === "company"
-                      ? "회사에서 맡은 역할, 거래처·직원 등 상대방과의 관계, 계약·업무 중 어떤 문제가 생겼는지 적어주세요."
-                      : "누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
+                    casePurpose === "respond_to_claim"
+                      ? subjectContext === "company"
+                        ? "회사에서 맡은 역할과 상대방의 주장, 받은 요청과 확인한 기록을 적어주세요. 진행 상황은 아는 만큼만 알려주셔도 괜찮아요."
+                        : "상대방은 어떤 주장을 하나요? 받은 연락과 제가 기억하는 일을 구분해 적어주세요. 확인되지 않은 내용은 모른다고 알려주셔도 괜찮아요."
+                      : subjectContext === "company"
+                        ? "회사에서 맡은 역할, 거래처·직원 등 상대방과의 관계, 계약·업무 중 어떤 문제가 생겼는지 적어주세요."
+                        : "누구와 어떤 일이 있었고, 지금 무엇이 가장 걱정되나요? 정확한 날짜나 금액은 나중에 보완해도 괜찮아요."
                   }
                 />
                 <div className="conversation-composer-toolbar">
@@ -262,7 +331,7 @@ export function CaseInput({
                     className="conversation-context"
                     disabled={busy || loading || !canCreate}
                   >
-                    <legend className="sr-only">누구의 사건인가요?</legend>
+                    <legend className="sr-only">개인·기업 맥락</legend>
                     {(["individual", "company"] as const).map((value) => (
                       <label key={value} className={subjectContext === value ? "selected" : ""}>
                         <input
@@ -287,9 +356,11 @@ export function CaseInput({
                 </div>
               </div>
               <p className="conversation-subject-help" id="subject-context-help" aria-live="polite">
-                {subjectContext === "company"
-                  ? "기업 사건은 회사와 상대방의 관계, 담당 역할, 계약·승인·정산 기록을 중심으로 정리해요. 사건은 이 계정에서 관리해요."
-                  : "개인 사건은 나와 상대방의 관계, 약속과 피해, 대화·입금 기록을 중심으로 정리해요."}
+                {casePurpose === "respond_to_claim"
+                  ? "상대방의 주장과 내가 확인한 내용을 나눠 정리해요. 선택한 입장만으로 책임이나 사건 분야·진행 단계를 정하지 않아요."
+                  : subjectContext === "company"
+                    ? "기업 사건은 회사와 상대방의 관계, 담당 역할, 계약·승인·정산 기록을 중심으로 정리해요. 사건은 이 계정에서 관리해요."
+                    : "개인 사건은 나와 상대방의 관계, 약속과 피해, 대화·입금 기록을 중심으로 정리해요."}
               </p>
               {error ? (
                 <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
@@ -314,22 +385,27 @@ export function CaseInput({
             </form>
             {!narrative && !session?.needsConsent ? (
               <div className="conversation-examples">
-                {(subjectContext === "company" ? companyExamples : individualExamples).map(
-                  ({ label, text, Icon }) => (
-                    <Button
-                      key={label}
-                      variant="outline"
-                      disabled={loading || !canCreate}
-                      onClick={() => {
-                        setNarrative(text);
-                        document.getElementById("narrative")?.focus();
-                      }}
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      {label}
-                    </Button>
-                  ),
-                )}
+                {(casePurpose === "respond_to_claim"
+                  ? subjectContext === "company"
+                    ? companyResponseExamples
+                    : responseExamples
+                  : subjectContext === "company"
+                    ? companyExamples
+                    : individualExamples
+                ).map(({ label, text, Icon }) => (
+                  <Button
+                    key={label}
+                    variant="outline"
+                    disabled={loading || !canCreate}
+                    onClick={() => {
+                      setNarrative(text);
+                      document.getElementById("narrative")?.focus();
+                    }}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    {label}
+                  </Button>
+                ))}
               </div>
             ) : null}
             {(!canCreate || busy || loading || !!sessionError) && (
