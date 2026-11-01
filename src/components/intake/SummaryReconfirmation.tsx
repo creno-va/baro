@@ -7,6 +7,7 @@ import { startForegroundPolling } from "../../client/foreground-poll";
 import { accessHref } from "../../client/return-path";
 import type {
   V2CaseContext,
+  V2CaseContextUpdate,
   V2SummaryReconciliation,
   V2SummaryReconciliationCancel,
   V2SummaryReconciliationConfirm,
@@ -19,7 +20,7 @@ import { Textarea } from "../ui/form";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { CaseMaterials } from "../workspace/CaseMaterials";
-import { CaseContextNote } from "./CaseContextNote";
+import { CaseContextNote, casePurposeLabels } from "./CaseContextNote";
 import { BackToCases, ErrorPanel } from "./common";
 import { SummaryChanges, SummaryReading } from "./SummaryReading";
 import { useCustomerAccess } from "./useCustomerAccess";
@@ -28,11 +29,13 @@ export type SummaryReconfirmationProps = {
   caseId: string;
   embedded?: boolean;
   onConfirmed?: (item: CaseView) => void;
+  onChanged?: (item: CaseView) => void;
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
 };
 type Mutation =
+  | { kind: "context"; input: V2CaseContextUpdate }
   | { kind: "request"; input: V2SummaryReconciliationRequest }
   | { kind: "proposal"; input: V2SummaryReconciliationConfirm }
   | { kind: "cancel"; input: V2SummaryReconciliationCancel }
@@ -69,6 +72,7 @@ function SummaryReconfirmationScene({
   caseId,
   embedded = false,
   onConfirmed,
+  onChanged,
   onCancel,
   onDirtyChange,
   onBusyChange,
@@ -84,6 +88,11 @@ function SummaryReconfirmationScene({
   const [notice, setNotice] = useState("");
   const [kind, setKind] = useState<"correction" | "addition" | null>(null);
   const [explanation, setExplanation] = useState("");
+  const [purposeOpen, setPurposeOpen] = useState(false);
+  const [purposeDraft, setPurposeDraft] = useState<"prepare_claim" | "respond_to_claim" | null>(
+    null,
+  );
+  const contextIntent = useRef<{ input: V2CaseContextUpdate; revision: number } | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [returnHref, setReturnHref] = useState(`/cases/${encodeURIComponent(caseId)}`);
   const base = `/cases/${encodeURIComponent(caseId)}`;
@@ -99,8 +108,13 @@ function SummaryReconfirmationScene({
   const draft = useRef("");
   draft.current = explanation;
   const focusTarget = useRef<HTMLButtonElement>(null);
-  const callbacks = useRef({ onConfirmed, onDirtyChange, onBusyChange });
-  callbacks.current = { onConfirmed, onDirtyChange, onBusyChange };
+  const callbacks = useRef({ onConfirmed, onChanged, onDirtyChange, onBusyChange });
+  callbacks.current = { onConfirmed, onChanged, onDirtyChange, onBusyChange };
+  const dirty = useRef(false);
+  const isDirty =
+    !!explanation.trim() ||
+    (purposeOpen && purposeDraft !== null && purposeDraft !== context?.casePurpose);
+  dirty.current = isDirty;
   const access = useCustomerAccess(
     () => {
       ++request.current;
@@ -108,6 +122,9 @@ function SummaryReconfirmationScene({
       failed.current = null;
       completion.current = null;
       requestIntent.current = null;
+      contextIntent.current = null;
+      setPurposeOpen(false);
+      setPurposeDraft(null);
       revision.current = null;
       draft.current = "";
       setItem(null);
@@ -132,8 +149,8 @@ function SummaryReconfirmationScene({
     );
   }, [base]);
   useEffect(() => {
-    callbacks.current.onDirtyChange?.(explanation.trim().length > 0);
-  }, [explanation]);
+    callbacks.current.onDirtyChange?.(isDirty);
+  }, [isDirty]);
   useEffect(() => {
     callbacks.current.onBusyChange?.(busy);
   }, [busy]);
@@ -146,7 +163,7 @@ function SummaryReconfirmationScene({
   );
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
-      if (draft.current.trim()) event.preventDefault();
+      if (dirty.current) event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
@@ -162,6 +179,10 @@ function SummaryReconfirmationScene({
   );
   const report = useCallback(
     (cause: unknown) => {
+      if ((cause as { code?: string })?.code === "CONFLICT") {
+        completion.current = null;
+        contextIntent.current = null;
+      }
       if (["UNAUTHENTICATED", "NOT_FOUND"].includes((cause as { code?: string })?.code ?? ""))
         deny();
       setError(cause);
@@ -216,6 +237,31 @@ function SummaryReconfirmationScene({
       failed.current = null;
     }
   }, []);
+  const finishContext = useCallback((snapshot: Awaited<ReturnType<typeof readSnapshot>>) => {
+    const intent = contextIntent.current;
+    if (!intent) return false;
+    if (
+      snapshot.next.revision === intent.revision &&
+      snapshot.context?.casePurpose === intent.input.casePurpose &&
+      snapshot.context.subjectContext === intent.input.subjectContext &&
+      JSON.stringify(snapshot.context.procedure) === JSON.stringify(intent.input.procedure)
+    ) {
+      contextIntent.current = null;
+      setPurposeOpen(false);
+      setPurposeDraft(null);
+      setNotice("입장을 저장했어요. 개인·기업 맥락과 절차 단계는 그대로 유지했어요.");
+      callbacks.current.onChanged?.(snapshot.next);
+      return true;
+    }
+    if (snapshot.next.revision > intent.revision) {
+      contextIntent.current = null;
+      throw new ApiError(
+        "CONFLICT",
+        "입장 저장 이후 사건이 바뀌었어요. 최신 내용을 확인해 주세요.",
+      );
+    }
+    return false;
+  }, []);
   const load = useCallback(
     async (replace = false) => {
       if (pending.current) return;
@@ -235,16 +281,18 @@ function SummaryReconfirmationScene({
         if (!(await verify()) || !current(epoch) || serial !== request.current) return;
         if (
           !replace &&
-          draft.current.trim() &&
+          dirty.current &&
           revision.current &&
           revision.current.revision !== snapshot.next.revision &&
-          !requestIntent.current
+          !requestIntent.current &&
+          !contextIntent.current
         )
           throw new ApiError(
             "CONFLICT",
             "다른 화면에서 사건 내용이 바뀌었어요. 작성한 설명은 남겨뒀어요. 최신 정리를 확인한 뒤 다시 요청해 주세요.",
           );
         accept(snapshot);
+        finishContext(snapshot);
         setFiles(materials.files);
         setMaterialsError(materials.failed);
         setError(null);
@@ -270,7 +318,7 @@ function SummaryReconfirmationScene({
         if (alive(epoch) && serial === request.current) setLoading(false);
       }
     },
-    [ticket, verify, readSnapshot, caseId, current, accept, finish, alive, report],
+    [ticket, verify, readSnapshot, caseId, current, accept, finish, finishContext, alive, report],
   );
   useEffect(() => {
     if (version) void load();
@@ -293,7 +341,16 @@ function SummaryReconfirmationScene({
     try {
       if (!(await verify(false, true)) || !current(epoch)) return false;
       failed.current = operation;
-      if (operation.kind === "request") {
+      if (operation.kind === "context") {
+        contextIntent.current = {
+          input: operation.input,
+          revision: operation.input.expectedRevision + 1,
+        };
+        const updated = await api.rework.updateContext(caseId, operation.input, {
+          expectedOwner: owner,
+        });
+        contextIntent.current = { input: operation.input, revision: updated.workspaceRevision };
+      } else if (operation.kind === "request") {
         requestIntent.current = operation.input;
         await api.rework.requestReconciliation(caseId, operation.input, { expectedOwner: owner });
       } else if (operation.kind === "proposal") {
@@ -311,8 +368,16 @@ function SummaryReconfirmationScene({
           revision: operation.revision + (operation.alreadyConfirmed ? 0 : 1),
           summaryRevision: operation.summaryRevision,
         };
-        if (!operation.alreadyConfirmed)
-          await api.cases.confirmSummary(caseId, { expectedRevision: operation.revision });
+        if (!operation.alreadyConfirmed) {
+          const confirmed = await api.cases.confirmSummary(caseId, {
+            expectedRevision: operation.revision,
+          });
+          completion.current = {
+            kind: "initial",
+            revision: confirmed.revision,
+            summaryRevision: operation.summaryRevision,
+          };
+        }
       }
       acknowledged = true;
       failed.current = null;
@@ -320,7 +385,10 @@ function SummaryReconfirmationScene({
       const snapshot = await readSnapshot();
       if (!(await verify()) || !current(epoch)) return false;
       accept(snapshot);
-      if (operation.kind === "request") {
+      if (operation.kind === "context") {
+        if (!finishContext(snapshot))
+          throw new ApiError("CONFLICT", "입장 저장 결과를 확인해 주세요.");
+      } else if (operation.kind === "request") {
         setExplanation("");
         setKind(null);
         requestIntent.current = null;
@@ -430,7 +498,24 @@ function SummaryReconfirmationScene({
           )}
           {embedded && <h2 id={headingId}>사건 정리를 다시 확인해요</h2>}
           {context ? (
-            <CaseContextNote context={context} />
+            <>
+              <CaseContextNote context={context} />
+              {item.schemaVersion !== "1" && item.stage !== "archived" && (
+                <Button
+                  variant="ghost"
+                  disabled={locked || activeRequest}
+                  onClick={(event) => {
+                    event.currentTarget.focus();
+                    setPurposeDraft(
+                      context.casePurpose === "unconfirmed" ? null : context.casePurpose,
+                    );
+                    setPurposeOpen(true);
+                  }}
+                >
+                  {context.casePurpose === "unconfirmed" ? "입장 확인하기" : "입장 변경"}
+                </Button>
+              )}
+            </>
           ) : (
             <p role="status">사건 입장 정보를 불러오지 못했어요.</p>
           )}
@@ -596,6 +681,67 @@ function SummaryReconfirmationScene({
         </section>
       )}
       <Dialog
+        open={purposeOpen}
+        onOpenChange={(open) => {
+          if (!busy) {
+            setPurposeOpen(open);
+            if (!open) setPurposeDraft(null);
+          }
+        }}
+        title="어떤 입장에서 정리하고 싶나요?"
+        description="입장과 사건 분야·진행 단계는 서로 달라요. 확인하지 않은 입장은 미확인으로 남겨도 괜찮아요."
+      >
+        <fieldset className="conversation-purpose" disabled={busy}>
+          <legend>사건 입장</legend>
+          {(["prepare_claim", "respond_to_claim"] as const).map((purpose) => (
+            <label key={purpose}>
+              <input
+                type="radio"
+                name="review-case-purpose"
+                checked={purposeDraft === purpose}
+                onChange={() => setPurposeDraft(purpose)}
+              />
+              <span>{casePurposeLabels[purpose]}</span>
+            </label>
+          ))}
+        </fieldset>
+        {Boolean(error) && (
+          <p role="alert">저장 결과를 확인하지 못했어요. 선택한 입장은 남겨뒀어요.</p>
+        )}
+        <div className="summary-review-actions">
+          <Button
+            loading={busy}
+            disabled={locked || !context || !purposeDraft || purposeDraft === context.casePurpose}
+            onClick={() =>
+              item &&
+              context &&
+              purposeDraft &&
+              void mutate({
+                kind: "context",
+                input: {
+                  expectedRevision: item.revision,
+                  casePurpose: purposeDraft,
+                  subjectContext: context.subjectContext,
+                  procedure: context.procedure,
+                },
+              })
+            }
+          >
+            입장 저장
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setPurposeOpen(false);
+              setPurposeDraft(null);
+            }}
+          >
+            나중에 확인
+          </Button>
+        </div>
+      </Dialog>
+      <Dialog
         open={kind !== null}
         onOpenChange={(open) => {
           if (!open && !busy) {
@@ -627,7 +773,17 @@ function SummaryReconfirmationScene({
             정확히 모르는 부분은 모른다고 적어주세요. 이 설명만으로 기존 사실이나 출처를 덮어쓰지
             않아요. {[...explanation.trim()].length.toLocaleString()} / 5,000자
           </p>
-          {Boolean(error) && <p role="alert">저장하지 못했어요. 작성한 설명을 남겨뒀어요.</p>}
+          {Boolean(error) && (
+            <p role="alert">요청 결과를 확인하지 못했어요. 작성한 설명을 남겨뒀어요.</p>
+          )}
+          {(error as { code?: string })?.code === "CONFLICT" && (
+            <Button variant="outline" disabled={busy} onClick={() => void load(true)}>
+              최신 내용 불러오기
+            </Button>
+          )}
+          {[...explanation.trim()].length > 5000 && (
+            <p role="alert">설명은 5,000자까지 입력할 수 있어요.</p>
+          )}
           <div className="summary-review-actions">
             <Button
               type="submit"

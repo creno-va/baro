@@ -3,6 +3,7 @@ import { reconfirmationCase } from "../helpers/intake-reconfirmation";
 
 // Browser fixtures are local/synthetic and never call a model or legal provider.
 async function seed(page: Page, stage: "summary" | "active" = "summary") {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const item = reconfirmationCase(stage);
   await page.addInitScript((item) => {
     if (localStorage.getItem("synthetic-reconfirmation-seeded")) return;
@@ -45,6 +46,7 @@ for (const stage of ["summary", "active"] as const) {
       page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `.wrangler/ui622/summary-${stage}-desktop.png`, fullPage: true });
   });
 }
 
@@ -54,6 +56,7 @@ test("320px: read actions fit the page and keep touch targets", async ({ page })
   await page.goto(`/cases/${item.id}/summary`);
   await expect(page.getByRole("button", { name: "다른 부분이 있어요", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: ".wrangler/ui622/summary-mobile-320.png", fullPage: true });
   for (const name of ["맞아요", "다른 부분이 있어요", "빠진 내용이 있어요"]) {
     const box = await page.getByRole("button", { name, exact: true }).boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
@@ -109,6 +112,7 @@ test("proposal resume, cancel, explain again and confirm preserve canonical prov
   const item = await seed(page, "active");
   await page.goto(`/cases/${item.id}/summary`);
   await propose(page);
+  await page.screenshot({ path: ".wrangler/ui622/summary-proposal-desktop.png", fullPage: true });
   expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
   await page.reload();
   await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
@@ -221,3 +225,168 @@ test("keyboard Escape returns focus to the request button and leaves canonical s
   await expect(opener).toBeFocused();
   expect((await canonical(page, item.id)).summaryDetails).toEqual(item.summaryDetails);
 });
+
+test("legacy purpose stays unconfirmed until the user saves; subject and procedure are preserved", async ({
+  page,
+}) => {
+  const item = await seed(page, "active");
+  await page.goto(`/cases/${item.id}/summary`);
+  await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
+  await expect(
+    page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole("button", { name: "나중에 확인", exact: true }).click();
+  await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
+  expect((await canonical(page, item.id)).revision).toBe(12);
+  await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
+  await page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }).check();
+  await page.getByRole("button", { name: "입장 저장", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "어떤 입장에서 정리하고 싶나요?" }),
+  ).not.toBeVisible();
+  await expect(
+    page
+      .getByRole("complementary", { name: "사건 입장과 맥락" })
+      .getByText("상대방 주장에 대응하고 싶어요", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("기업 사건", { exact: true })).toBeVisible();
+  await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+  const saved = await canonical(page, item.id);
+  expect(saved.subjectContext).toBe("company");
+  expect(saved.revision).toBe(13);
+  expect(saved.summaryDetails).toEqual(item.summaryDetails);
+  await page.reload();
+  await expect(
+    page
+      .getByRole("complementary", { name: "사건 입장과 맥락" })
+      .getByText("상대방 주장에 대응하고 싶어요", { exact: true }),
+  ).toBeVisible();
+});
+
+test("320px case input separates purpose from subject context without overflow", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/app");
+  await page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }).check();
+  await page.getByRole("radio", { name: "기업", exact: true }).check();
+  await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
+    "placeholder",
+    /상대방의 주장/,
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  for (const name of [
+    "고소·청구를 준비하고 싶어요",
+    "상대방 주장에 대응하고 싶어요",
+    "개인",
+    "기업",
+  ]) {
+    const box = await page.getByRole("radio", { name, exact: true }).locator("..").boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({
+    path: ".wrangler/ui622/case-input-respond-mobile-320.png",
+    fullPage: true,
+  });
+});
+
+for (const stage of ["summary", "active"] as const)
+  test(`${stage}: agrees with the saved summary without rewriting its facts`, async ({ page }) => {
+    const item = await seed(page, stage);
+    await page.goto(`/cases/${item.id}/summary`);
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "이 내용으로 계속할까요?" })
+      .getByRole("button", { name: "취소", exact: true })
+      .click();
+    await expect(page.getByRole("button", { name: "맞아요", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await page.getByRole("button", { name: "확인하고 계속", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/cases/${item.id}$`));
+    const saved = await canonical(page, item.id);
+    expect(saved.stage).toBe("active");
+    expect(saved.revision).toBe(stage === "summary" ? 13 : 12);
+    expect(saved.summaryDetails).toEqual(item.summaryDetails);
+  });
+
+test("a conflict retains the natural explanation while explicitly loading the latest summary", async ({
+  page,
+}) => {
+  const item = await seed(page);
+  await page.goto(`/cases/${item.id}/summary`);
+  await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+  await input.fill("아직 제출하지 않은 합성 설명입니다.");
+  await page.evaluate((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[id].revision++;
+    cases[id].summaryDetails.revision++;
+    cases[id].summaryDetails.overview = "다른 화면에서 확인한 최신 정리";
+    cases[id].summary = cases[id].summaryDetails.overview;
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+  }, item.id);
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+  await expect(input).toHaveValue("아직 제출하지 않은 합성 설명입니다.");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "최신 내용 불러오기", exact: true })
+    .click();
+  await expect(input).toHaveValue("아직 제출하지 않은 합성 설명입니다.");
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
+  await expect(page.getByRole("button", { name: "변경안 확정하기", exact: true })).toBeVisible();
+  expect((await canonical(page, item.id)).summary).toBe("다른 화면에서 확인한 최신 정리");
+});
+
+for (const outcome of ["success", "failure"] as const)
+  test(`an older ${outcome} read cannot replace a newer summary`, async ({ page }) => {
+    const item = await seed(page);
+    await page.goto(`/cases/${item.id}/summary`);
+    await expect(page.getByRole("button", { name: "맞아요", exact: true })).toBeEnabled();
+    await page.evaluate(async (outcome) => {
+      const path = "/src/client/api/cases.ts";
+      const core = "/src/client/api/core.ts";
+      const { casesApi } = await import(path);
+      const { ApiError } = await import(core);
+      const get = casesApi.get.bind(casesApi);
+      let first = true;
+      casesApi.get = async (id: string) => {
+        const snapshot = await get(id);
+        if (!first) return snapshot;
+        first = false;
+        return new Promise((resolve, reject) => {
+          (window as unknown as { releaseSummaryRead?: () => void }).releaseSummaryRead = () =>
+            outcome === "success"
+              ? resolve(snapshot)
+              : reject(new ApiError("UNAVAILABLE", "합성 이전 조회 실패", true));
+        });
+      };
+      window.dispatchEvent(new Event("focus"));
+    }, outcome);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => !!(window as unknown as { releaseSummaryRead?: () => void }).releaseSummaryRead,
+        ),
+      )
+      .toBe(true);
+    await page.evaluate((id) => {
+      const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+      cases[id].revision++;
+      cases[id].summaryDetails.revision++;
+      cases[id].summaryDetails.overview = "새로 확인한 최신 합성 정리";
+      cases[id].summary = cases[id].summaryDetails.overview;
+      localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+      window.dispatchEvent(new Event("focus"));
+    }, item.id);
+    await expect(page.getByText("새로 확인한 최신 합성 정리", { exact: true })).toBeVisible();
+    await page.evaluate(async () => {
+      (window as unknown as { releaseSummaryRead?: () => void }).releaseSummaryRead?.();
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    });
+    await expect(page.getByText("새로 확인한 최신 합성 정리", { exact: true })).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+  });

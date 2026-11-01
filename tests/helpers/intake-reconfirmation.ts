@@ -146,6 +146,7 @@ export function reconfirmationContext(): WorkspaceContext {
     facts: summary.facts,
     messages: [],
     latestMessage: {
+      schemaVersion: "2",
       id: "synthetic-reconciliation-request",
       operationId: "synthetic-reconciliation-operation",
       role: "user",

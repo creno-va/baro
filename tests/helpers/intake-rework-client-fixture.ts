@@ -2,9 +2,9 @@
 // Shared clients/session fencing + synthetic HTTP adapters; no provider fallback is shipped.
 import { createReworkClient } from "@baro/api-client";
 import { createSessionBoundClient } from "@baro/client-core";
-import type { OperationRequest } from "../../packages/api-client/src/http";
+import type { OperationRequest, OperationRequestOptions } from "../../packages/api-client/src/http";
 import { browserSessionScope } from "../../src/client/api/context";
-import { ApiError } from "../../src/client/api/core";
+import { ApiError, responseError } from "../../src/client/api/core";
 import { api as original } from "../../src/client/api/index";
 import { casesMockHandlers } from "../../src/client/api/mock/cases";
 import { createReconciliationMock } from "../../src/client/api/mock/mock-reconciliation";
@@ -17,6 +17,7 @@ import {
 import type { WorkspaceMockRuntime, WorkspaceMockState } from "../../src/client/api/mock/workspace";
 import {
   type V2CaseContext,
+  v2CaseContextUpdateSchema,
   v2ReworkCreateCaseRequestSchema,
   v2ReworkVersionSchema,
 } from "../../src/contracts/v2";
@@ -31,7 +32,11 @@ const reconcile = createReconciliationMock(runtime, {
   },
 });
 const neutralProcedure = { kind: "unconfirmed", stage: "unconfirmed", description: null } as const;
-const request: OperationRequest = async <T>(_operation: string, input: unknown, options = {}) => {
+const request: OperationRequest = async <T>(
+  _operation: string,
+  input: unknown,
+  options: OperationRequestOptions = {},
+) => {
   if (!options.path) throw new Error("Missing synthetic path");
   const path = options.path;
   const suffix = path.split("/").at(-1) ?? "read";
@@ -59,12 +64,7 @@ const request: OperationRequest = async <T>(_operation: string, input: unknown, 
     }),
   );
   if (response) {
-    if (!response.ok) {
-      const body = (await response.json()) as {
-        error: { code: string; message: string; retryable: boolean };
-      };
-      throw new ApiError(body.error.code, body.error.message, body.error.retryable);
-    }
+    if (!response.ok) throw await responseError(response);
     const value = await response.json();
     if (fault === `${suffix}-lost-after`) {
       localStorage.removeItem("synthetic-reconciliation-fault");
@@ -80,6 +80,22 @@ const request: OperationRequest = async <T>(_operation: string, input: unknown, 
     const id = decodeURIComponent(contextMatch[1] ?? "");
     const item = casesMockHandlers["cases.get"]({ id });
     const contexts = readStore<Record<string, V2CaseContext>>("reworkContexts", {});
+    if (options.method === "PUT") {
+      const update = v2CaseContextUpdateSchema.parse(input);
+      if (update.expectedRevision !== item.revision)
+        throw new ApiError("CONFLICT", "합성 context CAS 충돌");
+      item.revision++;
+      contexts[id] = {
+        casePurpose: update.casePurpose,
+        subjectContext: update.subjectContext,
+        procedure: update.procedure,
+      };
+      const records = readStore<Record<string, typeof item>>("cases", {});
+      records[id] = item;
+      writeStore("cases", records);
+      writeStore("reworkContexts", contexts);
+      writeStore("syntheticStaleAnalysis", id);
+    }
     return {
       contractVersion: v2ReworkVersionSchema.value,
       workspaceRevision: item.revision,
@@ -139,7 +155,7 @@ const rework = createSessionBoundClient(browserSessionScope, () =>
         (byte) => byte.toString(16).padStart(2, "0"),
       ).join(""),
     newKey: () => crypto.randomUUID(),
-    keyStorage: sessionStorage,
+    ...(typeof sessionStorage === "undefined" ? {} : { keyStorage: sessionStorage }),
   }),
 );
 export const api = {
