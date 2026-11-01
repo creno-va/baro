@@ -8,6 +8,7 @@ import { boundedProcessingResources } from "../budget/processing-runtime";
 import { namedProcessorPort } from "../file-processing/native-identity";
 import { createProcessorTransport } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
+import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import { preparedAnalysisMatchesScope, readPreparedAnalysis } from "../rework/state";
 import { REPORT_QUERY_LIMIT, REPORT_ROW_LIMIT } from "./limits";
 import { ReportError } from "./source";
@@ -225,6 +226,7 @@ export async function createCaseReportDependencies(
   if (!content.reworkContext || content.reworkContext.casePurpose === "unconfirmed") return deps;
   return {
     ...deps,
+    guideHosts: GUIDE_HOSTS,
     readPreparedAnalysis: (actor, id) => readPreparedAnalysis(core, actor, id),
     preparedAnalysisMatchesScope: (actor, id, snapshot, scope) =>
       preparedAnalysisMatchesScope(core, actor, id, snapshot, {

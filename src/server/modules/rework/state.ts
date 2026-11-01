@@ -22,7 +22,11 @@ import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
 import type { WorkspaceContext } from "../workspace/pipeline";
 import { type AnalysisScope, loadAnalysisInput, readAnalysisScope } from "./analysis-input";
 import { createReworkCaseService, ReworkError } from "./case-context";
-import { analysisTaskSchema, preparedAnalysisRecordSchema } from "./records";
+import {
+  analysisTaskSchema,
+  preparedAnalysisRecordSchema,
+  reportContinuationSchema,
+} from "./records";
 
 /** Stable admission/execution projection for the incoming dialog turn. The new
  * message requires refreshing prior analysis; it never marks that analysis fresh. */
@@ -188,7 +192,7 @@ type ReportSummary = {
   id: string;
   revision: number;
   stale: boolean;
-  analysisReview?: { analysisId: string | null } | undefined;
+  analysisReview?: { analysisId: string | null; status?: string; userEdited?: boolean } | undefined;
 };
 const intentSchema = z.object({
   id: opaqueIdSchema,
@@ -291,10 +295,30 @@ export function createReworkStateService(
       const reportReady =
         !!report &&
         !report.stale &&
-        !!snapshot &&
-        report.analysisReview?.analysisId === snapshot.id &&
-        canonicalAnalysisJson(snapshot.basis) === canonicalAnalysisJson(analysis.basis) &&
-        !["pending", "running", "stale", "failed"].includes(analysis.status);
+        report.analysisReview?.userEdited !== true &&
+        analysis.basis !== null &&
+        ((!!snapshot &&
+          report.analysisReview?.analysisId === snapshot.id &&
+          report.analysisReview.status !== "review_required" &&
+          canonicalAnalysisJson(snapshot.basis) === canonicalAnalysisJson(analysis.basis) &&
+          !["pending", "running", "stale", "failed"].includes(analysis.status)) ||
+          (analysis.status === "failed" &&
+            report.analysisReview?.analysisId === null &&
+            report.analysisReview.status === "review_required"));
+      const continuation = await records.read(
+        a,
+        id,
+        "checkpoint",
+        "report-continuation",
+        reportContinuationSchema,
+      );
+      const reportFailure =
+        continuation?.value.status === "failed" &&
+        analysis.basis !== null &&
+        !["pending", "running", "stale"].includes(analysis.status) &&
+        canonicalAnalysisJson(continuation.value.basis) === canonicalAnalysisJson(analysis.basis)
+          ? continuation.value.failure
+          : null;
       const intents: V2ConversationState["intents"] = [];
       const messages = (
         await core
@@ -337,12 +361,18 @@ export function createReworkStateService(
         analysis,
         snapshot,
         report: {
-          status: report ? (reportReady ? "ready" : "stale") : "not_started",
+          status: reportReady
+            ? "ready"
+            : reportFailure
+              ? "failed"
+              : report
+                ? "stale"
+                : "not_started",
           id: report?.id ?? null,
           revision: report?.revision ?? null,
-          basis: reportReady ? (snapshot?.basis ?? null) : null,
+          basis: reportReady ? analysis.basis : null,
           currentJobId: null,
-          failure: null,
+          failure: reportReady ? null : reportFailure,
         },
         intents,
       });
