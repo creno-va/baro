@@ -331,3 +331,28 @@ workspace W28→30만 바뀌며 analysis/report가 ready→stale가 됐다. guar
 전달했다. PDF 자체는52082B/A4 4쪽을 모두 렌더해 한국어·본문·인용·쪽번호의 잘림과 겹침이
 없음을 확인했다. 이는 UI 저장/후속 완료의 증거가 아니며 중앙 수정 전 같은 실패는 반복하지
 않는다. 전체14개 통과 기록은 계속 보류한다.
+
+PR691 exact `90a42c57041a779add305f2bae09d7bfa3c0183b`의 Quality41345758917,
+Legal41345758894, nativePDF41345758901 성공/main `fc00ee2f`를 확인해 통합했다. 중앙은
+같은 저장 claim의 암호화 증명으로 PDF의 기술 revision을 판별하고 원래 report ciphertext와
+권한/사후 guard를 유지했다.04 native 사후 검증91563dcc도 중앙에 반영돼 merge로 보존했다.
+
+그 뒤 실제 UI PDF 다운로드가 발생했다. Playwright의 fulfilled PDF BrowserResponse.body가
+0바이트인 관측 오류는 독립 binary transport probe로 구분했다: 실제 PDF 입력/upstream/
+브라우저 저장은 각각52082바이트와 완전히 같은 내용이었고 BrowserResponse만0이었다.
+테스트는 같은 URL의 실제 Hono upstream APIResponse 전체 bytes를 메모리에 보존해 저장
+파일과 비교한다. 제품 PDF·다운로드 guard를 바꾸지 않는다. 이 비교로 실제 UI PDF51931B,
+리포트revision4의 저장과 HTML/basis 보존이 통과했고 새 문서4쪽을 모두 렌더해 확인했다.
+
+다음 직접 해결 선택은 PATCH200 뒤 `검토용 초안 준비`가 비활성이어서 여정을 중지했다.
+06의 단일 독립 실제 진단은 선택 자체가 W를 바꾸지 않고, PDF 전부터 resolution이
+not_ready/basis=null이었다고 확인했다. snapshot.status=ready와 report.analysisReview.status=
+partial의 비교만 달랐으며 ID·scope·검토 시각·currentness·사실 수가 일치했다. 이는 선택이
+기술 revision을 올려 freshness를 깨뜨렸다는 증거가 아니다.00의 공통 상태 표시 규칙과06
+consumer의 선행 CI/main을 기다린다. 원래 실패의 PDF·HTML·protocol·DOM·로그는
+`/tmp/baro-625-resolution-choice-red-original`에 보존했다. 전체 정상14개는 아직 미완료다.
+
+다음 여정은 PDF 전/후와 선택 후의 숫자·enum·해시·합성ID만 `*-readiness.json`에 별도
+보존한다. 사건/자료 원문·절차 설명·토큰/쿠키·stack/SQL은 포함하지 않으며 CI artifact 수집
+대상에서도 제외한다. 일반 full을 원인 수정 전에 반복하지 않는다. main691 통합 및 이
+테스트 관측 보강 뒤 quick(Astro542 error0, 기존674 포함)가 통과했다.

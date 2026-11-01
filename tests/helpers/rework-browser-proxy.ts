@@ -80,6 +80,7 @@ export async function openReworkBrowserFixture(
     await context.addCookies([info.ownerCookie]);
     const actions: { body: string | null; key: string | undefined }[] = [];
     const observations: Record<string, string | number | undefined>[] = [];
+    const pdfResponses: { path: string; bytes: Buffer }[] = [];
     await context.route("**/api/**", async (route) => {
       if (stopping) return route.abort("aborted").catch(() => undefined);
       try {
@@ -101,6 +102,12 @@ export async function openReworkBrowserFixture(
         } finally {
           upstream.delete(pending);
         }
+        if (
+          request.method() === "GET" &&
+          /^\/api\/v2\/reports\/[^/]+\/pdf$/.test(url.pathname) &&
+          response.status() === 200
+        )
+          pdfResponses.push({ path: url.pathname, bytes: await response.body() });
         const kind = url.pathname.endsWith("/workspace")
           ? "workspace"
           : url.pathname.endsWith("/summary")
@@ -163,6 +170,7 @@ export async function openReworkBrowserFixture(
       info,
       actions,
       observations,
+      pdfResponses,
       control: async (path: string, input?: unknown) => {
         if (!/^[-a-z]+$/.test(path)) throw new Error("INVALID_REWORK_TEST_CONTROL");
         return context.request.fetch(`${info.origin}/__rework-test/${path}`, {

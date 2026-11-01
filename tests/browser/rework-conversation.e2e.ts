@@ -64,7 +64,66 @@ async function stableForeground(locator: Locator) {
     openDialogs: document.querySelectorAll("dialog[open]").length,
   }));
 }
-async function preserveReport(page: Page, directory: string) {
+async function captureReadiness(page: Page, directory: string, phase: string) {
+  const value = await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+    const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
+    const [conversation, report, resolution] = await Promise.all([
+      api.rework.getConversation(id),
+      api.rework.peekReport(id),
+      api.rework.getResolution(id),
+    ]);
+    const basis = resolution.basis;
+    return {
+      synthetic: true,
+      workspaceRevision: conversation.workspaceRevision,
+      summaryConfirmed: conversation.summaryConfirmed,
+      context: {
+        purpose: conversation.caseContext.casePurpose,
+        kind: conversation.caseContext.procedure.kind,
+        stage: conversation.caseContext.procedure.stage,
+      },
+      analysis: {
+        id: conversation.snapshot?.id,
+        status: conversation.analysis.status,
+        basis: conversation.analysis.basis,
+      },
+      report: report && {
+        id: report.id,
+        revision: report.revision,
+        stale: report.stale,
+        basis: report.basis,
+        analysisReview: report.analysisReview,
+        excludedFileIds: report.excludedFileIds,
+        maskIdentifiers: report.maskIdentifiers,
+      },
+      resolution: {
+        revision: resolution.revision,
+        status: resolution.status,
+        selection: resolution.selection,
+        selectedFileIds: resolution.selectedFileIds,
+        maskIdentifiers: resolution.maskIdentifiers,
+        basis: basis && {
+          workspaceRevision: basis.workspaceRevision,
+          researchRevision: basis.researchRevision,
+          summaryRevision: basis.summaryRevision,
+          analysisId: basis.analysisId,
+          evidenceHash: basis.evidenceHash,
+          reportId: basis.reportId,
+          reportRevision: basis.reportRevision,
+          purpose: basis.casePurpose,
+          kind: basis.procedure.kind,
+          stage: basis.procedure.stage,
+        },
+      },
+    };
+  });
+  // Private diagnostic only: enums, hashes and synthetic identities, no source
+  // bodies, procedure descriptions, cookies or provider errors. Not CI upload.
+  await writeFile(join(directory, `${phase}-readiness.json`), JSON.stringify(value, null, 2));
+}
+async function preserveReport(page: Page, directory: string, fixture: Fixture) {
   const current = await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
     const { api } = (await import(path)) as typeof import("../../src/client/api/index");
@@ -76,12 +135,8 @@ async function preserveReport(page: Page, directory: string) {
   });
   expect(current.html).toContain('data-baro-report="1"');
   await writeFile(join(directory, "report.html"), current.html);
-  const response = page.waitForResponse(
-    (r) =>
-      r.request().method() === "GET" &&
-      /^\/api\/v2\/reports\/[^/]+\/pdf$/.test(new URL(r.url()).pathname) &&
-      r.ok(),
-  );
+  await captureReadiness(page, directory, "before-pdf");
+  const responseIndex = fixture.pdfResponses.length;
   const downloaded = page.waitForEvent("download");
   const button = page
     .getByRole("region", { name: "리포트 준비와 검토", exact: true })
@@ -92,10 +147,17 @@ async function preserveReport(page: Page, directory: string) {
   if (!file) throw new Error("MISSING_UI_REPORT_ARTIFACT");
   const bytes = await readFile(file);
   expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
-  expect(bytes.equals(await (await response).body())).toBe(true);
+  // Chromium can expose an empty BrowserResponse.body for a fulfilled PDF.
+  // Compare the actual Hono upstream bytes, before browser transport, instead.
+  const responses = fixture.pdfResponses
+    .slice(responseIndex)
+    .filter((r) => r.path === `/api/v2/reports/${encodeURIComponent(current.id)}/pdf`);
+  expect(responses).toHaveLength(1);
+  expect(bytes.equals(responses[0]!.bytes)).toBe(true);
   await artifact.saveAs(join(directory, "report.pdf"));
   await artifact.delete();
   await expect(button).toBeEnabled();
+  await captureReadiness(page, directory, "after-pdf");
   await writeFile(
     join(directory, "basis.json"),
     JSON.stringify(
@@ -111,7 +173,7 @@ async function preserveReport(page: Page, directory: string) {
       2,
     ),
   );
-  return bytes;
+  return { bytes, id: current.id };
 }
 async function addMaterial(
   page: Page,
@@ -664,17 +726,9 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           JSON.stringify(await stableForeground(report), null, 2),
         );
         await page.screenshot({ path: join(directory, "report.png"), animations: "disabled" });
-        const preservedPdf = await preserveReport(page, directory);
+        const preservedPdf = await preserveReport(page, directory, f);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
-        const pdfResponse =
-          followup === "리포트만 저장"
-            ? page.waitForResponse(
-                (response) =>
-                  response.request().method() === "GET" &&
-                  /^\/api\/v2\/reports\/[^/]+\/pdf$/.test(new URL(response.url()).pathname) &&
-                  response.ok(),
-              )
-            : null;
+        const pdfResponseIndex = f.pdfResponses.length;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
         if (followup === "직접 해결") {
           await expect(
@@ -686,7 +740,13 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
               exact: true,
             })
             .check();
-          await report.getByRole("button", { name: "검토용 초안 준비", exact: true }).click();
+          await captureReadiness(page, directory, "self-selected");
+          const prepareDraft = report.getByRole("button", {
+            name: "검토용 초안 준비",
+            exact: true,
+          });
+          await expect(prepareDraft).toBeEnabled();
+          await prepareDraft.click();
           const draft = report.getByRole("textbox", { name: "초안 검토·수정", exact: true });
           await expect(draft).toBeEnabled();
           await expect(draft).toHaveValue(/\S+/);
@@ -711,7 +771,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
           ).toBeVisible();
         else {
-          if (!download || !pdfResponse) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
+          if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
           const artifact = await download;
           expect(artifact.suggestedFilename()).toMatch(/\.pdf$/i);
           const file = await artifact.path();
@@ -719,8 +779,12 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           const bytes = await readFile(file);
           expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
           expect(bytes.byteLength).toBeGreaterThan(100);
-          expect(bytes.equals(await (await pdfResponse).body())).toBe(true);
-          expect(bytes.equals(preservedPdf)).toBe(true);
+          const responses = f.pdfResponses
+            .slice(pdfResponseIndex)
+            .filter((r) => r.path === `/api/v2/reports/${encodeURIComponent(preservedPdf.id)}/pdf`);
+          expect(responses).toHaveLength(1);
+          expect(bytes.equals(responses[0]!.bytes)).toBe(true);
+          expect(bytes.equals(preservedPdf.bytes)).toBe(true);
           await artifact.saveAs(join(directory, "downloaded-report.pdf"));
           const stored = z
             .object({
