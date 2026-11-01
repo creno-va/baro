@@ -51,6 +51,8 @@ Bun.serve({
       .replace("/api/v2/cases/case/rework/resolution/draft", "/fixture/draft")
       .replace("/api/v2/cases/case/rework/resolution", "/fixture/resolution");
     const reportPath = path === "/api/v2/cases/case/rework/report" ? "/fixture/report" : path;
+    if (path === "/fixture/health" && request.method === "GET")
+      return Response.json({ fixture: "baro-resolution", ready: true });
     if (path === "/fixture/control" && request.method === "POST") {
       const input = (await request.json()) as {
         reset?: boolean;
