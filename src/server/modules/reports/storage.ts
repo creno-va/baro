@@ -36,6 +36,15 @@ export type ReportDependencies = {
   /** Server-authorized immutable analysis only. Never dispatch a job, invoke a
    * model or perform external legal discovery from this callback. */
   readPreparedAnalysis?: (actor: Actor, caseId: string) => Promise<V2LegalAnalysisSnapshot | null>;
+  /** One local authoritative read that proves owner, exact audited snapshot and
+   * official bindings, with requested scope equal to current case scope before
+   * and after that read. Never cache across source reads or dispatch analysis.
+   * Legacy two-step adapters remain supported. */
+  readPreparedAnalysisForScope?: (
+    actor: Actor,
+    caseId: string,
+    scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean },
+  ) => Promise<V2LegalAnalysisSnapshot | null>;
   preparedAnalysisMatchesScope?: (
     actor: Actor,
     caseId: string,

@@ -95,31 +95,36 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   });
   const canonical = createV2ReportsRepository(core, deps.guideHosts);
   const accounting = createV2AccountingRepository(core);
+  const hasPreparedReader = Boolean(deps.readPreparedAnalysisForScope || deps.readPreparedAnalysis);
   const preparedSource = async (
     a: Actor,
     caseId: string,
     excluded: readonly string[],
     mask = false,
   ) => {
-    const options = deps.readPreparedAnalysis
+    const options = hasPreparedReader
       ? {
           includeAnalysis: true as const,
           scope: { excludedFileIds: excluded, maskIdentifiers: mask },
         }
       : undefined;
     const source = await buildReportSource(core, a, caseId, excluded, deps.guideHosts, options);
-    if (!deps.readPreparedAnalysis)
-      return { ...source, analysis: undefined, analysisIdentity: undefined };
-    const snapshot = await deps.readPreparedAnalysis(a, caseId);
+    if (!hasPreparedReader) return { ...source, analysis: undefined, analysisIdentity: undefined };
+    const scope = { excludedFileIds: excluded, maskIdentifiers: mask };
+    const snapshot = deps.readPreparedAnalysisForScope
+      ? await deps.readPreparedAnalysisForScope(a, caseId, scope)
+      : ((await deps.readPreparedAnalysis?.(a, caseId)) ?? null);
     const scopeMatches =
-      snapshot && deps.preparedAnalysisMatchesScope
-        ? await deps.preparedAnalysisMatchesScope(a, caseId, snapshot, {
-            excludedFileIds: excluded,
-            maskIdentifiers: mask,
-          })
-        : false;
+      snapshot &&
+      (deps.readPreparedAnalysisForScope
+        ? true
+        : deps.preparedAnalysisMatchesScope
+          ? await deps.preparedAnalysisMatchesScope(a, caseId, snapshot, scope)
+          : false);
     const needsScopeProof =
-      Boolean(deps.preparedAnalysisMatchesScope) || mask || excluded.length > 0;
+      Boolean(deps.readPreparedAnalysisForScope || deps.preparedAnalysisMatchesScope) ||
+      mask ||
+      excluded.length > 0;
     const compatible = needsScopeProof && !scopeMatches ? null : snapshot;
     const bound = await bindPreparedReportAnalysis(
       core,
@@ -139,8 +144,14 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     return source.analysis ? reportAnalysisText(source.body, base, source.analysis) : base;
   };
   const checkAnalysis = async (a: Actor, caseId: string, review: ReportReviewData) => {
-    if (review.analysisIdentity === undefined || !deps.readPreparedAnalysis) return;
-    const current = await deps.readPreparedAnalysis(a, caseId);
+    if (review.analysisIdentity === undefined || !hasPreparedReader) return;
+    const scope = {
+      excludedFileIds: review.excludedFileIds,
+      maskIdentifiers: review.maskIdentifiers,
+    };
+    const current = deps.readPreparedAnalysisForScope
+      ? await deps.readPreparedAnalysisForScope(a, caseId, scope)
+      : ((await deps.readPreparedAnalysis?.(a, caseId)) ?? null);
     // A scope change can make the authorized loader return null immediately
     // after saving. A report that intentionally omitted all derived analysis is
     // still current; a later compatible snapshot makes it eligible for refresh.
@@ -150,6 +161,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     if (
       current &&
       review.analysis?.snapshot &&
+      !deps.readPreparedAnalysisForScope &&
       deps.preparedAnalysisMatchesScope &&
       !(await deps.preparedAnalysisMatchesScope(a, caseId, current, {
         excludedFileIds: review.excludedFileIds,
@@ -664,7 +676,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
           value.expectedRevision !== prior?.revision)
       )
         throw new ReportError("STALE_REVISION");
-      const old = prior && deps.readPreparedAnalysis ? await read(a, prior.id) : null;
+      const old = prior && hasPreparedReader ? await read(a, prior.id) : null;
       const excludedFileIds = value.excludedFileIds ?? old?.review.excludedFileIds ?? [];
       const maskIdentifiers = old?.review.maskIdentifiers ?? false;
       const source = await preparedSource(a, caseId, excludedFileIds, maskIdentifiers);
