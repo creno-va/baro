@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { opaqueIdSchema } from "../../contracts";
+import { opaqueIdSchema, revisionSchema } from "../../contracts";
 import {
   V2_LIMITS,
   type V2StorageReservation,
   v2StorageReservationSchema,
 } from "../../contracts/v2";
+import { MAX_PLAINTEXT_BYTES } from "../crypto";
 import { createV2AccountingRepository } from "./v2-accounting";
 import {
   abandonArtifactBlob,
@@ -52,6 +53,16 @@ import {
 import type { PreparedPhysicalCapacity } from "./v2-storage-capacity";
 import type { PreparedStoragePaidHold } from "./v2-storage-paid-runtime";
 import type { JobLease } from "./v2-workspace";
+
+const reportArtifactIdentitySchema = z.strictObject({
+  revision: revisionSchema,
+  summaryRevision: revisionSchema,
+  snapshotId: opaqueIdSchema,
+  encryptedPayload: z
+    .string()
+    .min(1)
+    .max(MAX_PLAINTEXT_BYTES * 2),
+});
 
 export function storagePredicate(
   ownerId: string,
@@ -216,6 +227,9 @@ export function createV2StorageRepository(core: V2Core) {
         target: { kind: "file" | "report"; id: string; revision: number };
         operationId: string;
         byteLength: number;
+        /** Same-request immutable report data, never an authorization result.
+         * The final owned CAS still compares every captured field to storage. */
+        reportIdentity?: z.infer<typeof reportArtifactIdentitySchema>;
       },
     ) {
       return safe(async () => {
@@ -224,33 +238,46 @@ export function createV2StorageRepository(core: V2Core) {
           parse(opaqueIdSchema, id);
         parse(z.number().int().positive(), input.target.revision);
         parse(z.number().int().positive().max(10000000000), input.byteLength);
+        if (input.reportIdentity && input.target.kind !== "report") return false;
+        const captured = input.reportIdentity
+          ? parse(reportArtifactIdentitySchema, input.reportIdentity)
+          : null;
         if (!(await accounting.ensurePrincipal(g))) return false;
         const predicate = storagePredicate(g.ownerId, input.byteLength);
         const claimId = crypto.randomUUID();
         const report =
           input.target.kind === "report"
-            ? await core
-                .statement(
-                  `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id
+            ? captured
+              ? {
+                  id: input.target.id,
+                  revision: captured.revision,
+                  operation_id: input.operationId,
+                  summary_revision: captured.summaryRevision,
+                  snapshot_id: captured.snapshotId,
+                  encrypted_payload: captured.encryptedPayload,
+                }
+              : await core
+                  .statement(
+                    `SELECT r.* FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id
            WHERE r.id=? AND r.workspace_id=? AND w.owner_id=? AND r.workspace_revision=? AND r.operation_id=?
            AND r.state IN ('queued','building') AND ${aliveWorkspace}
            AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id)`,
-                  [
-                    input.target.id,
-                    g.workspaceId,
-                    g.ownerId,
-                    input.target.revision,
-                    input.operationId,
-                  ],
-                )
-                .first<{
-                  id: string;
-                  revision: number;
-                  operation_id: string;
-                  summary_revision: number;
-                  snapshot_id: string;
-                  encrypted_payload: string;
-                }>()
+                    [
+                      input.target.id,
+                      g.workspaceId,
+                      g.ownerId,
+                      input.target.revision,
+                      input.operationId,
+                    ],
+                  )
+                  .first<{
+                    id: string;
+                    revision: number;
+                    operation_id: string;
+                    summary_revision: number;
+                    snapshot_id: string;
+                    encrypted_payload: string;
+                  }>()
             : null;
         if (input.target.kind === "report" && !report) return false;
         const proof = report

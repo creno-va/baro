@@ -296,6 +296,137 @@ async function reservedPdf(
   return { id, encryption: "chunk_aead_v1" as const, byteLength: 100, contentHash: HASH };
 }
 
+function reportIdentity(f: Fixture, r: Awaited<ReturnType<typeof create>>) {
+  const row = f.database.sqlite
+    .query(
+      "SELECT revision,summary_revision,snapshot_id,encrypted_payload FROM v2_reports WHERE id=?",
+    )
+    .get(r.value.id) as {
+    revision: number;
+    summary_revision: number;
+    snapshot_id: string;
+    encrypted_payload: string;
+  };
+  return {
+    revision: row.revision,
+    summaryRevision: row.summary_revision,
+    snapshotId: row.snapshot_id,
+    encryptedPayload: row.encrypted_payload,
+  };
+}
+
+test("same-request report identity saves one capture read while retaining the same owned CAS, ledger and proof", async () => {
+  const f = await fixture(),
+    r = await create(f),
+    identity = reportIdentity(f, r);
+  const reserve = async (captured: boolean) => {
+    const queries = f.database.queryCount;
+    expect(
+      await f.storage.reserveArtifact(guard(f), {
+        id: crypto.randomUUID(),
+        artifactId: crypto.randomUUID(),
+        target: { kind: "report", id: r.value.id, revision: r.value.snapshotRevision },
+        operationId: r.input.operationId,
+        byteLength: 100,
+        ...(captured ? { reportIdentity: identity } : {}),
+      }),
+    ).toBe(true);
+    return f.database.queryCount - queries;
+  };
+  const capturedQueries = await reserve(true),
+    legacyQueries = await reserve(false);
+  expect(capturedQueries + 1).toBe(legacyQueries);
+  expect(count(f, "v2_storage_reservations")).toBe(2);
+  expect(count(f, "v2_rework_records")).toBe(2);
+  expect(f.database.sqlite.query("SELECT reserved_bytes FROM v2_storage_usage").get()).toEqual({
+    reserved_bytes: 200,
+  });
+  expect(
+    await researchRevisionBase(
+      f.core,
+      f.actor.ownerId,
+      f.workspaceId,
+      guard(f).expectedRevision,
+      1,
+    ),
+  ).toBe(r.value.snapshotRevision);
+});
+
+for (const change of [
+  "revision",
+  "summary",
+  "snapshot",
+  "cipher",
+  "workspace_revision",
+  "operation",
+  "deleted",
+  "file_target",
+] as const)
+  test(`captured report data cannot authorize ${change} artifact reservation`, async () => {
+    const f = await fixture(),
+      r = await create(f),
+      identity = reportIdentity(f, r);
+    if (change === "revision") identity.revision++;
+    if (change === "summary") identity.summaryRevision++;
+    if (change === "snapshot") identity.snapshotId = crypto.randomUUID();
+    if (change === "cipher") identity.encryptedPayload += "x";
+    if (change === "deleted")
+      f.database.sqlite
+        .query("INSERT INTO v2_tombstones VALUES('report',?,?)")
+        .run(r.value.id, NOW);
+    const before = guard(f).expectedRevision;
+    expect(
+      await f.storage.reserveArtifact(guard(f), {
+        id: crypto.randomUUID(),
+        artifactId: crypto.randomUUID(),
+        target: {
+          kind: change === "file_target" ? "file" : "report",
+          id: r.value.id,
+          revision: r.value.snapshotRevision + (change === "workspace_revision" ? 1 : 0),
+        },
+        operationId: change === "operation" ? crypto.randomUUID() : r.input.operationId,
+        byteLength: 100,
+        reportIdentity: identity,
+      }),
+    ).toBe(false);
+    expect(guard(f).expectedRevision).toBe(before);
+    expect(count(f, "v2_storage_reservations")).toBe(0);
+    expect(count(f, "v2_rework_records")).toBe(0);
+  });
+
+test("a captured report changed while proof encryption yields cannot publish a reservation or proof", async () => {
+  const f = await fixture(),
+    r = await create(f),
+    identity = reportIdentity(f, r),
+    encrypt = f.core.encrypt;
+  let changed = false;
+  f.core.encrypt = async (...args: Parameters<typeof encrypt>) => {
+    const encrypted = await encrypt(...args);
+    if (!changed && args[0] === "v2_rework_records") {
+      changed = true;
+      f.database.sqlite
+        .query("UPDATE v2_reports SET summary_revision=summary_revision+1 WHERE id=?")
+        .run(r.value.id);
+    }
+    return encrypted;
+  };
+  const before = guard(f).expectedRevision;
+  expect(
+    await f.storage.reserveArtifact(guard(f), {
+      id: crypto.randomUUID(),
+      artifactId: crypto.randomUUID(),
+      target: { kind: "report", id: r.value.id, revision: r.value.snapshotRevision },
+      operationId: r.input.operationId,
+      byteLength: 100,
+      reportIdentity: identity,
+    }),
+  ).toBe(false);
+  expect(changed).toBe(true);
+  expect(guard(f).expectedRevision).toBe(before);
+  expect(count(f, "v2_storage_reservations")).toBe(0);
+  expect(count(f, "v2_rework_records")).toBe(0);
+});
+
 test("exact atomic export proofs preserve research across reservation/completion without changing report ciphertext", async () => {
   const f = await fixture(),
     before = guard(f).expectedRevision,
