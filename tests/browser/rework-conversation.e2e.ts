@@ -471,6 +471,15 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         if (purpose === "prepare_claim" && followup === "직접 해결")
           await page.screenshot({ path: "/tmp/baro-625-real-conversation-320.png" });
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
+        const pdfResponse =
+          followup === "리포트만 저장"
+            ? page.waitForResponse(
+                (response) =>
+                  response.request().method() === "GET" &&
+                  /^\/api\/v2\/reports\/[^/]+\/pdf$/.test(new URL(response.url()).pathname) &&
+                  response.ok(),
+              )
+            : null;
         await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
         if (followup === "직접 해결") {
           await expect(
@@ -506,7 +515,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
           ).toBeVisible();
         else {
-          if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
+          if (!download || !pdfResponse) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
           const artifact = await download;
           expect(artifact.suggestedFilename()).toMatch(/\.pdf$/i);
           const file = await artifact.path();
@@ -514,6 +523,18 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           const bytes = await readFile(file);
           expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
           expect(bytes.byteLength).toBeGreaterThan(100);
+          expect(bytes.equals(await (await pdfResponse).body())).toBe(true);
+          const stored = z
+            .object({
+              artifacts: z.object({
+                pdf: z.array(z.object({ state: z.string(), logicalBytes: z.number() })),
+              }),
+            })
+            .parse(await (await f.control("stats")).json());
+          expect(stored.artifacts.pdf).toContainEqual({
+            state: "stored",
+            logicalBytes: bytes.byteLength,
+          });
           await artifact.delete();
         }
         expect(new URL(page.url()).pathname).toBe(path);
