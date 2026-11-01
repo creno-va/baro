@@ -20,6 +20,7 @@ async function fixture(page: Page, partial = false) {
     files: [] as Record<string, unknown>[],
     failPart: false,
     reject: false,
+    withdrawOnComplete: false,
     pause: null as Promise<void> | null,
     edits: {} as Record<string, { text: string; included: boolean }>,
   };
@@ -145,6 +146,7 @@ async function fixture(page: Page, partial = false) {
       item.status = "uploaded";
       item.revision = 2;
       state.revision++;
+      if (state.withdrawOnComplete) state.needsConsent = true;
       return route.fulfill({
         json: { fileId: item.id, revision: 2, status: "uploaded", processingQueued: false },
       });
@@ -317,6 +319,26 @@ test("a rejected file requires a fresh selection while existing uploads recover 
   await upload(page);
   await expect(page.getByTestId("received")).toHaveText("synthetic-upload-2");
   expect(state.writes.filter((path) => path.endsWith("/files"))).toHaveLength(2);
+});
+
+test("consent withdrawn after upload commit preserves the ACK without offering to resend the accepted file", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await choose(page);
+  state.withdrawOnComplete = true;
+  await upload(page);
+  await expect(page.getByTestId("received")).toHaveText("synthetic-upload-1");
+  await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "새 증거 추가", exact: true })
+      .getByRole("link", { name: "최신 동의 확인", exact: true }),
+  ).toBeVisible();
+  state.needsConsent = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("button", { name: "새 증거 업로드", exact: true })).toBeDisabled();
+  expect(state.writes.filter((path) => path.endsWith("/files"))).toHaveLength(1);
 });
 
 test("320px preview list scrolls within its area and keeps 44px controls and fallback selection", async ({

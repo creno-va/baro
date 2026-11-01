@@ -177,7 +177,7 @@ export function useEvidenceUpload({
     try {
       if (!(await verify(false, true)) || !current(epoch)) return;
       for (const file of chosen) {
-        if (!current(epoch)) return;
+        if (!(await verify(false, true)) || !current(epoch)) return;
         try {
           const result = await api.files.upload(
             caseId,
@@ -187,7 +187,9 @@ export function useEvidenceUpload({
             },
             { metadataOnly: true },
           );
-          if (!(await verify(false, true)) || !current(epoch)) return;
+          // Consent may be withdrawn after a committed write. Preserve its ACK
+          // with read authorization; require fresh consent before the next file.
+          if (!(await verify()) || !current(epoch)) return;
           accepted.push(result);
           // Clear accepted inputs before callbacks/readback so an unrelated refresh failure
           // never resends a committed file. The API reconciles an ambiguous ACK by exact ID.
