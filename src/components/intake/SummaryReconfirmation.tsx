@@ -751,9 +751,9 @@ function SummaryReconfirmationScene({
         </section>
       )}
       <Dialog
-        open={purposeOpen}
+        open={ready && purposeOpen}
         onOpenChange={(open) => {
-          if (!busy) {
+          if (ready && !busy) {
             setPurposeOpen(open);
             if (!open) setPurposeDraft(null);
           }
@@ -812,10 +812,10 @@ function SummaryReconfirmationScene({
         </div>
       </Dialog>
       <Dialog
-        open={kind !== null}
+        open={ready && kind !== null}
         returnFocusRef={dialogReturnFocus}
         onOpenChange={(open) => {
-          if (!open && !busy) {
+          if (ready && !open && !busy) {
             setKind(null);
             setExplanation("");
           }
@@ -877,9 +877,9 @@ function SummaryReconfirmationScene({
         </form>
       </Dialog>
       <Dialog
-        open={confirming}
+        open={ready && confirming}
         onOpenChange={(open) => {
-          if (!busy) setConfirming(open);
+          if (ready && !busy) setConfirming(open);
         }}
         title="이 내용으로 계속할까요?"
         description="확인한 사실과 미확인 내용을 바탕으로 사건 정리를 이어가요."
