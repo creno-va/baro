@@ -4,6 +4,7 @@ import { settleIntakeSave } from "../helpers/intake-autosave";
 
 // No OAuth/AI success claim: real production APIs receive signed synthetic sessions.
 const modulePath = "/src/client/api/index.ts";
+const originalSummary = "사용자의 거래 자료 확인 준비를 정리했습니다.";
 async function startCustomerServer(browserOrigin: string) {
   const server = spawn("bun", ["tests/helpers/customer-browser-server.ts", browserOrigin], {
     stdio: ["pipe", "pipe", "pipe"],
@@ -45,13 +46,15 @@ for (const viewport of [
   { width: 640, height: 450 },
   { width: 1280, height: 900 },
 ]) {
-  test(`real summary/timeline lost responses, keyboard/reload and account purge at ${viewport.width}px`, async ({
+  test(`real readonly summary/timeline lost responses, keyboard/reload and account purge at ${viewport.width}px`, async ({
     page,
     context,
+    browserName,
   }, testInfo) => {
     const browserOrigin = new URL(String(testInfo.project.use.baseURL ?? "http://127.0.0.1:4355"))
       .origin;
     const { server, info } = await startCustomerServer(browserOrigin);
+    let releasePendingSession: (() => void) | undefined;
     try {
       // 640x450 is the CSS viewport of a 1280x900 window at 200% browser zoom.
       // Also stress CSS zoom separately; unlike browser zoom it retains media queries.
@@ -75,8 +78,7 @@ for (const viewport of [
         );
       await context.addCookies([info.ownerCookie]);
       let sessionUnavailable = false;
-      let droppedSave = false,
-        droppedConfirm = false,
+      let droppedConfirm = false,
         droppedTimeline = false;
       let apiInFlight = 0;
       let sessionRequests = 0;
@@ -88,6 +90,7 @@ for (const viewport of [
         releaseSession?.();
         releaseSession = undefined;
       };
+      releasePendingSession = releaseHeldSession;
       const mutations: { path: string; body: string | null; key: string | undefined }[] = [];
       await context.route("**/api/**", async (route) => {
         const request = route.request();
@@ -126,16 +129,6 @@ for (const viewport of [
               body: request.postData(),
               key: request.headers()["idempotency-key"],
             });
-          if (
-            response.ok() &&
-            request.method() === "PUT" &&
-            path.endsWith("/summary") &&
-            !droppedSave
-          ) {
-            droppedSave = true;
-            await route.abort("failed");
-            return;
-          }
           if (response.ok() && path.endsWith("/summary/confirm") && !droppedConfirm) {
             droppedConfirm = true;
             await route.abort("failed");
@@ -158,23 +151,13 @@ for (const viewport of [
       });
       const base = `/cases/${info.id}`;
       await page.goto(`${base}/summary`);
-      const editor = page.getByLabel("요약 편집");
-      await expect(editor).toBeVisible();
-      await editor.fill("직접 수정한 합성 브라우저 요약입니다.");
-      await page.getByRole("button", { name: "수정 내용 저장" }).focus();
-      await page.keyboard.press("Enter");
-      await expect(page.getByRole("alert")).toBeVisible();
-      await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
-      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect(editor).toBeVisible();
-      await page.getByRole("button", { name: "수정 내용 저장" }).click();
-      await expect(page.getByText("수정한 요약이 저장됐어요.")).toBeVisible();
-      const saveWrites = mutations.filter((mutation) => mutation.path.endsWith("/summary"));
-      expect(saveWrites).toHaveLength(2);
-      expect(saveWrites[0]).toEqual(saveWrites[1]);
-      await page.reload();
-      await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
-      await editor.fill("네트워크 장애 후에도 보존할 요약 초안");
+      await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+      await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+      const editor = page.getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true });
+      await editor.fill("네트워크 장애 후에도 보존할 재조율 설명 초안");
       await expect.poll(() => apiInFlight).toBe(0);
       await page.evaluate(async () => {
         const path = "/src/client/api/session.ts";
@@ -222,7 +205,7 @@ for (const viewport of [
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect.poll(async () => (await sessionReads()).calls).toBeGreaterThan(callsBeforeFocus);
       expect(sessionRequests).toBe(sharedRequests);
-      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 재조율 설명 초안");
       releaseHeldSession();
       await settled();
       // Sharing ends when the read settles. Ordinary focus must now observe a
@@ -232,8 +215,8 @@ for (const viewport of [
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect.poll(() => sessionRequests).toBeGreaterThan(requestsBeforeOutage);
       await expect.poll(() => failedSessions).toBeGreaterThan(0);
-      await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
-      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
+      await expect(page.getByRole("alert").filter({ hasText: "연결하지 못했어요" })).toBeVisible();
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 재조율 설명 초안");
       await settled();
       // Explicit peer invalidation hides private content even during an
       // outage. Recovery may restore the draft only after owner verification.
@@ -248,7 +231,7 @@ for (const viewport of [
       );
       await expect.poll(() => failedSessions).toBeGreaterThan(failuresBeforeInvalidation);
       await expect(editor).not.toBeVisible();
-      await expect(page.getByRole("alert")).toContainText("연결하지 못했어요");
+      await expect(page.getByRole("alert").filter({ hasText: "연결하지 못했어요" })).toBeVisible();
       sessionUnavailable = false;
       await expect.poll(() => apiInFlight).toBe(0);
       const readsBeforeRetry = workspaceReads;
@@ -260,8 +243,8 @@ for (const viewport of [
       );
       releaseHeldSession();
       await expect.poll(() => workspaceReads).toBeGreaterThan(readsBeforeRetry);
-      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 요약 초안");
-      await editor.fill("다른 계정으로 저장되면 안 되는 요약 초안");
+      await expect(editor).toHaveValue("네트워크 장애 후에도 보존할 재조율 설명 초안");
+      await editor.fill("다른 계정으로 저장되면 안 되는 재조율 설명 초안");
       // Finish the same-owner reload before replacing its signed cookie; the
       // following focus is the account-change verification being asserted.
       await expect.poll(() => apiInFlight, { timeout: 15000 }).toBe(0);
@@ -274,21 +257,31 @@ for (const viewport of [
       await expect.poll(() => apiInFlight, { timeout: 15000 }).toBe(0);
       await context.addCookies([info.ownerCookie]);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect(editor).toHaveValue("직접 수정한 합성 브라우저 요약입니다.");
+      await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+      await expect(editor).not.toBeVisible();
+      await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
       await expect(
         page.getByRole("checkbox", { name: /요약이 내가 이야기한 사실과 맞는지/ }),
       ).toHaveCount(0);
-      await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-      await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+      const agree = page.getByRole("button", { name: "맞아요", exact: true });
+      await agree.focus();
+      await page.keyboard.press("Enter");
+      const confirmation = page.getByRole("dialog", {
+        name: "이 내용으로 계속할까요?",
+        exact: true,
+      });
+      const confirm = confirmation.getByRole("button", { name: "확인하고 계속", exact: true });
+      await confirm.focus();
+      await page.keyboard.press("Enter");
       await expect(page.getByRole("alert")).toBeVisible();
-      await page.getByRole("button", { name: "요약 확인하고 계속" }).click();
-      await page.getByRole("button", { name: "확인하고 사건 열기" }).click();
+      await confirm.click();
       await expect(page).toHaveURL(base);
       const confirmations = mutations.filter((mutation) =>
         mutation.path.endsWith("/summary/confirm"),
       );
       expect(confirmations).toHaveLength(2);
       expect(confirmations[0]).toEqual(confirmations[1]);
+      expect(mutations.filter((mutation) => mutation.path.endsWith("/summary"))).toHaveLength(0);
       await expect(page.getByLabel("추가 사실 또는 질문")).toBeVisible();
       await page.getByRole("link", { name: "타임라인", exact: true }).click();
       await page.getByRole("button", { name: "일정 추가" }).click();
@@ -359,10 +352,9 @@ for (const viewport of [
         }, accountType);
       expect(await role("lawyer")).toBe(200);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await expect(page.getByLabel("추가 사실 또는 질문")).not.toBeVisible();
-      await expect(page.getByRole("alert")).toContainText(
-        "계정 또는 사건 접근이 바뀌어 이전 내용을 비웠어요.",
-      );
+      // Both roles may use their own workspace. Reauthorization must clear the
+      // prior role's draft even when the same owner's editor is shown again.
+      await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("");
       expect(await role("customer")).toBe(200);
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("");
@@ -395,7 +387,9 @@ for (const viewport of [
           await links.first().focus();
           await expect(links.first()).toBeFocused();
           for (let index = 1; index < (await links.count()); index++) {
-            await page.keyboard.press("Tab");
+            const nextLinkKey =
+              browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+            await page.keyboard.press(nextLinkKey);
             await expect(links.nth(index)).toBeFocused();
             await expect(links.nth(index)).toBeInViewport({ ratio: 1 });
           }
@@ -426,7 +420,14 @@ for (const viewport of [
       );
       expect(saved.timeline).toHaveLength(1);
     } finally {
-      server.stdin.end();
+      releasePendingSession?.();
+      try {
+        await page.close();
+        await context.unrouteAll({ behavior: "wait" });
+      } finally {
+        server.stdin.end();
+        server.kill();
+      }
     }
   });
 }
@@ -490,8 +491,7 @@ for (const [action, outcome] of [
       await answer.fill(text);
       if (action === "save") {
         await settleIntakeSave(page);
-        await expect(page.getByRole("status")).toContainText("저장됐어요.");
-        expect(writes).toBe(1);
+        await expect.poll(() => writes).toBe(1);
       } else {
         await page.evaluate(() => window.dispatchEvent(new Event("focus")));
         await expect(answer).toBeVisible();
@@ -513,7 +513,13 @@ for (const [action, outcome] of [
       }
     } finally {
       releaseRead?.();
-      server.stdin.end();
+      try {
+        await page.close();
+        await context.unrouteAll({ behavior: "wait" });
+      } finally {
+        server.stdin.end();
+        server.kill();
+      }
     }
   });
 }

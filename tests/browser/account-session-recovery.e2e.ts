@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
 import { openReportEditor } from "../helpers/report-controls";
+import { preparationRead } from "../helpers/report-rework-reads";
 
 async function trackSessionReads(page: Page) {
   await page.evaluate(async () => {
@@ -92,7 +93,9 @@ for (const role of ["customer", "lawyer"] as const) {
     ).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
     if (role === "lawyer") {
-      expect(caseReads).toBe(0);
+      // Both roles can enter cases and use the shared recent-case navigation.
+      // Settings still omits the customer's legacy archive for lawyers.
+      expect(caseReads).toBeGreaterThanOrEqual(2);
       await expect(page.getByRole("region", { name: "보관한 사건" })).toHaveCount(0);
     } else {
       expect(caseReads).toBeGreaterThanOrEqual(2);
@@ -201,6 +204,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session") {
       if (outage) {
         failures++;
@@ -223,7 +227,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
       });
     }
     if (path.endsWith("/files")) return route.fulfill({ json: [] });
-    if (path.endsWith("/reports"))
+    if (path.endsWith("/reports") || path.endsWith("/rework/report"))
       return route.fulfill({
         json: {
           id: "synthetic-report",
@@ -248,9 +252,13 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   outage = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect.poll(() => failures).toBeGreaterThan(0);
-  await expect(page.getByRole("alert")).toBeVisible();
+  const reportError = page
+    .locator(".report-error")
+    .filter({ has: page.getByRole("button", { name: "다시 확인", exact: true }) });
+  await expect(reportError).toHaveAttribute("role", "alert");
+  await expect(reportError).toBeVisible();
   await expect(editor).toHaveValue("Unsaved report correction");
-  await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+  await reportError.getByRole("button", { name: "다시 확인", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "저장 내용을 다시 불러올까요?" })).toBeVisible();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(editor).toHaveValue("Unsaved report correction");
@@ -352,6 +360,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session")
       return route.fulfill({
         json: {
@@ -360,7 +369,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
         },
       });
     if (path.endsWith("/files")) return route.fulfill({ json: [] });
-    if (path.endsWith("/reports"))
+    if (path.endsWith("/reports") || path.endsWith("/rework/report"))
       return route.fulfill({
         json: {
           id: "synthetic-report",
@@ -404,6 +413,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       if (!path.startsWith("/api/")) return route.continue();
+      if (await preparationRead(route)) return;
       if (path === "/api/me/session") {
         if (phase === "late") {
           held++;
@@ -434,7 +444,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
         });
       }
       if (path.endsWith("/files")) return route.fulfill({ json: [] });
-      if (path.endsWith("/reports"))
+      if (path.endsWith("/reports") || path.endsWith("/rework/report"))
         return route.fulfill({
           json: {
             id: "synthetic-report",
