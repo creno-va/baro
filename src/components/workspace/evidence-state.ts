@@ -17,7 +17,7 @@ export const materialStateLabels: Record<MaterialState, string> = {
   rejected: "등록 거절",
   failed: "처리 실패 · 확인 필요",
   review: "내용 확인 후 반영 가능",
-  linked: "현재 자료가 사실에 연결됨",
+  linked: "사실에 연결된 자료",
   stale: "자료 변경 · 다시 반영 필요",
 };
 
