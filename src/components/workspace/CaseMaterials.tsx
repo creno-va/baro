@@ -1,5 +1,6 @@
 import type { FileView } from "../../client/api/types";
 import type { V2Fact } from "../../contracts/v2";
+import { Button } from "../ui/button";
 import { materialState, materialStateLabels } from "./evidence-state";
 import "../../styles/evidence.css";
 
@@ -7,10 +8,13 @@ export function CaseMaterials({
   caseId,
   files,
   facts = [],
+  onReviewFile,
 }: {
   caseId: string;
   files: FileView[];
   facts?: V2Fact[] | undefined;
+  /** Open the same private review inside a conversation panel when supplied. */
+  onReviewFile?: (fileId: string) => void;
 }) {
   if (!files.length) return null;
   return (
@@ -28,11 +32,24 @@ export function CaseMaterials({
           const status = materialStateLabels[materialState(file, facts)];
           return (
             <li key={file.id}>
-              <a
-                href={`/cases/${encodeURIComponent(caseId)}/files?file=${encodeURIComponent(file.id)}`}
-              >
-                {file.name}
-              </a>
+              {onReviewFile ? (
+                <Button
+                  variant="ghost"
+                  className="evidence-material-open"
+                  onClick={(event) => {
+                    event.currentTarget.focus();
+                    onReviewFile(file.id);
+                  }}
+                >
+                  {file.name}
+                </Button>
+              ) : (
+                <a
+                  href={`/cases/${encodeURIComponent(caseId)}/files?file=${encodeURIComponent(file.id)}`}
+                >
+                  {file.name}
+                </a>
+              )}
               <span>{status}</span>
             </li>
           );

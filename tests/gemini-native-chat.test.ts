@@ -8,6 +8,7 @@ import {
 import { workspaceChatOutputSchema } from "../src/server/modules/llm-gateway/v2/schemas";
 
 const draft = {
+  conversationIntent: null,
   text: "확인할 날짜와 금액을 구분해 주세요.",
   references: [],
   warnings: [],
@@ -35,6 +36,9 @@ test("compact chat definitions preserve required fields, closed objects and lega
   const { requestedTools: _, unknowns: _gaps, ...legacy } = draft;
   expect(decoder.safeParse({ output: legacy }).success).toBe(false);
   expect(workspaceChatOutputSchema.parse(legacy)).toEqual(draft);
+  const { conversationIntent: _intent, ...oldStored } = draft;
+  expect(workspaceChatOutputSchema.parse(oldStored)).toEqual(oldStored);
+  expect(decoder.safeParse({ output: oldStored }).success).toBe(false);
   expect(
     workspaceChatOutputSchema.safeParse({
       ...draft,
