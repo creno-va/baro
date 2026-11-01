@@ -1,0 +1,168 @@
+import { expect, test } from "@playwright/test";
+
+test.beforeEach(async ({ request }) => {
+  await request.post("/fixture/control", { data: { reset: true } });
+});
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
+  for (const path of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
+    test(`${purpose} → ${path}`, async ({ page, request }) => {
+      await request.post("/fixture/control", { data: { purpose } });
+      await page.goto("/");
+      const button = page.getByRole("button", { name: new RegExp(`^${path}`) });
+      await expect(button).toBeEnabled();
+      await button.click();
+      if (path === "직접 해결") {
+        await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
+        await expect(page.getByText("관할", { exact: true })).toBeVisible();
+        await expect(page.getByRole("option")).toHaveCount(1);
+      } else if (path === "변호사와 해결") {
+        await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+          "href",
+          "/lawyers",
+        );
+        if (purpose === "respond_to_claim")
+          await expect(
+            page.getByRole("heading", { name: "국선변호·법률구조 공식 안내" }),
+          ).toBeVisible();
+      } else {
+        await expect(page.getByRole("status")).toContainText("저장 요청");
+        const calls = await (await request.get("/fixture/counts")).json();
+        expect(calls).toMatchObject({ draft: 0, update: 0, saveReport: 1, files: 0 });
+      }
+    });
+test("grounded draft review/edit/save/download and reconnect across both host surfaces", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  const editor = page.getByLabel("초안 검토·수정");
+  await expect(editor).toContainText("[미입력: 관할]");
+  await expect(editor).not.toContainText("010-1234-5678");
+  await editor.fill(`${await editor.inputValue()}\n직접 검토한 수정`);
+  await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+  await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/검토용\.txt$/);
+  await page.reload();
+  await expect(page.getByLabel("초안 검토·수정")).toContainText("직접 검토한 수정");
+  await page.getByRole("button", { name: "대화·리포트 보기 전환" }).click();
+  await expect(page.getByText("합성 대화", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("초안 검토·수정")).toContainText("직접 검토한 수정");
+});
+test("scope edits hide old drafts and dirty path switches need explicit discard", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("초안 검토·수정").fill("미저장 합성 편집");
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "계속 검토" }).click();
+  await expect(page.getByLabel("초안 검토·수정")).toHaveValue("미저장 합성 편집");
+  await expect(page.getByLabel("선택 자료 1", { exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByRole("button", { name: "수정을 버리고 경로 변경" }).click();
+  await page.getByLabel("선택 자료 1", { exact: true }).uncheck();
+  await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+  await page.getByRole("button", { name: "범위 적용" }).click();
+  await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
+});
+test("account change purges dirty text and discards a delayed draft result", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await request.post("/fixture/control", { data: { delayDraft: 300 } });
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await request.post("/fixture/control", { data: { owner: "other-owner" } });
+  await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+  await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("계정");
+});
+test("download failure remains retryable without draft generation", async ({ page, request }) => {
+  await request.post("/fixture/control", { data: { failDownload: true } });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+  await expect(page.getByRole("alert")).toContainText("완료하지 못했어요");
+  await request.post("/fixture/control", { data: { failDownload: false } });
+  await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+  await expect(page.getByRole("status")).toContainText("저장 요청");
+  const calls = await (await request.get("/fixture/counts")).json();
+  expect(calls).toMatchObject({ saveReport: 2, draft: 0, update: 0 });
+});
+test("320px layout keeps equal choices, touch targets and no document overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
+  const metrics = await page.locator(".resolution-path").evaluateAll((buttons) =>
+    buttons.map((button) => ({
+      height: button.getBoundingClientRect().height,
+      width: button.getBoundingClientRect().width,
+    })),
+  );
+  expect(metrics.every((m) => m.height >= 44)).toBe(true);
+  expect(new Set(metrics.map((m) => m.width)).size).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.screenshot({ path: ".wrangler/resolution-mobile.png", fullPage: true });
+});
+test("stale revision hides previous draft and account switch clears an existing private edit", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
+  await request.post("/fixture/control", { data: { stale: true } });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+  await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("초안 검토·수정").fill("PRIVATE DIRTY SYNTHETIC");
+  await request.post("/fixture/control", { data: { owner: "other-owner" } });
+  await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+  await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("PRIVATE DIRTY SYNTHETIC");
+});
+test("a local draft download failure preserves reviewed save and consent loss permits historical download", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+  await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  await page.evaluate(() => {
+    URL.createObjectURL = () => {
+      throw Error("synthetic download failure");
+    };
+  });
+  await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("완료하지 못했어요");
+  await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
+  await request.post("/fixture/control", { data: { needsConsent: true } });
+  await page.reload();
+  await expect(page.getByLabel("초안 검토·수정")).toBeVisible();
+  await expect(page.getByRole("button", { name: "검토한 초안 저장" })).toBeDisabled();
+  const event = page.waitForEvent("download");
+  await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+  await event;
+  const calls = await (await request.get("/fixture/counts")).json();
+  expect(calls.draft).toBe(1);
+});

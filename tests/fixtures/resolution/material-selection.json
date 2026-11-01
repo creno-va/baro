@@ -1,0 +1,56 @@
+{
+  "notice": "Synthetic privacy and factual-grounding fixture; these are not real case materials or official guidance.",
+  "facts": [
+    {
+      "id": "confirmed-event",
+      "text": "합성 사용자는 물품을 받지 못했다고 확인했다.",
+      "confirmed": true,
+      "fileIds": []
+    },
+    {
+      "id": "confirmed-unfavorable",
+      "text": "합성 사용자는 상대방에게 수령 확인 문자를 보냈다고 확인했다.",
+      "confirmed": true,
+      "fileIds": []
+    },
+    {
+      "id": "unconfirmed-date",
+      "text": "확인되지 않은 날짜를 확정 사실로 사용하면 안 된다.",
+      "confirmed": false,
+      "fileIds": []
+    },
+    {
+      "id": "excluded-dependent-fact",
+      "text": "제외 자료에서만 확인한 합성 내용은 초안에 포함하지 않는다.",
+      "confirmed": true,
+      "fileIds": ["excluded-file"]
+    }
+  ],
+  "files": [
+    {
+      "id": "selected-file",
+      "revision": 2,
+      "name": "선택한 합성 메시지.txt",
+      "text": "합성 연락처 010-1234-5678, synthetic@example.invalid"
+    },
+    {
+      "id": "excluded-file",
+      "revision": 1,
+      "name": "제외한 합성 자료.txt",
+      "text": "이 제외 자료의 내용과 이름을 상담 미리보기나 초안에 자동 포함하지 않는다."
+    }
+  ],
+  "selectedFileIds": ["selected-file"],
+  "excludedFileIds": ["excluded-file"],
+  "maskIdentifiers": true,
+  "expected": {
+    "includedFactIds": ["confirmed-event", "confirmed-unfavorable"],
+    "includedFileIds": ["selected-file"],
+    "missingFields": ["인적사항", "사건 날짜", "관할", "제출처", "기한"],
+    "mustNotContain": [
+      "010-1234-5678",
+      "synthetic@example.invalid",
+      "확인되지 않은 날짜를 확정 사실로 사용하면 안 된다."
+    ]
+  }
+}
