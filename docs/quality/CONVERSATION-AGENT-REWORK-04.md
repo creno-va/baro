@@ -255,3 +255,11 @@ AI200/동의 철회/foreign 계정/peer CAS **5개가 Chromium에서 통과**했
 않았다. 00에 중앙 projection 계약 검증을 전달했고 UI의 동등 비교를 임의 `>=`로 풀지 않는다.
 임시 진단은 제거했다. 01 최종 확인 UI의 CI/main과 이 revision 계약을 소비한 뒤, 처리 실패와
 전체6여정/ACK2를 재검증한다. 전체14 통과나 실제 외부 인수 완료는 여전히 주장하지 않는다.
+
+PR683 exact `56b2fb5295c89909ae00ccfe0f890baf68d98c9a`의 Quality41333275468 성공과
+main `341b795e`를 확인해 소비했다. 실제 초기 질문2×3→재조율 확정→Workspace 진입을
+수동 이동 없이 통과하고, action ACK 유실과 ReportReview 자체 준비 ACK 유실 **2개가
+Chromium에서 통과**했다(44.4초). 실제 commit 뒤 잃은 응답이며 원래 전체 입력과 key를
+유지한다. 따라서 실제14개 중 NLP와 독립인 경계5+ACK2가 통과했다. 중앙 intent의 W는
+검증된 동일 owner/operation/workspace의 completed job과 암호화 메시지를 통해 실제 게시
+W로 projection한다고00과 확정했다. UI의 정확 비교와 과거 intent 차단은 유지한다.
