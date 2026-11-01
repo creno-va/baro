@@ -193,7 +193,7 @@ function SummaryReconfirmationScene({
     for (let attempt = 0; attempt < 2; attempt++) {
       const next = await api.cases.get(caseId);
       // Legacy summary routes remain readable without requiring a v2 rework record.
-      if (next.schemaVersion === "1" || next.stage === "archived")
+      if (next.schemaVersion === "1" || !["summary", "active"].includes(next.stage))
         return { next, reconciliation: null, context: null };
       const [reconciliation, contextView] = await Promise.all([
         api.rework.getReconciliation(caseId, { expectedOwner: access.ownerId() ?? "" }),
@@ -519,7 +519,7 @@ function SummaryReconfirmationScene({
                 </Button>
               )}
             </>
-          ) : (
+          ) : item.stage === "intake" ? null : (
             <p role="status">
               {item.schemaVersion === "1"
                 ? "미확인 입장"

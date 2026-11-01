@@ -411,3 +411,20 @@ for (const mode of ["legacy", "archived"] as const)
     await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
     await expect(page.getByRole("alert")).toHaveCount(0);
   });
+
+test("an early summary bookmark returns to saved questions without requiring a summary record", async ({
+  page,
+}) => {
+  const item = await seed(page);
+  await page.addInitScript((id) => {
+    const cases = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
+    cases[id].stage = "intake";
+    cases[id].summary = "";
+    delete cases[id].summaryDetails;
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+  }, item.id);
+  await page.goto(`/cases/${item.id}/summary`);
+  await expect(page.getByRole("link", { name: "질문 이어가기", exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toHaveCount(0);
+});
