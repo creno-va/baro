@@ -236,3 +236,22 @@ foreign 계정·peer context 수정6을 포함한다. 실행 중 다음 두 공�
   검증하는 수정 중이며 전체6여정과 ACK2는 이 실제 초기 확인 UI를 계속 통과해야 한다.
 
 이 검사는 실제 외부 모델/법률 API/OAuth/기기 촬영/운영 배포의 인수를 대신하지 않는다.
+
+후속 PR684 exact `30f35a48b8e80b186f48847653fefb7976a35fb9`의 Quality41332285826,
+Legal41332285860, PDF41332285862 성공과 main `b6020f9c` 병합을 확인해 통합했다.
+실제 설치 workspace facade 회귀가 **1개/36 assertions 통과**로 바뀌었다. public currentJobId와
+latest job은 null, 기존 active 사건·리포트 ID는 유지하고 추가 모델/검색0을 검사한다.
+raw 내부 작업 lock과 명시 job GET, 일반 채팅의 assistant 누락 검사는 유지한다.
+
+실제 브라우저의 정리 순서도 고쳤다. 브라우저 polling을 offline으로 중지하고 기존 route
+handler를 실제 서버가 살아 있는 동안 drain한 뒤 서버를 닫는다. teardown 뒤 ECONNREFUSED를
+제품 실패로 오인하지 않으며, 검사 중 실제 fetch 실패는 계속 실패한다. 이 변경 후 검색 실패/
+AI200/동의 철회/foreign 계정/peer CAS **5개가 Chromium에서 통과**했다(12.3초).
+`bun ci`와 `validate:quick`도 통과했다. quick에는 rework392개/3172 assertions와 기존 경계
+674개/6291 assertions 및 모바일/도구 검사가 포함됐다.
+
+남은 NLP 연결 검사에서 수치만 기록해 원인을 확인했다: 게시 후 conversation W15인데
+서버 intent는 assistant admission W14를 반환해 현재 UI의 정확 게시 revision 조건과 맞지
+않았다. 00에 중앙 projection 계약 검증을 전달했고 UI의 동등 비교를 임의 `>=`로 풀지 않는다.
+임시 진단은 제거했다. 01 최종 확인 UI의 CI/main과 이 revision 계약을 소비한 뒤, 처리 실패와
+전체6여정/ACK2를 재검증한다. 전체14 통과나 실제 외부 인수 완료는 여전히 주장하지 않는다.
