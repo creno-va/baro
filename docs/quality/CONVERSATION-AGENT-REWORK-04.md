@@ -1,8 +1,70 @@
 # 대화 에이전트 통합 검증 (#625)
 
-이 문서는 합성 사건의 검증 계약이다. 실행 결과는 검사 후 별도로 기록한다. 실제 외부
+이 문서는 합성 사건의 검증 계약과 실행 기록이다. 최신 결과는 아래 최종 실행 상태를 따른다. 실제 외부
 모델·법률 API·OAuth·배포 성공을 합성 결과로 대신하지 않는다. 공통 계약과 통합 상태의
 정본은 `docs/development/CONVERSATION-REPORT-REWORK.md`이며 통합00이 관리한다.
+
+## 2026-11-02 최종 실행 상태
+
+실제 앱 조립의 고정 검사 소스는 `b424eb2125c2fef3399adbb5790423c45921f7d8`이다.
+공통 mock 선행 [PR695](https://github.com/creno-va/baro/pull/695)의 exact
+`87a10a6c57e7a8b167a7fb5057dff861005d480d` Quality41355266822 성공과 main
+`7cea91232f63f6807b62d15b53c6fbc7f27c2e41` 병합을 재확인해 통합했다.
+그 뒤 결합 소스 `13f0b062e990371b5543d4634c9decb9a1d31194`에서 공통 mock과 quick를
+검증했다. 이번 추가 변경은 공통 mock의 알려진 revision 보존이며 실제 서비스14개 검사의 제품
+소스는 그대로다. 성공 당시12경로 원본은 다시 실행하거나 덮어쓰지 않았다.
+
+| 범위 | 결과와 근거 |
+| --- | --- |
+| 실제 앱/서비스 통합 | Chromium14개/3.5분, WebKit14개/3.8분 통과. 양 입장×후속3경로와8개 실패·경합 검사를 실제 Hono/D1/AES/서명 세션/설치 SDK로 실행 |
+| 격리 대화 UI | Chromium17개/8.6초, WebKit17개/12.6초 통과. body/제거된 control·정확한 scroll ancestor·구조적 main opener·외부 control·native dialog·계정 epoch를 구분 |
+| 공통 앱 mock | PR695 통합 뒤 Chromium2개/26.9초, WebKit2개/32.1초 통과. 실제 intake·자료·재확인/입장/절차·제한 리포트를 같은 대화 URL로 연결 |
+| 브라우저 등록 | 명시 env로 각 config/engine의 `--list`를 수집: Agent17+shared2+actual14=각33개. 등록을 건너뛰어 통과 수를 만든 것이 아님 |
+| 코어/게시/업로드/다운로드 | 관련6파일174개/780 assertions 통과. 원래 request ID와 전체 입력, exact 게시 revision, 원본 hash/의미 동결, 실패 후 명시 복구 포함 |
+| 실제 native | SDK 원본/hash/로컬 R2 binding 전체 bytes·Docker 처리/PDF·사후 current-report·암호화 저장 용량1개/62 assertions 통과. physical cloud Containers 정지 인수가 아님 |
+| 설치/quick | `bun ci`1349 installs/변경0. 결합13f0의 `validate:quick` exit0: Astro542파일 error0,534개·448개/4 opt-in skip·도구674개/6291 assertions 및 타입/정적 검사 통과 |
+| build | b424의 `validate:build` exit0. 실제 production Worker를 local workerd에서 부팅해 익명 로그인 HTML 제공 확인. 배포·실제 OAuth 성공이 아님 |
+| PDF/HTML/저장 | 실제12PDF/48쪽과 HTML1108개 본문 항목, 전체 bytes·basis/hash 일치. self의 검토/저장 UTF8 초안과 save의 동일 PDF 재다운로드까지 통과 |
+| 독립 시각 검토 | 05가 별도 bytecopy에서12PDF48쪽 전체를 렌더/직접 검토. clipping/overlap/blank/brokenGlyph/bbox finding0, 원본 재hash 불변·1108/1108 본문 일치 |
+
+두 입장에서 자료 선택→동의/원본 업로드→대화 반영/inline 검토→재확인→자동 법률·판례 조사→
+NLP 리포트 요청→실제 PDF→직접 해결/변호사 준비/저장으로 이어졌다. 첫 self는 실제 commit
+응답 유실을 겪은 첨부 메시지를 같은 key/전체 body로 재전송해 첨부1개를 유지했다.
+respond-save는 기존 촬영 picker의 `capture=environment`와 실제 합성 PNG를 사용했고,
+원본 SHA·vision 실행·partial/low_quality·uncertain·포함 근거·리포트 문구를 확인했다.
+`actualCameraDevice=false`이며, 이12경로는 선택된 사진의 PDF 내 이미지 삽입 검증으로
+확대하지 않는다. 해당 이미지 삽입은05의 별도 선택사진 검증과 구분한다.
+
+WebKit의 Playwright Request는 원래 Blob PUT의 body를 노출하지 않았다. fixture 전용 dev
+middleware가 같은 origin의 원래 HTTP stream을 실제 Hono로 전달한다. 본문 재생성,
+결과 DTO 대체, 제품/CSP/CORS·cookie/Origin/expected-owner/upload-session/hash 검증
+완화는 없다. 제품 runtime은 Workers이며 Node HTTP는 테스트 config에만 있다.
+
+키보드 문제는 실제 DOM 관측과 독립 red로 재현했다. 현재 패널을 포함한 정확한
+`.workspace-messages` 자체가 target인 idle Escape만 기존 close로 전달한다. document/window
+listener나 외부 control의 초점 이동은 추가하지 않았다. 구조적 main/scroll은 실제 control
+opener로 취급하지 않고 composer로 돌아간다. busy/dirty·owner/epoch·native dialog 경계와
+원래 버튼 복귀는 유지한다. 실제 통합 여정에는 임의 focus/sleep이 없고 마지막 상태가
+`TEXTAREA#workspace-message`임을 web-first assertion과 최소 metadata로 확인했다.
+
+공통 mock 실패의 readonly 비교에서는 사건9개 영역의 canonical digest가 모두 같고,
+workspace/case/conversation revision도 모두10→13으로 일치했다. ready 파일의 hash는 유효하지만 revision만
+누락됐고 ACK/review는1이었다. 00이 새 FileView에 알려진 revision1을 보존해 고쳤다.
+04의 safe integer/원본 hash/처리 검토/사건 의미/요청 재사용 검증은 완화하지 않았다.
+
+재현 로그는 `/tmp/baro-625-actual-b424-final-{chromium,webkit}.log`,
+`/tmp/baro-625-after695-shared-final-{chromium,webkit}.log`,
+`/tmp/baro-625-after695-final-quick.log`, `/tmp/baro-625-b424-final-build.log`에 있다.
+성공 원본은 `/tmp/baro-625-journeys/{chromium,webkit}/<purpose>-<branch>/`의
+PDF/HTML/basis·자료/리포트/후속 PNG와 visual metadata다. 독립 검토는
+`/tmp/baro-626-final-pdf-qa-b424eb21/independent-check.json`에 보존했다. 원래 실패는
+별도 red-original 경로에 남겼다. protocol/readiness JSON과 모든 tmp/log를 일괄 artifact로
+올리지 않으며 외부 모델·공식 source 응답은 명시 합성 포트임을 유지한다.
+
+최종 main의 수동 full·기존 보안/정책/공개 gate·실제 공급자/OAuth/기기/법률 승인과
+병합·배포는 통합00의 #621/#71 인수다. 이 로컬 결과로 그 조건을 성공 처리하거나 이슈를
+자동 종료하지 않는다. 아래 상세 기록의 대기/실패 문구는 각 당시의 관측이며 최신 상태는
+이 절과 PR642의 정확한 최종 head/CI를 따른다.
 
 ## 공통 시작 상태
 
