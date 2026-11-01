@@ -270,3 +270,33 @@ context 종료까지 유지하고 실제 upstream fetch만 drain하도록 수정
 2초에 통과했다(전체6.3초). 검사 중 실제 fetch 실패를 성공 DTO로 대체하지 않는다.
 앞선 offline→unroute wait 정리 방식은 이 수정으로 대체했다. 01이 별도 관찰한 WebKit
 summary200 이후 body 읽기 오류는 이 검사들에서 재현되지 않았으며 해결로 단정하지 않는다.
+
+## 2026-11-02 실제 업로드 연결과 새 요청 source 경합
+
+실제 SDK 업로드를 대화 전송으로 이어갈 때 최초 전송 전에 전체 사건/맥락/메시지/자료의
+의미가 그대로인지 검증한다. 요약이 불완전하거나 pagination이 남으면 자동 전송하지 않고
+입력을 보존한다. 기술 작업 revision만 진행한 경우에도 fresh Workspace/Case/conversation의
+동일 revision, 원본 hash·파일명·크기·MIME와 처리 완료를 확인해야 한다. 업로드 전 원본 기준을
+동결하며 새 자료 외의 사실·질문·다른 자료·맥락 변경은 명시 재검토로 돌린다. 이미 전송한
+요청은 이 경로에서 새 revision으로 바꾸지 않는다. 관련 순수 경계21개/29 assertions와
+실제 Workspace Chromium90개, 격리 에이전트 Chromium11개/WebKit11개가 통과했다.
+
+실제 API 검사에서 upload ACK의 원본 hash가 사라지는 문제를00에 전달했다. 중앙 PR687
+및 PR688(main `f17f7181`, exact `7a3919546ce52086071935b856374c133d85a154`,
+Quality41339390069 성공)를 통합한 뒤 실제 SDK ACK→처리 ready의 동일 원본 hash와 R2 전체
+바이트, 실제 Docker PDF/예약·저장 용량 일치 검사가1개/56 assertions로 통과했다.
+제품에서 원본 hash를 재계산하거나 임의 기본값으로 대체하지 않는다.
+
+실제 브라우저의 처리 실패와 원본 전체 바이트 검사가 통과했다. 실패한 자료는 대화에
+반영됐다고 게시하지 않고 기존 파일 검토와 원본 다운로드를 제공한다. 전체 여정의 자료
+업로드→대화 반영→inline 자료 검토까지 실제 서비스로 연결됐다. 320px 캡처는 열린 dialog
+1개, 전경과 조상 opacity1/filter none/진행 animation0을 확인한 뒤 보존했고, 선명한 본문과
+버튼을 직접 확인했다. 안정화 전 중첩·흐린 캡처는 시각 검증 증거로 사용하지 않는다.
+
+새 자료 후 재확인 경합은 정확한 요청 수치로 좁혔다. 옛 재확인 취소는 expectedW36의
+POST200/W37, 새 요청은 expectedW37/S3의 POST202/W38/pending, 직후 GET200은
+같은 W38/stale였다. 명시 최신 읽기1회는 설명을 보존하지만 새 제안을 만들지 못했다.
+이는 POST409나 UI revision 비교를 느슨하게 해서 해결할 문제가 아니다. 00·01에
+실제 protocol을 전달했고 새 operation의 admission source와 옛 receipt의 immutable
+source를 구분하는 중앙 수정 전에는 같은 실패를 반복하지 않는다. 전체6여정/14개 통과는
+아직 기록하지 않는다. 독립 관련 검사169개와 검토 다운로드5개는 현재 main 통합 뒤 통과했다.

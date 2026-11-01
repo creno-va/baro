@@ -79,6 +79,7 @@ export async function openReworkBrowserFixture(
       throw new Error("REWORK_BROWSER_SCOPE_MISMATCH");
     await context.addCookies([info.ownerCookie]);
     const actions: { body: string | null; key: string | undefined }[] = [];
+    const observations: Record<string, string | number | undefined>[] = [];
     await context.route("**/api/**", async (route) => {
       if (stopping) return route.abort("aborted").catch(() => undefined);
       try {
@@ -100,6 +101,56 @@ export async function openReworkBrowserFixture(
         } finally {
           upstream.delete(pending);
         }
+        const kind = url.pathname.endsWith("/workspace")
+          ? "workspace"
+          : url.pathname.endsWith("/summary")
+            ? "summary"
+            : url.pathname.split("/rework/")[1];
+        if (
+          kind &&
+          [
+            "workspace",
+            "summary",
+            "conversation",
+            "summary-reconciliation",
+            "summary-reconciliation/request",
+            "summary-reconciliation/cancel",
+            "summary-reconciliation/confirm",
+          ].includes(kind)
+        ) {
+          const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+          let input: Record<string, unknown> | null = null;
+          try {
+            input = request.postDataJSON() as Record<string, unknown> | null;
+          } catch {}
+          const number = (value: unknown) =>
+            typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
+          observations.push({
+            kind,
+            method: request.method(),
+            status: response.status(),
+            expectedW: number(input?.expectedRevision),
+            expectedS: number(input?.summaryRevision),
+            W: number(body?.workspaceRevision),
+            S: number(body?.revision),
+            confirmedW: number(body?.confirmedWorkspaceRevision),
+            confirmedS: number(body?.confirmedSummaryRevision),
+            state:
+              typeof body?.status === "string" &&
+              [
+                "idle",
+                "pending",
+                "running",
+                "proposed",
+                "confirmed",
+                "stale",
+                "failed",
+                "cancelled",
+              ].includes(body.status)
+                ? body.status
+                : undefined,
+          });
+        }
         if (request.method() === "POST" && url.pathname.endsWith("/rework/actions"))
           actions.push({ body: request.postData(), key: request.headers()["idempotency-key"] });
         if (await options.dropResponse?.(request, response)) return route.abort("failed");
@@ -111,6 +162,7 @@ export async function openReworkBrowserFixture(
     return {
       info,
       actions,
+      observations,
       control: async (path: string, input?: unknown) => {
         if (!/^[-a-z]+$/.test(path)) throw new Error("INVALID_REWORK_TEST_CONTROL");
         return context.request.fetch(`${info.origin}/__rework-test/${path}`, {

@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { z } from "zod";
 import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
 
@@ -36,6 +36,33 @@ async function reportReady(page: Page) {
       .getByRole("region", { name: "리포트 준비와 검토", exact: true })
       .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
   ).toBeVisible();
+}
+async function stableForeground(locator: Locator) {
+  await expect
+    .poll(() =>
+      locator.evaluate((element) => {
+        for (let node: Element | null = element; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (
+            Number(style.opacity) !== 1 ||
+            style.filter !== "none" ||
+            style.visibility !== "visible" ||
+            node
+              .getAnimations()
+              .some((animation) => animation.playState === "running" || animation.pending)
+          )
+            return false;
+        }
+        return true;
+      }),
+    )
+    .toBe(true);
+  return locator.evaluate((element) => ({
+    opacity: getComputedStyle(element).opacity,
+    filter: getComputedStyle(element).filter,
+    running: element.getAnimations().filter((a) => a.playState === "running").length,
+    openDialogs: document.querySelectorAll("dialog[open]").length,
+  }));
 }
 async function preserveReport(page: Page, directory: string) {
   const current = await page.evaluate(async () => {
@@ -480,15 +507,15 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
     }, testInfo) => {
       const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
       const f = await openReworkBrowserFixture(context, browserOrigin, purpose);
+      const branch = { "직접 해결": "self", "변호사와 해결": "lawyer", "리포트만 저장": "save" }[
+        followup
+      ];
+      const directory = join(
+        "/tmp/baro-625-journeys",
+        String(testInfo.project.name || "chromium"),
+        `${purpose}-${branch}`,
+      );
       try {
-        const branch = { "직접 해결": "self", "변호사와 해결": "lawyer", "리포트만 저장": "save" }[
-          followup
-        ];
-        const directory = join(
-          "/tmp/baro-625-journeys",
-          String(testInfo.project.name || "chromium"),
-          `${purpose}-${branch}`,
-        );
         await mkdir(directory, { recursive: true });
         await page.setViewportSize({ width: 320, height: 844 });
         const path = `/cases/${encodeURIComponent(f.info.caseId)}`;
@@ -503,18 +530,57 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             exact: true,
           }),
         ).toBeVisible();
-        await page.screenshot({ path: join(directory, "materials.png") });
+        await expect(page.getByRole("dialog")).toHaveCount(1);
+        await writeFile(
+          join(directory, "materials-visual.json"),
+          JSON.stringify(await stableForeground(page.getByRole("dialog")), null, 2),
+        );
+        await page.screenshot({ path: join(directory, "materials.png"), animations: "disabled" });
         await page.keyboard.press("Escape");
         await expect(page.getByRole("dialog")).toHaveCount(0);
 
         await openAction(page, "사건 정리 재확인");
         const confirmation = page.getByRole("region", { name: "사건 정리 재확인", exact: true });
-        await confirmation.getByRole("button", { name: "빠진 내용이 있어요", exact: true }).click();
+        // New material/facts invalidate the earlier immutable confirmation.
+        // Consume 01's explicit stale recovery rather than bypassing it.
+        await expect(
+          confirmation.getByRole("region", { name: "사실과 출처", exact: true }),
+        ).toContainText(materialText);
+        await confirmation.getByRole("button", { name: "다시 설명하기", exact: true }).click();
         await page
           .getByRole("textbox", { name: "빠진 내용을 알려주세요", exact: true })
           .fill("방금 올린 계약서의 원본은 제가 보관하고 있습니다.");
         await page.getByRole("button", { name: "변경안 요청하기", exact: true }).click();
-        await confirmation.getByRole("button", { name: "변경안 확정하기", exact: true }).click();
+        const confirmChange = confirmation.getByRole("button", {
+          name: "변경안 확정하기",
+          exact: true,
+        });
+        const refreshExplanation = page
+          .getByRole("dialog")
+          .getByRole("button", { name: "최신 내용 불러오기", exact: true });
+        await expect
+          .poll(
+            async () => (await confirmChange.isVisible()) || (await refreshExplanation.isVisible()),
+          )
+          .toBe(true);
+        if (await refreshExplanation.isVisible()) {
+          const beforeRefresh = f.observations.filter((item) => item.method === "POST").length;
+          await refreshExplanation.click();
+          const explanation = page.getByRole("textbox", {
+            name: "빠진 내용을 알려주세요",
+            exact: true,
+          });
+          await expect(explanation).toHaveValue("방금 올린 계약서의 원본은 제가 보관하고 있습니다.");
+          const requestChange = page.getByRole("button", { name: "변경안 요청하기", exact: true });
+          await expect(requestChange).toBeEnabled();
+          expect(f.observations.filter((item) => item.method === "POST")).toHaveLength(beforeRefresh);
+          await requestChange.click();
+        }
+        await expect(confirmChange).toBeVisible();
+        const beforeConfirmation = (await counters(f)).models.filter(
+          (phase) => phase === "workspace_legal_plan",
+        ).length;
+        await confirmChange.click();
         await expect(confirmation).not.toBeVisible();
         // Confirmation owns automatic admission; this action displays its
         // existing job/result and never asks the user for a search phrase.
@@ -523,9 +589,12 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             async () =>
               (await counters(f)).models.filter((phase) => phase === "workspace_legal_plan").length,
           )
-          .toBeGreaterThanOrEqual(2);
+          .toBeGreaterThan(beforeConfirmation);
         await openAction(page, "법률·판례와 현재 약점 확인");
         const analysis = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
+        await expect(
+          analysis.getByText("현재 기준의 법률·판례 조사", { exact: true }),
+        ).toBeVisible();
         await expect(
           analysis.getByText("관련 판례와 우리 사건 비교", { exact: true }),
         ).toBeVisible();
@@ -541,7 +610,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         if (purpose === "prepare_claim" && followup === "직접 해결")
           await page.screenshot({ path: "/tmp/baro-625-real-conversation-320.png" });
-        await page.screenshot({ path: join(directory, "report.png") });
+        await writeFile(
+          join(directory, "report-visual.json"),
+          JSON.stringify(await stableForeground(report), null, 2),
+        );
+        await page.screenshot({ path: join(directory, "report.png"), animations: "disabled" });
         const preservedPdf = await preserveReport(page, directory);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         const pdfResponse =
@@ -613,7 +686,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           });
           await artifact.delete();
         }
-        await page.screenshot({ path: join(directory, "followup.png") });
+        await writeFile(
+          join(directory, "followup-visual.json"),
+          JSON.stringify(await stableForeground(report), null, 2),
+        );
+        await page.screenshot({ path: join(directory, "followup.png"), animations: "disabled" });
         expect(new URL(page.url()).pathname).toBe(path);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
@@ -632,7 +709,15 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           ).toBe(true);
         }
       } finally {
-        await f.close();
+        try {
+          await mkdir(directory, { recursive: true });
+          await writeFile(
+            join(directory, "protocol.json"),
+            JSON.stringify(f.observations, null, 2),
+          );
+        } finally {
+          await f.close();
+        }
       }
     });
 
