@@ -5,6 +5,15 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.case-materials .evidence-material-open {
+  min-height: 44px;
+  max-width: 100%;
+  height: auto;
+  padding-inline: 0;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
 .evidence-picker-actions {
   display: flex;
   flex-wrap: wrap;

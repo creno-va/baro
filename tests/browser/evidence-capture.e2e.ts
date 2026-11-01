@@ -41,7 +41,7 @@ async function fixture(page: Page, partial = false) {
       return route.fulfill({
         json: {
           file: {
-            id: "synthetic-photo",
+            id: path.split("/").at(-2),
             revision: state.revision,
             name: "합성 사진",
             status: "ready",
@@ -83,10 +83,13 @@ async function fixture(page: Page, partial = false) {
       for (const edit of request.postDataJSON().edits)
         state.edits[edit.observationId] = { text: edit.text, included: edit.included };
       state.revision++;
+      const fileId = path.split("/").at(-2);
+      const file = state.files.find((value) => value.id === fileId);
+      if (file) file.revision = state.revision;
       return route.fulfill({
         json: {
           reviewId: "synthetic-review",
-          fileId: "synthetic-photo",
+          fileId,
           revision: state.revision,
           workspaceRevision: state.revision,
           status: "ready",
@@ -457,4 +460,40 @@ test("foreground refresh recovers processing files and removes deleted files wit
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(stored).toHaveCount(0);
   expect(state.writes).toHaveLength(0);
+});
+
+test("the inline file callback preserves the conversation route and dirty callbacks protect local choices and corrections", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  await expect(page.getByTestId("upload-dirty")).toHaveText("false");
+  await page.getByRole("button", { name: "합성 인라인 자료", exact: true }).click();
+  await expect(page.getByRole("button", { name: "합성 인라인 자료", exact: true })).toBeFocused();
+  await expect(page.getByTestId("inline-file")).toHaveText("synthetic-inline");
+  await expect(page).toHaveURL("/");
+  await choose(page);
+  await expect(page.getByTestId("upload-dirty")).toHaveText("true");
+  await page.getByRole("button", { name: `${photo.name} 첨부 제거`, exact: true }).click();
+  await expect(page.getByTestId("upload-dirty")).toHaveText("false");
+  state.files = [
+    {
+      id: "synthetic-existing",
+      revision: 1,
+      name: "합성 기존 자료.jpg",
+      declaredMediaType: "image/jpeg",
+      byteLength: 4,
+      status: "ready",
+    },
+  ];
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.getByRole("button", { name: "관찰 검토", exact: true }).click();
+  const editor = page.getByRole("region", { name: "새 증거 추가", exact: true });
+  await editor.getByLabel("확인·교정한 내용").first().fill("합성 미저장 교정");
+  await expect(page.getByTestId("upload-dirty")).toHaveText("true");
+  await editor.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
+  await expect(page.getByTestId("upload-dirty")).toHaveText("false");
+  await choose(page);
+  await expect(page.getByTestId("upload-dirty")).toHaveText("true");
+  await page.getByRole("button", { name: "합성 업로드 패널 전환", exact: true }).click();
+  await expect(page.getByTestId("upload-dirty")).toHaveText("false");
 });
