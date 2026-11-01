@@ -185,6 +185,17 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setNotice("");
     setError("");
   }, []);
+  const handleFailure = useCallback(
+    (error: unknown) => {
+      const code = (error as { code?: string })?.code;
+      if (code === "NOT_FOUND" || code === "UNAUTHENTICATED") purge();
+      else if (code === "STALE_REVISION")
+        setState((current) => (current ? { ...current, status: "stale" } : null));
+      else if (code === "CONSENT_REQUIRED") setNeedsConsent(true);
+      setError(failureMessage(error));
+    },
+    [purge],
+  );
   const verify = useCallback(
     async (epoch: number, write = false) => {
       const session = await client.session();
@@ -244,7 +255,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       await verify(epoch);
       if (epoch === sequence.current) accept(next);
     } catch (e) {
-      if (epoch === sequence.current) setError(failureMessage(e));
+      if (epoch === sequence.current) handleFailure(e);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -253,7 +264,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         reload.current();
       }
     }
-  }, [client, props.caseId, verify, accept]);
+  }, [client, props.caseId, verify, accept, handleFailure]);
   reload.current = () => void load();
   const previousReport = useRef({ id: props.reportId, revision: props.reportRevision });
   useEffect(() => {
@@ -315,7 +326,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         if (next && write) props.onChanged?.();
       }
     } catch (e) {
-      if (epoch === sequence.current) setError(failureMessage(e));
+      if (epoch === sequence.current) handleFailure(e);
     } finally {
       lock.current = false;
       setBusy(false);

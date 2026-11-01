@@ -263,3 +263,43 @@ test("consent withdrawal permits local historical path browsing and paused saved
   expect(after.draft).toBe(before.draft);
   expect(after.observations).toBe(0);
 });
+
+for (const code of ["NOT_FOUND", "UNAUTHENTICATED"] as const)
+  test(`server ${code} purges an existing private draft without an account-change event`, async ({
+    page,
+  }) => {
+    await page.goto("/?default");
+    await page.getByRole("button", { name: /^직접 해결/ }).click();
+    await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+    await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+    await page.getByLabel("초안 검토·수정").fill(`PRIVATE-ACCESS-${code}`);
+    await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+    await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+    await expect(page.getByRole("button", { name: "초안 다운로드", exact: true })).toBeEnabled();
+    await page.route("**/api/v2/cases/case/rework/resolution", (route) =>
+      route.fulfill({ status: code === "NOT_FOUND" ? 404 : 401, json: { code } }),
+    );
+    await page.getByRole("button", { name: "초안 다운로드", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("계정");
+    await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText(`PRIVATE-ACCESS-${code}`);
+  });
+
+test("a stale mutation immediately hides the previous draft before a parent refresh", async ({
+  page,
+}) => {
+  await page.goto("/?default");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  await page.getByLabel("초안 검토·수정").fill("PRIVATE-STALE-EDIT");
+  await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+  await page.route("**/api/v2/cases/case/rework/resolution", (route) =>
+    route.fulfill({ status: 409, json: { code: "STALE_REVISION" } }),
+  );
+  await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+  await expect(page.getByRole("alert")).toContainText("사건이나 리포트가 바뀌었어요");
+  await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+  await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("PRIVATE-STALE-EDIT");
+});
