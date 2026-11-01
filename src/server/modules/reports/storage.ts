@@ -115,6 +115,7 @@ type Ports = {
   canonical: ReturnType<typeof createV2ReportsRepository>;
   actor: (ownerId: string) => Actor;
 };
+type BuiltReport = { row: ExportRow; reportFiles?: number };
 const MAX_SELECTED_ZIP_BYTES = 900_000_000;
 export function createReportExports(core: V2Core, deps: ReportDependencies, ports: Ports) {
   const storage = createV2StorageRepository(core),
@@ -144,16 +145,6 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     revision: r.revision,
     kind,
   });
-  const valid = async (actor: Actor, id: string) => {
-    const data = await ports.read(actor, id);
-    if (
-      data.review.sourceDigest !==
-      (await sourceDigest(core, actor, data.row.workspace_id, reportSourceOptions(data.review)))
-    )
-      throw new ReportError("STALE_REVISION");
-    await ports.checkAnalysis?.(actor, data.row.workspace_id, data.review);
-    return data;
-  };
   async function abandon(blobId: string) {
     const journalId = crypto.randomUUID(),
       at = now();
@@ -257,6 +248,12 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
           target: { kind: "report", id: r.id, revision: r.workspace_revision },
           operationId: r.operation_id,
           byteLength: size,
+          reportIdentity: {
+            revision: r.revision,
+            summaryRevision: r.summary_revision,
+            snapshotId: r.snapshot_id,
+            encryptedPayload: r.encrypted_payload,
+          },
         },
       ))
     )
@@ -457,13 +454,20 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
   }
   async function download(
     ownerId: string,
-    r: ExportRow,
+    built: BuiltReport,
     blobId: string,
     kind: ExportIdentity["kind"],
     parentReportId?: string,
   ) {
-    const data = await ports.read(a(ownerId), r.id);
-    const authorize = storedReportFence(
+    const r = built.row;
+    // A newly built artifact already has a schema-validated immutable body.
+    // Only its bounded file count is reused; every live download/stream
+    // authorization below still queries the exact report and stored artifact.
+    const reportFiles =
+      built.reportFiles ?? (await ports.read(a(ownerId), r.id)).body.selectedFiles.length;
+    if (!Number.isInteger(reportFiles) || reportFiles < 0 || reportFiles > 100)
+      throw new ReportError("STORAGE_UNAVAILABLE");
+    const storedFence = storedReportFence(
       core,
       a(ownerId),
       r,
@@ -472,7 +476,10 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       parentReportId,
       deps.sessionId,
     );
-    await authorize();
+    const metadata = await storedFence();
+    const authorize = async () => {
+      await storedFence();
+    };
     const blob = await storage.findBlob(a(ownerId), blobId);
     if (!blob || blob.kind !== kind || blob.key_version !== "report_stream_v1")
       throw new ReportError("NOT_FOUND");
@@ -482,7 +489,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         pdfBytes: kind === "report_pdf" ? blob.logical_bytes : 0,
         zipBytes: kind === "original_zip" ? blob.logical_bytes : 0,
         sourceRows: 0,
-        reportFiles: data.body.selectedFiles.length,
+        reportFiles,
         applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
       }),
     );
@@ -501,10 +508,6 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
     const object = await bucket().get(blob.object_key);
     if (!object || !("body" in object) || object.size !== blob.cipher_bytes)
       throw new ReportError("STORAGE_UNAVAILABLE");
-    const metadata = await core
-      .statement("SELECT encrypted_payload FROM v2_blobs WHERE id=? AND state='stored'", [blobId])
-      .first<string>("encrypted_payload");
-    if (!metadata) throw new ReportError("NOT_FOUND");
     const { contentHash } = await core.decrypt(
       "v2_blobs",
       blobId,
@@ -532,14 +535,32 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       byteLength: blob.logical_bytes,
     };
   }
-  async function build(actor: Actor, id: string, selected?: readonly string[]) {
-    const existing = await ports.row(actor, id);
-    if (!selected && existing.state === "ready" && existing.pdf_blob_id) return existing;
+  async function build(
+    actor: Actor,
+    id: string,
+    selected?: readonly string[],
+  ): Promise<BuiltReport> {
+    if (!selected) {
+      const existing = await ports.row(actor, id);
+      if (existing.state === "ready" && existing.pdf_blob_id) return { row: existing };
+    }
     await requireReportConsent(core, actor);
     if (!test && !deps.costs) throw new ReportError("BUDGET_UNAVAILABLE");
-    const data = await valid(actor, id),
+    const data = await ports.read(actor, id),
       r = data.row;
-    if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) return r;
+    if (r.state === "ready" && r.pdf_blob_id && (!selected || r.zip_blob_id)) {
+      if (
+        data.review.sourceDigest !==
+        (await sourceDigest(core, actor, r.workspace_id, reportSourceOptions(data.review)))
+      )
+        throw new ReportError("STALE_REVISION");
+      await ports.checkAnalysis?.(actor, r.workspace_id, data.review);
+      return { row: r, reportFiles: data.body.selectedFiles.length };
+    }
+    await ports.checkAnalysis?.(actor, r.workspace_id, data.review);
+    // The fresh export fence below authenticates the same source digest and
+    // official originals before any lease, font, renderer or storage work.
+    // Re-reading that digest here duplicates the complete source pass.
     const fence = await exportFence(
       core,
       actor,
@@ -695,7 +716,6 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         ))
       )
         throw new ReportError("NOT_FOUND");
-      return ports.row(a(actor.ownerId), id);
     } catch (error) {
       allowReportCleanup(core);
       for (const blobId of written) await abandon(blobId);
@@ -729,22 +749,39 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         throw new ReportError("EXPORT_RETRY_EXHAUSTED");
       throw error;
     }
+    // Completion already committed its actual receipts. A failed readonly
+    // handoff must not abandon those artifacts or turn completion into retry.
+    const completed = await ports.row(a(actor.ownerId), id);
+    if (
+      completed.id !== r.id ||
+      completed.revision !== r.revision ||
+      completed.snapshot_id !== r.snapshot_id ||
+      completed.encrypted_payload !== r.encrypted_payload ||
+      completed.workspace_id !== r.workspace_id ||
+      completed.workspace_revision !== r.workspace_revision ||
+      completed.summary_revision !== r.summary_revision ||
+      completed.operation_id !== r.operation_id
+    )
+      throw new ReportError("STALE_REVISION");
+    return { row: completed, reportFiles: data.body.selectedFiles.length };
   }
   return {
     async pdf(actor: Actor, id: string) {
-      const r = await build(actor, id);
+      const built = await build(actor, id),
+        r = built.row;
       if (!r.pdf_blob_id) throw new ReportError("STORAGE_UNAVAILABLE");
-      return download(actor.ownerId, r, r.pdf_blob_id, "report_pdf");
+      return download(actor.ownerId, built, r.pdf_blob_id, "report_pdf");
     },
     async storedZip(actor: Actor, id: string, parentReportId: string) {
       const r = await ports.row(actor, id);
       if (r.state !== "ready" || !r.zip_blob_id) throw new ReportError("NOT_FOUND");
-      return download(actor.ownerId, r, r.zip_blob_id, "original_zip", parentReportId);
+      return download(actor.ownerId, { row: r }, r.zip_blob_id, "original_zip", parentReportId);
     },
     async zip(actor: Actor, id: string, selected: readonly string[]) {
-      const r = await build(actor, id, selected);
+      const built = await build(actor, id, selected),
+        r = built.row;
       if (!r.zip_blob_id) throw new ReportError("STORAGE_UNAVAILABLE");
-      return download(actor.ownerId, r, r.zip_blob_id, "original_zip");
+      return download(actor.ownerId, built, r.zip_blob_id, "original_zip");
     },
   };
 }

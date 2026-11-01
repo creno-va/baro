@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createFilesClient, reworkReportViewSchema } from "@baro/api-client";
+import { ApiError, createFilesClient, reworkReportViewSchema } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { z } from "zod";
 import { EXPECTED_OWNER_HEADER } from "../src/contracts/session";
@@ -82,12 +82,10 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           undefined,
           { metadataOnly: true },
         );
-        const ready = await until(
-          async () =>
-            (await files.list(f.info.caseId, { metadataOnly: true })).find(
-              (file) => file.id === uploaded.id,
-            ),
-          (value) => value?.status === "ready" || value?.status === "failed",
+        const ready = await untilAcceptedFileReady(f, uploaded.id, async () =>
+          (await files.list(f.info.caseId, { metadataOnly: true })).find(
+            (file) => file.id === uploaded.id,
+          ),
         );
         expect(ready?.status).toBe("ready");
         expect(new TextDecoder().decode(await files.original(f.info.caseId, uploaded.id))).toBe(
@@ -114,7 +112,13 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         const artifactDir = Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR
           ? `${Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR}/${purpose}`
           : null;
-        if (artifactDir) await Bun.write(`${artifactDir}/report.pdf`, bytes);
+        if (artifactDir) {
+          await Bun.write(`${artifactDir}/report.pdf`, bytes);
+          const html = await request(`/api/v2/reports/${review.id}/html`);
+          expect(html.ok).toBe(true);
+          await Bun.write(`${artifactDir}/report.html`, await html.text());
+          await Bun.write(`${artifactDir}/review.json`, JSON.stringify(review, null, 2));
+        }
         const observed = await stats(f);
         expect(observed.native).toMatchObject({ probe: 1, process: 1, report: 1 });
         expect(observed.artifacts.pdf).toEqual([
@@ -319,6 +323,46 @@ async function until<T>(read: () => Promise<T>, ready: (value: T) => boolean) {
     await Bun.sleep(10);
   }
   throw new Error("SYNTHETIC_FIXTURE_WAIT_LIMIT");
+}
+async function untilAcceptedFileReady<T extends { id: string; status: string }>(
+  f: Fixture,
+  acceptedFileId: string,
+  read: () => Promise<T | undefined>,
+) {
+  let lastFailure: unknown;
+  for (let attempt = 0; attempt < 500; attempt++) {
+    try {
+      const value = await read();
+      lastFailure = undefined;
+      if (value && value.id !== acceptedFileId) throw new Error("SYNTHETIC_FILE_MISMATCH");
+      if (value?.status === "ready" || value?.status === "failed") return value;
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.code !== "UNAVAILABLE" || !cause.retryable)
+        throw cause;
+      const response = await f.control(new Request("http://127.0.0.1:4396/__rework-test/stats"));
+      if (!response?.ok) throw cause;
+      const { jobs } = z
+        .object({
+          jobs: z.array(
+            z.object({ kind: z.string(), status: z.string(), total: z.number().int().positive() }),
+          ),
+        })
+        .parse(await response.json());
+      // This fresh case accepts exactly this one file. Its single admitted file
+      // job must still be active; a completed/failed/missing job cannot justify
+      // retrying a storage failure. Other reads/mutations never use this path.
+      const fileJobs = jobs.filter((job) => job.kind === "file_processing");
+      if (
+        fileJobs.reduce((sum, job) => sum + job.total, 0) !== 1 ||
+        !fileJobs.every((job) => ["queued", "running", "validating"].includes(job.status))
+      )
+        throw cause;
+      lastFailure = cause;
+    }
+    await Bun.sleep(10);
+  }
+  if (lastFailure) throw lastFailure;
+  throw new Error("SYNTHETIC_FILE_WAIT_LIMIT");
 }
 async function prepare(f: Fixture) {
   for (let round = 0; round < 2; round++) {

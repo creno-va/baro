@@ -74,7 +74,11 @@ type Work = {
 function stage(sql: string): Stage {
   if (sql === REPORT_SOURCE_SQL) return "source_rows";
   if (sql.startsWith("WITH source AS")) return "export_fence";
-  if (sql.startsWith("SELECT 1 FROM v2_reports r JOIN v2_workspaces")) return "stored_fence";
+  if (
+    sql.startsWith("SELECT 1 FROM v2_reports r JOIN v2_workspaces") ||
+    sql.startsWith("SELECT b.encrypted_payload AS blob_envelope FROM v2_reports")
+  )
+    return "stored_fence";
   if (sql.startsWith("SELECT r.*") && sql.includes(" FROM v2_reports")) return "report_access";
   if (/^(SELECT|WITH)/.test(sql)) {
     if (sql.includes("FROM v2_private_parts")) return "snapshot_parts";
@@ -677,10 +681,11 @@ test("canonical report v2 read/review/PDF/HTML separates database, render and of
       { operation: "get_initial", calls: 61, statements: 85 },
       { operation: "save_review", calls: 69, statements: 95 },
       { operation: "get_saved", calls: 15, statements: 17 },
-      // One owned report capture + two atomic (header/part/publish) proofs.
+      // Both atomic proofs remain. The immutable count and report identity
+      // avoid duplicate reads; stored fences also return/pin blob metadata.
       // Existing request/plan/row/byte limits are unchanged.
-      { operation: "pdf_first", calls: 100, statements: 133 },
-      { operation: "pdf_saved", calls: 32, statements: 34 },
+      { operation: "pdf_first", calls: 90, statements: 121 },
+      { operation: "pdf_saved", calls: 31, statements: 33 },
       { operation: "html", calls: 20, statements: 24 },
       { operation: "generate", calls: 61, statements: 85 },
     ]);

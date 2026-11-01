@@ -215,11 +215,12 @@ export function storedReportFence(
   sessionId?: string,
 ) {
   const column = kind === "report_pdf" ? "pdf_blob_id" : "zip_blob_id";
+  let envelope: string | undefined;
   return async () => {
     const session = reportSessionFence(sessionId);
     const ok = await core
       .statement(
-        `SELECT 1 FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.${column} JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.${column}=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND b.state='stored' AND b.visibility='private' AND b.kind='${kind}' AND p.owner_id=w.owner_id AND x.entity_id=r.id ${parentReportId ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=r.revision AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) ${session.sql}`,
+        `SELECT b.encrypted_payload AS blob_envelope FROM v2_reports r JOIN v2_workspaces w ON w.id=r.workspace_id JOIN user u ON u.id=w.owner_id JOIN v2_blobs b ON b.id=r.${column} JOIN v2_storage_reservations x ON x.id=b.reservation_id JOIN v2_billing_principals p ON p.id=b.principal_id WHERE r.id=? AND r.revision=? AND r.snapshot_id=? AND r.encrypted_payload=? AND r.${column}=? AND r.state='ready' AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=r.id) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') AND b.state='stored' AND b.visibility='private' AND b.kind='${kind}' AND p.owner_id=w.owner_id AND x.entity_id=r.id ${parentReportId ? "AND EXISTS(SELECT 1 FROM v2_reports parent WHERE parent.id=? AND parent.workspace_id=w.id AND parent.revision=r.revision AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=parent.id))" : ""} AND x.state!='released' AND NOT EXISTS(SELECT 1 FROM v2_report_selections s LEFT JOIN v2_files f ON f.id=s.file_id WHERE s.report_id=r.id AND (f.id IS NULL OR f.workspace_id!=w.id OR EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id))) ${session.sql}`,
         [
           report.id,
           report.revision,
@@ -231,8 +232,15 @@ export function storedReportFence(
           ...session.values,
         ],
       )
-      .first();
-    if (!ok) throw new ReportError("NOT_FOUND");
+      .first<{ blob_envelope: string }>();
+    if (
+      !ok ||
+      typeof ok.blob_envelope !== "string" ||
+      (envelope !== undefined && envelope !== ok.blob_envelope)
+    )
+      throw new ReportError("NOT_FOUND");
+    envelope = ok.blob_envelope;
+    return envelope;
   };
 }
 export async function requireReportConsent(core: V2Core, actor: Actor) {
