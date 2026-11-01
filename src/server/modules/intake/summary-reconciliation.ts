@@ -89,6 +89,8 @@ export function assertReconciliationPreserves(before: V2Summary, after: V2Summar
     const next = retained.get(fact.id);
     if (
       !next ||
+      next.attribution !== fact.attribution ||
+      next.userEdited !== fact.userEdited ||
       !fact.references.every((ref) => next.references.some((candidate) => same(candidate, ref))) ||
       !fact.conflictingFactIds.every((id) => next.conflictingFactIds.includes(id)) ||
       (fact.significance === "unfavorable" && next.significance !== "unfavorable") ||
@@ -99,7 +101,8 @@ export function assertReconciliationPreserves(before: V2Summary, after: V2Summar
   }
   if (
     !before.unknowns.every((unknown) => after.unknowns.includes(unknown)) ||
-    !before.parties.every((party) => after.parties.some((next) => next.id === party.id))
+    !before.parties.every((party) => after.parties.some((next) => next.id === party.id)) ||
+    after.facts.some((fact) => fact.userEdited && !before.facts.some((old) => old.id === fact.id))
   )
     throw new SummaryReconciliationError("POLICY_REJECTED");
 }
@@ -178,10 +181,30 @@ export function createSummaryReconciliationService(deps: SummaryReconciliationDe
         });
         assertReconciliationPreserves(before, proposal.after);
         const oldFacts = new Map(before.facts.map((fact) => [fact.id, fact]));
-        assertWorkspaceFacts(
-          generation.context,
-          proposal.after.facts.filter((fact) => !same(fact, oldFacts.get(fact.id))),
+        const changedFacts = proposal.after.facts.filter(
+          (fact) => !same(fact, oldFacts.get(fact.id)),
         );
+        assertWorkspaceFacts(generation.context, changedFacts);
+        for (const fact of changedFacts) {
+          if (
+            fact.attribution !== "user_material" ||
+            ["uncertain", "conflicting"].includes(fact.certainty)
+          )
+            continue;
+          const uncertainSource = generation.context.materials.some((source) => {
+            if (
+              !fact.references.some((ref) => same(ref, source.reference)) ||
+              !source.text.includes(fact.text)
+            )
+              return false;
+            const coverage = source.coverage as {
+              observationCertainty?: string;
+              userEdited?: boolean;
+            } | null;
+            return coverage?.observationCertainty === "uncertain" || coverage?.userEdited === true;
+          });
+          if (uncertainSource) throw new SummaryReconciliationError("POLICY_REJECTED");
+        }
         if (
           !(
             await deps.audit({

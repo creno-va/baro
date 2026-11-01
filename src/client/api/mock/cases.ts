@@ -92,7 +92,10 @@ function replay<T>(operation: string, raw: unknown, key: string, run: () => T): 
   writeStore("caseRequests", Object.fromEntries(Object.entries(receipts).slice(-100)));
   return response;
 }
-function makeQuestions(narrative: string, subject: "individual" | "company"): QuestionView[] {
+export function makeMockQuestions(
+  narrative: string,
+  subject: "individual" | "company",
+): QuestionView[] {
   const money = /돈|송금|대금|빌려|보증금|급여|월급/.test(narrative);
   const work = /월급|급여|퇴직|해고|회사|근로/.test(narrative);
   return [
@@ -191,7 +194,7 @@ export const casesMockHandlers = {
       };
       owners[item.id] = user;
       writeStore("caseOwners", owners);
-      const questions = makeQuestions(input.narrative, input.subjectContext);
+      const questions = makeMockQuestions(input.narrative, input.subjectContext);
       store(item, {
         narrative: input.narrative,
         questions,
