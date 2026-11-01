@@ -484,7 +484,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'금전 대여 사건'"
+          "default": "'\uae08\uc804 \ub300\uc5ec \uc0ac\uac74'"
         },
         "status": {
           "name": "status",
@@ -1426,6 +1426,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "over_14_confirmed": {
+          "name": "over_14_confirmed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "consented_at": {

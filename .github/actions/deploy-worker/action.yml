@@ -60,7 +60,7 @@ runs:
       shell: bash
       env:
         DEPLOY_ENVIRONMENT: ${{ inputs.target-environment }}
-      run: bun scripts/apply-d1-migrations.ts "$DEPLOY_ENVIRONMENT"
+      run: bun scripts/apply-d1-migrations.ts "$DEPLOY_ENVIRONMENT" --before 0021_drop_consent_age.sql
 
     - name: Configure model capability independently of costs
       shell: bash
@@ -83,6 +83,12 @@ runs:
           NAVER_CLIENT_SECRET
           KAKAO_CLIENT_ID
           KAKAO_CLIENT_SECRET
+
+    - name: Apply post-cutover migrations
+      shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.target-environment }}
+      run: bun scripts/apply-d1-migrations.ts "$DEPLOY_ENVIRONMENT"
 
     - name: Verify release, schema and endpoint behavior
       shell: bash

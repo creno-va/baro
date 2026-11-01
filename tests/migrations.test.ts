@@ -42,6 +42,8 @@ test("age removal upgrade preserves policy receipts and auth rows, restores dire
     };
     const migration = await Bun.file("drizzle/0020_remove_consent_age.sql").text();
     db.sqlite.transaction(() => db.sqlite.exec(migration))();
+    const contract = await Bun.file("drizzle/0021_drop_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(contract))();
     expect(db.sqlite.query("SELECT * FROM user_consents").all()).toEqual(receipts);
     expect(untouched.map((table) => db.sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(
       before,
@@ -75,6 +77,39 @@ test("age removal upgrade preserves policy receipts and auth rows, restores dire
         sql: string;
       },
     ).toMatchObject({ sql: expect.not.stringContaining("over_14_confirmed") });
+  } finally {
+    db.close();
+  }
+});
+
+test("consent expansion supports the old reader and new age-free writes until Worker cutover", async () => {
+  const db = await createTestDatabase({ throughMigration: "0019_self_profile_listing" });
+  try {
+    const old = await seedTestSession(db, { consent: true });
+    const fresh = await seedTestSession(db);
+    const expand = await Bun.file("drizzle/0020_remove_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(expand))();
+    expect(
+      db.sqlite.query("SELECT user_id FROM user_consents WHERE over_14_confirmed=1").all(),
+    ).toEqual([{ user_id: old.userId }]);
+    const database = drizzle(db.binding, { schema });
+    await saveConsent(database, fresh.userId, CURRENT_POLICY_VERSIONS);
+    expect(
+      db.sqlite
+        .query("SELECT over_14_confirmed FROM user_consents WHERE user_id=?")
+        .get(fresh.userId),
+    ).toEqual({ over_14_confirmed: null });
+    expect(await hasCurrentConsent(database, fresh.userId)).toBe(true);
+    const receipts = db.sqlite
+      .query(
+        "SELECT user_id,terms_version,privacy_version,ai_notice_version,consented_at FROM user_consents ORDER BY user_id",
+      )
+      .all();
+    const contract = await Bun.file("drizzle/0021_drop_consent_age.sql").text();
+    db.sqlite.transaction(() => db.sqlite.exec(contract))();
+    expect(db.sqlite.query("SELECT * FROM user_consents ORDER BY user_id").all()).toEqual(receipts);
+    expect(await hasCurrentConsent(database, fresh.userId)).toBe(true);
+    expect(db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
   } finally {
     db.close();
   }
@@ -218,7 +253,7 @@ test("fresh migrations retain consent FK and cascade without an age field", asyn
     sqlite.exec("DELETE FROM user WHERE id='u'");
     expect(sqlite.query("SELECT * FROM user_consents").all()).toEqual([]);
     expect(sqlite.query("SELECT value FROM app_metadata WHERE key='schema_version'").get()).toEqual(
-      { value: "0020_remove_consent_age" },
+      { value: "0021_drop_consent_age" },
     );
   } finally {
     database.close();
