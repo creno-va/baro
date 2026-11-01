@@ -59,3 +59,28 @@ test("320px: read actions fit the page and keep touch targets", async ({ page })
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
 });
+
+for (const [purpose, subject] of [
+  ["고소·청구를 준비하고 싶어요", "개인"],
+  ["상대방 주장에 대응하고 싶어요", "기업"],
+] as const) {
+  test(`${purpose}: saves a separate subject context and resumes the same purpose`, async ({
+    page,
+  }) => {
+    await seed(page);
+    await page.goto("/app");
+    await page.getByRole("radio", { name: purpose, exact: true }).check();
+    await page.getByRole("radio", { name: subject, exact: true }).check();
+    await page
+      .getByLabel("지금까지 있었던 일")
+      .fill("실제 사건이 없는 합성 입력입니다. 서로 다른 입장과 기업 맥락을 따로 저장합니다.");
+    await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+    await expect(page).toHaveURL(/\/intake$/);
+    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
+    await expect(page.getByText(`${subject} 사건`, { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
+    await expect(page.getByText(`${subject} 사건`, { exact: true })).toBeVisible();
+    await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+  });
+}

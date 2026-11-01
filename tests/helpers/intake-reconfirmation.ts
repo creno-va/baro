@@ -1,5 +1,6 @@
 import type { CaseView } from "../../src/client/api/types";
 import { type V2Summary, v2SummarySchema } from "../../src/contracts/v2";
+import type { WorkspaceContext } from "../../src/server/modules/workspace/pipeline";
 
 /** Entirely synthetic: no model, provider, or private case is used. */
 export function reconfirmationSummary(): V2Summary {
@@ -104,4 +105,63 @@ export function reconfirmationCandidate(): V2Summary {
     ],
     unknowns: [...original.unknowns, "일부 반환받은 정확한 금액은 미확인입니다."],
   });
+}
+
+export function reconfirmationContext(): WorkspaceContext {
+  const summary = reconfirmationSummary();
+  const first = summary.facts[0];
+  const material = summary.facts[1];
+  const adverse = summary.facts[2];
+  const reference = material?.references[0];
+  if (!first || !material || !adverse || reference?.kind !== "user_material")
+    throw new Error("Invalid synthetic provenance fixture");
+  return {
+    subjectContext: "company",
+    intake: {
+      schemaVersion: "2",
+      revision: 7,
+      status: "confirmed",
+      narrative: adverse.text,
+      batches: [
+        {
+          id: "synthetic-batch",
+          ordinal: 1,
+          generatedForIntakeRevision: 7,
+          questions: [
+            {
+              id: "synthetic-date",
+              prompt: "지급일은 언제였나요?",
+              answerType: "text",
+              options: [],
+            },
+          ],
+          answers: [{ questionId: "synthetic-date", status: "answered", value: first.text }],
+        },
+      ],
+      summary,
+      confirmedSummaryRevision: 3,
+      currentJobId: null,
+    },
+    confirmedSummary: summary,
+    facts: summary.facts,
+    messages: [],
+    latestMessage: {
+      id: "synthetic-reconciliation-request",
+      operationId: "synthetic-reconciliation-operation",
+      role: "user",
+      text: syntheticReconfirmationExplanation,
+      selectedFileIds: [],
+      workspaceRevision: 12,
+      createdAt: summary.createdAt,
+    },
+    citations: [],
+    materials: [{ reference, text: material.text, coverage: { complete: true } }],
+    references: {
+      intakeRevision: 7,
+      answeredQuestionIds: ["synthetic-date"],
+      messages: [{ id: "synthetic-reconciliation-request", workspaceRevision: 12 }],
+      files: [{ id: "synthetic-contract", revision: 2, category: "document", pageCount: 1 }],
+      verifiedCitationIds: [],
+    },
+  };
 }
