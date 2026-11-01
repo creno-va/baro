@@ -41,6 +41,7 @@ import {
   type ReportReviewData,
   reportFile,
   reportReviewSchema,
+  reportSourceOptions,
   reportText,
   sourceDigest,
   validateOriginalSelection,
@@ -100,7 +101,13 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     excluded: readonly string[],
     mask = false,
   ) => {
-    const source = await buildReportSource(core, a, caseId, excluded, deps.guideHosts);
+    const options = deps.readPreparedAnalysis
+      ? {
+          includeAnalysis: true as const,
+          scope: { excludedFileIds: excluded, maskIdentifiers: mask },
+        }
+      : undefined;
+    const source = await buildReportSource(core, a, caseId, excluded, deps.guideHosts, options);
     if (!deps.readPreparedAnalysis)
       return { ...source, analysis: undefined, analysisIdentity: undefined };
     const snapshot = await deps.readPreparedAnalysis(a, caseId);
@@ -220,7 +227,9 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
   };
   const view = async (a: Actor, id: string) => {
     const data = await read(a, id);
-    let stale = data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id));
+    let stale =
+      data.review.sourceDigest !==
+      (await sourceDigest(core, a, data.row.workspace_id, reportSourceOptions(data.review)));
     try {
       await checkAnalysis(a, data.row.workspace_id, data.review);
     } catch (error) {
@@ -321,7 +330,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     const current = await ownedWorkspace(core, a, caseId);
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
-    if (review.sourceDigest !== (await sourceDigest(core, a, caseId)))
+    if (review.sourceDigest !== (await sourceDigest(core, a, caseId, reportSourceOptions(review))))
       throw new ReportError("STALE_REVISION");
     await checkAnalysis(a, caseId, review);
     const id = review.parentReportId ? `export-${crypto.randomUUID()}` : crypto.randomUUID();
@@ -503,7 +512,11 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         sourceDigest: source.digest,
         parentReportId: null,
         ...(source.analysis
-          ? { analysis: source.analysis, analysisIdentity: source.analysisIdentity }
+          ? {
+              sourceFormat: "analysis_sources_v1" as const,
+              analysis: source.analysis,
+              analysisIdentity: source.analysisIdentity,
+            }
           : {}),
       };
       const id = await reportReadStep("create", () =>
@@ -554,7 +567,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       if (!prior || prior.revision !== value.expectedRevision)
         throw new ReportError("STALE_REVISION");
       const old = await read(a, prior.id);
-      if (old.review.sourceDigest !== (await sourceDigest(core, a, caseId)))
+      if (
+        old.review.sourceDigest !==
+        (await sourceDigest(core, a, caseId, reportSourceOptions(old.review)))
+      )
         throw new ReportError("STALE_REVISION");
       await checkAnalysis(a, caseId, old.review);
       const source = await preparedSource(a, caseId, value.excludedFileIds, value.maskIdentifiers);
@@ -608,6 +624,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         format: "client_review_v1" as const,
         sourceDigest: source.digest,
         ...(analysis ? { analysis } : {}),
+        ...(source.analysis ? { sourceFormat: "analysis_sources_v1" as const } : {}),
         ...(source.analysisIdentity !== undefined
           ? { analysisIdentity: source.analysisIdentity }
           : {}),
@@ -674,7 +691,11 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         sourceDigest: source.digest,
         parentReportId: null,
         ...(source.analysis
-          ? { analysis: source.analysis, analysisIdentity: source.analysisIdentity }
+          ? {
+              sourceFormat: "analysis_sources_v1" as const,
+              analysis: source.analysis,
+              analysisIdentity: source.analysisIdentity,
+            }
           : {}),
       };
       const id = await createRecord(
@@ -786,7 +807,10 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const a = actor(ownerId),
         data = await read(a, id);
       validateOriginalSelection(data.body, data.review.excludedFileIds, selectedFileIds);
-      if (data.review.sourceDigest !== (await sourceDigest(core, a, data.row.workspace_id)))
+      if (
+        data.review.sourceDigest !==
+        (await sourceDigest(core, a, data.row.workspace_id, reportSourceOptions(data.review)))
+      )
         throw new ReportError("STALE_REVISION");
       const exportId = await createRecord(
         a,

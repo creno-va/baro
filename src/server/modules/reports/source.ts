@@ -52,8 +52,22 @@ export const reportReviewSchema = z.strictObject({
   analysis: reportAnalysisReviewSchema.optional(),
   /** Exact current analysis identity, including a filtered result that cannot be displayed. */
   analysisIdentity: z.string().max(5000).nullable().optional(),
+  sourceFormat: z.literal("analysis_sources_v1").optional(),
 });
 export type ReportReviewData = z.infer<typeof reportReviewSchema>;
+export type ReportSourceOptions = {
+  includeAnalysis: true;
+  scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean };
+};
+export const reportSourceOptions = (
+  review: Pick<ReportReviewData, "sourceFormat" | "excludedFileIds" | "maskIdentifiers">,
+): ReportSourceOptions | undefined =>
+  review.sourceFormat === "analysis_sources_v1"
+    ? {
+        includeAnalysis: true,
+        scope: { excludedFileIds: review.excludedFileIds, maskIdentifiers: review.maskIdentifiers },
+      }
+    : undefined;
 function coverageText(value: V2Coverage | null) {
   if (!value) return "처리 범위를 확인하지 못함 · 원본에서 직접 확인 필요";
   const labels = {
@@ -125,7 +139,9 @@ export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
 /** Internal report/storage revisions do not make the source stale. Track the
  * actual summary, messages, material coverage, actions and timeline identities.
  * D1 limits each compound SELECT to five terms. Keep this one ordered statement
- * for exportFence, nesting two groups of four without changing bind order.
+ * for exportFence, with two groups of four plus two opt-in identities.
+ * Flag zero preserves legacy rows/digests. Context ciphertext changes are source
+ * changes; its constant row revision excludes report bookkeeping bumps.
  * json_set appends the final keys within D1's 32-argument function limit while
  * preserving JSON key order and null values used by existing source digests.
  * A competing original can invalidate a bound source without modifying its row.
@@ -138,12 +154,15 @@ export const REPORT_SOURCE_SQL = `SELECT * FROM (SELECT 'summary' AS kind,s.id,s
     ) UNION ALL SELECT * FROM (SELECT 'message',id,revision,created_at FROM v2_messages WHERE workspace_id=?
     UNION ALL SELECT 'action',id,revision,'' FROM v2_actions WHERE workspace_id=?
     UNION ALL SELECT 'timeline',id,revision,'' FROM v2_timeline WHERE workspace_id=?
-    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_set(json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at),'$.verified',s.verified_at,'$.expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END || CASE WHEN ${NO_NEWER_CONFLICTING_SOURCE_SQL} THEN '' ELSE ':superseded' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=?) ORDER BY kind,id`;
+    UNION ALL SELECT 'citation',c.id,c.snapshot_revision,c.citation_json || ':' || json_set(json_object('id',s.source_id,'type',s.source_type,'officialId',s.official_id,'version',s.version,'section',s.section,'hash',s.content_hash,'extractor',s.extractor_version,'url',s.canonical_url,'title',s.title,'date',s.source_date,'court',s.court,'case',s.case_number,'institution',s.institution_id,'endpoint',s.endpoint_id,'rights',s.rights_provenance,'fetched',s.fetched_at),'$.verified',s.verified_at,'$.expires',s.expires_at) || ':' || CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? THEN 'fresh' ELSE 'unavailable' END || CASE WHEN ${NO_NEWER_CONFLICTING_SOURCE_SQL} THEN '' ELSE ':superseded' END FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=?)
+    UNION ALL SELECT 'analysis',r.id,r.revision,r.encrypted_payload || ':' || r.workspace_revision || ':' || r.part_count || ':' || r.byte_length FROM v2_rework_records r WHERE ?=1 AND r.workspace_id=? AND r.owner_id=? AND r.kind='analysis' AND r.entity_id=r.workspace_id AND r.state='published' AND r.revision=(SELECT max(newer.revision) FROM v2_rework_records newer WHERE newer.workspace_id=r.workspace_id AND newer.owner_id=r.owner_id AND newer.kind=r.kind AND newer.entity_id=r.entity_id AND newer.state='published')
+    UNION ALL SELECT 'case_context',w.id,1,w.encrypted_payload FROM v2_workspaces w WHERE ?=1 AND w.id=? AND w.owner_id=? ORDER BY kind,id`;
 export async function reportSourceRows(
   core: V2Core,
   actor: Actor,
   id: string,
   verifiedOriginal?: (citationId: string, body: string) => void,
+  options?: ReportSourceOptions,
 ) {
   const rows = (
     await core
@@ -159,6 +178,12 @@ export async function reportSourceRows(
         actor.now,
         actor.now,
         id,
+        options?.includeAnalysis ? 1 : 0,
+        id,
+        actor.ownerId,
+        options?.includeAnalysis ? 1 : 0,
+        id,
+        actor.ownerId,
       ])
       .all<{ kind: string; id: string; revision: number; snapshot: string }>()
   ).results;
@@ -181,21 +206,35 @@ export async function reportSourceRows(
   }
   return rows;
 }
-export async function sourceDigest(core: V2Core, actor: Actor, id: string) {
+export async function sourceDigest(
+  core: V2Core,
+  actor: Actor,
+  id: string,
+  options?: ReportSourceOptions,
+) {
   const workspace = await ownedWorkspace(core, actor, id);
-  const rows = await reportSourceRows(core, actor, id);
-  return reportSourceDigest(workspace.confirmed_summary_revision, workspace.status, rows);
+  const rows = await reportSourceRows(core, actor, id, undefined, options);
+  return reportSourceDigest(workspace.confirmed_summary_revision, workspace.status, rows, options);
 }
 export function reportSourceDigest(
   summary: number | null,
   status: string,
   rows: { id: string; kind: string; revision: number; snapshot: string }[],
+  options?: ReportSourceOptions,
 ) {
   // Preserve runtimeDigest's alphabetical canonical key order for existing reports,
   // while source identities may exceed its unrelated 64 KiB paid-proof limit.
   return digest(
     new TextEncoder().encode(
       JSON.stringify({
+        ...(options
+          ? {
+              analysisScope: {
+                excludedFileIds: [...options.scope.excludedFileIds].sort(),
+                maskIdentifiers: options.scope.maskIdentifiers,
+              },
+            }
+          : {}),
         rows: rows.map(({ id, kind, revision, snapshot }) => ({ id, kind, revision, snapshot })),
         status,
         summary,
@@ -278,11 +317,12 @@ export async function buildReportSource(
   id: string,
   excluded: readonly string[],
   guideHosts: readonly string[] = [],
+  options?: ReportSourceOptions,
 ) {
   const current = await ownedWorkspace(core, actor, id);
   if (current.status !== "active" || !current.confirmed_summary_revision)
     throw new ReportError("REVIEW_REQUIRED");
-  const digest = await sourceDigest(core, actor, id);
+  const digest = await sourceDigest(core, actor, id, options);
   const workspace = createV2WorkspaceRepository(core.binding, core.cipher, guideHosts);
   const intake = await workspace.readIntake(actor, id),
     summary = intake?.summary;
@@ -469,7 +509,8 @@ export async function buildReportSource(
     ],
     generatedAt: actor.now,
   });
-  if ((await sourceDigest(core, actor, id)) !== digest) throw new ReportError("STALE_REVISION");
+  if ((await sourceDigest(core, actor, id, options)) !== digest)
+    throw new ReportError("STALE_REVISION");
   // Display-only metadata from the same authenticated intake read. Never use
   // reference/fact order as a question number or modify canonical provenance.
   const display: ReportDisplayContext = {

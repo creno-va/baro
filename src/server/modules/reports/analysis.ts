@@ -223,7 +223,17 @@ export function reportAnalysisText(body: V2ReportBody, base: string, review: Rep
             heading(
               `${requirement.label} · ${{ supported: "근거 연결됨", insufficient: "요건 확인 필요", conflicting: "상반된 사실 확인 필요" }[requirement.assessment]}`,
             ),
-            bullet(`관련 법 조항 · ${support(requirement.sourceClaimIds)}`),
+            ...requirement.sourceClaimIds.flatMap((id) => {
+              const claim = claims.get(id);
+              const citation = claim ? citations.get(claim.citationId) : undefined;
+              if (!claim || citation?.kind !== "statute") return [];
+              return [
+                bullet(`관련 법 조항 · ${citation.title} ${citation.article} (${support([id])})`),
+                ...(claim.kind === "legal_explanation"
+                  ? [bullet(`요건 검토 설명 · ${claim.text}`)]
+                  : []),
+              ];
+            }),
             ...facts(requirement.factIds),
             ...evidence(requirement.evidence),
             ...facts(requirement.conflictingFactIds).map((line) =>

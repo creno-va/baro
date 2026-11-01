@@ -52,6 +52,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       f.statute.source.body,
       f.precedent.source.body,
       "반환 약정과 이행 조건",
+      `관련 법 조항 · ${f.statute.citation.title} ${f.statute.citation.kind === "statute" ? f.statute.citation.article : ""} (근거 1)`,
       "증거 1 · 1쪽",
       "송금 경위가 공통입니다.",
       "판례에는 서명 원본이 있으나 사건에는 원본을 확인하지 못했습니다.",

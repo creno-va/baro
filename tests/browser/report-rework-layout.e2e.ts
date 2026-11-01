@@ -18,6 +18,17 @@ for (const side of ["claim", "response"])
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
+        await expect(page.locator(".report-inline-photo img")).toBeVisible();
+        if (format === "html") {
+          const ratio = await page
+            .locator(".baro-report .hero")
+            .evaluate(
+              (hero) =>
+                hero.querySelector("h1")!.getBoundingClientRect().width /
+                hero.getBoundingClientRect().width,
+            );
+          expect(ratio).toBeGreaterThan(0.95);
+        }
         if (format === "web") {
           await expect(page.locator(".report-inline-photo img")).toBeVisible();
           const widths = await page

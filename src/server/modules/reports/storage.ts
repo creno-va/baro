@@ -26,6 +26,7 @@ import {
   ownedWorkspace,
   ReportError,
   type ReportReviewData,
+  reportSourceOptions,
   sourceDigest,
   validateOriginalSelection,
 } from "./source";
@@ -136,7 +137,10 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
   });
   const valid = async (actor: Actor, id: string) => {
     const data = await ports.read(actor, id);
-    if (data.review.sourceDigest !== (await sourceDigest(core, actor, data.row.workspace_id)))
+    if (
+      data.review.sourceDigest !==
+      (await sourceDigest(core, actor, data.row.workspace_id, reportSourceOptions(data.review)))
+    )
       throw new ReportError("STALE_REVISION");
     await ports.checkAnalysis?.(actor, data.row.workspace_id, data.review);
     return data;
@@ -535,6 +539,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       now,
       deps.sessionId,
       data.body.citations.map((citation) => citation.id),
+      reportSourceOptions(data.review),
     );
     if (fence.rows > 250) throw new ReportError("EXPORT_LIMIT_EXCEEDED");
     const l = await lease(actor.ownerId, r);

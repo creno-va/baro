@@ -30,7 +30,7 @@ const documentCss = `
 .baro-report .brand { font-weight:750; font-size:17px; color:#1d3556; }
 .baro-report .brand img { width:20px; height:23px; vertical-align:middle; margin-right:8px; }
 .baro-report .date { font-size:11px; color:#647084; }
-.baro-report .hero { padding:28px 0 24px; }
+.baro-report .hero { display:block; padding:28px 0 24px; }
 .baro-report .hero p { font-size:11px; color:#647084; margin:0 0 8px; }
 .baro-report h1 { font-size:28px; font-weight:750; letter-spacing:-.035em; line-height:1.4; margin:0; overflow-wrap:anywhere; }
 .baro-report .section { padding:24px 0; border-top:1px solid #e3e8ef; }

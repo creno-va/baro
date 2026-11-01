@@ -10,11 +10,13 @@ const css =
   (await Bun.file("src/styles/global.css").text())
     .replace(/^@import .*;$/gm, "")
     .replace(/@theme inline\s*\{[^}]*\}/s, "") + (await Bun.file("src/styles/reports.css").text());
+const photo = `data:image/jpeg;base64,${Buffer.from(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer()).toString("base64")}`;
 Bun.serve({
   hostname: "127.0.0.1",
   port: 4377,
   fetch(request) {
     const path = new URL(request.url).pathname;
+    if (path === "/fixture-photo-data") return Response.json(photo);
     if (path === "/app.js")
       return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (path === "/app.css") return new Response(css, { headers: { "content-type": "text/css" } });

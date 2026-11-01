@@ -43,6 +43,7 @@ const css =
   (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
   (await Bun.file(`${root}/src/styles/evidence.css`).text()) +
+  (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
   (await Bun.file(`${root}/src/styles/settings.css`).text()) +
   "body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
 const server = Bun.serve({

@@ -6,6 +6,7 @@ import type { ReportView as BaseReportView, FileView } from "../../client/api/ty
 import { isExplicitSignOut } from "../../client/session-events";
 import type { V2ConversationState, V2Fact } from "../../contracts/v2";
 import { reportPhotoIds } from "../../utils/report-markdown";
+import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { Button } from "../ui/button";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseNavigation } from "../workspace/CaseNavigation";
@@ -63,6 +64,9 @@ export function ReportReview({
   const [newReportAvailable, setNewReportAvailable] = useState(false);
   const [pollPaused, setPollPaused] = useState(false);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [evidenceDirty, setEvidenceDirty] = useState(false);
+  const [resolutionBusy, setResolutionBusy] = useState(false);
+  const [resolutionDirty, setResolutionDirty] = useState(false);
   const [evidenceFacts, setEvidenceFacts] = useState<V2Fact[]>([]);
   const owner = useRef<string | null>(null);
   const lock = useRef(false);
@@ -131,6 +135,9 @@ export function ReportReview({
     preparationAttempt.current = null;
     reflectionAttempt.current = null;
     setEvidenceBusy(false);
+    setEvidenceDirty(false);
+    setResolutionBusy(false);
+    setResolutionDirty(false);
     setEvidenceFacts([]);
     setEditing(false);
 
@@ -359,23 +366,25 @@ export function ReportReview({
       byteLength: files.find((file) => file.id === photo.id)?.sizeBytes ?? 0,
     }));
   useEffect(() => {
-    onDirtyChange?.(dirty || Boolean(preservedEdit));
+    onDirtyChange?.(dirty || Boolean(preservedEdit) || evidenceDirty || resolutionDirty);
     return () => onDirtyChange?.(false);
-  }, [dirty, preservedEdit, onDirtyChange]);
+  }, [dirty, preservedEdit, evidenceDirty, resolutionDirty, onDirtyChange]);
   useEffect(() => {
-    onBusyChange?.(Boolean(busy) || accessChecking || exportingPdf || evidenceBusy);
+    onBusyChange?.(
+      Boolean(busy) || accessChecking || exportingPdf || evidenceBusy || resolutionBusy,
+    );
     return () => onBusyChange?.(false);
-  }, [busy, accessChecking, exportingPdf, evidenceBusy, onBusyChange]);
+  }, [busy, accessChecking, exportingPdf, evidenceBusy, resolutionBusy, onBusyChange]);
   useEffect(() => {
-    if (!dirty && !preservedEdit) return;
+    if (!dirty && !preservedEdit && !evidenceDirty && !resolutionDirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty, preservedEdit]);
+  }, [dirty, preservedEdit, evidenceDirty, resolutionDirty]);
   async function run(label: string, action: () => Promise<void>) {
-    if (lock.current || accessChecking || evidenceBusy) return false;
+    if (lock.current || accessChecking || evidenceBusy || evidenceDirty) return false;
     const sequence = loadSequence.current;
     lock.current = true;
     setBusy("계정 접근 상태 확인 중…");
@@ -607,7 +616,14 @@ export function ReportReview({
                 type="button"
                 className="report-edit-toggle"
                 disabled={
-                  Boolean(busy) || accessChecking || accessUnknown || needsConsent || evidenceBusy
+                  Boolean(busy) ||
+                  accessChecking ||
+                  accessUnknown ||
+                  needsConsent ||
+                  evidenceBusy ||
+                  evidenceDirty ||
+                  resolutionBusy ||
+                  resolutionDirty
                 }
                 aria-expanded={editing}
                 aria-controls="report-edit-fields"
@@ -632,6 +648,9 @@ export function ReportReview({
                   accessUnknown ||
                   needsConsent ||
                   evidenceBusy ||
+                  evidenceDirty ||
+                  resolutionBusy ||
+                  resolutionDirty ||
                   Boolean(preservedEdit && dirty && report.stale)
                 }
                 onClick={() => setRegenerate(true)}
@@ -698,7 +717,10 @@ export function ReportReview({
                     accessChecking ||
                     needsConsent ||
                     Boolean(pendingJob) ||
-                    evidenceBusy
+                    evidenceBusy ||
+                    evidenceDirty ||
+                    resolutionBusy ||
+                    resolutionDirty
                   }
                   onClick={() =>
                     void run("리포트 준비 요청 중…", async () => {
@@ -723,7 +745,14 @@ export function ReportReview({
             <p>새 리포트가 준비됐어요. 현재 편집 내용은 확인한 뒤 전환할 수 있어요.</p>
             <button
               type="button"
-              disabled={Boolean(busy) || accessChecking}
+              disabled={
+                Boolean(busy) ||
+                accessChecking ||
+                evidenceBusy ||
+                evidenceDirty ||
+                resolutionBusy ||
+                resolutionDirty
+              }
               onClick={() => (dirty ? setReloadConfirm(true) : void load())}
             >
               새 리포트 열기
@@ -735,7 +764,9 @@ export function ReportReview({
             <p>{error}</p>
             <button
               type="button"
-              disabled={Boolean(busy)}
+              disabled={
+                Boolean(busy) || evidenceBusy || evidenceDirty || resolutionBusy || resolutionDirty
+              }
               onClick={(event) => {
                 event.currentTarget.focus();
                 if (dirty) setReloadConfirm(true);
@@ -781,7 +812,15 @@ export function ReportReview({
         {report && (
           <fieldset
             className="report-controls"
-            disabled={Boolean(busy) || accessChecking || accessUnknown || evidenceBusy}
+            disabled={
+              Boolean(busy) ||
+              accessChecking ||
+              accessUnknown ||
+              evidenceBusy ||
+              evidenceDirty ||
+              resolutionBusy ||
+              resolutionDirty
+            }
           >
             {needsConsent && (
               <p className="report-callout" role="status">
@@ -954,6 +993,29 @@ export function ReportReview({
             </section>
           </fieldset>
         )}
+        {rework && report && owner.current && (
+          <FollowUpResolution
+            caseId={caseId}
+            reportId={report.id}
+            reportRevision={report.revision}
+            embedded={embedded}
+            disabled={
+              Boolean(busy) ||
+              accessChecking ||
+              accessUnknown ||
+              dirty ||
+              evidenceBusy ||
+              evidenceDirty ||
+              exportingPdf
+            }
+            onSaveReport={downloadCurrentReport}
+            onChanged={() => {
+              void evidenceChanged();
+            }}
+            onDirtyChange={setResolutionDirty}
+            onBusyChange={setResolutionBusy}
+          />
+        )}
         {rework && owner.current && (
           <div className="report-evidence-entry">
             <EvidenceUpload
@@ -963,6 +1025,8 @@ export function ReportReview({
                 exportingPdf ||
                 needsConsent ||
                 dirty ||
+                resolutionBusy ||
+                resolutionDirty ||
                 accessChecking ||
                 accessUnknown
               }
@@ -971,6 +1035,7 @@ export function ReportReview({
               onEvidenceChanged={evidenceChanged}
               onReflect={reflectEvidence}
               onBusyChange={setEvidenceBusy}
+              onDirtyChange={setEvidenceDirty}
               onError={(cause) =>
                 setError(cause instanceof Error ? cause.message : "자료 상태를 다시 확인해 주세요.")
               }

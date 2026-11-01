@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { V2ConversationState, V2LegalAnalysisSnapshot } from "../../src/contracts/v2";
+import type { V2ResolutionState } from "../../src/contracts/v2/resolution";
 
 const basis = {
   researchRevision: 7,
@@ -8,6 +9,39 @@ const basis = {
   evidenceHash: "a".repeat(64),
   casePurpose: "prepare_claim" as const,
 };
+function resolutionState(report = preparedReport()): V2ResolutionState {
+  return {
+    contractVersion: "conversation-report-v1",
+    revision: 1,
+    basis: {
+      ...basis,
+      workspaceRevision: 7,
+      analysisId: "synthetic-analysis",
+      reportId: report.id,
+      reportRevision: report.revision,
+      procedure: { kind: "civil", stage: "before_filing", description: null },
+    },
+    selection: null,
+    selectedFileIds: [],
+    maskIdentifiers: false,
+    status: "active",
+    draft: null,
+    procedureChecks: [
+      {
+        id: "unknown-court",
+        label: "관할",
+        detail: "관할 확인에 필요한 사실을 확인해 주세요.",
+        status: "needs_confirmation",
+        sourceClaimIds: [],
+      },
+    ],
+    weaknessChecks: ["반환 조건의 전체 원본 확인"],
+    consultationPreparation: ["사건 경위와 확인한 자료를 준비해 주세요."],
+    citations: [],
+    sourceClaims: [],
+    allowedDocumentKinds: ["fact_statement"],
+  };
+}
 function conversationState(): V2ConversationState {
   return {
     contractVersion: "conversation-report-v1",
@@ -126,6 +160,8 @@ test("report evidence uses the real upload and review components, requests case 
         },
       });
     if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+    if (path.endsWith("/rework/resolution"))
+      return route.fulfill({ json: resolutionState(report ?? undefined) });
     if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
     if (path.endsWith("/files") && request.method() === "GET")
       return route.fulfill({ json: files });
@@ -336,6 +372,12 @@ test("report evidence uses the real upload and review components, requests case 
   await upload
     .getByLabel("확인·교정한 내용", { exact: true })
     .fill("[문서 기재] 사용자가 확인하고 고친 반환 약정");
+  await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "true");
+  await expect(page.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(upload.getByLabel("확인·교정한 내용", { exact: true })).toHaveValue(
+    "[문서 기재] 사용자가 확인하고 고친 반환 약정",
+  );
   await expect(
     upload.getByRole("button", { name: "자료 내용 반영하기", exact: true }),
   ).toBeDisabled();
@@ -373,6 +415,8 @@ test("rework entry only reads; explicit preparation and scope save use the displ
         },
       });
     if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+    if (path.endsWith("/rework/resolution"))
+      return route.fulfill({ json: resolutionState(report ?? undefined) });
     if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
     if (path.endsWith("/rework/actions")) {
       preparations++;
@@ -628,3 +672,96 @@ test("embedded report preserves stale edits before generating a new snapshot and
   await expect(page.locator(".report-reading")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveCount(0);
 });
+
+for (const side of ["prepare_claim", "respond_to_claim"] as const)
+  for (const choice of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
+    test(`actual report composition: ${side} → ${choice}`, async ({ page }) => {
+      const report = preparedReport();
+      const state = conversationState();
+      state.caseContext.casePurpose = side;
+      state.snapshot = partialSnapshot(state.caseContext);
+      let resolution = resolutionState(report);
+      if (resolution.basis) resolution.basis.casePurpose = side;
+      let updates = 0,
+        drafts = 0,
+        analysisActions = 0,
+        pdfs = 0,
+        legacyReads = 0;
+      let failPdf = true;
+      await page.route("**/api/**", async (route) => {
+        const req = route.request(),
+          path = new URL(req.url()).pathname;
+        if (path === "/api/me/session")
+          return route.fulfill({
+            json: {
+              user: { id: "synthetic-report-owner", name: "합성", accountType: "customer" },
+              needsConsent: false,
+            },
+          });
+        if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+        if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
+        if (path.endsWith("/rework/resolution/draft")) {
+          drafts++;
+          return route.fulfill({ status: 503, json: { error: { code: "UNAVAILABLE" } } });
+        }
+        if (path.endsWith("/rework/resolution")) {
+          if (req.method() === "PATCH") {
+            updates++;
+            resolution = { ...resolution, selection: req.postDataJSON().choice };
+          }
+          return route.fulfill({ json: resolution });
+        }
+        if (path.endsWith("/rework/actions")) {
+          analysisActions++;
+          return route.fulfill({ status: 503, json: {} });
+        }
+        if (path.endsWith("/report")) {
+          legacyReads++;
+          return route.fulfill({ json: report });
+        }
+        if (path.endsWith("/files")) return route.fulfill({ json: [] });
+        if (path.endsWith("/pdf")) {
+          pdfs++;
+          if (failPdf)
+            return route.fulfill({
+              status: 503,
+              json: { error: { code: "STORAGE_UNAVAILABLE", message: "합성 PDF 실패" } },
+            });
+          return route.fulfill({
+            contentType: "application/pdf",
+            body: Buffer.from("%PDF-1.7\nSynthetic offline transport verification\n%%EOF"),
+          });
+        }
+        return route.fulfill({ status: 404, json: {} });
+      });
+      await page.goto("/cases/synthetic-rework-case/reports?rework=true&embedded=true");
+      const button = page.getByRole("button", { name: new RegExp(`^${choice}`) });
+      await expect(button).toBeEnabled();
+      await button.click();
+      if (choice === "직접 해결") {
+        await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
+        await expect(page.getByText("관할", { exact: true })).toBeVisible();
+        expect(updates).toBe(1);
+      } else if (choice === "변호사와 해결") {
+        await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+          "href",
+          "/lawyers",
+        );
+        expect(updates).toBe(1);
+      } else {
+        await expect(page.locator(".resolution").getByRole("alert")).toContainText(
+          "완료하지 못했어요",
+        );
+        await expect(page.locator(".resolution").getByRole("status")).toHaveCount(0);
+        failPdf = false;
+        const download = page.waitForEvent("download");
+        await button.click();
+        expect((await download).suggestedFilename()).toContain(report.id);
+        await expect(page.locator(".resolution").getByRole("status")).toContainText("저장 요청");
+        expect(updates).toBe(0);
+        expect(pdfs).toBe(2);
+      }
+      expect(drafts).toBe(0);
+      expect(analysisActions).toBe(0);
+      expect(legacyReads).toBe(0);
+    });

@@ -623,6 +623,7 @@
   color: #647084;
 }
 .baro-report .hero {
+  display: block;
   padding: 28px 0 24px;
 }
 .baro-report .hero p {
