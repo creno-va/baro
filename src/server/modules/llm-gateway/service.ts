@@ -9,6 +9,12 @@ import {
 } from "../../../contracts";
 import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
 import { comparisonCandidateSchema } from "../legal-retrieval/research/comparison";
+import { LEGAL_ANALYSIS_PROMPT_VERSION } from "./analysis-prompts";
+import {
+  legalAnalysisAuditSchema,
+  legalAnalysisOutputSchema,
+  legalAnalysisPlanSchema,
+} from "./analysis-schema";
 import {
   type GatewayAttemptHandle,
   type GatewayAttemptLedger,
@@ -39,6 +45,9 @@ import {
 } from "./v2/schemas";
 
 const schemas = {
+  workspace_legal_plan: legalAnalysisPlanSchema,
+  workspace_legal_analysis: legalAnalysisOutputSchema,
+  workspace_legal_audit: legalAnalysisAuditSchema,
   minimize: minimizedInputSchema,
   screening: screeningOutputSchema,
   structure: structuredCaseSchema,
@@ -56,6 +65,9 @@ const schemas = {
   workspace_audit: workspaceAuditOutputSchema,
 };
 const limits = {
+  workspace_legal_plan: 2400,
+  workspace_legal_analysis: 10000,
+  workspace_legal_audit: 8000,
   minimize: 2200,
   screening: 800,
   structure: 4000,
@@ -150,7 +162,15 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
       typeof input === "object" &&
       (input as { phase?: unknown }).phase === "workspace_precedent_compare");
   const envelope = z.strictObject({
-    output: isComparisonAudit(phase, input) ? comparisonAuditOutputSchema : schemas[phase],
+    output: isComparisonAudit(phase, input)
+      ? comparisonAuditOutputSchema
+      : phase === "workspace_chat"
+        ? workspaceChatOutputSchema.extend({
+            // Saved pre-rework messages may omit the intent; new strict provider
+            // output must carry either an allowed intent or explicit null.
+            conversationIntent: workspaceChatOutputSchema.shape.conversationIntent.unwrap(),
+          })
+        : schemas[phase],
   });
   // Strict provider output must include defaulted fields too; input schemas mark
   // them optional, which the provider rejects before generating a response.
@@ -168,7 +188,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
     messages: [
       {
         role: "system",
-        content: `BARO prompt ${comparison ? COMPARISON_PROMPT_VERSION : phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${promptFor(phase, input)}`,
+        content: `BARO prompt ${comparison ? COMPARISON_PROMPT_VERSION : phase.startsWith("workspace_legal_") ? LEGAL_ANALYSIS_PROMPT_VERSION : phase.startsWith("workspace_") ? WORKSPACE_PROMPT_VERSION : PROMPT_VERSION}. ${promptFor(phase, input)}`,
       },
       {
         role: "user",
@@ -180,7 +200,7 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
         }),
       },
     ],
-    ...(phase === "workspace_audit" || phase === "validation"
+    ...(phase === "workspace_audit" || phase === "workspace_legal_audit" || phase === "validation"
       ? {
           extra_body: {
             google: { thinking_config: { thinking_level: "medium", include_thoughts: false } },
