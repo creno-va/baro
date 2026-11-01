@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { type V2Fact, v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2";
+import {
+  type V2Fact,
+  type V2LegalAnalysisSnapshot,
+  v2LegalAnalysisSnapshotSchema,
+} from "../src/contracts/v2";
 import {
   analysisBasis,
   type LegalAnalysisInput,
@@ -148,6 +152,217 @@ async function refresh(args: ResolutionSourceInput) {
   args.currentAnalysis.basis = await analysisBasis(args.input);
   args.currentAnalysis.context = structuredClone(args.input.context);
 }
+/** Synthetic immutable analysis shape only; no official-source authority is
+ * granted by this pure projection fixture. The native integration keeps binding/SQL fences. */
+async function statusFixture(
+  purpose: "prepare_claim" | "respond_to_claim",
+  status: V2LegalAnalysisSnapshot["status"],
+  unknown: "none" | "purpose" | "kind" | "stage" = "none",
+) {
+  const a = await fixture(purpose);
+  if (unknown === "purpose") a.context.casePurpose = "unconfirmed";
+  if (unknown === "kind") a.context.procedure.kind = "unconfirmed";
+  if (unknown === "stage") a.context.procedure.stage = "unconfirmed";
+  a.input.context = structuredClone(a.context);
+  const snapshot = required(a.currentAnalysis);
+  snapshot.status = status;
+  snapshot.perspective.casePurpose = a.context.casePurpose;
+  snapshot.limitations = ["합성 검증 · 미확인 사건 절차와 실제 원문 확인은 별개입니다."];
+  if (status === "ready") {
+    snapshot.citations = [
+      {
+        id: "law",
+        sourceId: "law-source",
+        kind: "statute",
+        officialId: "1706",
+        title: "합성 법 조항",
+        article: "제1조",
+        effectiveDate: "2026-10-01",
+        url: "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+        verifiedAt: now,
+        contentHash: "a".repeat(64),
+      },
+      {
+        id: "precedent",
+        sourceId: "precedent-source",
+        kind: "precedent",
+        officialId: "100001",
+        title: "합성 판례",
+        court: "합성 법원",
+        caseNumber: "합성 사건",
+        decisionDate: "2026-10-01",
+        url: "https://www.law.go.kr/LSW/precInfoP.do?precSeq=100001",
+        verifiedAt: now,
+        contentHash: "b".repeat(64),
+      },
+    ];
+    snapshot.sourceClaims = [
+      {
+        id: "law-claim",
+        citationId: "law",
+        kind: "quotation",
+        text: "합성 원문",
+        startUtf16: 0,
+        endUtf16: 5,
+      },
+      {
+        id: "precedent-claim",
+        citationId: "precedent",
+        kind: "quotation",
+        text: "합성 판례",
+        startUtf16: 0,
+        endUtf16: 5,
+      },
+    ];
+    snapshot.issues = [
+      {
+        id: "issue",
+        title: "합성 쟁점",
+        requirements: [
+          {
+            id: "requirement",
+            label: "합성 요건",
+            assessment: "insufficient",
+            sourceClaimIds: ["law-claim"],
+            factIds: ["statement"],
+            conflictingFactIds: [],
+            evidence: [],
+            gaps: ["현재 절차 확인"],
+          },
+        ],
+      },
+    ];
+    snapshot.precedents = [
+      {
+        citationId: "precedent",
+        commonalities: [
+          { text: "합성 공통점", factIds: ["statement"], sourceClaimIds: ["precedent-claim"] },
+        ],
+        differences: [
+          { text: "합성 차이점", factIds: ["material"], sourceClaimIds: ["precedent-claim"] },
+        ],
+        preparationMeaning: "자료의 원문을 확인합니다.",
+      },
+    ];
+    snapshot.availability = [
+      { kind: "statute", status: "verified", reason: null },
+      { kind: "precedent", status: "verified", reason: null },
+    ];
+  }
+  await refresh(a);
+  a.currentAnalysis = v2LegalAnalysisSnapshotSchema().parse(snapshot);
+  return a;
+}
+
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
+  for (const unknown of ["none", "purpose", "kind", "stage"] as const)
+    test(`${purpose}: ready analysis with ${unknown} unconfirmed context requires the exact report display status`, async () => {
+      const a = await statusFixture(purpose, "ready", unknown);
+      const review = required(required(a.report).analysisReview);
+      review.status = unknown === "none" ? "ready" : "partial";
+      const source = await buildResolutionSource(a);
+      expect(source.basis?.analysisId).toBe("analysis");
+      expect(source.analysis?.status).toBe("ready");
+      expect(source.analysis?.limitations).toEqual(a.currentAnalysis?.limitations);
+      expect(source.documentSupport).toEqual([]);
+      expect(source.context).toEqual(a.input.context);
+      const h = resolutionHarness({ ...source, stored: null });
+      let state = await h.service.get("owner", "case");
+      expect(state.status).toBe("active");
+      expect(state.allowedDocumentKinds).toEqual(["fact_statement"]);
+      state = await h.service.update("owner", "case", {
+        ...resolutionMutation(state),
+        action: "select",
+        choice: "self",
+        selectedFileIds: state.selectedFileIds,
+        maskIdentifiers: state.maskIdentifiers,
+      });
+      state = await h.service.prepareDraft("owner", "case", {
+        ...resolutionMutation(state),
+        documentKind: "fact_statement",
+        selectedFileIds: state.selectedFileIds,
+        maskIdentifiers: state.maskIdentifiers,
+        factsConfirmed: true,
+      });
+      expect(state.draft?.content).toContain("[미입력: 관할]");
+      expect(state.draft?.content).toContain("[미입력: 제출 기한]");
+      for (const mismatched of [
+        "ready",
+        "partial",
+        "empty",
+        "unavailable",
+        "review_required",
+      ] as const) {
+        if (mismatched === (unknown === "none" ? "ready" : "partial")) continue;
+        review.status = mismatched;
+        expect((await buildResolutionSource(a)).basis).toBeNull();
+      }
+    });
+
+for (const status of ["partial", "empty", "unavailable"] as const)
+  test(`a genuinely ${status} analysis keeps its own status with confirmed or unconfirmed procedure`, async () => {
+    for (const unknown of ["none", "kind"] as const) {
+      const a = await statusFixture("respond_to_claim", status, unknown);
+      const review = required(required(a.report).analysisReview);
+      for (const display of [
+        "ready",
+        "partial",
+        "empty",
+        "unavailable",
+        "review_required",
+      ] as const) {
+        review.status = display;
+        const source = await buildResolutionSource(a);
+        expect(source.basis !== null).toBe(display === status);
+        if (display === status) {
+          expect(source.analysis?.status).toBe(status);
+          expect(source.analysis?.limitations).toEqual(a.currentAnalysis?.limitations);
+        }
+      }
+    }
+  });
+
+test("the allowed ready-to-partial display never bypasses identity, current basis, scope, review or confirmed facts", async () => {
+  const mutations: ((a: ResolutionSourceInput) => void)[] = [
+    (a) => {
+      required(required(a.report).analysisReview).analysisId = "other-analysis";
+    },
+    (a) => {
+      required(required(a.report).analysisReview).checkedAt = "2026-10-31T12:00:00.000Z";
+    },
+    (a) => {
+      required(required(a.report).analysisReview).userEdited = true;
+    },
+    (a) => {
+      required(a.report).stale = true;
+    },
+    (a) => {
+      required(required(a.report).basis).summaryRevision++;
+    },
+    (a) => {
+      a.input.researchRevision++;
+    },
+    (a) => {
+      a.input.scope.excludedFileIds.push("file");
+    },
+    (a) => {
+      required(a.input.facts[0]).text = "아직 확인하지 않은 새로운 설명";
+    },
+    (a) => {
+      required(a.report).maskIdentifiers = true;
+    },
+  ];
+  for (const mutate of mutations) {
+    const a = await statusFixture("prepare_claim", "ready", "kind");
+    required(required(a.report).analysisReview).status = "partial";
+    mutate(a);
+    const source = await buildResolutionSource(a);
+    expect(source.basis).toBeNull();
+    expect(source.analysis).toBeNull();
+    expect(source.documentSupport).toEqual([]);
+  }
+});
+
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   test(`${purpose}: valid unavailable snapshot still permits an honest fact draft with exact basis`, async () => {
     const args = await fixture(purpose);
