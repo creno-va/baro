@@ -419,6 +419,10 @@ test("the installed workspace facade reads a completed private analysis without 
       listFiles: (id, options) => files.list(id, options),
     });
     const before = await stats(f);
+    expect((await json(f, "/workspace")).currentJobId).toBeNull();
+    const latest = await request(`/api/v2/cases/${f.info.caseId}/workspace-jobs/latest`);
+    expect(latest.ok).toBe(true);
+    expect(await latest.json()).toBeNull();
     const workspace = await client.get(f.info.caseId);
     expect(workspace.case.id).toBe(f.info.caseId);
     expect(workspace.case.stage).toBe("active");
