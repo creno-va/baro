@@ -2,9 +2,13 @@ import { z } from "zod";
 import { dateSchema, opaqueIdSchema, revisionSchema, timestampSchema } from "../../../contracts";
 import {
   v2AnalysisBasisSchema,
+  v2ConversationActionRequestSchema,
   v2FailureCodeSchema,
   v2LegalAnalysisSnapshotSchema,
   v2OfficialCitationSchema,
+  v2ResolutionCheckSchema,
+  v2ResolutionDocumentKindSchema,
+  v2SourceClaimSchema,
 } from "../../../contracts/v2";
 import { legalAnalysisInputSchema } from "../legal-retrieval/analysis/context";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
@@ -17,6 +21,7 @@ export const analysisTaskSchema = z
     jobId: opaqueIdSchema,
     operationId: opaqueIdSchema,
     requestId: opaqueIdSchema,
+    actionRequest: v2ConversationActionRequestSchema.optional(),
     beforeWorkspaceRevision: revisionSchema,
     targetWorkspaceRevision: revisionSchema,
     summaryRevision: revisionSchema,
@@ -37,6 +42,30 @@ export const analysisTaskSchema = z
       t.input.confirmedSummary.revision === t.summaryRevision,
   );
 export type AnalysisTask = z.infer<typeof analysisTaskSchema>;
+export const procedureSourcesSchema = z.strictObject({
+  procedureChecks: z.array(v2ResolutionCheckSchema).max(100),
+  documentSupport: z
+    .array(
+      z.strictObject({
+        documentKind: v2ResolutionDocumentKindSchema,
+        sourceClaimIds: z.array(opaqueIdSchema).max(100),
+      }),
+    )
+    .max(8),
+  citations: z.array(v2OfficialCitationSchema(GUIDE_HOSTS)).max(2),
+  sourceClaims: z.array(v2SourceClaimSchema).max(10),
+  limitations: z
+    .array(
+      z.strictObject({
+        id: opaqueIdSchema,
+        reason: z.string().min(1).max(200),
+        action: z.string().min(1).max(2000),
+        url: z.url().nullable(),
+        checkedAt: timestampSchema.nullable(),
+      }),
+    )
+    .max(100),
+});
 export const preparedAnalysisRecordSchema = z
   .strictObject({
     format: z.literal("prepared-legal-analysis-v1"),
@@ -46,6 +75,7 @@ export const preparedAnalysisRecordSchema = z
     failure: v2FailureCodeSchema.nullable(),
     completedAt: timestampSchema,
     procedureCitations: z.array(v2OfficialCitationSchema(GUIDE_HOSTS)).max(2),
+    procedureSources: procedureSourcesSchema.optional(),
   })
   .refine((r) => (r.snapshot === null) === (r.failure !== null));
 export type PreparedAnalysisRecord = z.infer<typeof preparedAnalysisRecordSchema>;

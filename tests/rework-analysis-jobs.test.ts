@@ -1,0 +1,265 @@
+import { afterEach, expect, setSystemTime, test } from "bun:test";
+import { modelBounds } from "../scripts/provision-ai-budget";
+import type { V2Fact } from "../src/contracts/v2";
+import { createV2Core } from "../src/server/db/v2-core";
+import { createV2ReworkRepository } from "../src/server/db/v2-rework";
+import { createReworkCaseService } from "../src/server/modules/rework/case-context";
+import { preparedAnalysisRecordSchema } from "../src/server/modules/rework/records";
+import { createReworkStateService, readPreparedAnalysis } from "../src/server/modules/rework/state";
+import { createLegalAnalysisJobs } from "../src/server/runtime/rework-analysis";
+import { syntheticGatewayInput } from "./helpers/gateway-input";
+import observation from "./helpers/gemini-observation";
+import { reportFixture } from "./helpers/report-fixture";
+
+const fixtures: Awaited<ReturnType<typeof reportFixture>>[] = [];
+afterEach(() => {
+  setSystemTime();
+  for (const f of fixtures.splice(0)) f.db.close();
+});
+async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim") {
+  const f = await reportFixture();
+  fixtures.push(f);
+  setSystemTime(new Date(f.actor.now));
+  const core = createV2Core(f.db.binding, f.core.cipher, { applicationCostLimitsEnabled: false });
+  const fact: V2Fact = {
+    id: crypto.randomUUID(),
+    text: "상대방과 합성 반환 약속을 주고받았다는 진술입니다.",
+    attribution: "user_statement",
+    certainty: "reported",
+    significance: "neutral",
+    conflictingFactIds: [],
+    userEdited: false,
+    references: [{ kind: "intake_narrative", intakeRevision: 1 }],
+  };
+  const factRow = crypto.randomUUID();
+  f.db.sqlite
+    .query(
+      "INSERT INTO v2_facts(id,entity_id,workspace_id,revision,summary_revision,encrypted_payload) VALUES(?,?,?,1,1,?)",
+    )
+    .run(
+      factRow,
+      fact.id,
+      f.workspaceId,
+      await core.encrypt("v2_facts", factRow, f.actor.ownerId, 1, fact),
+    );
+  await createReworkCaseService(core, { clock: () => f.actor.now }).update(
+    f.actor.ownerId,
+    f.workspaceId,
+    crypto.randomUUID(),
+    {
+      expectedRevision: f.rev(),
+      casePurpose: purpose,
+      subjectContext: "individual",
+      procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+    },
+  );
+  const calls: string[] = [],
+    continuations: string[] = [],
+    pending: Promise<void>[] = [];
+  let outage = false,
+    revoke = false;
+  const env = {
+    APP_ENV: "preview",
+    DB: f.db.binding,
+    APPLICATION_COST_LIMITS_ENABLED: "false",
+    MONTHLY_BUDGET_CAP_ENABLED: "false",
+    AI_GATEWAY_ID: "synthetic-rework",
+    AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(
+      modelBounds(
+        { ...observation, checkedAt: f.actor.now, validUntil: "2026-10-07T00:00:00.000Z" },
+        "a".repeat(64),
+      ),
+    ),
+    WORKSPACE_PROCESSING: {
+      get: async () => {
+        throw new Error("Synthetic absent instance");
+      },
+      create: async ({ id }: { id: string }) => ({ id }),
+    },
+    AI: {
+      run: async (_model: string, raw: Record<string, unknown>) => {
+        const { phase, data } = syntheticGatewayInput(raw);
+        calls.push(phase);
+        expect(phase).toBe("workspace_legal_plan");
+        expect((data as { context: { casePurpose: string } }).context.casePurpose).toBe(purpose);
+        if (outage) throw new Error("Synthetic unavailable provider");
+        if (revoke)
+          f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
+        const output = {
+          issues: [
+            {
+              id: "loan-issue",
+              title: "반환 약속의 확인",
+              factIds: [fact.id],
+              requests: [
+                { kind: "statute", lawTitle: "민법", articles: [{ number: "598", branch: "0" }] },
+                { kind: "precedent", concept: "대여금" },
+              ],
+            },
+          ],
+        };
+        return {
+          id: `synthetic-rework-${calls.length}`,
+          service_tier: "default",
+          choices: [{ message: { content: JSON.stringify({ output }) }, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 500,
+            completion_tokens: 100,
+            prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+          },
+        };
+      },
+    },
+  } as unknown as Env;
+  const service = createLegalAnalysisJobs(core, env, {
+    clock: () => f.actor.now,
+    waitUntil: (p) => pending.push(p),
+    prepareReport: async (_owner, _case, requestId) => {
+      continuations.push(requestId);
+    },
+  });
+  const execute = async (jobId: string) => {
+    const row = f.db.sqlite
+      .query("SELECT target_revision,runtime_instance_id FROM v2_jobs WHERE id=?")
+      .get(jobId) as { target_revision: number; runtime_instance_id: string };
+    const result = await service.execute(
+      {
+        ownerId: f.actor.ownerId,
+        workspaceId: f.workspaceId,
+        workspaceRevision: row.target_revision,
+        jobId,
+      },
+      row.runtime_instance_id,
+    );
+    await Promise.all(pending.splice(0));
+    return result;
+  };
+  return {
+    ...f,
+    core,
+    env,
+    service,
+    calls,
+    continuations,
+    execute,
+    outage: () => {
+      outage = true;
+    },
+    revoke: () => {
+      revoke = true;
+    },
+  };
+}
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
+  test(`actual paid native plan for ${purpose} stores honest unavailable sources and resumes the report once`, async () => {
+    const f = await fixture(purpose),
+      requestId = crypto.randomUUID(),
+      expectedRevision = f.rev();
+    const request = { requestId, expectedRevision, continueWithReport: true };
+    const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, request);
+    expect(f.calls).toHaveLength(0);
+    expect(await f.service.admit(f.actor.ownerId, f.workspaceId, request)).toEqual(admitted);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 1 });
+    expect((await f.execute(admitted.operationId)).status).toBe("completed");
+    expect(f.calls).toEqual(["workspace_legal_plan"]);
+    const snapshot = await readPreparedAnalysis(f.core, f.actor, f.workspaceId);
+    expect(snapshot?.status).toBe("unavailable");
+    expect(snapshot?.availability.every((s) => s.status === "unavailable")).toBe(true);
+    expect(snapshot?.citations).toEqual([]);
+    expect(snapshot?.sourceClaims).toEqual([]);
+    expect(
+      (
+        await createReworkStateService(f.core, { clock: () => f.actor.now }).get(
+          f.actor.ownerId,
+          f.workspaceId,
+        )
+      ).analysis.status,
+    ).toBe("unavailable");
+    expect(f.continuations).toEqual([requestId]);
+    await f.execute(admitted.operationId);
+    expect(f.continuations).toEqual([requestId]);
+    expect(f.calls).toHaveLength(1);
+    expect(
+      f.db.sqlite.query("SELECT responses_used,responses_reserved FROM v2_daily_usage").get(),
+    ).toEqual({ responses_used: 1, responses_reserved: 0 });
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_attempts").get()).toEqual({
+      n: 1,
+    });
+  });
+test("AI200 and actual missing configuration stop admission; missing cost observations do not", async () => {
+  const f = await fixture();
+  f.db.sqlite
+    .query("INSERT INTO v2_daily_usage(owner_id,day,responses_used) VALUES(?,?,200)")
+    .run(f.actor.ownerId, "2026-10-06");
+  await expect(
+    f.service.admit(f.actor.ownerId, f.workspaceId, {
+      requestId: crypto.randomUUID(),
+      expectedRevision: f.rev(),
+      continueWithReport: false,
+    }),
+  ).rejects.toMatchObject({ code: "USER_QUOTA_EXCEEDED" });
+  f.db.sqlite.query("UPDATE v2_daily_usage SET responses_used=0").run();
+  const missing = createLegalAnalysisJobs(
+    f.core,
+    { ...f.env, AI_GATEWAY_ID: "" },
+    { clock: () => f.actor.now },
+  );
+  await expect(
+    missing.admit(f.actor.ownerId, f.workspaceId, {
+      requestId: crypto.randomUUID(),
+      expectedRevision: f.rev(),
+      continueWithReport: false,
+    }),
+  ).rejects.toMatchObject({ code: "DEPENDENCY_UNAVAILABLE" });
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+  expect(f.calls).toHaveLength(0);
+});
+test("provider failure remains a failed encrypted analysis and retains every admitted execution", async () => {
+  const f = await fixture();
+  f.outage();
+  const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+    requestId: crypto.randomUUID(),
+    expectedRevision: f.rev(),
+    continueWithReport: false,
+  });
+  expect((await f.execute(admitted.operationId)).status).toBe("failed");
+  const raw = await createV2ReworkRepository(f.core).read(
+    f.actor,
+    f.workspaceId,
+    "analysis",
+    f.workspaceId,
+    preparedAnalysisRecordSchema,
+  );
+  expect(raw?.value.snapshot).toBeNull();
+  expect(raw?.value.failure).toBe("MODEL_UNAVAILABLE");
+  expect(
+    (
+      await createReworkStateService(f.core, { clock: () => f.actor.now }).get(
+        f.actor.ownerId,
+        f.workspaceId,
+      )
+    ).analysis.status,
+  ).toBe("failed");
+  expect(f.calls.length).toBeGreaterThan(0);
+  expect(f.calls.length).toBeLessThanOrEqual(3);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_job_holds").get()).toEqual({
+    n: 1,
+  });
+});
+test("a consent revoked during actual native response cannot publish analysis or a report continuation", async () => {
+  const f = await fixture();
+  f.revoke();
+  const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+    requestId: crypto.randomUUID(),
+    expectedRevision: f.rev(),
+    continueWithReport: true,
+  });
+  expect((await f.execute(admitted.operationId)).status).toBe("stopped");
+  expect(
+    await createV2ReworkRepository(f.core).head(f.actor, f.workspaceId, "analysis", f.workspaceId),
+  ).toBeNull();
+  expect(f.continuations).toEqual([]);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_execution_job_holds").get()).toEqual({
+    n: 1,
+  });
+});

@@ -135,6 +135,9 @@ export function createLeasedWorkspaceGateway(
   let initialUsed = false;
   return {
     async call(phase, input, requestId, reserve, reserveCorrection, invocationId) {
+      // The complete native wire and its admission must use the same public
+      // projection. Full binding originals stay in server-side proof storage.
+      input = workspaceModelInput(input);
       if (!invocationId || !(await options.authorize())) throw new ModelError("MODEL_UNAVAILABLE");
       await options.onPhase?.(phase);
       const now = clock(),

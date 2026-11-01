@@ -1,4 +1,9 @@
-import { type V2Summary, type V2UserMessage, v2SummarySchema } from "../../../contracts/v2";
+import {
+  type V2Summary,
+  type V2UserMessage,
+  v2SummarySchema,
+  v2UserMessageSchema,
+} from "../../../contracts/v2";
 import { readCustomerConsentSnapshot } from "../../auth/account-type";
 import { aliveWorkspace, MAX_REHYDRATE_BYTES, utf8Bytes, type V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
@@ -12,8 +17,9 @@ import type { ReconciliationAuthority } from "../workspace/summary-reconciliatio
 import { createReworkCaseService, ReworkError } from "./case-context";
 
 // These authenticated correction messages are durable inputs, but their own
-// admission/receipt must not invalidate the source digest that admitted them.
-const messages = `(SELECT json_group_array(json_object('id',id,'revision',revision,'encrypted_payload',encrypted_payload)) FROM (SELECT m.id,m.revision,m.encrypted_payload FROM v2_messages m WHERE m.workspace_id=w.id AND m.role='user' AND NOT EXISTS(SELECT 1 FROM v2_idempotency i WHERE i.operation_id=m.operation_id AND i.owner_id=w.owner_id AND i.route='/api/v2/cases/'||w.id||'/rework/tasks/summary_reconciliation') ORDER BY m.id))`;
+// immutable admission record must not invalidate its own source digest. Do not
+// rely on expiring idempotency rows to identify this durable message provenance.
+const messages = `(SELECT json_group_array(json_object('id',id,'revision',revision,'encrypted_payload',encrypted_payload)) FROM (SELECT m.id,m.revision,m.encrypted_payload FROM v2_messages m WHERE m.workspace_id=w.id AND m.role='user' AND NOT EXISTS(SELECT 1 FROM v2_rework_records rr WHERE rr.workspace_id=w.id AND rr.owner_id=w.owner_id AND rr.entity_id=w.id AND rr.kind='reconciliation' AND rr.state='published' AND rr.workspace_revision=m.workspace_revision) ORDER BY m.id))`;
 const files = `(SELECT json_group_array(json_object('id',id,'revision',revision,'state',state,'encrypted_payload',encrypted_payload,'manifest_snapshot_id',manifest_snapshot_id,'coverage_snapshot_id',coverage_snapshot_id)) FROM (SELECT f.id,f.revision,f.state,f.encrypted_payload,f.manifest_snapshot_id,f.coverage_snapshot_id FROM v2_files f WHERE f.workspace_id=w.id AND f.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ORDER BY f.id))`;
 const sources = `(SELECT json_group_array(json_object('id',id,'citation_json',citation_json,'content_hash',content_hash,'extractor_version',extractor_version,'expires_at',expires_at,'rights_provenance',rights_provenance)) FROM (SELECT b.id,b.citation_json,s.content_hash,s.extractor_version,s.expires_at,s.rights_provenance FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=w.id ORDER BY b.id))`;
 
@@ -22,7 +28,7 @@ const sources = `(SELECT json_group_array(json_object('id',id,'citation_json',ci
 export async function loadReconciliationSource(
   core: V2Core,
   actor: SummaryReconciliationActor,
-  options: { write: boolean; requestMessage?: V2UserMessage },
+  options: { write: boolean; requestMessage?: V2UserMessage; admittingMessage?: true },
 ): Promise<ReconciliationAuthority> {
   const access = await readCustomerConsentSnapshot(core.binding, actor.ownerId);
   if (!["customer", "lawyer"].includes(access.accountType)) throw new ReworkError("NOT_FOUND");
@@ -59,13 +65,43 @@ export async function loadReconciliationSource(
     text += part.text;
   }
   const summary: V2Summary = v2SummarySchema.parse(JSON.parse(text));
-  const context = await readWorkspaceContext(
-    core,
-    actor,
-    actor.caseId,
-    options.requestMessage,
-    GUIDE_HOSTS,
-  );
+  let issued = options.requestMessage;
+  let issuedProof: { sql: string; values: unknown[] } = { sql: "1", values: [] };
+  if (issued && !options.admittingMessage) {
+    const current = await core
+      .statement(
+        "SELECT m.revision,m.encrypted_payload FROM v2_messages m JOIN v2_operations o ON o.id=m.operation_id WHERE m.id=? AND m.workspace_id=? AND m.operation_id=? AND m.role='user' AND o.owner_id=? AND o.workspace_id=m.workspace_id",
+        [issued.id, actor.caseId, issued.operationId, actor.ownerId],
+      )
+      .first<{ revision: number; encrypted_payload: string }>();
+    if (!current) throw new ReworkError("STALE_REVISION");
+    const fresh = await core.decrypt(
+      "v2_messages",
+      issued.id,
+      actor.ownerId,
+      current.revision,
+      current.encrypted_payload,
+      v2UserMessageSchema,
+    );
+    if (JSON.stringify(fresh) !== JSON.stringify(v2UserMessageSchema.parse(issued)))
+      throw new ReworkError("STALE_REVISION");
+    issued = fresh;
+    issuedProof = {
+      sql: "EXISTS(SELECT 1 FROM v2_messages m JOIN v2_operations o ON o.id=m.operation_id WHERE m.id=? AND m.workspace_id=w.id AND m.operation_id=? AND m.revision=? AND m.encrypted_payload=? AND m.workspace_revision=? AND m.role='user' AND o.owner_id=w.owner_id AND o.workspace_id=w.id)",
+      values: [
+        fresh.id,
+        fresh.operationId,
+        current.revision,
+        current.encrypted_payload,
+        fresh.workspaceRevision,
+      ],
+    };
+  }
+  // Only initial paid-plan preparation projects a not-yet-committed message.
+  // Admission inserts it atomically; execution always verifies the actual row.
+  if (issued && options.admittingMessage && issued.workspaceRevision !== row.revision + 1)
+    throw new ReworkError("STALE_REVISION");
+  const context = await readWorkspaceContext(core, actor, actor.caseId, issued, GUIDE_HOSTS);
   const caseContext = await createReworkCaseService(core, { clock: () => actor.now }).get(
     actor.ownerId,
     actor.caseId,
@@ -137,8 +173,15 @@ export async function loadReconciliationSource(
   // Do not clear other contextCoverage flags: messages, official sources and
   // preparation lists still use the existing explicitly bounded projection.
   const authority = {
-    sql: `w.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_intakes WHERE id=w.id AND summary_id=?) AND ${files}=? AND ${messages}=? AND ${sources}=?`,
-    values: [row.encrypted_payload, row.summary_id, row.files, row.messages, row.sources],
+    sql: `w.encrypted_payload=? AND EXISTS(SELECT 1 FROM v2_intakes WHERE id=w.id AND summary_id=?) AND ${files}=? AND ${messages}=? AND ${sources}=? AND (${issuedProof.sql})`,
+    values: [
+      row.encrypted_payload,
+      row.summary_id,
+      row.files,
+      row.messages,
+      row.sources,
+      ...issuedProof.values,
+    ],
   };
   if (
     !(await core
