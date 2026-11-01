@@ -96,40 +96,36 @@ async function seed(page: Page) {
   }, storage);
 }
 
-test("summary overview saves and reconnects while its stored facts remain intact", async ({
+test("canonical summary confirmation reconnects without rewriting its stored facts", async ({
   page,
 }) => {
   await seed(page);
   await page.goto(`${base}/summary`);
-  await expect(page.getByLabel("요약 편집", { exact: true })).toBeVisible();
-  const factsBefore = await page.evaluate(() =>
-    JSON.stringify(
+  const summaryBefore = await page.evaluate(
+    () =>
       JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")["completion-case"]
-        .summaryDetails.facts,
-    ),
+        .summaryDetails,
   );
+  await expect(page.getByText(summaryBefore.overview, { exact: true })).toBeVisible();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("사실 내용", { exact: true })).toHaveCount(0);
+  for (const fact of summaryBefore.facts)
+    await expect(page.getByText(fact.text, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
   await page
-    .getByLabel("요약 편집", { exact: true })
-    .fill("원본 확인 후 반환 연도를 정리한 합성 요약입니다.");
-  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(page.getByText("수정한 요약이 저장됐어요.", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
-    "원본 확인 후 반환 연도를 정리한 합성 요약입니다.",
-  );
-  expect(
-    await page.evaluate(() =>
-      JSON.stringify(
-        JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")["completion-case"]
-          .summaryDetails.facts,
-      ),
-    ),
-  ).toBe(factsBefore);
-  await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?" })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
   await expect(page).toHaveURL(base);
+  await page.reload();
   await page.goto(`${base}/summary`);
-  await expect(page.getByLabel("요약 편집", { exact: true })).toBeEditable();
+  await expect(page.getByText(summaryBefore.overview, { exact: true })).toBeVisible();
+  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveCount(0);
+  const saved = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")["completion-case"],
+  );
+  expect(saved.stage).toBe("active");
+  expect(saved.summaryDetails).toEqual(summaryBefore);
   await page.getByRole("link", { name: "작업 공간으로 돌아가기", exact: true }).last().click();
   await expect(page).toHaveURL(base);
 });
@@ -231,12 +227,14 @@ test("login preserves a permitted path and rejects an external return destinatio
   await expect(page).toHaveURL(/\/app$/);
 });
 
-test("structured drafts and file corrections retain their base revision across a peer edit", async ({
+test("summary explanations and file corrections retain their base revision across a peer edit", async ({
   page,
 }) => {
   await seed(page);
   await page.goto(`${base}/summary`);
-  await page.getByLabel("요약 편집", { exact: true }).fill("아직 저장하지 않은 사실 초안");
+  await page.getByRole("button", { name: "다른 부분이 있어요", exact: true }).click();
+  const explanation = page.getByRole("textbox", { name: "다른 부분을 알려주세요", exact: true });
+  await explanation.fill("아직 저장하지 않은 사실 초안");
   await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
     const { api } = await import(path);
@@ -247,19 +245,22 @@ test("structured drafts and file corrections retain their base revision across a
     });
     window.dispatchEvent(new Event("focus"));
   });
-  await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByLabel("요약 편집", { exact: true })).toHaveValue(
-    "아직 저장하지 않은 사실 초안",
-  );
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
-  await expect(page.getByLabel("요약 편집")).toHaveValue("다른 탭에서 저장한 요약");
-  await page.evaluate(async () => {
-    const path = "/src/client/api/index.ts";
-    const { api } = await import(path);
-    const item = await api.cases.get("completion-case");
-    await api.cases.confirmSummary(item.id, { expectedRevision: item.revision });
-  });
+  const explanationDialog = page.getByRole("dialog", { name: "어떤 부분이 다른가요?" });
+  await expect(explanationDialog.getByRole("alert")).toBeVisible();
+  await expect(explanation).toHaveValue("아직 저장하지 않은 사실 초안");
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeDisabled();
+  await explanationDialog.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await expect(explanation).toHaveValue("아직 저장하지 않은 사실 초안");
+  await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeEnabled();
+  await expect(page.getByText("다른 탭에서 저장한 요약", { exact: true })).toBeVisible();
+  // Discard only through an explicit user action after the peer conflict is resolved.
+  await explanationDialog.getByRole("button", { name: "취소", exact: true }).click();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?" })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
+  await expect(page).toHaveURL(base);
   await page.goto(`${base}/files?file=file-one`);
   await page.getByLabel("확인·교정한 내용").fill("저장하지 않은 자료 교정 초안");
   await page.evaluate(async () => {
