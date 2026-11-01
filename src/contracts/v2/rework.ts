@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   boundedText,
+  CASE_NARRATIVE_MIN_LENGTH,
   displayText,
   opaqueIdSchema,
   revisionSchema,
@@ -8,11 +9,10 @@ import {
 } from "../common";
 import { v2FailureCodeSchema, v2HashSchema, v2IdListSchema } from "./common";
 import { v2SummarySchema } from "./intake";
-import { v2CreateCaseRequestSchema, v2WorkspaceSchema } from "./workspace";
+import { v2WorkspaceSchema } from "./workspace";
 
 /** Opt-in only. Existing v1/v2 workspace, intake and report responses stay unchanged. */
-export const CONVERSATION_REPORT_VERSION = "conversation-report-v1" as const;
-export const v2ReworkVersionSchema = z.literal(CONVERSATION_REPORT_VERSION);
+export const v2ReworkVersionSchema = z.literal("conversation-report-v1");
 export const v2CasePurposeSchema = z.enum(["prepare_claim", "respond_to_claim", "unconfirmed"]);
 export const v2ConfirmedCasePurposeSchema = v2CasePurposeSchema.exclude(["unconfirmed"]);
 export const v2ProcedureSchema = z.strictObject({
@@ -40,7 +40,11 @@ export const v2CaseContextUpdateSchema = z.strictObject({
   subjectContext: z.enum(["individual", "company"]),
   procedure: v2ProcedureSchema,
 });
-export const v2ReworkCreateCaseRequestSchema = v2CreateCaseRequestSchema.extend({
+export const v2ReworkCreateCaseRequestSchema = z.strictObject({
+  narrative: boundedText(CASE_NARRATIVE_MIN_LENGTH, 5000),
+  subjectContext: z.enum(["individual", "company"]),
+  jurisdiction: z.literal("KR"),
+  turnstileToken: boundedText(1, 2048),
   casePurpose: v2ConfirmedCasePurposeSchema,
 });
 export const v2CaseContextViewSchema = z.strictObject({
@@ -50,7 +54,8 @@ export const v2CaseContextViewSchema = z.strictObject({
 });
 export const v2ReworkCreateCaseResponseSchema = z.strictObject({
   contractVersion: v2ReworkVersionSchema,
-  workspace: v2WorkspaceSchema,
+  // The opt-in and old workspace schemas may be split across SSR chunks.
+  workspace: z.lazy(() => v2WorkspaceSchema),
   context: v2CaseContextSchema,
 });
 /** File metadata and observation edits must change fileRevision or the evidence digest. */

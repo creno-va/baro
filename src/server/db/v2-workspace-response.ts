@@ -3,12 +3,14 @@ import {
   type V2Action,
   type V2ActionCompletion,
   type V2AssistantMessage,
+  type V2ConversationIntent,
   type V2Fact,
   type V2Summary,
   type V2TimelineEntry,
   type V2ToolResult,
   v2ActionCompletionSchema,
   v2ActionSchema,
+  v2ConversationIntentSchema,
   v2FactSchema,
   v2MessageSchema,
   v2SummarySchema,
@@ -54,6 +56,7 @@ export function createV2WorkspaceResponseRepository(
         timeline: V2TimelineEntry[];
         toolResults?: V2ToolResult[];
         precedentComparison?: V2PrecedentComparison;
+        conversationIntent?: V2ConversationIntent | null;
       },
       onFailure?: (failure: WorkspacePublicationFailure) => void,
     ) {
@@ -80,6 +83,10 @@ export function createV2WorkspaceResponseRepository(
         );
         const timeline = parse(z.array(v2TimelineEntrySchema).max(5), input.timeline);
         const toolResults = parse(v2ToolResultsSchema, input.toolResults ?? []);
+        const conversationIntent =
+          input.conversationIntent == null
+            ? null
+            : parse(v2ConversationIntentSchema, input.conversationIntent);
         const comparison = input.precedentComparison
           ? parse(v2PrecedentComparisonSchema, input.precedentComparison)
           : undefined;
@@ -301,6 +308,7 @@ export function createV2WorkspaceResponseRepository(
           ...message,
           ...(toolResults.length ? { toolResults } : {}),
           ...(comparison ? { precedentComparison: comparison } : {}),
+          ...(conversationIntent ? { conversationIntent } : {}),
         });
         statements.push(
           core.statement(
