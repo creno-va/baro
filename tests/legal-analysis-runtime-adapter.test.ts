@@ -7,7 +7,12 @@ import {
 } from "../src/server/modules/legal-retrieval/analysis/runtime-adapter";
 import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/bound-sources";
 import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
-import { ModelError } from "../src/server/modules/llm-gateway/service";
+import type {
+  GatewayAttemptRequest,
+  GatewayTransportReceipt,
+} from "../src/server/modules/llm-gateway/attempts";
+import { MODEL_ID } from "../src/server/modules/llm-gateway/prompts";
+import { createLlmGateway, ModelError } from "../src/server/modules/llm-gateway/service";
 import { workspaceModelInput } from "../src/server/modules/workspace/pipeline";
 import sample from "./fixtures/legal/analysis/scenarios.json";
 import { legalAnalysisFixture } from "./helpers/legal-analysis-fixture";
@@ -136,6 +141,7 @@ async function fixture(
     correction?: boolean;
     defaultReader?: boolean;
     readerError?: boolean;
+    nativeGateway?: boolean;
     beforeReserve?: (f: Awaited<ReturnType<typeof legalAnalysisFixture>>) => void;
     beforeReturn?: (
       phase: LegalAnalysisGatewayPhase,
@@ -190,6 +196,81 @@ async function fixture(
     providerDispatches = 0,
     attempts = 0,
     clock = NOW;
+  const ledgerRequests: GatewayAttemptRequest[] = [];
+  const receipts: GatewayTransportReceipt[] = [];
+  const settled: Promise<void>[] = [];
+  const native = createLlmGateway(
+    {
+      APP_ENV: "preview",
+      AI_GATEWAY_ID: "synthetic-gateway",
+      AI: {
+        async run(model, wire, settings) {
+          const phase = calls.at(-1)?.phase;
+          if (!phase) throw new Error("Missing synthetic phase");
+          expect(model).toBe(MODEL_ID);
+          expect(settings.gateway).toEqual({
+            id: "synthetic-gateway",
+            collectLog: false,
+            skipCache: true,
+          });
+          expect(wire).not.toHaveProperty("messages");
+          expect(wire).toMatchObject({
+            generationConfig: {
+              responseMimeType: "application/json",
+              thinkingConfig: {
+                thinkingLevel: phase === "workspace_legal_audit" ? "MEDIUM" : "LOW",
+                includeThoughts: false,
+              },
+            },
+          });
+          const value = wire as { contents: { parts: { text: string }[] }[] };
+          const projected = JSON.parse(value.contents[0]?.parts[0]?.text ?? "null").data;
+          const output =
+            phase === "workspace_legal_plan"
+              ? plan(options.many)
+              : phase === "workspace_legal_analysis"
+                ? draft(projected)
+                : {
+                    pass: true,
+                    findings: [],
+                    unsupportedFactIds: [],
+                    legalClaimsSupported: true,
+                    strategyDetected: false,
+                  };
+          providerDispatches++;
+          return {
+            candidates: [
+              { content: { parts: [{ text: JSON.stringify({ output }) }] }, finishReason: "STOP" },
+            ],
+            usageMetadata: {
+              promptTokenCount: 100,
+              candidatesTokenCount: 100,
+              thoughtsTokenCount: 0,
+              totalTokenCount: 200,
+              cachedContentTokenCount: 0,
+            },
+            responseId: `synthetic_response_${providerDispatches}`,
+          };
+        },
+      },
+    },
+    {
+      requireAttemptLedger: true,
+      attemptLedger: {
+        beforeDispatch: async (request) => {
+          ledgerRequests.push(request);
+          return { invocationId: request.invocationId, attemptId: crypto.randomUUID() };
+        },
+        confirmDispatch: async () => true,
+        afterTransport: async (_handle, receipt) => {
+          receipts.push(receipt);
+        },
+        waitUntil: (promise) => {
+          settled.push(promise);
+        },
+      },
+    },
+  );
   const adapter = createLegalAnalysisRuntimeAdapter({
     core: f.core,
     env: { LAW_API_OC: "synthetic-only" },
@@ -198,6 +279,8 @@ async function fixture(
     gateway: {
       async call(phase, value, requestId, reserve, reserveCorrection, invocationId) {
         calls.push({ phase, input: value, requestId, invocationId });
+        if (options.nativeGateway)
+          return native.call(phase, value, requestId, reserve, reserveCorrection, invocationId);
         if (phase === "workspace_legal_plan" && options.rejectPlan)
           throw new ModelError("MODEL_UNAVAILABLE");
         if (!(await reserve())) throw new ModelError("MODEL_UNAVAILABLE");
@@ -290,6 +373,9 @@ async function fixture(
     batches,
     ids,
     counts: () => ({ identityReads, providerDispatches, attempts }),
+    ledgerRequests,
+    receipts,
+    settled,
     setTime: (value: string) => {
       clock = value;
     },
@@ -353,6 +439,29 @@ test("five verified originals are revalidated in batches of four without weakeni
     expect(f.db.sqlite.query("SELECT count(*) AS n FROM v2_citation_bindings").get()).toEqual({
       n: 5,
     });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("registered native gateway and its attempt ledger execute the adapter's three phases end to end", async () => {
+  const f = await fixture({ nativeGateway: true, defaultReader: true });
+  try {
+    const result = await f.adapter.prepare(f.input);
+    await Promise.all(f.settled);
+    expect(result.snapshot.status).toBe("ready");
+    expect(f.ledgerRequests.map((r) => r.phase)).toEqual(phases);
+    expect(
+      f.ledgerRequests.every(
+        (r) =>
+          r.invocationId === f.ids[r.phase as LegalAnalysisGatewayPhase] &&
+          r.attemptOrdinal === 1 &&
+          r.wireInputSha256.length === 64,
+      ),
+    ).toBe(true);
+    expect(f.receipts).toHaveLength(3);
+    expect(f.receipts.every((r) => r.transport === "response" && !r.definitiveNoCharge)).toBe(true);
+    expect(f.counts()).toEqual({ identityReads: 3, providerDispatches: 3, attempts: 4 });
   } finally {
     f.db.close();
   }
