@@ -570,10 +570,14 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
             name: "빠진 내용을 알려주세요",
             exact: true,
           });
-          await expect(explanation).toHaveValue("방금 올린 계약서의 원본은 제가 보관하고 있습니다.");
+          await expect(explanation).toHaveValue(
+            "방금 올린 계약서의 원본은 제가 보관하고 있습니다.",
+          );
           const requestChange = page.getByRole("button", { name: "변경안 요청하기", exact: true });
           await expect(requestChange).toBeEnabled();
-          expect(f.observations.filter((item) => item.method === "POST")).toHaveLength(beforeRefresh);
+          expect(f.observations.filter((item) => item.method === "POST")).toHaveLength(
+            beforeRefresh,
+          );
           await requestChange.click();
         }
         await expect(confirmChange).toBeVisible();
