@@ -604,6 +604,7 @@ test("the analysis module initializes and validates synthetic claims in actual l
     expect(await response.json()).toMatchObject({
       status: "ready",
       citations: 2,
+      evidenceHash: prepared.snapshot.basis.evidenceHash,
       calls: 3,
       synthetic: true,
       runtimeWorker: true,

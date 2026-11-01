@@ -30,6 +30,7 @@ export const legalAnalysisInputSchema = z.strictObject({
   }),
 });
 export type LegalAnalysisInput = z.infer<typeof legalAnalysisInputSchema>;
+const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Stable object keys; source strings and positions retain their exact bytes. */
 export function canonicalAnalysisJson(value: unknown): string {
@@ -70,7 +71,7 @@ export async function analysisBasis(raw: LegalAnalysisInput): Promise<V2Analysis
           a.fileId < b.fileId ? -1 : a.fileId > b.fileId ? 1 : 0,
         ),
         materials: [...input.materials].sort((a, b) =>
-          canonicalAnalysisJson(a).localeCompare(canonicalAnalysisJson(b)),
+          compare(canonicalAnalysisJson(a), canonicalAnalysisJson(b)),
         ),
         scope: { ...input.scope, excludedFileIds: [...input.scope.excludedFileIds].sort() },
       }),
@@ -93,11 +94,9 @@ export async function isAnalysisCurrent(
           .sort(),
       ) &&
     canonicalAnalysisJson(
-      [...snapshot.includedEvidence].sort((a, b) => a.fileId.localeCompare(b.fileId)),
+      [...snapshot.includedEvidence].sort((a, b) => compare(a.fileId, b.fileId)),
     ) ===
-      canonicalAnalysisJson(
-        [...input.includedEvidence].sort((a, b) => a.fileId.localeCompare(b.fileId)),
-      )
+      canonicalAnalysisJson([...input.includedEvidence].sort((a, b) => compare(a.fileId, b.fileId)))
   );
 }
 

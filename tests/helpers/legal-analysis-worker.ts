@@ -45,6 +45,7 @@ export default {
     return Response.json({
       status: result.snapshot.status,
       citations: result.snapshot.citations.length,
+      evidenceHash: result.snapshot.basis.evidenceHash,
       calls,
       synthetic: true,
       runtimeWorker: true,
