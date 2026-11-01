@@ -3,7 +3,11 @@ export default defineConfig({
   testDir: "../browser",
   testMatch: "conversation-agent.e2e.ts",
   workers: 1,
-  use: { baseURL: "http://127.0.0.1:4394", browserName: "chromium", trace: "off" },
+  use: { baseURL: "http://127.0.0.1:4394", trace: "off" },
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" } },
+    { name: "webkit", use: { browserName: "webkit" } },
+  ],
   webServer: {
     env: { PUBLIC_API_MODE: "mock", BARO_UI_TEST_FIXTURE: "true" },
     command:
