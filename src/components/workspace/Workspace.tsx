@@ -553,7 +553,7 @@ export function Workspace({
       if (!(await verify()) || !current(epoch)) return;
       apply(next);
       preparationAttempt.current = null;
-      setNotice(`${label}에 최신 내용을 반영하도록 요청했어요.`);
+      if (target === "timeline") setNotice(`${label}에 최신 내용을 반영하도록 요청했어요.`);
     });
   }
   async function retryFile(fileId: string) {
