@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { CURRENT_POLICY_VERSIONS } from "../src/contracts/consent";
 import { createCaseDataCipher } from "../src/server/crypto";
 import { createV2AccountingRepository } from "../src/server/db/v2-accounting";
@@ -10,16 +10,18 @@ import { reconcileFileUploads } from "../src/server/modules/files/reconcile";
 import { createFilesService, type PrivateBucket } from "../src/server/modules/files/service";
 import type { createTestDatabase } from "./helpers/d1";
 import { seedTestSession } from "./helpers/session";
-import { ready } from "./helpers/storage-capacity";
+import { NOW, ready } from "./helpers/storage-capacity";
 
 const databases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
+  setSystemTime();
   for (const db of databases.splice(0)) {
     expect(db.sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
     db.close();
   }
 });
 async function fixture(limits: { headLimit?: number; deleteLimit?: number } = {}) {
+  setSystemTime(new Date(NOW));
   const { db } = await ready({ getLimit: 100, headLimit: 100, deleteLimit: 100, ...limits });
   const old = new Date(Date.now() - 360000).toISOString();
   const user = await seedTestSession(db, { now: Date.parse(old), consent: true });

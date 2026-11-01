@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import {
   initializeEmptyPhysicalStorage,
@@ -19,6 +19,7 @@ import { fixture, intent } from "./helpers/storage-capacity";
 const SHA = "a".repeat(40);
 const coldDatabases: Awaited<ReturnType<typeof createTestDatabase>>[] = [];
 afterEach(() => {
+  setSystemTime();
   for (const db of coldDatabases.splice(0)) db.close();
 });
 
@@ -349,8 +350,9 @@ test("native D1 cold bootstrap commits physical capacity with no financial contr
 
 async function setup() {
   const f = await fixture();
-  const now = new Date().toISOString(),
-    validUntil = new Date(Date.now() + 3600000).toISOString();
+  setSystemTime(new Date(f.actor.now));
+  const now = f.actor.now,
+    validUntil = new Date(Date.parse(now) + 3600000).toISOString();
   const observation = observationSchema.parse({
     ...historical,
     checkedAt: now,
