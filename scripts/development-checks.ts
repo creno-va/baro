@@ -70,9 +70,10 @@ export function browserTargets(files: string[], available: string[]): string[] {
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
   const caseFlows =
-    /\/(cases|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-home|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
+    /\/(cases|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-(?:home|agent)|rework-(?:conversation|shared-mock)|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
   const lawyerFlows = /\/(directory(?:-[^/]+)?|lawyers?(?:-[^/]+)?)\.e2e\.ts$/;
-  const reportFlows = /\/(reports?(?:-[^/]+)?|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
+  const reportFlows =
+    /\/(reports?(?:-[^/]+)?|rework-(?:conversation|shared-mock)|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
   const rules: [RegExp, RegExp][] = [
     [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
     // Shared session notifications and return paths affect every signed-in area.
@@ -91,6 +92,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
       caseFlows,
     ],
     [/^tests\/browser\/(?:conversation|intake103)\.config\.ts$/, caseFlows],
+    [/^tests\/helpers\/(?:conversation-agent|rework-)[^/]*\.(?:ts|tsx)$/, caseFlows],
     [/^tests\/browser\/lawyer-public\.config\.ts$/, lawyerFlows],
     [
       /^tests\/browser\/integration\.config\.ts$/,
@@ -209,6 +211,26 @@ export async function runBrowserTargets(
     if (code !== 0) failures.push(`${command.join(" ")} (exit ${code})`);
   };
   targets = normalizedPaths(targets);
+  const reworkGroups = [
+    {
+      target: "tests/browser/conversation-agent.e2e.ts",
+      config: "tests/helpers/conversation-agent.playwright.config.ts",
+      flags: {},
+    },
+    {
+      target: "tests/browser/rework-shared-mock.e2e.ts",
+      config: "tests/helpers/rework-mock-browser.playwright.config.ts",
+      flags: { BARO_REWORK_SHARED_MOCK: "true" },
+    },
+    {
+      target: "tests/browser/rework-conversation.e2e.ts",
+      config: "tests/helpers/rework-browser.playwright.config.ts",
+      flags: { BARO_REWORK_BROWSER_INTEGRATED: "true" },
+    },
+  ];
+  const reworkTargets = targets.filter((path) =>
+    reworkGroups.some((group) => group.target === path),
+  );
   const mockTargets = targets.filter((path) =>
     /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
       path,
@@ -227,6 +249,7 @@ export async function runBrowserTargets(
       !customerRealTargets.includes(path) &&
       !reportRealTargets.includes(path) &&
       !recoveryTargets.includes(path) &&
+      !reworkTargets.includes(path) &&
       existsSync(path.replace(".e2e.ts", ".config.ts")),
   );
   const regularTargets = targets.filter(
@@ -236,6 +259,7 @@ export async function runBrowserTargets(
       !customerRealTargets.includes(path) &&
       !reportRealTargets.includes(path) &&
       !recoveryTargets.includes(path) &&
+      !reworkTargets.includes(path) &&
       !standaloneTargets.includes(path),
   );
   if (regularTargets.length) {
@@ -280,6 +304,25 @@ export async function runBrowserTargets(
   for (const target of standaloneTargets) {
     const config = target.replace(".e2e.ts", ".config.ts");
     await run(["bunx", "playwright", "test", "--config", config, target]);
+  }
+  for (const group of reworkGroups) {
+    if (!reworkTargets.includes(group.target)) continue;
+    if (group.flags.BARO_REWORK_BROWSER_INTEGRATED === "true")
+      await run([
+        "docker",
+        "build",
+        "--target",
+        "office-runtime",
+        "-f",
+        "services/file-processor/Dockerfile",
+        "-t",
+        "baro-report-rendering",
+        ".",
+      ]);
+    await run(["bunx", "playwright", "test", "--config", group.config, group.target], {
+      ...process.env,
+      ...group.flags,
+    });
   }
   if (mockTargets.length) {
     for (const [config, selected] of [

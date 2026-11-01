@@ -193,7 +193,7 @@ export function createSummaryReconciliationStorage(
       );
       const source = await ports.authorize(actor, {
         write,
-        ...(write && record ? { requestMessage: record.value.requestMessage } : {}),
+        ...(record ? { requestMessage: record.value.requestMessage } : {}),
       });
       const end = await records.head(actor, actor.caseId, "reconciliation", actor.caseId);
       if (!same(start, end) || (record?.id ?? null) !== (end?.id ?? null)) continue;

@@ -201,6 +201,26 @@ DB 실제 publication/반복 대화/strict public DTO/unknowns clear·action 변
 
 이 tree의 bun ci·validate:quick 전체 profile·validate:db drift/fresh/upgrade·validate:build 및 built local workerd 부팅이 모두 성공했다. 최초 quick은 pinned Node PATH가 빠져 보안 baseline probe가 실패했으며, 지정된 Node24.19.0 경로를 사용한 재실행에서 보안 원본 실패/패치 후 거절 검사를 그대로 통과했다. 이를 제품 보호 완화로 해결하지 않았다.
 
+PR671은 변경된 base의 required Quality gate expected로 첫 병합이 거절되어 base를 갱신했다. exact4420b9dd070565a3287ec92fa45ba22a42bee7ea의 Quality41327186274 성공 뒤 main14727d98a108dcf8a8390ec04356a6350a9fc3c6에 병합했으며 보호 규칙을 우회하지 않았다. PR678 exact4bc3a8d15a07c98d8d65026f639760bb467f55bb의 Quality41327474613/Legal41327474628/native41327474743 성공 뒤 main5d3bda3c168551ac42dc468abc8077b2d70fb5da에 병합했다.04의 actual API neutral/intent-only4종138 assertions가 이 main에서 통과했다. 마지막 모델 실행은 chat/audit2개뿐이고 공식 조회·report 생성 증가0, 기존 snapshot/report ID·ready 상태를 유지했다.
+
+PR672 exact5d37bbce2e543174d16cf823ed84560e73c9a82b의 Quality41328012807/Legal41328012753/native41328012730 성공 뒤 mainef58bcc880cbf5b1e6911ab107c382b1f641bb59에 병합했다. fixture foundation만 통합하며 최종 Workspace CLI/14브라우저와 neutral4종 회귀는642에서 소비한다. 실제 마지막 receipt-run은 PDF52,068bytes, blob cipher52,713bytes·stored1, reservation stored1/52,068bytes, PDF binding held/stopped1/52,713bytes, capacity held59,739=totals59,739=held bindings8개 합계이고 writer8개 stopped였다.05가 동일 PDF hash와 JSON 쌍을 독립 확인했고 이전52,070bytes 관측 run과 분리 보존했다. 비용 금액/시각·hold·원장을 조작하지 않았다.
+
+00은 scripts/development-checks.ts와 해당 test를 단독 정비한다. 새 conversation-agent11개, shared-mock2개, actual rework14개를 default server에서 제외하고 담당의 전용 config로 순차 실행한다. shared/integrated의 명시 opt-in을 설정해 skip guard 때문에 실제 검사가 빠지지 않게 하며, 실제14 선택 시 기존 office-runtime Docker image를 먼저 빌드한다. 현재 full의 native build는 browser 뒤이므로 실제 기술 선행 조건을 명시한 것이다. build/브라우저 실패는 기존대로 모아 전체 실패로 남기고 다른 group 검사를 숨기지 않는다. 선택·routing·guard·Docker 순서와 실패 보존25 tests565 assertions가 통과했고, 최종 main manual full의 실제27개 실행은 별도로 확인한다.
+
+### 실제 웹·설치 클라이언트 연결의 최종 경계
+
+PR681 exact7087a0fb2ca056deeb863b1663f183b187f3338a의 Quality41328391182 성공 후 maineee8691631aff1e5bf13a73bb35a58a9c4190642에 병합했다. 동일 원문의 실제 재검증 시 원래 citation 시각을 보존하는 가용성 수정이며119 tests1201 assertions의 실제 source repository/binding/publication authority/암호화 resolution CAS를 검증했다. 원문·권한·TTL·다른 owner/scope·늦은 변경의 거절은 유지한다.
+
+PR679 exactf825bc894a748ea9d9a5ca30fb6c521d74935cec의 Quality41328824041 성공 후 main0d9eac02baa2b58f8891c24b628d4e2eeb93c93c, PR680 exact21c0893ad7b0e7b42ac8e7cd15246725eae68550의 Quality41329254521 성공 후 main92d6fe1ab29604ec4cc4ebb465be0f0adb847e8a, PR682 exact39e9a8b6db179781c4aaac5e6664d44c84c05200의 Quality41330558747 성공 후 main40503502ebea21e850039b1001915d732305ccf0에 순차 병합했다.679의 기존 config를 사용한 공통 Chromium57개와 shared lawyer client14/97,680의 공유3여정 Chromium/WebKit 각3개 및 실제 원본 bytearray/선택 ZIP CRC·UTF8명·전체 내용 검증이 통과했다. PDF/ZIP이 합성인지 실제 native 경로인지 품질 기록에서 구분한다. architecture의 ADR0018 cross-reference도 기존 unavailable 법률 설명 금지를 보존하며 명확히 했다.
+
+04의 actual14 연결은 두 추가 실제 경계에서 멈춰 동일 원인 반복을 중단했다.01은 확정 뒤 자동 technical revision을 UI가 peer 변경으로 오인하는 오류를683에서 수정한다. 초기 확인은 원래 사용자가 읽은 canonical 전체/summary revision·동일 owner/case·성공 POST와 현재 동일 fresh pair의 summaryConfirmed를 묶어 navigation만 허용한다. 자료/맥락의 후속 변경에 따른 분석·리포트 stale 판단을 이 이동 허용으로 덮어쓰지 않는다. 다른 canonical이나 미확정·다른 owner·다른 receipt는 계속 거절한다.
+
+00의 `codex/621-rework-public-job-projection`은 공유 client의 완료 assistant 누락 검사를 유지하면서 서버가 암호화 task/immutable reconciliation admission의 job·operation·target revision·owner 관계를 검증한 내부 작업만 public current/latest chat 표시에서 분리한다. latest의 내부 작업은 기존 nullable 계약의 null이며 과거 작업을 최신으로 승격하지 않는다. 실제 raw current-job lock·CAS·실패·작업·원장·receipt는 그대로이고, 이미 알려진 job ID의 owner-checked GET도 유지한다. 손상한 encrypted proof나 identity 불일치는 성공으로 숨기지 않는다. API DTO·schema/migration·모델·공급자는 변경하지 않는다.
+
+또한 저장된 issued statement를 readonly authorize에도 재검증하고, 해당 admission revision까지의 citation binding 집합만 재조율 source digest/authority에 고정한다. 이후 자동 분석이 만든 별도 binding 추가는 사용자 입력 변경이 아니며, 원래 admitted source의 본문/hash/rights/TTL과 최종 owner/revision/source SQL fence는 유지한다. 수정 전 main의 두 부분을 각각 복원한 실험에서 실제 private-job projection과 이후 binding의 digest 오탐이 독립 실패했다. 최종 코드는 모두 복원했다.
+
+관련46 tests585 assertions가 통과했다. 양 입장의 실제2×3→재조율 확정→native legal analysis/report→설치 Workspace facade get, 현재 canonical receipt 유지·같은 report ID·추가 모델/조회0, 일반 완료 chat의 missing-assistant3회 재조회 후 실제 오류, raw job lock/legacy GET, 다른 owner·operation·암호화 손상과 원래 source 권한 변조의 거절을 포함한다. PDF opt-in1개는 이 focused 실행에서 skip이며 이미 수행한 actual native PDF 및 최종14의 다운로드와 별도다. bun ci/validate:quick·DB drift/fresh/upgrade·production build/local workerd가 통과했다. 새 test fixture의 API 배열 형식·strict guard·타입 오류는 제품 보호를 바꾸지 않고 수정했다. CI/main 뒤04·01이 실제 화면을 다시 소비하며 최종14·최종PDF·최종 main 수동 full은 아직 미완료다.
+
 PR675 exact85093766b851e40b35d40b7e2e4d08fbe902fb39의 Quality41324914769/Legal41324914750/nativePDF41324914761 성공 후 main26427659ac8a386334a545e0bf32b4cd3ba1073c에 병합했다. 실제 fixture의 Syntax400은 반복 검사에서0으로 해소됐지만 재조율 context read의 별도503은 남았다.04가 임시 enum 진단으로 readWorkspaceContext의 readIntake→summary unavailable 경합까지 좁혔으며 원복 완료했다.00은 실제 source proof가 바뀐 경우만 stale로 분류하고 unchanged source의 실제 오류는 보존하는 후속을 진행한다. DB corruption 거절을 완화하거나 unknown503을 반복해 성공으로 만들지 않는다.
 
 PR673 exact887187a9b22c58e4b589d3dec7dd5dde01cf3949의 Quality41325273600/nativePDF41325273571 성공 후 main32abc5f79bf04fede1dfdce19c13f967e90c92a3에 병합했다. private scoped read 포트만 추가됐으며00의 실제 current-scope 전후 확인/runtime binding은 아직 남아 있다.

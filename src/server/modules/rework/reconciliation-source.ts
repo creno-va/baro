@@ -1,3 +1,4 @@
+import { revisionSchema } from "../../../contracts/common";
 import {
   type V2Summary,
   type V2UserMessage,
@@ -21,7 +22,8 @@ import { createReworkCaseService, ReworkError } from "./case-context";
 // rely on expiring idempotency rows to identify this durable message provenance.
 const messages = `(SELECT json_group_array(json_object('id',id,'revision',revision,'encrypted_payload',encrypted_payload)) FROM (SELECT m.id,m.revision,m.encrypted_payload FROM v2_messages m WHERE m.workspace_id=w.id AND m.role='user' AND NOT EXISTS(SELECT 1 FROM v2_rework_records rr WHERE rr.workspace_id=w.id AND rr.owner_id=w.owner_id AND rr.entity_id=w.id AND rr.kind='reconciliation' AND rr.state='published' AND rr.workspace_revision=m.workspace_revision) ORDER BY m.id))`;
 const files = `(SELECT json_group_array(json_object('id',id,'revision',revision,'state',state,'encrypted_payload',encrypted_payload,'manifest_snapshot_id',manifest_snapshot_id,'coverage_snapshot_id',coverage_snapshot_id)) FROM (SELECT f.id,f.revision,f.state,f.encrypted_payload,f.manifest_snapshot_id,f.coverage_snapshot_id FROM v2_files f WHERE f.workspace_id=w.id AND f.state!='deleting' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ORDER BY f.id))`;
-const sources = `(SELECT json_group_array(json_object('id',id,'citation_json',citation_json,'content_hash',content_hash,'extractor_version',extractor_version,'expires_at',expires_at,'rights_provenance',rights_provenance)) FROM (SELECT b.id,b.citation_json,s.content_hash,s.extractor_version,s.expires_at,s.rights_provenance FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=w.id ORDER BY b.id))`;
+const sourceProjection = (revision?: number) =>
+  `(SELECT json_group_array(json_object('id',id,'citation_json',citation_json,'content_hash',content_hash,'extractor_version',extractor_version,'expires_at',expires_at,'rights_provenance',rights_provenance)) FROM (SELECT b.id,b.citation_json,s.content_hash,s.extractor_version,s.expires_at,s.rights_provenance FROM v2_citation_bindings b JOIN v2_official_sources s ON s.source_id=b.source_id WHERE b.workspace_id=w.id ${revision === undefined ? "" : `AND b.snapshot_revision<=${revisionSchema.parse(revision)}`} ORDER BY b.id))`;
 
 /** Full canonical summary with honest bounded history/source coverage. This is
  * separate from the eight-fact conversational projection and performs no external IO. */
@@ -30,6 +32,10 @@ export async function loadReconciliationSource(
   actor: SummaryReconciliationActor,
   options: { write: boolean; requestMessage?: V2UserMessage; admittingMessage?: true },
 ): Promise<ReconciliationAuthority> {
+  // A receipt concerns the sources admitted with its immutable explanation.
+  // Later automatic research can add bindings without changing that statement.
+  // Existing admitted sources still retain their full body/hash/rights/TTL fences.
+  const sources = sourceProjection(options.requestMessage?.workspaceRevision);
   const access = await readCustomerConsentSnapshot(core.binding, actor.ownerId);
   if (!["customer", "lawyer"].includes(access.accountType)) throw new ReworkError("NOT_FOUND");
   if (options.write && !access.currentConsent) throw new ReworkError("CONSENT_REQUIRED");
