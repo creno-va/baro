@@ -20,6 +20,8 @@ export type EvidenceUploadProps = {
   onUploaded: (files: FileView[]) => Promise<unknown>;
   onError?: (cause: unknown) => unknown;
   onBusyChange?: (busy: boolean) => void;
+  /** Includes local selections and unsaved observation corrections. */
+  onDirtyChange?: (dirty: boolean) => void;
   onEvidenceChanged?: () => Promise<unknown>;
   /** Use the existing selectedFileIds message path and then read fresh revisions. */
   onReflect?: (fileId: string) => Promise<unknown>;
@@ -37,6 +39,7 @@ function EvidenceUploadEditor({
   onUploaded,
   onError,
   onBusyChange,
+  onDirtyChange,
   onEvidenceChanged,
   onReflect,
 }: EvidenceUploadProps) {
@@ -57,6 +60,11 @@ function EvidenceUploadEditor({
   scope.current = upload.scopeKey;
   const reviewFile = upload.uploaded.find((file) => file.id === reviewId);
   const busy = upload.busy || upload.selecting || reviewBusy || reflectBusy;
+  const dirty = reviewDirty || upload.local.length > 0 || upload.selecting;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
   useEffect(() => {
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);

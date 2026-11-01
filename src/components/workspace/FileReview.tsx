@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { FileReviewProgress, FileReviewView } from "../../client/api/types";
@@ -61,6 +61,7 @@ export function FileReview({
   onBusyChange?: (busy: boolean) => void;
   refreshVersion?: string;
 }) {
+  const fieldPrefix = useId();
   const [review, setReview] = useState<FileReviewView | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { text: string; included: boolean }>>({});
   const [busy, setBusy] = useState(false);
@@ -342,10 +343,10 @@ export function FileReview({
                   <summary>원본 추출 내용</summary>
                   <p style={{ whiteSpace: "pre-wrap" }}>{original.text}</p>
                 </details>
-                <label htmlFor={`observation-${ordinal}`}>확인·교정한 내용</label>
+                <label htmlFor={`${fieldPrefix}-observation-${ordinal}`}>확인·교정한 내용</label>
                 <textarea
                   rows={Math.min(10, Math.max(2, Math.ceil(draft.text.length / 45)))}
-                  id={`observation-${ordinal}`}
+                  id={`${fieldPrefix}-observation-${ordinal}`}
                   value={draft.text}
                   onChange={(e) => update({ text: e.target.value, included: draft.included })}
                 />
