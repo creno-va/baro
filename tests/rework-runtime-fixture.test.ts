@@ -330,40 +330,55 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
     }
   });
 
-test("an ordinary audited conversation without case changes preserves the analysis/report and starts no research", async () => {
-  const f = await createReworkRuntimeFixture({
-    browserOrigin: "http://127.0.0.1:4396",
-    purpose: "prepare_claim",
-    native: "unavailable",
-  });
-  try {
-    const state = await prepare(f, { reconcile: false });
-    const before = await stats(f);
-    const current = await json(f, "/workspace");
-    await json(f, "/messages", {
-      expectedRevision: current.workspaceRevision,
-      text: "현재 기록을 다시 읽어주세요.",
-      selectedFileIds: [],
+for (const scenario of [
+  { intent: null, text: "현재 기록을 다시 읽어주세요." },
+  { intent: "analyze_legal", text: "관련 판례 보여줘" },
+  { intent: "prepare_report", text: "보고서 만들어줘" },
+  { intent: "add_material", text: "계약서 올릴게" },
+] as const)
+  test(`an audited ${scenario.intent ?? "ordinary"} conversation without case changes preserves analysis/report and starts no research`, async () => {
+    const f = await createReworkRuntimeFixture({
+      browserOrigin: "http://127.0.0.1:4396",
+      purpose: "prepare_claim",
+      native: "unavailable",
     });
-    expect(
-      (
-        await f.control(
-          new Request("http://127.0.0.1:4396/__rework-test/settle", { method: "POST", body: "{}" }),
-        )
-      )?.ok,
-    ).toBe(true);
-    const after = await stats(f);
-    expect(after.models.slice(before.models.length)).toEqual(["workspace_chat", "workspace_audit"]);
-    expect(after.sources).toBe(before.sources);
-    expect(after.reports.total).toBe(before.reports.total);
-    const currentState = await json(f, "/rework/conversation");
-    expect(currentState.snapshot?.id).toBe(state.snapshot?.id);
-    expect(currentState.analysis.status).toBe("ready");
-    expect(currentState.report.id).toBe(state.report.id);
-  } finally {
-    await f.close();
-  }
-});
+    try {
+      const state = await prepare(f, { reconcile: false });
+      const before = await stats(f);
+      const current = await json(f, "/workspace");
+      await json(f, "/messages", {
+        expectedRevision: current.workspaceRevision,
+        text: scenario.text,
+        selectedFileIds: [],
+      });
+      expect(
+        (
+          await f.control(
+            new Request("http://127.0.0.1:4396/__rework-test/settle", {
+              method: "POST",
+              body: "{}",
+            }),
+          )
+        )?.ok,
+      ).toBe(true);
+      const after = await stats(f);
+      expect(after.models.slice(before.models.length)).toEqual([
+        "workspace_chat",
+        "workspace_audit",
+      ]);
+      expect(after.sources).toBe(before.sources);
+      expect(after.reports.total).toBe(before.reports.total);
+      const currentState = await json(f, "/rework/conversation");
+      expect(currentState.snapshot?.id).toBe(state.snapshot?.id);
+      expect(currentState.analysis.status).toBe("ready");
+      expect(currentState.report.id).toBe(state.report.id);
+      expect(currentState.intents.map((value) => value.intent)).toEqual(
+        scenario.intent ? [scenario.intent] : [],
+      );
+    } finally {
+      await f.close();
+    }
+  });
 
 test("an unavailable official source gives a limited report and passive reads do not retry it", async () => {
   const f = await createReworkRuntimeFixture({
