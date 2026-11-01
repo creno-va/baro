@@ -1,0 +1,109 @@
+import { expect, type Page, test } from "@playwright/test";
+import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
+
+// Enabled only when the central real runtime composition has passed CI/main.
+// This suite forwards HTTP; it never fulfills a fabricated analysis/report DTO.
+test.skip(
+  process.env.BARO_REWORK_BROWSER_INTEGRATED !== "true",
+  "Central runtime composition required",
+);
+
+async function openAction(page: Page, name: string) {
+  const group = page.getByRole("group", { name: "대화에서 이어갈 작업", exact: true });
+  const button = group.getByRole("button", { name, exact: true });
+  if (!(await button.isVisible())) await group.getByText("다른 작업", { exact: true }).click();
+  await button.click();
+}
+
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
+  for (const followup of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
+    test(`${purpose}: material → confirmation → automatic law/precedent → report → ${followup}, one conversation URL`, async ({
+      page,
+      context,
+    }, testInfo) => {
+      const browserOrigin = new URL(String(testInfo.project.use.baseURL)).origin;
+      const f = await openReworkBrowserFixture(context, browserOrigin, purpose);
+      try {
+        await page.setViewportSize({ width: 320, height: 844 });
+        const path = `/cases/${encodeURIComponent(f.info.caseId)}`;
+        await page.goto(path);
+        const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
+        await expect(composer).toBeEnabled();
+        await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
+        await page.getByRole("button", { name: "보내기", exact: true }).click();
+        const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+        await expect(materials).toBeVisible();
+        const chooser = page.waitForEvent("filechooser");
+        await materials.getByRole("button", { name: "파일 선택", exact: true }).click();
+        await (await chooser).setFiles({
+          name: "synthetic-conversation-contract.txt",
+          mimeType: "text/plain",
+          buffer: Buffer.from("합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다."),
+        });
+        await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
+          "synthetic-conversation-contract.txt",
+        );
+        await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+        await page.getByRole("button", { name: "보내기", exact: true }).click();
+        const attachment = page
+          .locator(".workspace-message-attachments")
+          .getByRole("link", {
+            name: "synthetic-conversation-contract.txt",
+            exact: true,
+          })
+          .last();
+        await expect(attachment).toBeVisible();
+        await attachment.click();
+        await expect(
+          page.getByRole("dialog").getByRole("heading", {
+            name: "synthetic-conversation-contract.txt",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+
+        await openAction(page, "사건 정리 재확인");
+        const confirmation = page.getByRole("region", { name: "사건 정리 재확인", exact: true });
+        await confirmation.getByRole("button", { name: "맞아요", exact: true }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "확인하고 계속", exact: true })
+          .click();
+        const analysis = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
+        await expect(
+          analysis.getByText("관련 판례와 우리 사건 비교", { exact: true }),
+        ).toBeVisible();
+        await expect(analysis.getByText("법 조항·요건과 사건 근거", { exact: true })).toBeVisible();
+        await expect(analysis.getByRole("link", { name: /공식 원문/ }).first()).toBeVisible();
+        expect(new URL(page.url()).pathname).toBe(path);
+
+        await composer.fill("현재 확인한 내용으로 보고서를 준비해 주세요.");
+        await page.getByRole("button", { name: "보내기", exact: true }).click();
+        const report = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+        await expect(
+          report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+        ).toBeVisible();
+        const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
+        await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
+        if (followup === "직접 해결")
+          await expect(
+            report.getByRole("heading", { name: "준비 순서와 확인할 안내", exact: true }),
+          ).toBeVisible();
+        else if (followup === "변호사와 해결")
+          await expect(
+            report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
+          ).toBeVisible();
+        else {
+          if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
+          expect((await download).suggestedFilename()).toMatch(/\.pdf$/i);
+        }
+        expect(new URL(page.url()).pathname).toBe(path);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await expect(composer).toBeInViewport();
+      } finally {
+        f.close();
+      }
+    });

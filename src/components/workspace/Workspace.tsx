@@ -35,7 +35,8 @@ import {
 import { CaseDetail } from "../analysis/CaseDetail";
 import { SummaryReconfirmation } from "../intake/SummaryReconfirmation";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
-import { downloadBlob } from "../reports/download";
+import { downloadReviewedReport } from "../reports/download-reviewed";
+import { ReportReview } from "../reports/ReportReview";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
@@ -624,21 +625,14 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     const session = await api.session.get();
     if (!session.user || !current(epoch))
       throw new ApiError("UNAUTHENTICATED", "이용 계정이 바뀌었어요.");
-    const options = { expectedOwner: session.user.id };
-    const before = await api.rework.peekReport(caseId, options);
-    if (before?.id !== reportId || before.revision !== revision)
-      throw new ApiError("CONFLICT", "리포트가 바뀌었어요. 검토한 버전을 다시 확인해 주세요.");
-    const blob = await api.reports.pdf(reportId);
-    if (!(await verify(false, false)) || !current(epoch))
-      throw new ApiError("UNAUTHENTICATED", "이용 계정이 바뀌었어요.");
-    const after = await api.rework.peekReport(caseId, options);
-    if (!current(epoch)) throw new ApiError("UNAUTHENTICATED", "사건이나 계정이 바뀌었어요.");
-    if (after?.id !== reportId || after.revision !== revision)
-      throw new ApiError(
-        "CONFLICT",
-        "리포트가 바뀌어 이전 파일을 저장하지 않았어요. 다시 확인해 주세요.",
-      );
-    downloadBlob(blob, `BARO-${reportId}.pdf`);
+    await downloadReviewedReport({
+      caseId,
+      reportId,
+      reportRevision: revision,
+      expectedOwner: session.user.id,
+      verify: async () =>
+        mounted.current && current(epoch) && (await verify(false, false)) && current(epoch),
+    });
   }
   function renderConversationPane(pane: ConversationPane, props: ConversationPaneProps) {
     if (!view) return null;
@@ -657,6 +651,19 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             }}
             onChanged={() => void props.onChanged()}
             onCancel={props.onCancel}
+            onDirtyChange={props.onDirtyChange}
+            onBusyChange={props.onBusyChange}
+          />
+        </div>
+      );
+    if (pane === "report")
+      return (
+        <div inert={props.disabled}>
+          <ReportReview
+            caseId={caseId}
+            embedded
+            rework
+            onChanged={() => void props.onChanged()}
             onDirtyChange={props.onDirtyChange}
             onBusyChange={props.onBusyChange}
           />

@@ -119,3 +119,22 @@ Workspace와 동일 데이터를 사용하는 inline UI를 조립하고 검증 �
 실제 chunk/hash/원본 검증을 유지한다. WebKit의 IDB Blob 직렬화 문제는 테스트 DI에서
 ArrayBuffer를 저장해 검사했고 제품 R2나 중앙 mock 저장소는 변경하지 않았다.
 중앙 Hono/D1 orchestration 및 리포트 최종 조립과 전체 여섯 경로 결과는 후속 기록한다.
+
+후속 검사에서 실제 Workspace WebKit **5개**(자료 추가/inline 검토/준비,320px composer,
+사진 선택 전쓰기0·미리보기/제거/명시 동의/실패 복구,처리 실패/원본 바이트/삭제)가 통과했다.
+main640 통합 뒤 `validate:quick`(Astro518파일 error0, 선택673 tests)도 통과했다.
+build는 production Worker를 실제 local workerd에서 시작해 익명 로그인 HTML까지 검사했다.
+
+최종 브라우저 진입점은 `tests/helpers/rework-browser-server.ts`의 loopback 전용 transport와
+`rework-browser-proxy.ts`, 실제 Astro route/real-client 설정으로 준비한다. production API
+factory와 실제 SQLite/D1·AES·signed session의 조립은 통합00 factory가 소유한다. 이 진입점은
+API 응답 DTO·분석·리포트·해결 논리를 새로 만들지 않는다. 요청 본문·쿠키·expected-owner·
+idempotency header를 실제 Hono로 전달한다. 중앙 runtime의 CI/main 전에는 실행을 명시적으로
+거절하며 `rework-conversation.e2e.ts`의 양쪽 입장×3개 시나리오는 미실행 상태로 유지한다.
+
+리포트 PR641 최종 `cfe65304`의 Quality41304107272/nativePDF41304107288 성공과 main
+`1bfe0e50` 병합을 확인해 실제 `ReportReview embedded rework`를 대화에 연결했다. 리포트
+내부의03 업로드/06 해결 UI를 바깥에서 중복 배치하지 않는다. 별도 해결 영역의 저장은05
+`downloadReviewedReport`를 재사용하며 현재 owner/case epoch와 정확한 report ID/revision/stale를
+PDF 요청 전후 확인한다. helper의 실패·취소를 throw해06의 저장 완료 표시를 막는다.
+이 조립 뒤 `validate:quick`과 `validate:build`(실제 Worker 부팅)가 다시 통과했다.
