@@ -7,6 +7,7 @@ import { boundedProcessingResources } from "../budget/processing-runtime";
 import { namedProcessorPort } from "../file-processing/native-identity";
 import { createProcessorTransport } from "../file-processing/transport";
 import { createFilesService } from "../files/service";
+import { preparedAnalysisMatchesScope, readPreparedAnalysis } from "../rework/state";
 import { REPORT_QUERY_LIMIT, REPORT_ROW_LIMIT } from "./limits";
 import type { ReportDependencies } from "./storage";
 
@@ -22,6 +23,12 @@ export function createReportDependencies(
 ): ReportDependencies {
   const environment = env.APP_ENV === "production" ? "production" : "preview";
   const deps: ReportDependencies = {
+    readPreparedAnalysis: (actor, caseId) => readPreparedAnalysis(core, actor, caseId),
+    preparedAnalysisMatchesScope: (actor, caseId, snapshot, scope) =>
+      preparedAnalysisMatchesScope(core, actor, caseId, snapshot, {
+        ...scope,
+        excludedFileIds: [...scope.excludedFileIds],
+      }),
     environment,
     clock,
     bucket: env.CASE_PRIVATE_R2,

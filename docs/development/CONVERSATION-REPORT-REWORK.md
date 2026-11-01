@@ -3,7 +3,7 @@
 - 사용자 지시: 2026-11-01. 상위 [#620](https://github.com/creno-va/baro/issues/620).
 - 단독 변경 소유자: **BARO-REWORK-00 통합**. 각 담당은 이 문서를 직접 수정하지 않고 변경 명세·검증 결과를00에 전달한다.
 - 기준 main: `4a5bfe85d2f53d15812f592f9261a5b84767695c` / PR619 / main CI41289887458 SUCCESS. 실행 시 재확인한다.
-- 통합 전용 checkout: `/Users/hwang-eunchan/.codex/worktrees/9cd5/baro`, 깨끗한 최신 main에서 `codex/621-conversation-report-contract` 생성.
+- 통합 전용 checkout: `/Users/hwang-eunchan/.codex/worktrees/9cd5/baro`, 깨끗한 최신 main에서 `codex/621-rework-state` 생성.
 - 기존 #600은 CLOSED, 열린 PR0개 확인. PR618/619까지의 UI·동의·DB 전환 변경을 보존한다. 다른 worktree·secret·이전 리포트·원장을 초기화하지 않는다.
 - `bun run work:next`: 56 tasks, no cycles. pinned Bun1.4.0 설치 후 `bun ci` 통과.
 - 계약 PR628: exact head `faa7bbd96256ee5e2439ad2e7ff28ee5aec23657`, CI41297706438·Legal41297706429 SUCCESS → main `b5b7de06554fa939bf4b61448240227c4008d311` 정상 병합.01~06에 전달하고 각 의존 구현을 시작했다.00 후속 브랜치는 `codex/621-rework-runtime`.
@@ -41,13 +41,13 @@
 
 | 세션 제목 | thread ID / host | 이슈·브랜치 | 소유 범위 | PR/상태 |
 | --- | --- | --- | --- | --- |
-| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-conversation-report-contract` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 인터페이스 조율·계약 준비 |
-| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | 인터페이스 회신·fixture 준비 |
-| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631·CI/구형 미확정 입장 보강 검토 중 |
-| BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629 병합·단위147/브라우저22·기존 FileReview10·실제 Astro2, 실제 카메라 기기/provider 별도 |
-| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-conversation-agent` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | 인터페이스 수용·독립 fixture/UI 준비 |
-| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | 인터페이스 수용·독립 PDF20쪽 렌더 검증 |
-| BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | 인터페이스 수용·fixture/quick 통과 |
+| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-state` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | 계약/공통 저장/작업 admission·gateway 선행 병합; 실제 runtime·Hono 통합 중 |
+| BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-intake-reconfirmation` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636 병합, PR646 암호화 storage adapter 최신 main CI 확인 중 |
+| BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-automatic-legal-analysis` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644 병합, 공식 binding·관찰 certainty 보존 |
+| BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-evidence-capture` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629/635 병합; 재사용 업로드·대화 callback·44px 검증, 실제 카메라 기기/provider 별도 |
+| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-conversation-agent` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633 core 병합; PR642 Workspace·대화 실제 통합/6여정 harness 진행 중 |
+| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-rework` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641 병합; 6문서28쪽 실제 PDF 렌더·고정 Linux CI 성공, 최종 통합 별도 |
+| BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-follow-up-resolution` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632/639/643 병합; PR645 원문 링크·동의철회 저장본 읽기 보강 CI 중 |
 
 한 파일 한 소유자다.03/06은 Workspace.tsx·ReportReview.tsx를 수정하지 않는다. 공통 src/contracts/, src/server/db/, drizzle/, 공통 API/client·facade·export, gateway service/중앙 schemas/등록, router/runtime 조립은00만 변경한다. 기존 `src/server/api/v2/workspaces.ts`는00 소유이며01은 독립 재조율 서비스를 제공한다. handler 신설/위임은 정확 경로를 먼저 기록한다.
 
@@ -61,13 +61,13 @@ HTTP 계획: 새 사건 `POST /api/v2/cases/rework`에서 목적과 사건을 �
 
 | 계약 | 합의 방향 | 상태 |
 | --- | --- | --- |
-| 사건 맥락 | `casePurpose: prepare_claim / respond_to_claim / unconfirmed`; subjectContext와 별개, 구형 unconfirmed. 절차 단계는 사용자 확인 전 미확정 | 01/02 수용,06 확인 필요 |
+| 사건 맥락 | `casePurpose: prepare_claim / respond_to_claim / unconfirmed`; subjectContext와 별개, 구형 unconfirmed. 절차 단계는 사용자 확인 전 미확정 | 01~06 수용·계약 병합 완료 |
 | 재조율 | 요청·이유·exact before/after 제안·base workspace/intake/summary revisions·재접속·멱등성·취소·명시 confirm CAS. 확정 전 canonical summary 불변 | 01 인터페이스 수용,00 저장/중앙gateway 조립 |
-| 법률 분석 | 기존 공식 citation/sourceClaim shape 재사용. 요건별 fact/evidence refs·공백/모순, 판례 commonalities/differences·exact sourceClaim IDs, 약점/대응점·추가자료 | 02 초안 수신,05/06 확인 중 |
+| 법률 분석 | 기존 공식 citation/sourceClaim shape 재사용. 요건별 fact/evidence refs·공백/모순, 판례 commonalities/differences·exact sourceClaim IDs, 약점/대응점·추가자료 | 02/05/06 소비 검증 완료·실제 원문 권한/binding/TTL 유지 |
 | 분석 기준 | summaryRevision·관련 사건 revision·증거 fileRevision/hash digest·casePurpose·asOfDate. 비교 표시용 revision을 사실 변경과 구분 | 02와 구현 경계 조율 중 |
 | 증거 | 기존 files strict DTO 유지. 명시적 requirement.fileIds와 현재 파일/관찰로 대기/처리/검토/반영 계산, 파일명 유형 추측 금지 | 03 인터페이스 수용 |
-| 준비 상태 | pending/running/partial/ready/empty/unavailable/stale·실제 실패 구분. 완결성·부족 항목과 snapshot 기준 표시 | 04/05 확인 중 |
-| 대화/후속 | 서버 action allowlist·입력과 확인·3개 분기·실제 절차/검토용 초안·citation/analysis 기준, 제3자 자동 실행 없음 | 04/06 확인 중 |
+| 준비 상태 | pending/running/partial/ready/empty/unavailable/stale·실제 실패 구분. 완결성·부족 항목과 snapshot 기준 표시 | 04/05 수용·독립 구현 병합, 중앙 실행 조립 중 |
+| 대화/후속 | 서버 action allowlist·입력과 확인·3개 분기·실제 절차/검토용 초안·citation/analysis 기준, 제3자 자동 실행 없음 | 04/06 수용·독립 구현 병합, 중앙 실행 조립 중 |
 
 선행 계약의 CI 성공/main 병합→01/02/03/06 병렬 구현→필요한 공유 저장/gateway 조립→04/05 최종 통합 순서다.04/05는 명시적 독립 fixture/UI를 먼저 진행할 수 있다.02→06(근거 기반 안내/초안),01/02/03/06→04,02/03→05,04→05의 실제 의존성은 작은 인터페이스로 나누고 순환 구현 복제를 만들지 않는다. 기능 담당은 PR까지만 제출하고00이 CI·main/의존 PR 상태를 재확인한 뒤 순차 병합한다.
 
@@ -93,3 +93,14 @@ ADR-0006의 사실 준비 전용/완성 문서 일괄 거절, PRD/MVP·AI prompt
 첫 계약 PR이나 fixture 성공을 전체 완료로 표시하지 않는다. 이 문서의 PR/CI/main SHA·검증·미해결을 최종까지 계속 갱신한다.
 
 PR628 이후 실제 build 검사에서 export 문자열 상수가 Worker entry로 hoist되어 부팅이 실패했다. primitive export를 제거하고 `v2ReworkVersionSchema.value`를 사용한다. 그 뒤 별도 SSR 청크의 workspace schema 초기화 전 `.extend` 접근 실패를 확인해 새 create 요청은 공유 primitive로 독립 정의하고 응답의 workspace는 lazy로 읽도록 고쳤다. 두 초기 실패는 실제 Worker 부팅 검사로 발견했으며 bundling/dry-run만의 성공과 구분한다. 수정 뒤 같은 local workerd 검사는 성공했다. 이미지 blob 미리보기를 위해 CSP img-src에 blob:만 허용하고 외부 host는 추가하지 않았다.
+
+
+### 통합 경과 (2026-11-01)
+
+00이 exact head CI 성공을 확인해 squash 병합한 PR: #628 계약/ADR, #630 공유 client와 Worker 부팅, #629 자료 UI, #634 암호화 불변 상태, #633 대화 core, #631 법률 분석, #632 후속 해결, #635 자료 callback, #637 사건 목적 API/gateway, #636 사건 정리/재확인, #638 법률 runtime adapter, #639 후속 저장 adapter, #640 원자 작업/요약 저장, #641 웹·HTML·PDF 리포트, #644 관찰 확실성, #643 공식 절차 근거. 현재 기준 main은 #643 병합 결과이며 최종 SHA가 아니다. #646 저장 adapter와 #645 후속 UI는 순차 최신 main CI 후 병합한다. #642는 통합 중 draft다.
+
+00 공통 상태 PR은 소유자에 한정된 passive conversation/report peek, 전체 확정 요약·증거 hash와 관찰 qualifier를 보존하는 분석 입력, 정확 scope·공식 citation binding/TTL의 로컬 currentness 검사, 입장별 모델 맥락과 재조율 phase 등록을 제공한다. 동의 철회는 새 처리/수정을 막으며 기존 저장본의 currentness 읽기를 새 동의 gate로 막지 않는다. explicit mock은 실제 domain service를 재사용하지만 법률 결과를 unavailable로 명시하며 실제 provider/공식 검증 성공으로 표현하지 않는다. 초기/실행 JSON 입력 순서 차이로 저장된 wire 증명이 맞지 않던 회귀를 수정했다.
+
+현재 검증: 공통 focused51 tests367 assertions, 네이티브 workerd의 기존 원장/업그레이드 보존4 tests1480 assertions, Chromium/WebKit 요청 Blob 원본 바이트·reload·owner별 삭제2 tests 통과. 네이티브 fixture는 과거 consent column/디렉터리 epoch를 해당 migration 이전 형태로 복원하고 실제 업그레이드 뒤 현재 원본과 일치함을 확인했다. 실제 consent 관측 시각이나 원장은 수정하지 않았다. 이 검증은 실제 외부 호출과 무관하다.
+
+남은 구현은 중앙 분석/재조율 job 실행·자동 리포트 continuation, 원자 취소/receipt·동의/lease fencing, 대화 actions·후속 API의 실제 Hono 조립이다. 최종 6여정 브라우저와 exact main 수동 full 검증은 아직 미실행이다. 06이 확인한 실제 EasyLaw 원문들은 update_pending/image_omitted 제한을 유지하므로 현재 실제 formal complaint/answer/appeal 작성 가능 근거로 승격하지 않는다. 합성 fixture에서 검증된 작성 지원과 실제 원문 조건을 구분한다. production 배포는 하지 않는다.

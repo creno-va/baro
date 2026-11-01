@@ -26,6 +26,8 @@ export const executionDescriptorSchema = z.strictObject({
     "workspace_legal_plan",
     "workspace_legal_analysis",
     "workspace_legal_audit",
+    "workspace_summary_reconciliation",
+    "workspace_summary_reconciliation_audit",
   ]),
   correction: z.boolean(),
   wireInputSha256: v2HashSchema,

@@ -3,14 +3,26 @@ import { z } from "zod";
 import { idempotencyKeySchema, opaqueIdSchema } from "../../../contracts";
 import { v2ReworkCreateCaseRequestSchema } from "../../../contracts/v2";
 import { createCaseDataCipher } from "../../crypto";
-import { createV2Core, V2RepositoryError } from "../../db/v2-core";
+import { createV2Core, type V2Core, V2RepositoryError } from "../../db/v2-core";
 import { reportDependencyFailure } from "../../dependency-diagnostics";
 import { verifyTurnstile } from "../../modules/intake/service";
+import { createReportDependencies } from "../../modules/reports/runtime";
+import { createReportsService } from "../../modules/reports/service";
 import { createReworkCaseService, ReworkError } from "../../modules/rework/case-context";
+import { createReworkStateService } from "../../modules/rework/state";
 import { abuseAllowed, caseAccess } from "../case-access";
 import { type ApiEnvironment, errorBody } from "../errors";
 
-export function createReworkApi(options: { turnstile?: typeof verifyTurnstile } = {}) {
+export function createReworkApi(
+  options: {
+    turnstile?: typeof verifyTurnstile;
+    stateDependencies?: (
+      env: Env,
+      core: V2Core,
+      ownerId: string,
+    ) => Promise<Parameters<typeof createReworkStateService>[1]>;
+  } = {},
+) {
   const app = new Hono<ApiEnvironment>();
   app.use("*", async (c, next) => {
     c.header("cache-control", "private, no-store");
@@ -53,13 +65,13 @@ export function createReworkApi(options: { turnstile?: typeof verifyTurnstile } 
   });
   const access = (c: Context<ApiEnvironment>, mutation = false) =>
     caseAccess(c, mutation, mutation, true, { customerConsentSnapshot: true });
+  const domainCore = async (c: Context<ApiEnvironment>) =>
+    createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
+      applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
+      monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
+    });
   const service = async (c: Context<ApiEnvironment>) =>
-    createReworkCaseService(
-      createV2Core(c.env.DB, await createCaseDataCipher(c.env), {
-        applicationCostLimitsEnabled: c.env.APPLICATION_COST_LIMITS_ENABLED !== "false",
-        monthlyBudgetCapEnabled: c.env.MONTHLY_BUDGET_CAP_ENABLED !== "false",
-      }),
-    );
+    createReworkCaseService(await domainCore(c));
   app.post("/rework", async (c) => {
     const a = await access(c, true);
     if (a.response) return a.response;
@@ -80,6 +92,36 @@ export function createReworkApi(options: { turnstile?: typeof verifyTurnstile } 
     if (a.response) return a.response;
     z.strictObject({}).parse(c.req.query());
     return c.json(await (await service(c)).get(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))));
+  });
+  app.get("/:id/rework/conversation", async (c) => {
+    const a = await access(c);
+    if (a.response) return a.response;
+    z.strictObject({}).parse(c.req.query());
+    const core = await domainCore(c);
+    return c.json(
+      await createReworkStateService(
+        core,
+        (await options.stateDependencies?.(c.env, core, a.ownerId)) ?? {
+          peekReport: (ownerId, id) =>
+            createReportsService(core, createReportDependencies(c.env, core, ownerId)).peek(
+              ownerId,
+              id,
+            ),
+        },
+      ).get(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
+    );
+  });
+  app.get("/:id/rework/report", async (c) => {
+    const a = await access(c);
+    if (a.response) return a.response;
+    z.strictObject({}).parse(c.req.query());
+    const core = await domainCore(c);
+    return c.json(
+      await createReportsService(core, {
+        ...createReportDependencies(c.env, core, a.ownerId),
+        sessionId: a.sessionId,
+      }).peek(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))),
+    );
   });
   app.put("/:id/rework/context", async (c) => {
     const a = await access(c, true);
