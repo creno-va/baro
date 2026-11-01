@@ -13,7 +13,7 @@ export function directorySeedSql(count: number) {
   const ids = `WITH RECURSIVE numbers(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM numbers WHERE i<${count})`;
   return [
     `${ids} INSERT INTO user(id,name,email,created_at,updated_at) SELECT printf('owner-%05d',i),'Synthetic',printf('synthetic-%d@example.invalid',i),1,1 FROM numbers`,
-    `INSERT INTO user_consents SELECT id,'${CURRENT_POLICY_VERSIONS.termsVersion}','${CURRENT_POLICY_VERSIONS.privacyVersion}','${CURRENT_POLICY_VERSIONS.aiNoticeVersion}',1,'${DIRECTORY_NOW}' FROM user`,
+    `INSERT INTO user_consents(user_id,terms_version,privacy_version,ai_notice_version,consented_at) SELECT id,'${CURRENT_POLICY_VERSIONS.termsVersion}','${CURRENT_POLICY_VERSIONS.privacyVersion}','${CURRENT_POLICY_VERSIONS.aiNoticeVersion}','${DIRECTORY_NOW}' FROM user`,
     "INSERT INTO app_metadata(key,value) SELECT 'account-type:'||id,'lawyer' FROM user",
     `${ids} INSERT INTO v2_profiles(id,owner_id,revision,created_at,updated_at,self_listing_state) SELECT printf('profile-%05d',i),printf('owner-%05d',i),1,'${DIRECTORY_NOW}','${DIRECTORY_NOW}','listed' FROM numbers`,
     `INSERT INTO v2_private_snapshots(id,owner_id,purpose,target_id,revision,part_count,byte_length,encrypted_payload,created_at) SELECT 'snapshot-'||id,owner_id,'profile_revision',id,1,1,1,'synthetic-not-decryptable','${DIRECTORY_NOW}' FROM v2_profiles`,
