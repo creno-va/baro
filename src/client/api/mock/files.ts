@@ -172,6 +172,7 @@ export function createFilesMock(runtime: WorkspaceMockRuntime, originals = mockO
           };
           const file: FileView = {
             id: newId,
+            revision: 1,
             name: input.name,
             mimeType: input.mediaType,
             sizeBytes: input.byteLength,
