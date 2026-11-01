@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
 
 const id = "synthetic-chat-attachment";
@@ -28,6 +29,28 @@ async function seed(page: Page, faults: Record<string, string[]> = {}) {
             updatedAt: new Date().toISOString(),
             summary: "합성 요약",
             schemaVersion: "2",
+            summaryDetails: {
+              schemaVersion: "2",
+              revision: 1,
+              intakeRevision: 1,
+              createdAt: new Date().toISOString(),
+              overview: "합성 요약",
+              facts: [
+                {
+                  id: "synthetic-adverse-fact",
+                  text: "사용자도 약속 날짜를 변경한 적이 있다는 합성 진술",
+                  attribution: "user_statement",
+                  certainty: "reported",
+                  significance: "unfavorable",
+                  references: [{ kind: "intake_narrative", intakeRevision: 1 }],
+                  conflictingFactIds: [],
+                  userEdited: false,
+                },
+              ],
+              parties: [],
+              unknowns: ["원본의 진정성은 확인하지 않았습니다."],
+              notices: ["외부 모델을 호출하지 않는 합성 예시입니다."],
+            },
           },
         },
         caseOwners: { [id]: "synthetic-owner" },
@@ -290,6 +313,10 @@ test("file-only send uploads once, waits for processing, saves attachment and su
   page,
 }) => {
   await seed(page);
+  const summaryBefore = await page.evaluate(
+    (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].summaryDetails,
+    id,
+  );
   await attach(page);
   await page.getByLabel("첨부한 파일의 자동 처리에 동의합니다.").check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -305,9 +332,31 @@ test("file-only send uploads once, waits for processing, saves attachment and su
       id,
     ),
   ).toBe(1);
-  await page.getByRole("list", { name: "메시지 첨부 파일" }).getByRole("link").click();
-  await expect(page).toHaveURL(/\/files\?file=/);
+  const source = page.getByRole("list", { name: "메시지 첨부 파일" }).getByRole("link");
+  await expect(source).toHaveAttribute("href", `${base}/files?file=${user.selectedFileIds[0]}`);
+  await source.click();
+  await expect(page).toHaveURL(base);
   await expect(page.getByRole("dialog")).toContainText(file.name);
+  const stored = await page.evaluate(
+    async ({ id, fileId }) => {
+      const path = "/src/client/api/index.ts";
+      const { api } = await import(path);
+      const original = await api.files.original(id, fileId);
+      const item = await api.cases.get(id);
+      const uploaded = (await api.files.list(id, { metadataOnly: true })).find(
+        (f: { id: string; uploadContentHash?: string }) => f.id === fileId,
+      );
+      return {
+        text: await original.text(),
+        summary: item.summaryDetails,
+        hash: uploaded?.uploadContentHash,
+      };
+    },
+    { id, fileId: user.selectedFileIds[0] },
+  );
+  expect(stored.text).toBe(file.buffer.toString("utf8"));
+  expect(stored.hash).toBe(createHash("sha256").update(file.buffer).digest("hex"));
+  expect(stored.summary).toEqual(summaryBefore);
 });
 
 test("upload failure preserves draft and same file retry without duplicate reservation", async ({
@@ -344,7 +393,11 @@ test("failed processing never sends the message and queued sending can be cancel
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await page.getByRole("button", { name: "전송 대기 취소" }).click();
   await expect(page.getByLabel("추가 사실 또는 질문")).toBeEnabled();
-  await expect(page.getByText("처리 실패 · 자료에서 확인", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("list", { name: "이번 메시지의 첨부 파일" })
+      .getByText("처리 실패 · 확인 필요", { exact: true }),
+  ).toBeVisible();
   expect(await messages(page)).toEqual([]);
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("실패 시 보존할 질문");
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
@@ -440,7 +493,10 @@ test("materials retain every attachment and mark actual evidence without filter 
     (await messages(page)).find((message: { role: string }) => message.role === "assistant")
       .references,
   ).toHaveLength(5);
-  await page.getByRole("link", { name: "자료 탭에서 확인하기" }).click();
+  await page
+    .getByRole("navigation", { name: "사건 메뉴" })
+    .getByRole("link", { name: "자료 2", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/files$/);
   await expect(page.locator(".workspace-file-list")).toContainText("used.txt");
   await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
@@ -594,38 +650,53 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   ).toBe(0);
 });
 
-test("long chat fills the available width and passes scrolling to the page at its boundary", async ({
-  page,
-}) => {
-  await seed(page);
-  await page.evaluate((id) => {
-    const workspace = JSON.parse(localStorage.getItem("baro-api-mock-v1:workspace") ?? "{}");
-    workspace[id].messages = Array.from({ length: 24 }, (_, index) => ({
-      id: `scroll-message-${index}`,
-      role: index % 2 ? "assistant" : "user",
-      text: `${index + 1}번째 합성 대화입니다. 사실관계와 확인할 내용을 정리합니다.\n`.repeat(5),
-      status: "complete",
-      createdAt: new Date().toISOString(),
-    }));
-    localStorage.setItem("baro-api-mock-v1:workspace", JSON.stringify(workspace));
-  }, id);
-  await page.reload();
-  const log = page.getByRole("log", { name: "사건 대화" });
-  await expect(log.locator("article")).toHaveCount(24);
-  await expect(page.getByText("대화·자료 안내", { exact: true })).toHaveCount(0);
-  for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 390, height: 844 },
-    { width: 320, height: 650 },
-  ]) {
-    await page.evaluate(() => window.scrollTo(0, 0));
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+  { width: 320, height: 650 },
+])
+  test(`long chat fills its width and passes boundary scrolling to the page at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    // Native wheel transactions are per page; isolate each viewport so the last
+    // boundary gesture cannot keep scrolling during the next geometry check.
     await page.setViewportSize(viewport);
+    await seed(page);
+    await page.evaluate((id) => {
+      const workspace = JSON.parse(localStorage.getItem("baro-api-mock-v1:workspace") ?? "{}");
+      workspace[id].messages = Array.from({ length: 24 }, (_, index) => ({
+        id: `scroll-message-${index}`,
+        role: index % 2 ? "assistant" : "user",
+        text: `${index + 1}번째 합성 대화입니다. 사실관계와 확인할 내용을 정리합니다.\n`.repeat(5),
+        status: "complete",
+        createdAt: new Date().toISOString(),
+      }));
+      localStorage.setItem("baro-api-mock-v1:workspace", JSON.stringify(workspace));
+    }, id);
+    await page.reload();
+    const log = page.getByRole("log", { name: "사건 대화" });
+    await expect(log.locator("article")).toHaveCount(24);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    await expect(page.getByText("대화·자료 안내", { exact: true })).toHaveCount(0);
+
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        }),
+    );
+    // Resizing can anchor the document to the old chat boundary. Reset after
+    // the resize before recording viewport-relative composer coordinates.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
     await expect
       .poll(async () => {
         const panel = await page.locator(".workspace-main").boundingBox();
         return panel ? panel.y + panel.height : Infinity;
       })
-      .toBeLessThanOrEqual(viewport.height + 1);
+      .toBeCloseTo(viewport.height - 16, 0);
     await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(200);
     await expect
       .poll(async () => {
@@ -687,23 +758,22 @@ test("long chat fills the available width and passes scrolling to the page at it
     }).toPass({ intervals: [250], timeout: 2000 });
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
-  }
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".workspace-sidebar").scrollIntoViewIfNeeded();
-  await expect(page.locator(".workspace-sidebar")).toBeInViewport();
-  expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: /타임라인/ })
-    .click();
-  await expect(page).toHaveURL(/\/timeline$/);
-  expect(await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY)).not.toBe(
-    "hidden",
-  );
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: "대화", exact: true })
-    .click();
-  await expect(log.locator("article")).toHaveCount(24);
-  await expect(page.locator(".case-options")).toHaveCount(0);
-});
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".workspace-sidebar").scrollIntoViewIfNeeded();
+    await expect(page.locator(".workspace-sidebar")).toBeInViewport();
+    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(0);
+    await page
+      .getByRole("navigation", { name: "사건 메뉴" })
+      .getByRole("link", { name: /타임라인/ })
+      .click();
+    await expect(page).toHaveURL(/\/timeline$/);
+    expect(
+      await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY),
+    ).not.toBe("hidden");
+    await page
+      .getByRole("navigation", { name: "사건 메뉴" })
+      .getByRole("link", { name: "대화", exact: true })
+      .click();
+    await expect(log.locator("article")).toHaveCount(24);
+    await expect(page.locator(".case-options")).toHaveCount(0);
+  });
