@@ -111,6 +111,40 @@ test.skipIf(Bun.env.BARO_REWORK_NATIVE_FIXTURE !== "true")(
       expect(new TextDecoder().decode(bytes.subarray(0, 5))).toBe("%PDF-");
       expect(bytes.byteLength).toBeGreaterThan(1000);
       await Bun.write("/tmp/baro-625-runtime-report.pdf", bytes);
+      const afterPdf = await json(f, "/rework/report");
+      const afterPdfState = await json(f, "/rework/conversation");
+      const metadata = (value: typeof review) => ({
+        id: value.id,
+        revision: value.revision,
+        stale: value.stale,
+        basis: value.basis,
+        analysisReview: value.analysisReview,
+      });
+      const preparation = (value: typeof state) => ({
+        workspaceRevision: value.workspaceRevision,
+        summaryConfirmed: value.summaryConfirmed,
+        analysis: { status: value.analysis.status, basis: value.analysis.basis },
+        report: value.report,
+      });
+      await Bun.write(
+        "/tmp/baro-625-runtime-pdf-basis.json",
+        JSON.stringify(
+          {
+            synthetic: true,
+            before: metadata(review),
+            after: metadata(afterPdf),
+            beforeConversation: preparation(state),
+            afterConversation: preparation(afterPdfState),
+          },
+          null,
+          2,
+        ),
+      );
+      expect({ id: afterPdf.id, revision: afterPdf.revision, stale: afterPdf.stale }).toEqual({
+        id: review.id,
+        revision: review.revision,
+        stale: false,
+      });
       const observed = await stats(f);
       expect(observed.native).toMatchObject({ probe: 1, process: 1, report: 1 });
       expect(observed.artifacts.pdf).toEqual([
