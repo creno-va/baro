@@ -241,7 +241,7 @@ async function derivedBlob(
   expect(await f.storage.registerBlob(f.actor, b)).toBe(true);
   return b;
 }
-async function coverageStage(f: Fixture, p: Awaited<ReturnType<typeof processing>>) {
+async function coverageStage(f: Fixture, p: Awaited<ReturnType<typeof processing>>, revision = 3) {
   const id = crypto.randomUUID();
   const text = JSON.stringify(coverage);
   const parts = fragmentText(text);
@@ -253,7 +253,7 @@ async function coverageStage(f: Fixture, p: Awaited<ReturnType<typeof processing
         id,
         purpose: "file_coverage",
         targetId: p.current.id,
-        revision: 3,
+        revision,
         partCount: parts.length,
         byteLength: utf8Bytes(text),
       },
@@ -266,7 +266,7 @@ async function coverageStage(f: Fixture, p: Awaited<ReturnType<typeof processing
     await f.staging.seal(
       g,
       id,
-      { schemaVersion: "2", purpose: "file_coverage", targetId: p.current.id, revision: 3 },
+      { schemaVersion: "2", purpose: "file_coverage", targetId: p.current.id, revision },
       p.lease,
     ),
   ).toBe(true);
@@ -1221,6 +1221,7 @@ for (const changes of [2, 3])
       p = await processing(f);
     const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
       statement = f.core.statement.bind(f.core);
+    const peers = changes === 3 ? [p, await processing(f), await processing(f)] : [p];
     let pages = 0,
       changed = 0;
     f.core.statement = (sql, values) => {
@@ -1234,17 +1235,25 @@ for (const changes of [2, 3])
     };
     f.core.cipher.decrypt = async (value, context) => {
       const result = await decrypt(value, context);
-      if (context.table === "v2_files" && changed < changes) {
+      if (
+        context.table === "v2_files" &&
+        changes === 3 &&
+        changed === pages - 1 &&
+        context.rowId === peers[pages - 1]?.current.id
+      ) {
         changed++;
-        if (changes === 2 && changed === 2)
+        f.database.sqlite
+          .query("UPDATE v2_files SET state='processing' WHERE id=?")
+          .run(context.rowId);
+      } else if (context.table === "v2_files" && changes === 2 && changed < 2) {
+        changed++;
+        if (changed === 2)
           expect(
             await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {}),
           ).toBe(true);
         else
           f.database.sqlite
-            .query(
-              "UPDATE v2_files SET state=CASE WHEN state='queued' THEN 'processing' ELSE 'queued' END WHERE id=?",
-            )
+            .query("UPDATE v2_files SET state='processing' WHERE id=?")
             .run(p.current.id);
       }
       return result;
@@ -1338,11 +1347,11 @@ for (const target of ["file", "workspace", "account", "owner"] as const)
       }
       return result;
     };
-    expect(
-      await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+    await expect(
+      f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
         requireStablePage: true,
       }),
-    ).toEqual([]);
+    ).rejects.toMatchObject({ code: "SNAPSHOT_INVALID" });
     expect(changed).toBe(true);
   });
 
@@ -1421,5 +1430,199 @@ test("stable file heads need no extra query when only workspace revision changes
     id: p.current.id,
     revision: p.current.revision,
     status: "queued",
+  });
+});
+
+for (const change of [
+  "failed",
+  "deleting",
+  "backwards",
+  "job",
+  "operation",
+  "cipher",
+  "ready_edit",
+  "published_other_operation",
+] as const)
+  test(`stable metadata preserves the first failure for a non-processing transition: ${change}`, async () => {
+    const f = await fixture(),
+      p = await processing(f);
+    if (change === "ready_edit")
+      expect(await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {})).toBe(
+        true,
+      );
+    if (change === "backwards")
+      f.database.sqlite
+        .query("UPDATE v2_files SET state='processing' WHERE id=?")
+        .run(p.current.id);
+    const peer = change === "job" ? await processing(f) : null;
+    const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
+      statement = f.core.statement.bind(f.core);
+    let changed = false,
+      pages = 0;
+    f.core.statement = (sql, values) => {
+      if (
+        sql.startsWith(
+          "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+        )
+      )
+        pages++;
+      return statement(sql, values);
+    };
+    f.core.cipher.decrypt = async (value, context) => {
+      const result = await decrypt(value, context);
+      if (!changed && context.table === "v2_files" && context.rowId === p.current.id) {
+        changed = true;
+        if (change === "failed")
+          f.database.sqlite
+            .query(
+              "UPDATE v2_files SET state='failed',failure_code='FILE_PROCESSING_FAILED',current_job_id=NULL WHERE id=?",
+            )
+            .run(p.current.id);
+        else if (change === "deleting")
+          f.database.sqlite
+            .query("UPDATE v2_files SET state='deleting' WHERE id=?")
+            .run(p.current.id);
+        else if (change === "backwards")
+          f.database.sqlite
+            .query("UPDATE v2_files SET state='queued' WHERE id=?")
+            .run(p.current.id);
+        else if (change === "job") {
+          if (!peer) throw new Error("missing synthetic peer job");
+          f.database.sqlite
+            .query("UPDATE v2_files SET current_job_id=? WHERE id=?")
+            .run(peer.lease.jobId, p.current.id);
+        } else if (change === "operation")
+          f.database.sqlite
+            .query("UPDATE v2_files SET operation_id=? WHERE id=?")
+            .run(p.r.input.admission.operationId, p.current.id);
+        else if (change === "ready_edit")
+          expect(
+            await f.files.editObservations(guard(f), p.current.id, {
+              expectedRevision: 3,
+              edits: [
+                { observationId: observation().id, text: "사용자 합성 교정", included: true },
+              ],
+            }),
+          ).toBe(true);
+        else if (change === "published_other_operation") {
+          expect(
+            await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {}),
+          ).toBe(true);
+          f.database.sqlite
+            .query("UPDATE v2_files SET operation_id=? WHERE id=?")
+            .run(p.r.input.admission.operationId, p.current.id);
+        } else {
+          const cipher = await f.core.encrypt(
+            "v2_files",
+            p.current.id,
+            f.actor.ownerId,
+            p.current.revision,
+            {
+              name: "changed.pdf",
+              declaredMediaType: p.current.declaredMediaType,
+              probe: p.current.probe,
+              contentHash: HASH,
+            },
+          );
+          f.database.sqlite
+            .query("UPDATE v2_files SET encrypted_payload=? WHERE id=?")
+            .run(cipher, p.current.id);
+        }
+      }
+      return result;
+    };
+    await expect(
+      f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, { requireStablePage: true }),
+    ).rejects.toMatchObject({ code: "SNAPSHOT_INVALID" });
+    expect(changed).toBe(true);
+    expect(pages).toBe(1);
+  });
+
+test("staged completion can advance beyond a preserved earlier output namespace", async () => {
+  const f = await fixture(),
+    p = await processing(f);
+  const previous = await coverageStage(f, p, 3),
+    next = await coverageStage(f, p, 4);
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+  let published = false;
+  f.core.cipher.decrypt = async (value, context) => {
+    const result = await decrypt(value, context);
+    if (!published && context.table === "v2_files") {
+      published = true;
+      expect(
+        await f.fileStaging.publish(
+          next.g,
+          {
+            fileId: p.current.id,
+            fileRevision: 2,
+            coverageSnapshotId: next.id,
+            outputRevision: 4,
+            observationCount: 0,
+            derivativeCount: 0,
+          },
+          p.lease,
+        ),
+      ).toBe(true);
+    }
+    return result;
+  };
+  const result = await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+    requireStablePage: true,
+  });
+  expect(result[0]).toMatchObject({
+    id: p.current.id,
+    revision: 4,
+    status: "ready",
+    contentHash: HASH,
+    currentJobId: null,
+  });
+  expect(
+    f.database.sqlite.query("SELECT state FROM v2_private_snapshots WHERE id=?").get(previous.id),
+  ).toEqual({ state: "sealed" });
+});
+
+test("one successful publication cannot absorb another file's failure in the same page", async () => {
+  const f = await fixture(),
+    p = await processing(f),
+    q = await processing(f);
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
+    statement = f.core.statement.bind(f.core);
+  let changed = false,
+    pages = 0;
+  f.core.statement = (sql, values) => {
+    if (
+      sql.startsWith(
+        "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+      )
+    )
+      pages++;
+    return statement(sql, values);
+  };
+  f.core.cipher.decrypt = async (value, context) => {
+    const result = await decrypt(value, context);
+    if (!changed && context.table === "v2_files" && context.rowId === p.current.id) {
+      changed = true;
+      expect(await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {})).toBe(
+        true,
+      );
+      f.database.sqlite
+        .query(
+          "UPDATE v2_files SET state='failed',failure_code='FILE_PROCESSING_FAILED',current_job_id=NULL WHERE id=?",
+        )
+        .run(q.current.id);
+    }
+    return result;
+  };
+  await expect(
+    f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, { requireStablePage: true }),
+  ).rejects.toMatchObject({ code: "SNAPSHOT_INVALID" });
+  expect(pages).toBe(1);
+  const current = await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+    requireStablePage: true,
+  });
+  expect(current.find((file) => file.id === p.current.id)?.status).toBe("ready");
+  expect(current.find((file) => file.id === q.current.id)).toMatchObject({
+    status: "failed",
+    failure: "FILE_PROCESSING_FAILED",
   });
 });
