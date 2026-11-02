@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { z } from "zod";
+import { v2AcceptedOperationSchema } from "../../src/contracts/v2";
 import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
 
 // Enabled only when the central real runtime composition has passed CI/main.
@@ -194,17 +195,8 @@ async function preserveReport(page: Page, directory: string, fixture: Fixture) {
   );
   return { bytes, id: current.id };
 }
-async function addMaterial(
-  page: Page,
-  fixture: Fixture,
-  expectProcessingFailure = false,
-  afterSend?: () => Promise<void>,
-  camera = false,
-) {
+async function chooseMaterial(page: Page, camera = false) {
   const name = camera ? photoName : "synthetic-conversation-contract.txt";
-  const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
-  await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
-  await page.getByRole("button", { name: "보내기", exact: true }).click();
   const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
   await expect(materials).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
@@ -227,11 +219,37 @@ async function addMaterial(
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+  return { materials, name };
+}
+async function addMaterial(
+  page: Page,
+  fixture: Fixture,
+  expectProcessingFailure = false,
+  afterSend?: () => Promise<void>,
+  camera = false,
+) {
+  const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
+  await composer.fill("계약서 자료를 추가해서 확인하고 싶어요.");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const { materials, name } = await chooseMaterial(page, camera);
   const completed = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       /^\/api\/v2\/cases\/[^/]+\/files\/[^/]+\/complete$/.test(new URL(response.url()).pathname),
   );
+  const admitted = expectProcessingFailure
+    ? null
+    : page.waitForResponse((response) => {
+        const request = response.request();
+        if (
+          request.method() !== "POST" ||
+          new URL(response.url()).pathname !==
+            `/api/v2/cases/${encodeURIComponent(fixture.info.caseId)}/messages`
+        )
+          return false;
+        const input = request.postDataJSON() as { selectedFileIds?: unknown } | null;
+        return Array.isArray(input?.selectedFileIds) && input.selectedFileIds.length > 0;
+      });
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   const ack = await completed;
   expect(ack.status()).toBe(200);
@@ -260,6 +278,17 @@ async function addMaterial(
     await expect(original).toBeVisible();
     return original;
   }
+  // A completed processor does not finish the browser's authorized review
+  // and queued send. Observe its real admission before checking rendered UI.
+  // Match failures as well, so a genuine CAS rejection cannot become success.
+  if (!admitted) throw new Error("SYNTHETIC_MESSAGE_ADMISSION_MISSING");
+  const admission = await admitted;
+  expect(admission.status()).toBe(202);
+  v2AcceptedOperationSchema.parse(await admission.json());
+  const admittedFiles = z
+    .array(z.string())
+    .parse(admission.request().postDataJSON().selectedFileIds);
+  expect(admittedFiles.includes(completedFile.fileId)).toBe(true);
   const attachment = page
     .locator(".workspace-message-attachments")
     .getByRole("link", { name, exact: true })
@@ -467,6 +496,167 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await f.close();
   }
 });
+
+for (const change of ["technical_revision", "file_revision"] as const)
+  test(`queued photo review keeps its exact file revision across ${change}`, async ({
+    page,
+    context,
+  }, testInfo) => {
+    const control = {
+      uploaded: false,
+      readback: false,
+      injected: false,
+      revisions: null as { before: number; after: number } | null,
+    };
+    const f = await openReworkBrowserFixture(
+      context,
+      new URL(String(testInfo.project.use.baseURL)).origin,
+      "respond_to_claim",
+      {
+        dropResponse: async (request, response) => {
+          const path = new URL(request.url()).pathname;
+          if (request.method() === "POST" && path.endsWith("/complete") && response.ok())
+            control.uploaded = true;
+          if (
+            control.uploaded &&
+            !control.readback &&
+            request.method() === "GET" &&
+            path.endsWith("/files") &&
+            response.ok()
+          ) {
+            const files = await response.json();
+            if (
+              Array.isArray(files) &&
+              files.some((file) => ["uploaded", "queued", "processing"].includes(file.status))
+            ) {
+              // Preserve the real upload readback while admitted background
+              // work settles; both controls then isolate the review boundary.
+              control.readback = true;
+              expect((await f.control("settle", {})).ok()).toBe(true);
+            }
+          }
+          if (
+            control.injected ||
+            request.method() !== "GET" ||
+            !/\/files\/[^/]+\/review$/.test(path) ||
+            !response.ok()
+          )
+            return false;
+          control.injected = true;
+          control.revisions = await page.evaluate(
+            async ({ change, fileId }) => {
+              const path = "/src/client/api/index.ts";
+              const { api } = (await import(path)) as typeof import("../../src/client/api/index");
+              const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
+              if (change === "technical_revision") {
+                // A real authorized mutation advances W while the public source
+                // stays identical. Never fabricate a revision or an API response.
+                const before = await api.cases.get(id);
+                const after = await api.cases.rename(id, {
+                  title: before.title,
+                  expectedTitle: before.title,
+                });
+                if (before.title !== after.title) throw new Error("SYNTHETIC_SOURCE_CHANGED");
+                return { before: before.revision, after: after.revision };
+              }
+              const before = await api.files.review(id, fileId);
+              const observation = before.observations[0];
+              if (!observation || typeof before.file.revision !== "number")
+                throw new Error("SYNTHETIC_PHOTO_REVIEW_MISSING");
+              const saved = await api.files.saveReview(
+                id,
+                fileId,
+                {
+                  expectedRevision: before.file.revision,
+                  edits: [
+                    {
+                      observationId: observation.value.id,
+                      text: "동시에 교정한 합성 사진 관찰",
+                      included: false,
+                    },
+                  ],
+                },
+                before.workspaceRevision,
+              );
+              if (saved.status !== "ready") throw new Error("SYNTHETIC_PHOTO_EDIT_NOT_READY");
+              const after = await api.files.review(id, fileId);
+              if (typeof after.file.revision !== "number")
+                throw new Error("SYNTHETIC_PHOTO_REVISION_MISSING");
+              return { before: before.file.revision, after: after.file.revision };
+            },
+            { change, fileId: decodeURIComponent(path.split("/").at(-2) ?? "") },
+          );
+          // Finish only work admitted by the real correction before releasing
+          // the old review. The negative case then has a consistent new W.
+          expect((await f.control("settle", {})).ok()).toBe(true);
+          return false;
+        },
+      },
+    );
+    try {
+      await page.setViewportSize({ width: 320, height: 844 });
+      await openPreparedWorkspace(page, f);
+      await reportReady(page);
+      await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+      expect((await f.control("settle", {})).ok()).toBe(true);
+      expect((await f.control("native", { delayMs: 250 })).ok()).toBe(true);
+      if (change === "technical_revision") {
+        const attachment = await addMaterial(page, f, false, undefined, true);
+        await expect(attachment).toBeVisible();
+        const sent = f.observations.filter(
+          (item) =>
+            item.kind === "messages" && item.method === "POST" && item.selectedFileCount === 1,
+        );
+        expect(sent).toHaveLength(1);
+        expect(sent[0]?.status).toBe(202);
+      } else {
+        await openAction(page, "자료 추가·검토");
+        await chooseMaterial(page, true);
+        const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
+        const text = "교정 전 사진을 현재 대화에 반영해 주세요.";
+        await composer.fill(text);
+        const completed = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            /\/files\/[^/]+\/complete$/.test(new URL(response.url()).pathname),
+        );
+        await page.getByRole("button", { name: "보내기", exact: true }).click();
+        expect((await completed).status()).toBe(200);
+        expect((await f.control("settle", {})).ok()).toBe(true);
+        const rejected = page.locator("section.workspace-error");
+        await expect(rejected).toHaveCount(1);
+        await expect(rejected).toBeVisible();
+        await expect(rejected).toContainText("자료를 준비하는 동안 사건이나 입력이 바뀌었어요.");
+        await expect(composer).toHaveValue(text);
+        await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
+          photoName,
+        );
+        await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
+        expect(
+          f.observations.some(
+            (item) =>
+              item.kind === "messages" && item.method === "POST" && item.selectedFileCount === 1,
+          ),
+        ).toBe(false);
+      }
+      expect(control.readback).toBe(true);
+      expect(control.injected).toBe(true);
+      if (!control.revisions) throw new Error("SYNTHETIC_REVIEW_CONTROL_MISSING");
+      expect(control.revisions.after > control.revisions.before).toBe(true);
+    } finally {
+      try {
+        const directory = join(
+          "/tmp/baro-625-journeys",
+          testInfo.project.name,
+          `photo-review-${change}`,
+        );
+        await mkdir(directory, { recursive: true });
+        await writeFile(join(directory, "protocol.json"), JSON.stringify(f.observations, null, 2));
+      } finally {
+        await f.close();
+      }
+    }
+  });
 
 test("actual AI200 SQL admission rejects a new message without another model call", async ({
   page,

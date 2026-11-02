@@ -947,27 +947,33 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       let revision = view.case.revision;
       if (queuedUpload.current && !sendAttempt.current) {
         const queue = queuedUpload.current;
-        const [fresh, item, state] = await Promise.all([
-          api.workspace.get(caseId),
-          api.cases.get(caseId),
-          api.rework.getConversation(caseId),
-        ]);
-        if (!(await verify(false, true)) || !current(epoch)) return;
-        const processed = new Set<string>();
+        // Review can wait for a large photo's canonical observations. Capture
+        // the final workspace revision only after that IO and its access checks.
+        const reviewed = new Map<string, FileView["revision"]>();
         for (const id of fileIds) {
           if (queue.files.get(id)?.status === "ready") continue;
           const review = await api.files.review(caseId, id);
           if (!(await verify(false, true)) || !current(epoch)) return;
           if (
-            review.file.revision === fresh.files.find((f) => f.id === id)?.revision &&
             !review.pendingReview &&
             review.nextAfterOrdinal === null &&
             review.observations.every(
               (o) => uploadCanonical(o.value) === uploadCanonical(o.original),
             )
           )
-            processed.add(id);
+            reviewed.set(id, review.file.revision);
         }
+        const [fresh, item, state] = await Promise.all([
+          api.workspace.get(caseId),
+          api.cases.get(caseId),
+          api.rework.getConversation(caseId),
+        ]);
+        if (!(await verify(false, true)) || !current(epoch)) return;
+        // A newer W never authorizes an older file review. Keep the exact
+        // reviewed revision, frozen source checks and the final server CAS.
+        const processed = new Set<string>();
+        for (const [id, revision] of reviewed)
+          if (revision === fresh.files.find((file) => file.id === id)?.revision) processed.add(id);
         const decision = queuedConversationUpload(
           queue,
           fresh,

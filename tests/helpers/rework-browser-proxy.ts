@@ -80,12 +80,14 @@ export async function openReworkBrowserFixture(
     await context.addCookies([info.ownerCookie]);
     const actions: { body: string | null; key: string | undefined }[] = [];
     const observations: Record<string, string | number | undefined>[] = [];
+    let requestSequence = 0;
     const pdfResponses: { path: string; bytes: Buffer }[] = [];
     await context.route("**/api/**", async (route) => {
       if (stopping) return route.abort("aborted").catch(() => undefined);
       try {
         const request = route.request(),
-          url = new URL(request.url());
+          url = new URL(request.url()),
+          requestOrder = ++requestSequence;
         if (!url.pathname.startsWith("/api/")) return route.continue();
         if (
           request.method() === "PUT" &&
@@ -127,7 +129,9 @@ export async function openReworkBrowserFixture(
               ? "messages"
               : /\/files(?:\/[^/]+\/complete)?$/.test(url.pathname)
                 ? "file-admission"
-                : url.pathname.split("/rework/")[1];
+                : /\/files\/[^/]+\/review$/.test(url.pathname)
+                  ? "file-review"
+                  : url.pathname.split("/rework/")[1];
         if (
           kind &&
           [
@@ -140,6 +144,7 @@ export async function openReworkBrowserFixture(
             "summary-reconciliation/confirm",
             "messages",
             "file-admission",
+            "file-review",
           ].includes(kind)
         ) {
           const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
@@ -149,11 +154,39 @@ export async function openReworkBrowserFixture(
           } catch {}
           const number = (value: unknown) =>
             typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
+          const object = (value: unknown): Record<string, unknown> | undefined =>
+            value && typeof value === "object" && !Array.isArray(value)
+              ? (value as Record<string, unknown>)
+              : undefined;
+          const state = (value: unknown) =>
+            typeof value === "string" &&
+            [
+              "not_started",
+              "idle",
+              "uploaded",
+              "queued",
+              "processing",
+              "pending",
+              "running",
+              "ready",
+              "failed",
+              "stale",
+              "unavailable",
+              "cancelled",
+            ].includes(value)
+              ? value
+              : undefined;
+          const files = Array.isArray(body) ? body : Array.isArray(body?.files) ? body.files : [];
           observations.push({
             kind,
+            requestOrder,
             method: request.method(),
             status: response.status(),
             requestBytes: request.postDataBuffer()?.byteLength,
+            selectedFileCount:
+              kind === "messages" && Array.isArray(input?.selectedFileIds)
+                ? input.selectedFileIds.length
+                : undefined,
             errorCode:
               body?.error &&
               typeof body.error === "object" &&
@@ -166,7 +199,24 @@ export async function openReworkBrowserFixture(
                 : undefined,
             expectedW: number(input?.expectedRevision),
             expectedS: number(input?.summaryRevision),
-            W: number(body?.workspaceRevision),
+            W: number(body?.workspaceRevision) ?? number(object(body?.case)?.revision),
+            fileState:
+              state(object(body?.file)?.status) ??
+              (kind === "file-admission" ? state(body?.status) : undefined),
+            reviewedFileRevision: number(object(body?.file)?.revision),
+            analysisState: state(object(body?.analysis)?.status),
+            reportState: state(object(body?.report)?.status),
+            ...(files.length
+              ? {
+                  readyFiles: files.filter((file: unknown) => object(file)?.status === "ready")
+                    .length,
+                  processingFiles: files.filter((file: unknown) =>
+                    ["queued", "uploaded", "processing"].includes(String(object(file)?.status)),
+                  ).length,
+                  failedFiles: files.filter((file: unknown) => object(file)?.status === "failed")
+                    .length,
+                }
+              : {}),
             S: kind === "file-admission" ? undefined : number(body?.revision),
             fileRevision: kind === "file-admission" ? number(body?.revision) : undefined,
             confirmedW: number(body?.confirmedWorkspaceRevision),
