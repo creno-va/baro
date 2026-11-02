@@ -2,9 +2,13 @@ import type { ReworkReportView } from "@baro/api-client";
 import type { V2ResolutionDraftRequest, V2ResolutionMutation } from "../../../contracts/v2";
 import { v2ResolutionStateForGuidesSchema } from "../../../contracts/v2";
 import { createV2AccountingRepository, operationStatements } from "../../db/v2-accounting";
-import { aliveWorkspace, sqlClaim, type V2Core } from "../../db/v2-core";
+import { aliveWorkspace, sqlClaim, utf8Bytes, type V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
-import { createV2ReworkRepository } from "../../db/v2-rework";
+import {
+  createV2ReworkRepository,
+  type ReworkWriteGuard,
+  reworkConsentGuard,
+} from "../../db/v2-rework";
 import { canonicalAnalysisJson } from "../legal-retrieval/analysis/context";
 import { textHash } from "../legal-retrieval/service";
 import { readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
@@ -52,12 +56,23 @@ export function createReworkResolutionRuntime(
     const a = actor(ownerId),
       scope = await readAnalysisScope(core, a, caseId);
     const loaded = await loadAnalysisInput(core, a, caseId, scope);
+    let rawAuthority: ReworkWriteGuard | null = null;
     // Keep the input anchor first and raw before validated analysis. The
     // independent report read need not serialize that analysis validation.
     const [report, { raw, analysis }] = await Promise.all([
       deps.peekReport(ownerId, caseId),
       (async () => {
-        const raw = await records.read(a, caseId, "analysis", caseId, preparedAnalysisRecordSchema);
+        const raw = await records.read(
+          a,
+          caseId,
+          "analysis",
+          caseId,
+          preparedAnalysisRecordSchema,
+          undefined,
+          (proof) => {
+            rawAuthority = proof;
+          },
+        );
         const analysis = await readPreparedAnalysis(core, a, caseId, scope);
         return { raw, analysis };
       })(),
@@ -186,8 +201,8 @@ export function createReworkResolutionRuntime(
       GUIDE_HOSTS,
     );
     if (!proof) throw new ReworkError("STALE_REVISION");
-    const guard = (now: string) => ({
-      sql: `(${loaded.authority.sql}) AND (${proof.sql}) AND (${reportAuthority.sql}) ${reportSessionFence(deps.sessionId).sql} AND (SELECT id FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=v2_reports.id) ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1) IS ? AND (SELECT id FROM v2_rework_records WHERE workspace_id=w.id AND kind='analysis' AND entity_id=w.id AND state='published' ORDER BY revision DESC LIMIT 1) IS ?`,
+    const baseGuard = (now: string) => ({
+      sql: `(${loaded.authority.sql}) AND (${proof.sql}) AND (${reportAuthority.sql}) AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') ${reportSessionFence(deps.sessionId).sql} AND (SELECT id FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=v2_reports.id) ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1) IS ? AND (SELECT id FROM v2_rework_records WHERE workspace_id=w.id AND kind='analysis' AND entity_id=w.id AND state='published' ORDER BY revision DESC LIMIT 1) IS ?`,
       values: [
         ...loaded.authority.values,
         ...proof.values(now),
@@ -197,6 +212,23 @@ export function createReworkResolutionRuntime(
         raw?.id ?? null,
       ],
     });
+    const candidate = (now: string): ReworkWriteGuard => {
+      const base = baseGuard(now);
+      return rawAuthority
+        ? {
+            sql: `(${base.sql}) AND (${rawAuthority.sql})`,
+            values: [...base.values, ...rawAuthority.values],
+          }
+        : base;
+    };
+    // Optimize only bounded proofs. Large, previously valid records retain
+    // full reconstruction; neither the 4 MiB record nor 2 MiB batch is enlarged.
+    const bounded = candidate(deps.clock());
+    const reusable =
+      (!raw || rawAuthority !== null) &&
+      bounded.values.length <= 64 &&
+      utf8Bytes(JSON.stringify(bounded)) <= 1048576;
+    const guard = reusable ? candidate : baseGuard;
     // Reads also need the exact source proof. A null analysis basis must not
     // skip a late workspace, report, source or authenticated-session change.
     // Publication still evaluates this authority again in its final CAS.
@@ -210,7 +242,7 @@ export function createReworkResolutionRuntime(
         .first())
     )
       throw new ReworkError("STALE_REVISION");
-    return { value, guard, workspaceRevision: loaded.workspace.workspaceRevision };
+    return { value, guard, workspaceRevision: loaded.workspace.workspaceRevision, reusable };
   }
   function service(receipt?: {
     ownerId: string;
@@ -220,24 +252,81 @@ export function createReworkResolutionRuntime(
     hash: string;
   }) {
     let publicationRevision: number | null = null;
+    let anchor: {
+      ownerId: string;
+      caseId: string;
+      loaded: Awaited<ReturnType<typeof source>>;
+      canonical: string;
+    } | null = null;
+    const currentSource = async (
+      ownerId: string,
+      caseId: string,
+      mode: "read" | "write" = "read",
+      allowLargeNullCheck = false,
+    ) => {
+      if (!anchor) {
+        const loaded = await source(ownerId, caseId);
+        const value = structuredClone(loaded.value);
+        anchor = {
+          ownerId,
+          caseId,
+          loaded: { ...loaded, value },
+          canonical: canonicalAnalysisJson(value),
+        };
+        return anchor.loaded;
+      }
+      if (anchor.ownerId !== ownerId || anchor.caseId !== caseId)
+        throw new ReworkError("NOT_FOUND");
+      // Null-basis preflights previously checked access only. Retain a bounded
+      // guard without multiplying large-record reads. Load/publication and
+      // non-null basis checks still reconstruct the complete large source.
+      if (!anchor.loaded.reusable && !allowLargeNullCheck) {
+        const fresh = await source(ownerId, caseId);
+        if (
+          fresh.workspaceRevision !== anchor.loaded.workspaceRevision ||
+          canonicalAnalysisJson(fresh.value) !== anchor.canonical
+        )
+          throw new ReworkError("STALE_REVISION");
+        return fresh;
+      }
+      const loaded = anchor.loaded;
+      const proof = loaded.guard(deps.clock());
+      const consent = mode === "write" ? reworkConsentGuard(ownerId) : { sql: "1", values: [] };
+      if (
+        !(await core
+          .statement(
+            `SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace} AND (${proof.sql}) AND (${consent.sql})`,
+            [caseId, ownerId, loaded.workspaceRevision, ...proof.values, ...consent.values],
+          )
+          .first())
+      )
+        throw new ReworkError("STALE_REVISION");
+      return loaded;
+    };
     return createResolutionService(
       createResolutionRuntimeAdapter(core, {
         guideHosts: GUIDE_HOSTS,
         now: deps.clock,
-        loadSource: async (owner, id) => (await source(owner, id)).value,
+        loadSource: async (owner, id) => structuredClone((await currentSource(owner, id)).value),
         authorize: async (owner, id, basis, mode) => {
           if (!(await reworkAccess(core, owner, id, mode === "write"))) return false;
-          if (!basis) return true;
-          const fresh = await source(owner, id);
-          return canonicalAnalysisJson(fresh.value.basis) === canonicalAnalysisJson(basis);
+          if (!anchor) return basis === null;
+          const fresh = await currentSource(owner, id, mode, basis === null);
+          return (
+            !basis || canonicalAnalysisJson(fresh.value.basis) === canonicalAnalysisJson(basis)
+          );
         },
         publicationAuthority: async (owner, id, basis) => {
-          const fresh = await source(owner, id);
-          if (basis && canonicalAnalysisJson(fresh.value.basis) !== canonicalAnalysisJson(basis))
+          const fresh = await currentSource(owner, id);
+          if (canonicalAnalysisJson(fresh.value.basis) !== canonicalAnalysisJson(basis))
             throw new ResolutionError("STALE_REVISION");
           publicationRevision = fresh.workspaceRevision;
           return (now) => {
-            const guard = fresh.guard(now);
+            const original = fresh.guard(now);
+            const guard = {
+              sql: `w.revision=? AND (${original.sql})`,
+              values: [fresh.workspaceRevision, ...original.values],
+            };
             return receipt
               ? {
                   sql: `(${guard.sql}) AND NOT EXISTS(SELECT 1 FROM v2_idempotency WHERE owner_id=w.owner_id AND route=? AND key=? AND expires_at>?)`,

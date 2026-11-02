@@ -13,6 +13,7 @@ import { createReworkApi } from "../src/server/api/v2/rework";
 import { createV2Core } from "../src/server/db/v2-core";
 import { ReportError } from "../src/server/modules/reports/source";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
+import { createReworkResolutionRuntime } from "../src/server/modules/rework/resolution-runtime";
 import { createReworkRuntime } from "../src/server/modules/rework/runtime";
 import {
   createReworkStateService,
@@ -731,3 +732,182 @@ test("progress keeps the verified source TTL proof through its final metadata re
   });
   expect(changed).toBe(true);
 });
+
+for (const change of [
+  "body",
+  "rights",
+  "binding",
+  "clock",
+  "file",
+  "role",
+  "owner",
+  "report",
+  "analysis_parts",
+] as const)
+  test(`one-request resolution proof rejects late ${change} changes to actual bound analysis`, async () => {
+    const f = await fixture("prepare_claim", true);
+    if (change === "file") await readyFile(f, "합성 원문 revision 경계 검증 자료입니다.");
+    await f.runtime.resume(f.actor.ownerId, f.workspaceId);
+    await f.drain();
+    const reports = await f.runtime.reports(f.actor.ownerId, f.workspaceId);
+    const report = await reports.peek(f.actor.ownerId, f.workspaceId);
+    if (!report) throw new Error("missing synthetic report");
+    const baseline = createReworkResolutionRuntime(f.core, {
+      clock: () => f.actor.now,
+      peekReport: (owner, id) => reports.peek(owner, id),
+    });
+    const state = await baseline.get(f.actor.ownerId, f.workspaceId);
+    if (!state.basis) throw new Error("missing current bound analysis basis");
+    let changed = false,
+      now = f.actor.now;
+    const core: typeof f.core = {
+      ...f.core,
+      statement(sql, values = []) {
+        const statement = f.core.statement(sql, values);
+        if (
+          !sql.startsWith(
+            "SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=?",
+          ) ||
+          !sql.includes("SELECT id FROM v2_reports")
+        )
+          return statement;
+        return new Proxy(statement, {
+          get(target, property) {
+            if (property === "first")
+              return async (...args: Parameters<typeof target.first>) => {
+                const value = await target.first(...args);
+                if (!changed) {
+                  changed = true;
+                  if (change === "body")
+                    f.db.sqlite.exec("UPDATE v2_official_sources SET body=body||' '");
+                  else if (change === "rights")
+                    f.db.sqlite.exec("UPDATE v2_official_sources SET rights_provenance='{}'");
+                  else if (change === "binding")
+                    f.db.sqlite.exec("UPDATE v2_citation_bindings SET citation_json='{}'");
+                  else if (change === "clock") now = "2026-10-09T00:00:00.000Z";
+                  else if (change === "file")
+                    f.db.sqlite
+                      .query("UPDATE v2_files SET revision=revision+1 WHERE workspace_id=?")
+                      .run(f.workspaceId);
+                  else if (change === "role")
+                    f.db.sqlite
+                      .query(
+                        "INSERT INTO app_metadata(key,value,updated_at) VALUES(?,'invalid-role',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                      )
+                      .run(`account-type:${f.actor.ownerId}`, f.actor.now);
+                  else if (change === "owner")
+                    f.db.sqlite
+                      .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+                      .run(f.foreign.userId, f.workspaceId);
+                  else if (change === "report")
+                    f.db.sqlite
+                      .query("UPDATE v2_reports SET revision=revision+1 WHERE id=?")
+                      .run(report.id);
+                  else
+                    f.db.sqlite
+                      .query(
+                        "DELETE FROM v2_rework_parts WHERE record_id IN (SELECT id FROM v2_rework_records WHERE workspace_id=? AND kind='analysis')",
+                      )
+                      .run(f.workspaceId);
+                }
+                return value;
+              };
+            const value = Reflect.get(target, property);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+      },
+    };
+    const runtime = createReworkResolutionRuntime(core, {
+      clock: () => now,
+      peekReport: (owner, id) => reports.peek(owner, id),
+    });
+    const result = await runtime
+      .update(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+        expectedRevision: state.revision,
+        reportId: report.id,
+        reportRevision: report.revision,
+        action: "select",
+        choice: "lawyer",
+        selectedFileIds: state.selectedFileIds,
+        maskIdentifiers: state.maskIdentifiers,
+      })
+      .then(
+        () => "completed",
+        (error: { code: string }) => error.code,
+      );
+    expect(["STALE_REVISION", "NOT_FOUND", "CONSENT_REQUIRED"]).toContain(result);
+    expect(changed).toBe(true);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT count(*) n FROM v2_rework_records WHERE workspace_id=? AND kind='resolution' AND state='published'",
+        )
+        .get(f.workspaceId),
+    ).toEqual({ n: 0 });
+    expect(f.calls).toEqual([
+      "workspace_legal_plan",
+      "workspace_legal_analysis",
+      "workspace_legal_audit",
+    ]);
+  });
+
+for (const change of ["workspace", "source", "clock"] as const)
+  test(`final resolution CAS retains the pinned ${change} guard after staging`, async () => {
+    const f = await fixture("prepare_claim", true);
+    await f.runtime.resume(f.actor.ownerId, f.workspaceId);
+    await f.drain();
+    const reports = await f.runtime.reports(f.actor.ownerId, f.workspaceId),
+      report = await reports.peek(f.actor.ownerId, f.workspaceId);
+    if (!report) throw new Error("missing synthetic report");
+    const state = await createReworkResolutionRuntime(f.core, {
+      clock: () => f.actor.now,
+      peekReport: (owner, id) => reports.peek(owner, id),
+    }).get(f.actor.ownerId, f.workspaceId);
+    if (!state.basis) throw new Error("missing actual bound basis");
+    let changed = false,
+      now = f.actor.now;
+    const core: typeof f.core = {
+      ...f.core,
+      cipher: {
+        ...f.core.cipher,
+        async encrypt(text, context) {
+          const value = await f.core.cipher.encrypt(text, context);
+          if (context.table === "v2_rework_parts" && !changed) {
+            changed = true;
+            if (change === "workspace")
+              f.db.sqlite
+                .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+                .run(f.workspaceId);
+            else if (change === "source")
+              f.db.sqlite.exec("UPDATE v2_official_sources SET body=body||' '");
+            else now = "2026-10-09T00:00:00.000Z";
+          }
+          return value;
+        },
+      },
+    };
+    const runtime = createReworkResolutionRuntime(core, {
+      clock: () => now,
+      peekReport: (owner, id) => reports.peek(owner, id),
+    });
+    await expect(
+      runtime.update(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+        expectedRevision: state.revision,
+        reportId: report.id,
+        reportRevision: report.revision,
+        action: "select",
+        choice: "lawyer",
+        selectedFileIds: state.selectedFileIds,
+        maskIdentifiers: state.maskIdentifiers,
+      }),
+    ).rejects.toMatchObject({ code: "STALE_REVISION" });
+    expect(changed).toBe(true);
+    expect(
+      f.db.sqlite
+        .query(
+          "SELECT count(*) n FROM v2_rework_records WHERE workspace_id=? AND kind='resolution' AND state='published'",
+        )
+        .get(f.workspaceId),
+    ).toEqual({ n: 0 });
+  });
