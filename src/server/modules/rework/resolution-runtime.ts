@@ -3,7 +3,6 @@ import type { V2ResolutionDraftRequest, V2ResolutionMutation } from "../../../co
 import { v2ResolutionStateForGuidesSchema } from "../../../contracts/v2";
 import { createV2AccountingRepository, operationStatements } from "../../db/v2-accounting";
 import { aliveWorkspace, sqlClaim, utf8Bytes, type V2Core } from "../../db/v2-core";
-import { createV2FilesRepository } from "../../db/v2-files";
 import {
   createV2ReworkRepository,
   type ReworkWriteGuard,
@@ -73,7 +72,11 @@ export function createReworkResolutionRuntime(
             rawAuthority = proof;
           },
         );
-        const analysis = await readPreparedAnalysis(core, a, caseId, scope);
+        // The exact, schema-validated null snapshot has no prepared analysis.
+        // The final raw/head/source guard still rejects a late publication.
+        const analysis = raw?.value.snapshot
+          ? await readPreparedAnalysis(core, a, caseId, scope)
+          : null;
         return { raw, analysis };
       })(),
     ]);
@@ -155,9 +158,8 @@ export function createReworkResolutionRuntime(
         ? await loadAnalysisInput(core, a, caseId, { ...scope, maskIdentifiers: false })
         : loaded;
       const fileNames: Record<string, string> = {};
-      const files = createV2FilesRepository(core);
       for (const f of input.includedEvidence) {
-        const file = await files.read(a, f.fileId);
+        const file = loaded.evidenceMetadata[f.fileId];
         if (!file || file.revision !== f.fileRevision) throw new ReworkError("STALE_REVISION");
         fileNames[f.fileId] = file.name;
       }
