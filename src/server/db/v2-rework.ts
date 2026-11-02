@@ -108,6 +108,9 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
     entityId: string,
     schema: z.ZodType<T>,
     recordId?: string,
+    /** Private exact bytes from this validated read. Null keeps the existing
+     * full-read path when an atomic proof would exceed its technical bound. */
+    onAuthority?: (proof: ReworkWriteGuard | null) => void,
   ): Promise<ReworkRecord<T> | null> =>
     safe(async () => {
       const header = await row(actor, workspaceId, kind, entityId, recordId);
@@ -169,6 +172,26 @@ export function createV2ReworkRepository(core: V2Core, options: { clock?: () => 
         current.encrypted_payload !== header.encrypted_payload
       )
         return null;
+      if (onAuthority) {
+        const frozen = JSON.stringify([{ header, parts }]);
+        onAuthority(
+          utf8Bytes(frozen) > 1048576
+            ? null
+            : {
+                sql: `EXISTS(SELECT 1 FROM json_each(?) proof JOIN v2_rework_records r
+                  ON r.id=json_extract(proof.value,'$.header.id')
+                  WHERE r.workspace_id=w.id AND r.owner_id=w.owner_id
+                    AND (r.owner_id,r.workspace_id,r.entity_id,r.kind,r.revision,r.workspace_revision,r.part_count,r.byte_length,r.encrypted_payload,r.state)
+                     IS (json_extract(proof.value,'$.header.owner_id'),json_extract(proof.value,'$.header.workspace_id'),json_extract(proof.value,'$.header.entity_id'),json_extract(proof.value,'$.header.kind'),json_extract(proof.value,'$.header.revision'),json_extract(proof.value,'$.header.workspace_revision'),json_extract(proof.value,'$.header.part_count'),json_extract(proof.value,'$.header.byte_length'),json_extract(proof.value,'$.header.encrypted_payload'),json_extract(proof.value,'$.header.state'))
+                    AND (SELECT count(*) FROM v2_rework_parts WHERE record_id=r.id)=json_array_length(proof.value,'$.parts')
+                    AND NOT EXISTS(SELECT 1 FROM json_each(proof.value,'$.parts') expected
+                      WHERE NOT EXISTS(SELECT 1 FROM v2_rework_parts p WHERE p.record_id=r.id
+                        AND (p.id,p.part_index,p.byte_length,p.encrypted_payload)
+                         IS (json_extract(expected.value,'$.id'),json_extract(expected.value,'$.part_index'),json_extract(expected.value,'$.byte_length'),json_extract(expected.value,'$.encrypted_payload')))))`,
+                values: [frozen],
+              },
+        );
+      }
       return {
         id: header.id,
         revision: header.revision,
