@@ -548,6 +548,7 @@ test("full sections remain independent and only their successful join can issue 
     expect(job["timeout-minutes"]).toBe(60);
     expect(job["continue-on-error"]).toBeUndefined();
     expect(job.env.TARGET_SHA).toBe("$" + "{{ inputs.target_sha }}");
+    expect(job.env.GITHUB_TOKEN).toBeUndefined();
     expect(job.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
       "$" + "{{ inputs.target_sha }}",
     );
@@ -580,6 +581,8 @@ test("full sections remain independent and only their successful join can issue 
       expect(verify).toBeGreaterThan(guard);
       expect(record).toBeGreaterThan(verify);
       expect(job.steps[record]?.if).toBeUndefined();
+      for (const index of [verify, record])
+        expect(job.steps[index]?.env?.GITHUB_TOKEN).toBe("$" + "{{ secrets.GITHUB_TOKEN }}");
       expect(job.steps.at(-1)?.if).toBeUndefined();
     }
   }

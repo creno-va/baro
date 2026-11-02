@@ -42,7 +42,11 @@ test("browser failures do not hide later adapter failures and still reject the c
 
 test("dedicated mock configurations execute once with their own managed server", async () => {
   const calls: string[][] = [];
-  const targets = ["tests/browser/intake103.e2e.ts", "tests/browser/reports-integrated.e2e.ts"];
+  const targets = [
+    "tests/browser/intake103.e2e.ts",
+    "tests/browser/reports-integrated.e2e.ts",
+    "tests/browser/customer-completion.e2e.ts",
+  ];
   await runBrowserTargets(targets, async (command) => {
     calls.push(command);
     return 0;
@@ -67,6 +71,19 @@ test("follow-up fixture, configuration and product changes retain the managed br
     expect(
       browserTargets([source], ["tests/browser/resolution.e2e.ts", "tests/browser/auth.e2e.ts"]),
     ).toEqual(["tests/browser/resolution.e2e.ts"]);
+});
+
+test("full browser dispatch retains every discovered flow exactly once", async () => {
+  const targets = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].sort();
+  expect(targets.length).toBeGreaterThan(0);
+  const commands: string[][] = [];
+  await runBrowserTargets(targets, async (command) => {
+    commands.push(command);
+    return 0;
+  });
+  for (const target of targets)
+    expect(commands.filter((command) => command.includes(target))).toHaveLength(1);
+  expect(commands.filter((command) => command[0] === "docker")).toHaveLength(1);
 });
 
 test("browser validation succeeds only when every selected group succeeds", async () => {
