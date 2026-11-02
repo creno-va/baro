@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validation:
-    name: Full validation
+  core:
+    name: Full core validation
     runs-on: ubuntu-latest
     timeout-minutes: 60
     if: github.ref == 'refs/heads/main'
@@ -44,10 +44,8 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-      - name: Install frozen dependencies and browser
-        run: |
-          bun ci
-          bunx playwright install --with-deps chromium webkit
+      - name: Install frozen dependencies
+        run: bun ci
       - name: Install pinned PDF verification dependency
         run: |
           python3 -m venv "$RUNNER_TEMP/baro-full-python"
@@ -65,24 +63,8 @@ jobs:
       - name: Scan committed history (fully redacted)
         run: gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn
 
-      - name: Build pinned report runtime for acceptance
-        run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
-      - name: Verify native report and originals after final integration
-        env:
-          BARO_REWORK_NATIVE_FIXTURE: "true"
-          BARO_REPORT_EXPORT_ARTIFACT_DIR: .wrangler/report-export-budget-final
-        run: bun test tests/reports-export-query-budget.test.ts
-      - name: Run explicit full validation
-        run: bun run validate:full
-      - name: Record actual tested candidate
-        run: bun scripts/full-validation-receipt.ts
-      - name: Save successful full validation receipt
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-accessibility-preview-${{ inputs.target_sha }}
-          path: .wrangler/release/full-validation.json
-          if-no-files-found: error
-          retention-days: 30
+      - name: Run full core validation
+        run: bun run validate full-core
       - name: Non-sensitive deterministic eval evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -91,12 +73,50 @@ jobs:
           path: .wrangler/eval/*.json
           if-no-files-found: ignore
           retention-days: 14
+  browser:
+    name: Full browser validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.ref == 'refs/heads/main'
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+    steps:
+      - name: Validate explicit candidate input
+        run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify actual checkout and main ancestry
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: apps/mobile/.node-version
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies and browsers
+        run: |
+          bun ci
+          bunx playwright install --with-deps chromium webkit
+      - name: Install pinned PDF verification dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/baro-full-python"
+          "$RUNNER_TEMP/baro-full-python/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/browser/requirements.txt
+          echo "$RUNNER_TEMP/baro-full-python/bin" >> "$GITHUB_PATH"
+      - name: Run full browser validation
+        run: bun run validate full-browser
       - name: Retain synthetic conversation acceptance evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rework-journeys-${{ inputs.target_sha }}
-          include-hidden-files: true
           path: |
             /tmp/baro-625-journeys/**/report.pdf
             /tmp/baro-625-journeys/**/report.html
@@ -110,10 +130,115 @@ jobs:
             /tmp/baro-625-journeys/**/report-visual.json
             /tmp/baro-625-journeys/**/followup.png
             /tmp/baro-625-journeys/**/followup-visual.json
+          if-no-files-found: ignore
+          retention-days: 14
+  native:
+    name: Full native validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.ref == 'refs/heads/main'
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+    steps:
+      - name: Validate explicit candidate input
+        run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify actual checkout and main ancestry
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: apps/mobile/.node-version
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Install pinned PDF verification dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/baro-full-python"
+          "$RUNNER_TEMP/baro-full-python/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/browser/requirements.txt
+          echo "$RUNNER_TEMP/baro-full-python/bin" >> "$GITHUB_PATH"
+      - name: Build pinned report runtime for acceptance
+        run: docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .
+      - name: Verify native report and originals after final integration
+        env:
+          BARO_REWORK_NATIVE_FIXTURE: "true"
+          BARO_REPORT_EXPORT_ARTIFACT_DIR: .wrangler/report-export-budget-final
+        run: bun test tests/reports-export-query-budget.test.ts
+      - name: Run full native validation
+        run: bun run validate full-native
+      - name: Retain synthetic native acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rework-native-${{ inputs.target_sha }}
+          include-hidden-files: true
+          path: |
             .wrangler/report-export-budget-final/*/report.pdf
             .wrangler/report-export-budget-final/*/report.html
             .wrangler/report-export-budget-final/*/review.json
             .wrangler/report-export-budget-final/*/originals.zip
             .wrangler/report-export-budget-final/*/receipts.json
+            .wrangler/report-native/report.pdf
+            .wrangler/report-native/report-page-*.png
           if-no-files-found: ignore
           retention-days: 14
+  validation:
+    name: Full validation
+    needs: [core, browser, native]
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.ref == 'refs/heads/main'
+    env:
+      TARGET_SHA: ${{ inputs.target_sha }}
+      FULL_VALIDATION_SECTIONS: ${{ toJSON(needs) }}
+    steps:
+      - name: Validate explicit candidate input
+        run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify actual checkout and main ancestry
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: apps/mobile/.node-version
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Install frozen dependencies
+        run: bun ci
+      - name: Verify completed validation sections
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/full-validation-receipt.ts --check
+      - name: Record actual tested candidate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/full-validation-receipt.ts
+      - name: Save successful full validation receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-accessibility-preview-${{ inputs.target_sha }}
+          path: .wrangler/release/full-validation.json
+          if-no-files-found: error
+          retention-days: 30

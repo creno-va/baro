@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  fullValidationSections,
+  verifyFullValidationJobs,
+  verifyFullValidationJoin,
+} from "./full-validation-receipt";
 import { releaseChecks, type VerifiedReceipt } from "./release-candidate";
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -42,12 +47,14 @@ export function githubReceiptResolver(get: (path: string) => Promise<unknown>) {
     const old = cache.get(runId);
     if (old) return old;
     const resolve = async (): Promise<VerifiedReceipt> => {
-      const run = runSchema.parse(await get(`actions/runs/${runId}`));
+      const rawRun = await get(`actions/runs/${runId}`);
+      const run = runSchema.parse(rawRun);
       if (run.id !== runId) throw new Error("RECEIPT_RUN_MISMATCH");
       const artifacts = z
         .object({ artifacts: z.array(z.unknown()), total_count: z.number() })
         .parse(await get(`actions/runs/${runId}/artifacts?per_page=100`));
       if (artifacts.total_count > 100) throw new Error("RECEIPT_ARTIFACT_OVERFLOW");
+      const rawJobs = await get(`actions/runs/${runId}/jobs?filter=latest&per_page=100`);
       const jobs = z
         .object({
           jobs: z.array(
@@ -59,18 +66,29 @@ export function githubReceiptResolver(get: (path: string) => Promise<unknown>) {
           ),
           total_count: z.number(),
         })
-        .parse(await get(`actions/runs/${runId}/jobs?filter=latest&per_page=100`));
+        .parse(rawJobs);
       if (jobs.total_count > 100) throw new Error("RECEIPT_JOB_OVERFLOW");
       for (const [check, producer] of Object.entries(producers)) {
         if (run.path !== producer.path) continue;
-        const job = jobs.jobs.find((j) => j.name === producer.job && j.conclusion === "success");
-        if (
-          !job ||
-          ![producer.step, producer.receiptStep].every((name) =>
-            job.steps.some((s) => s.name === name && s.conclusion === "success"),
-          )
-        )
-          continue;
+        const candidates = jobs.jobs.filter((j) => j.name === producer.job);
+        const job = candidates.length === 1 ? candidates[0] : undefined;
+        const succeeded = (name: string) =>
+          job?.steps.some((s) => s.name === name && s.conclusion === "success");
+        const joined = succeeded("Verify completed validation sections");
+        const legacy = succeeded(producer.step);
+        if (job?.conclusion !== "success" || !succeeded(producer.receiptStep)) continue;
+        const sections = Object.values(fullValidationSections);
+        const hasJoin = job.steps.some(
+          (step) => step.name === "Verify completed validation sections",
+        );
+        const hasSection = jobs.jobs.some((item) =>
+          sections.some((section) => item.name === section.job),
+        );
+        if (hasJoin || hasSection) {
+          if (!joined || job.steps.some((step) => step.name === producer.step)) continue;
+          verifyFullValidationJobs(rawRun, rawJobs);
+          verifyFullValidationJoin(rawRun, rawJobs);
+        } else if (!legacy) continue;
         const prefix = `release-${check}-${producer.environment}-`;
         const matching = artifacts.artifacts.flatMap((raw) => {
           const item = artifactSchema.safeParse(raw);

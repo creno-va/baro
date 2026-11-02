@@ -11,6 +11,9 @@ export const validationProfiles = [
   "native",
   "security",
   "full",
+  "full-core",
+  "full-browser",
+  "full-native",
 ] as const;
 export type ValidationProfile = (typeof validationProfiles)[number];
 
@@ -56,6 +59,9 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/preview-legacy-fixture.test.ts",
       "tests/session-owner-fence.test.ts",
       "scripts/validate.test.ts",
+      "scripts/development-checks.test.ts",
+      "tests/full-validation-receipt.test.ts",
+      "tests/release-receipts.test.ts",
       "scripts/deploy.test.ts",
       "scripts/verify-release.test.ts",
       "tests/native-auth-codes.test.ts",
@@ -249,6 +255,19 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       return native;
     case "security":
       return security;
+    case "full-core":
+      return [
+        ...quick,
+        ["bun", "test"],
+        ...database,
+        ["bun", "run", "eval:offline"],
+        ...build,
+        ...security,
+      ];
+    case "full-browser":
+      return [...build, ["bun", "scripts/full-browser.ts"], ["bun", "run", "test:csp"]];
+    case "full-native":
+      return native;
     case "full":
       return [
         ...quick,

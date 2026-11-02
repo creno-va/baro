@@ -67,3 +67,29 @@ test("validation preserves failure and never runs later commands after a failed 
   expect(code).toBe(7);
   expect(observed).toEqual([["first"], ["fails"]]);
 });
+
+test("full sections retain every full command and keep browser build and native limits", () => {
+  const root = resolve("scratch", "project with spaces");
+  const full = validationCommands("full", root);
+  const sections = ["full-core", "full-browser", "full-native"].flatMap((profile) =>
+    validationCommands(profile, root),
+  );
+  const key = (commands: string[][]) => commands.map((c) => JSON.stringify(c)).sort();
+  expect(key(sections)).toEqual(key([...full, ...validationCommands("build", root)]));
+  const browserStart = full.findIndex((c) => c[1] === "scripts/full-browser.ts");
+  const securityStart = full.findIndex((c) => c[1] === "audit");
+  const nativeStart = full.findIndex((c) => c[0] === "docker");
+  expect(validationCommands("full-core", root)).toEqual([
+    ...full.slice(0, browserStart),
+    ...full.slice(securityStart, nativeStart),
+  ]);
+  expect(full.filter((c) => c[1] === "scripts/apply-d1-migrations.ts")).toHaveLength(2);
+  expect(validationCommands("full-browser", root)).toContainEqual(["bun", "run", "test:csp"]);
+  expect(validationCommands("full-browser", root)).toContainEqual([
+    "bun",
+    "run",
+    "build:production",
+  ]);
+  expect(validationCommands("full-core", root)).toContainEqual(["bun", "audit"]);
+  expect(validationCommands("full-native", root)).toEqual(validationCommands("native", root));
+});
