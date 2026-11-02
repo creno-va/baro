@@ -340,3 +340,111 @@ test("an earlier report request resumes only its view after server completion, p
   await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(1);
 });
+
+for (const phase of ["requested", "registered"] as const)
+  test(`unconfirmed ${phase} continuation preserves input and requires explicit confirmation within the existing window`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto("/__conversation-agent");
+    await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeVisible();
+    const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
+    await expect(composer).toBeEnabled();
+    await composer.fill("보존할 등록 대기 입력");
+    await page.clock.install();
+    await page.evaluate((phase) => window.conversationFixture.queueContinuation(phase), phase);
+    await expect(
+      page.getByText("리포트 준비 결과를 확인하고 있어요. 아직 완료된 결과는 아니에요.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(composer).toBeDisabled();
+    if (phase === "requested") {
+      await page.clock.runFor(20000);
+      await page.evaluate(() => window.conversationFixture.queueContinuation("registered"));
+      await page.clock.runFor(10001);
+    } else await page.clock.runFor(30001);
+    const recheck = page.getByRole("button", { name: "리포트 상태 다시 확인", exact: true });
+    await expect(recheck).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      320,
+    );
+    const reads = await page.evaluate(() => window.conversationFixture.reads);
+    await page.clock.runFor(10000);
+    expect(await page.evaluate(() => window.conversationFixture.reads)).toBe(reads);
+    await expect(composer).toHaveValue("보존할 등록 대기 입력");
+    if (phase === "registered") {
+      await page.getByRole("button", { name: "전송 대기 취소", exact: true }).click();
+      await expect(composer).toBeEnabled();
+      await expect(composer).toHaveValue("보존할 등록 대기 입력");
+    }
+    await page.evaluate(() => window.conversationFixture.finishContinuation());
+    expect(await page.evaluate(() => window.conversationFixture.reads)).toBe(reads);
+    await recheck.focus();
+    await page.keyboard.press("Enter");
+    await expect(recheck).toHaveCount(0);
+    await expect(composer).toBeEnabled();
+    await expect(composer).toHaveValue("보존할 등록 대기 입력");
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.activeElement?.id === "workspace-message" ||
+            document.activeElement?.classList.contains("workspace-messages"),
+        ),
+      )
+      .toBe(true);
+    expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(0);
+  });
+
+test("a late continuation read cannot restore another account's state or busy flag", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  await expect(page.getByRole("button", { name: "리포트 준비·검토", exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.conversationFixture.holdProgress = true;
+    window.conversationFixture.queueContinuation("registered");
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.conversationFixture.releaseProgress !== null))
+    .toBe(true);
+  await page.getByRole("button", { name: "합성 계정 전환", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.conversationFixture.aborted)).toBe(true);
+  await page.evaluate(() => window.conversationFixture.releaseProgress?.());
+  await expect(page.locator(".conversation-agent")).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).toBeEnabled();
+  expect(await page.evaluate(() => window.conversationFixture.calls.length)).toBe(0);
+});
+
+test("a report continuation keeps stored reads available and passive confirmation creates no new action", async ({
+  page,
+}) => {
+  await page.goto("/__conversation-agent");
+  const primary = page.getByRole("button", { name: "리포트 준비·검토", exact: true });
+  await expect(primary).toBeVisible();
+  await page.clock.install();
+  await page.evaluate(() => window.conversationFixture.queueContinuation("registered"));
+  await page.getByRole("button", { name: "전송 대기 취소", exact: true }).click();
+  await primary.click();
+  const report = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+  await expect(report).toBeVisible();
+  await expect(report.getByRole("button", { name: "기존 저장본 읽기", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).toBeEnabled();
+  const reads = await page.evaluate(() => window.conversationFixture.reads);
+  await page.clock.runFor(2000);
+  expect(await page.evaluate(() => window.conversationFixture.reads)).toBeGreaterThan(reads);
+  await page.evaluate(() => window.conversationFixture.finishContinuation());
+  await expect(
+    page.getByText("리포트 준비 결과를 확인하고 있어요. 아직 완료된 결과는 아니에요.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => window.conversationFixture.calls.map((request) => request.action)),
+  ).toEqual(["prepare_report"]);
+});

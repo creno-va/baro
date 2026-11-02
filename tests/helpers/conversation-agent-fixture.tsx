@@ -5,6 +5,7 @@ import {
   ConversationAgent,
   type ConversationClient,
 } from "../../src/components/workspace/ConversationAgent";
+import { v2AnalysisBasisSchema } from "../../src/contracts/v2";
 import type { ConversationFixtureControl } from "./conversation-agent-browser-api";
 import { limitedConversationState } from "./conversation-state";
 
@@ -19,6 +20,8 @@ export function ConversationAgentFixture() {
   const [paneTaskDone, setPaneTaskDone] = useState(false);
   const [workspaceRevision, setWorkspaceRevision] = useState(8);
   const [canMutate, setCanMutate] = useState(true);
+  const [queuedWork, setQueuedWork] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const scope = useRef(0);
   const control = useRef<ConversationFixtureControl>({
     calls: [],
@@ -26,6 +29,11 @@ export function ConversationAgentFixture() {
     fail: false,
     readFailure: null,
     reads: 0,
+    continuationPhase: null,
+    queueContinuation: () => {},
+    finishContinuation: () => {},
+    holdProgress: false,
+    releaseProgress: null,
     finishPaneTask: () => {},
     failureCode: "UNAVAILABLE",
     resolve: null,
@@ -41,6 +49,16 @@ export function ConversationAgentFixture() {
   });
   useEffect(() => {
     const value = control.current;
+    value.queueContinuation = (phase) => {
+      value.continuationPhase = phase;
+      setQueuedWork(true);
+      setRefreshKey((key) => key + 1);
+    };
+    value.finishContinuation = () => {
+      value.continuationPhase = null;
+      value.finishReport();
+      setRefreshKey((key) => key + 1);
+    };
     value.withdrawConsent = () => {
       value.needsConsent = true;
       setCanMutate(false);
@@ -84,7 +102,7 @@ export function ConversationAgentFixture() {
     window.conversationFixture = value;
   }, []);
   const client = useRef<ConversationClient>({
-    getConversation: async () => {
+    getConversationProgress: async (_id, options) => {
       control.current.reads++;
       if (control.current.readFailure === "unavailable")
         throw Object.assign(new Error("합성 상태 조회 실패"), { code: "UNAVAILABLE" });
@@ -94,7 +112,34 @@ export function ConversationAgentFixture() {
         control.current.advanceAfterIntentRead = false;
         state.current.workspaceRevision++;
       }
-      return snapshot;
+      const phase = control.current.continuationPhase;
+      const result = {
+        contractVersion: "conversation-report-progress-v1" as const,
+        state: snapshot,
+        reportContinuation: phase
+          ? {
+              phase,
+              requestId: "synthetic-report-continuation",
+              basis: v2AnalysisBasisSchema.parse(snapshot.analysis.basis),
+              expectedReportRevision: snapshot.report.revision,
+            }
+          : null,
+      };
+      options?.signal?.addEventListener(
+        "abort",
+        () => {
+          control.current.aborted = true;
+        },
+        { once: true },
+      );
+      if (control.current.holdProgress) {
+        await new Promise<void>((resolve) => {
+          control.current.releaseProgress = resolve;
+        });
+        control.current.holdProgress = false;
+        control.current.releaseProgress = null;
+      }
+      return result;
     },
     executeAction: async (_id, request, options) => {
       const value = control.current;
@@ -121,7 +166,7 @@ export function ConversationAgentFixture() {
             code: value.failureCode,
           },
         );
-      if (request.action === "prepare_report" && !value.reportBlocked)
+      if (request.action === "prepare_report" && !value.reportBlocked && !value.continuationPhase)
         state.current.report = {
           status: "ready",
           id: "report",
@@ -200,6 +245,8 @@ export function ConversationAgentFixture() {
               client={client}
               incomingMessageIds={incoming}
               disabled={false}
+              queuedWork={queuedWork}
+              refreshKey={refreshKey}
               access={{
                 ready: true,
                 canMutate,
@@ -268,6 +315,7 @@ export function ConversationAgentFixture() {
             />
           )}
         </div>
+        {queuedWork && <Button onClick={() => setQueuedWork(false)}>전송 대기 취소</Button>}
         <form className="workspace-composer" onSubmit={(event) => event.preventDefault()}>
           <label htmlFor="workspace-message">추가 사실 또는 질문</label>
           <textarea id="workspace-message" disabled={busy} />

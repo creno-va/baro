@@ -138,6 +138,7 @@ export async function openReworkBrowserFixture(
             "workspace",
             "summary",
             "conversation",
+            "conversation-progress",
             "summary-reconciliation",
             "summary-reconciliation/request",
             "summary-reconciliation/cancel",
@@ -176,6 +177,8 @@ export async function openReworkBrowserFixture(
             ].includes(value)
               ? value
               : undefined;
+          const projected = kind === "conversation-progress" ? object(body?.state) : body;
+          const continuation = object(body?.reportContinuation);
           const files = Array.isArray(body) ? body : Array.isArray(body?.files) ? body.files : [];
           observations.push({
             kind,
@@ -199,13 +202,28 @@ export async function openReworkBrowserFixture(
                 : undefined,
             expectedW: number(input?.expectedRevision),
             expectedS: number(input?.summaryRevision),
-            W: number(body?.workspaceRevision) ?? number(object(body?.case)?.revision),
+            W: number(projected?.workspaceRevision) ?? number(object(projected?.case)?.revision),
+            pendingEvidenceCount: Array.isArray(projected?.pendingEvidenceIds)
+              ? projected.pendingEvidenceIds.length
+              : undefined,
+            continuationPending:
+              kind === "conversation-progress"
+                ? body?.reportContinuation === null
+                  ? 0
+                  : continuation
+                    ? 1
+                    : undefined
+                : undefined,
+            continuationPhase:
+              continuation?.phase === "requested" || continuation?.phase === "registered"
+                ? continuation.phase
+                : undefined,
             fileState:
               state(object(body?.file)?.status) ??
               (kind === "file-admission" ? state(body?.status) : undefined),
             reviewedFileRevision: number(object(body?.file)?.revision),
-            analysisState: state(object(body?.analysis)?.status),
-            reportState: state(object(body?.report)?.status),
+            analysisState: state(object(projected?.analysis)?.status),
+            reportState: state(object(projected?.report)?.status),
             ...(files.length
               ? {
                   readyFiles: files.filter((file: unknown) => object(file)?.status === "ready")

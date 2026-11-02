@@ -7,6 +7,11 @@ export type ConversationFixtureControl = {
   fail: boolean;
   readFailure: "unavailable" | "parse" | null;
   reads: number;
+  continuationPhase: "requested" | "registered" | null;
+  queueContinuation: (phase: "requested" | "registered") => void;
+  finishContinuation: () => void;
+  holdProgress: boolean;
+  releaseProgress: (() => void) | null;
   finishPaneTask: () => void;
   failureCode: string;
   resolve: (() => void) | null;
