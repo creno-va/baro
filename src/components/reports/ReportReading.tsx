@@ -2,6 +2,7 @@
 import { ImagePlus } from "lucide-react";
 import { useRef } from "react";
 import {
+  isReportSourceSection,
   type ReportPhoto,
   reportMarkdownHtml,
   reportPhotoIds,
@@ -137,8 +138,14 @@ export function ReportReading({
           ) : (
             <div
               className="report-markdown"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: Local renderer escapes text and permits only owned-photo URLs; covered by XSS tests.
-              dangerouslySetInnerHTML={{ __html: reportMarkdownHtml(section.text, photos) }}
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: Escaped renderer permits owned photos and bounded official-source navigation only; covered by XSS tests.
+              dangerouslySetInnerHTML={{
+                __html: reportMarkdownHtml(
+                  section.text,
+                  photos,
+                  isReportSourceSection(section.title),
+                ),
+              }}
             />
           )}
         </section>

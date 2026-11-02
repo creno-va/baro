@@ -1089,6 +1089,16 @@
   color: #303d50;
   overflow-wrap: anywhere;
 }
+.report-markdown .report-official-source {
+  display: inline-block;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 0;
+  color: #2364e8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
 .report-markdown ul,
 .report-markdown ol {
   padding-left: 24px;

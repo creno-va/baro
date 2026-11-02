@@ -1,5 +1,6 @@
 import {
   escapeReportHtml,
+  isReportSourceSection,
   reportMarkdownBlocks,
   reportMarkdownHtml,
 } from "../../utils/report-markdown";
@@ -40,6 +41,8 @@ const documentCss = `
 .baro-report .lines p { margin:0 0 12px; white-space:pre-wrap; overflow-wrap:anywhere; orphans:3; widows:3; }
 .baro-report .lines ul,.baro-report .lines ol { margin:12px 0; padding-left:23px; }
 .baro-report .lines li { margin:0 0 9px; overflow-wrap:anywhere; orphans:2; widows:2; }
+.baro-report .report-official-source { color:#2364e8; text-decoration:underline; text-underline-offset:3px; overflow-wrap:anywhere; }
+.baro-report .report-official-source:focus-visible { outline:2px solid #2364e8; outline-offset:3px; }
 .baro-report .lines h4 { margin:18px 0 10px; font-size:14px; font-weight:700; break-after:avoid; }
 .baro-report blockquote { margin:16px 0; padding-left:14px; border-left:2px solid #dce3ed; }
 .baro-report .report-source-quote { white-space:pre-wrap; overflow-wrap:anywhere; orphans:3; widows:3; }
@@ -77,7 +80,7 @@ export function createReportMarkup(report: ReportDocument, _embedded = false) {
   const body = reportReviewSections(content)
     .map(
       (section, index) =>
-        `<section class="section"><div class="section-head"><span class="number">${index + 1}</span><h2>${escapeReportHtml(reportSectionTitle(section.title))}</h2></div><div class="lines">${reportMarkdownHtml(section.text, images)}</div></section>`,
+        `<section class="section"><div class="section-head"><span class="number">${index + 1}</span><h2>${escapeReportHtml(reportSectionTitle(section.title))}</h2></div><div class="lines">${reportMarkdownHtml(section.text, images, isReportSourceSection(section.title))}</div></section>`,
     )
     .join("");
   const date = new Date(report.updatedAt).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });

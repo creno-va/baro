@@ -102,3 +102,25 @@ try:
 finally:
     server.terminate()
     server.wait(timeout=5)
+
+# Official navigation is represented in the PDF without fetching its destination.
+# Product allowlisting is exercised separately by the actual runtime exports.
+official_urls = [
+    "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+    "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000623",
+]
+navigation = "".join(f'<p>공식 원문 · <a href="{url}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">{url}</a></p>' for url in official_urls)
+fetched = []
+def offline_resource(url):
+    fetched.append(url)
+    return resource(url)
+linked = HTML(string=source.replace("</main>", navigation + "</main>"), url_fetcher=offline_resource).render()
+assert fetched and all(url.startswith("data:") for url in fetched)
+assert {target for page in linked.pages for kind,target,*_ in page.links if kind == "external"} == set(official_urls)
+with tempfile.TemporaryDirectory() as temporary:
+    linked_pdf = Path(temporary) / "source-links.pdf"
+    linked_pdf.write_bytes(linked.write_pdf())
+    actual_links = subprocess.check_output(["pdfinfo", "-url", str(linked_pdf)]).decode("utf-8")
+    for url in official_urls:
+        assert url in actual_links, url
+print("Official source PDF URI navigation preserved; no background remote fetch.")

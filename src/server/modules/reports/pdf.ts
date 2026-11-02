@@ -1,3 +1,4 @@
+import { isReportSourceSection, reportOfficialSourceUrl } from "../../../utils/report-markdown";
 import { reportSections } from "../../../utils/report-sections";
 
 /** Workers-only PDF writer. Embedded static TrueType, per-glyph widths and a
@@ -169,7 +170,14 @@ export async function renderReportPdf(
     return `${color} rg BT /F0 ${size} Tf 1 0 0 1 ${x} ${y} Tm <${codes}> Tj ET\n`;
   };
   // Keep every title line; paginate even unusually long titles before body.
-  type RecordLine = { value: string; size: number; gap: number; heading?: boolean; color?: string };
+  type RecordLine = {
+    value: string;
+    size: number;
+    gap: number;
+    heading?: boolean;
+    color?: string;
+    sourceUrl?: string | undefined;
+  };
   const all: RecordLine[] = [
     ...title.map((value) => ({ value, size: 23, gap: 33 })),
     { value: `검토 버전 ${input.revision} · ${displayDate(input.updatedAt)}`, size: 9, gap: 27 },
@@ -183,28 +191,38 @@ export async function renderReportPdf(
       `제외 자료: ${input.excludedFileCount ?? 0}개 · 식별정보 자동 가림: ${input.maskIdentifiers ? "켜짐" : "꺼짐"} · 생성 기준 이후 변경은 반영되지 않습니다.`,
       9,
     ).map((value) => ({ value, size: 9, gap: 19 })),
-    ...reportSections(input.content).flatMap((section, index): RecordLine[] => [
-      {
-        value: `${String(index + 1).padStart(2, "0")}  ${section.title}`,
-        size: 13,
-        gap: 25,
-        heading: true,
-        color: "0.12 0.31 0.59",
-      },
-      ...section.lines.flatMap((line) => {
-        const detail = /^\[|^(출처|주의|작성 시각|검증 시각):/.test(line);
-        return wrap(line, detail ? 9 : 10.5).map((value) => ({
-          value,
-          size: detail ? 9 : 10.5,
-          gap: value ? (detail ? 15 : 19) : 9,
-          color: detail ? "0.35 0.40 0.48" : "0.10 0.14 0.23",
-        }));
-      }),
-      { value: "", size: 10, gap: 12 },
-    ]),
+    ...reportSections(input.content).flatMap((section, index): RecordLine[] => {
+      let fenced = false;
+      return [
+        {
+          value: `${String(index + 1).padStart(2, "0")}  ${section.title}`,
+          size: 13,
+          gap: 25,
+          heading: true,
+          color: "0.12 0.31 0.59",
+        },
+        ...section.lines.flatMap((line) => {
+          if (/^\s*```/u.test(line)) fenced = !fenced;
+          const sourceUrl =
+            !fenced && isReportSourceSection(section.title)
+              ? reportOfficialSourceUrl(line.replace(/^\s*(?:[-+*]|\d+[.)])\s+/u, ""))
+              : undefined;
+          const detail = /^\[|^(출처|주의|작성 시각|검증 시각):/.test(line);
+          return wrap(line, detail ? 9 : 10.5).map((value) => ({
+            value,
+            size: detail ? 9 : 10.5,
+            gap: value ? (detail ? 15 : 19) : 9,
+            color: detail ? "0.35 0.40 0.48" : "0.10 0.14 0.23",
+            sourceUrl,
+          }));
+        }),
+        { value: "", size: 10, gap: 12 },
+      ];
+    }),
   ];
   let cursor = 0;
   do {
+    const annotations: number[] = [];
     let y = 745,
       drawing =
         text("BARO", 14, 790, "0.13 0.35 0.78") +
@@ -213,7 +231,26 @@ export async function renderReportPdf(
     while (cursor < all.length) {
       const record = all[cursor];
       if (!record || y - record.gap - (record.heading ? 28 : 0) < 82) break;
-      drawing += text(record.value, record.size, y, record.color);
+      drawing += text(
+        record.value,
+        record.size,
+        y,
+        record.sourceUrl ? "0.137 0.392 0.910" : record.color,
+      );
+      if (record.sourceUrl && record.value) {
+        const width = [...record.value].reduce(
+          (sum, scalar) => sum + (character(scalar).width * record.size) / 1000,
+          0,
+        );
+        const uri = [...encode(record.sourceUrl)]
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        annotations.push(
+          object(
+            `<< /Type /Annot /Subtype /Link /Rect [52 ${y - record.size * 0.3} ${52 + width} ${y + record.size}] /Border [0 0 0] /A << /S /URI /URI <${uri}> >> >>`,
+          ),
+        );
+      }
       y -= record.gap;
       cursor++;
     }
@@ -227,7 +264,7 @@ export async function renderReportPdf(
     const content = object(stream(encode(drawing)));
     children.push(
       object(
-        `<< /Type /Page /Parent ${pages} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F0 ${fontId} 0 R >> >> /Contents ${content} 0 R >>`,
+        `<< /Type /Page /Parent ${pages} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F0 ${fontId} 0 R >> >> /Contents ${content} 0 R ${annotations.length ? `/Annots [${annotations.map((id) => `${id} 0 R`).join(" ")}]` : ""} >>`,
       ),
     );
   } while (cursor < all.length);
