@@ -1,11 +1,49 @@
-/** Small, escaped Markdown vocabulary shared by private preview and PDF. No
- * raw HTML, remote images, scripts or user-authored URL attributes are accepted. */
+/** Escaped vocabulary shared by preview and PDF. Owned photos and bounded
+ * official-source navigation only; no raw HTML, scripts or remote resources. */
 export const escapeReportHtml = (value: string) =>
   value.replace(
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c,
   );
 export type ReportPhoto = { id: string; name: string; url: string };
+export const isReportSourceSection = (title: string) =>
+  title === "출처와 분석 기준" || title === "공식 출처";
+
+/** Navigation only: this never establishes citation verification or fetches a
+ * resource. Preserve the original spelling after rejecting URL normalization,
+ * credentials, redirects and every parameter outside the canonical source IDs. */
+export function reportOfficialSourceUrl(line: string): string | undefined {
+  const match = /^공식 원문 · (https:\/\/[A-Za-z0-9./?=&_-]+)$/u.exec(line);
+  const raw = match?.[1];
+  if (!raw || match?.[0] !== line) return;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return;
+  }
+  const keys =
+    url.origin === "https://law.go.kr" && url.pathname === "/LSW/lsInfoP.do"
+      ? ["lsiSeq"]
+      : url.origin === "https://www.law.go.kr" && url.pathname === "/LSW/precInfoP.do"
+        ? ["precSeq"]
+        : url.origin === "https://www.easylaw.go.kr" && url.pathname === "/CSP/CnpClsMain.laf"
+          ? ["csmSeq", "ccfNo", "cciNo", "cnpClsNo"]
+          : [];
+  // Checking the literal query as well as URL components prevents percent,
+  // dot-segment, default-port and delimiter normalization from admitting input.
+  const originAndPath = `${url.origin}${url.pathname}`;
+  if (!keys.length || !raw.startsWith(`${originAndPath}?`)) return;
+  const pairs = raw.slice(originAndPath.length + 1).split("&");
+  if (
+    pairs.length !== keys.length ||
+    pairs.some((pair) => !/^[A-Za-z]+=[0-9]{1,12}$/u.test(pair)) ||
+    keys.some((key) => url.searchParams.getAll(key).length !== 1) ||
+    [...url.searchParams.keys()].some((key) => !keys.includes(key))
+  )
+    return;
+  return raw;
+}
 export type MarkdownBlock =
   | { kind: "paragraph" | "heading" | "quote" | "source_quote" | "code"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
@@ -83,12 +121,22 @@ function inline(text: string): string {
     })
     .join("");
 }
-export function reportMarkdownHtml(text: string, photos: readonly ReportPhoto[] = []) {
+export function reportMarkdownHtml(
+  text: string,
+  photos: readonly ReportPhoto[] = [],
+  sourceSection = false,
+) {
+  const sourceOrInline = (value: string) => {
+    const url = sourceSection ? reportOfficialSourceUrl(value) : undefined;
+    return url
+      ? `공식 원문 · <a class="report-official-source" href="${escapeReportHtml(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeReportHtml(url)}</a>`
+      : inline(value);
+  };
   return reportMarkdownBlocks(text)
     .map((block) => {
       if (block.kind === "list") {
         const tag = block.ordered ? "ol" : "ul";
-        return `<${tag}>${block.items.map((item) => `<li>${inline(item)}</li>`).join("")}</${tag}>`;
+        return `<${tag}>${block.items.map((item) => `<li>${sourceOrInline(item)}</li>`).join("")}</${tag}>`;
       }
       if (block.kind === "photo") {
         const photo = photos.find((photo) => photo.id === block.id);
@@ -105,7 +153,7 @@ export function reportMarkdownHtml(text: string, photos: readonly ReportPhoto[] 
       if (block.kind === "source_quote")
         return `<blockquote class="report-source-quote">${escapeReportHtml(block.text)}</blockquote>`;
       const tag = block.kind === "heading" ? "h4" : block.kind === "quote" ? "blockquote" : "p";
-      return `<${tag}>${inline(block.text)}</${tag}>`;
+      return `<${tag}>${block.kind === "paragraph" ? sourceOrInline(block.text) : inline(block.text)}</${tag}>`;
     })
     .join("");
 }

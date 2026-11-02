@@ -109,6 +109,28 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         const bytes = new Uint8Array(await pdf.arrayBuffer());
         expect(new TextDecoder().decode(bytes.subarray(0, 5))).toBe("%PDF-");
         expect(bytes.byteLength).toBeGreaterThan(1000);
+        if (Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR)
+          await Bun.write(
+            `${Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR}/${purpose}/report.pdf`,
+            bytes,
+          );
+        // The actual prepared runtime report must carry usable official-source
+        // PDF annotations, rather than merely printing URL-shaped text.
+        const links = Bun.spawnSync(
+          [
+            "python3",
+            "tests/helpers/report-pdf-links.py",
+            JSON.stringify([
+              "https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415",
+              "https://www.law.go.kr/LSW/precInfoP.do?precSeq=90000000623",
+            ]),
+          ],
+          { stdin: bytes, stdout: "pipe", stderr: "pipe" },
+        );
+        expect(links.exitCode).toBe(0);
+        const linkProof = JSON.parse(new TextDecoder().decode(links.stdout));
+        expect(linkProof.rectanglesWithinPages).toBe(true);
+        expect(linkProof.annotations).toBeGreaterThanOrEqual(2);
         const artifactDir = Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR
           ? `${Bun.env.BARO_REPORT_EXPORT_ARTIFACT_DIR}/${purpose}`
           : null;
@@ -185,6 +207,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
                 synthetic: true,
                 pdfSha256: await digest(bytes.buffer),
                 zipSha256: await digest(archiveBytes.buffer),
+                officialSourceLinks: linkProof,
                 zipRequestQueriesIncludingMiddleware: exported.queries - observed.queries,
                 artifacts: exported.artifacts,
               },
