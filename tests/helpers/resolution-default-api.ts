@@ -1,13 +1,11 @@
-import { createReworkClient } from "@baro/api-client";
+import { createReworkClient, responseError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 
 /** Explicit synthetic facade for the component's default client; Astro glob imports stay out of Bun's harness. */
 async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, init);
-  const value = (await response.json()) as T & { code?: string };
-  if (!response.ok)
-    throw Object.assign(new Error("synthetic request failed"), { code: value?.code });
-  return value;
+  if (!response.ok) throw await responseError(response);
+  return response.json() as Promise<T>;
 }
 const scope = createSessionScope();
 async function session() {

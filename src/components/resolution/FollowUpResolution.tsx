@@ -82,6 +82,8 @@ const paths = [
 ] as const;
 function failureMessage(error: unknown) {
   const code = (error as { code?: string })?.code;
+  if (code === "CONFLICT")
+    return "내용이 변경됐어요. 현재 상태를 다시 확인해 주세요. 저장된 내용은 보존돼요.";
   if (code === "STALE_REVISION")
     return "사건이나 리포트가 바뀌었어요. 현재 버전을 다시 확인해 주세요. 이전 초안은 보존돼요.";
   if (code === "REVIEW_REQUIRED") return "현재 리포트와 사실을 확인한 뒤 초안을 준비해 주세요.";
@@ -93,6 +95,8 @@ function failureMessage(error: unknown) {
     return "계정·동의 또는 사건 접근 상태가 바뀌었어요. 다시 로그인하고 확인해 주세요.";
   return "작업을 완료하지 못했어요. 저장된 내용은 보존돼요. 다시 시도해 주세요.";
 }
+const metadataMessage =
+  "후속 해결 상태를 확인하지 못했어요. 다시 확인한 뒤 진행해 주세요. 리포트 저장은 이용할 수 있어요.";
 export interface FollowUpResolutionProps {
   caseId: string;
   reportId?: string | undefined;
@@ -122,11 +126,13 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const [busy, setBusy] = useState(false);
   const [needsConsent, setNeedsConsent] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [pendingChoice, setPendingChoice] = useState<typeof selected>(null);
   const sequence = useRef(0),
     owner = useRef<string | null>(null),
     lock = useRef<number | null>(null);
+  const hasState = useRef(false);
   const controller = useRef(new AbortController());
   const reloadRequested = useRef(false);
   const reload = useRef<() => void>(() => undefined);
@@ -176,6 +182,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setBusy(false);
     owner.current = null;
     setNeedsConsent(false);
+    hasState.current = false;
     setState(null);
     setSelected(null);
     setFiles([]);
@@ -188,13 +195,16 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setPendingChoice(null);
     setNotice("");
     setError("");
+    setLoadError("");
   }, []);
   const handleFailure = useCallback(
     (error: unknown) => {
       const code = (error as { code?: string })?.code;
       if (code === "NOT_FOUND" || code === "UNAUTHENTICATED") purge();
-      else if (code === "STALE_REVISION")
-        setState((current) => (current ? { ...current, status: "stale" } : null));
+      else if (code === "STALE_REVISION" || code === "CONFLICT")
+        setState((current) =>
+          current ? { ...current, status: current.basis ? "stale" : "not_ready" } : null,
+        );
       else if (code === "CONSENT_REQUIRED") setNeedsConsent(true);
       setError(failureMessage(error));
     },
@@ -220,6 +230,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     [client, purge],
   );
   const accept = useCallback((next: V2ResolutionState) => {
+    hasState.current = true;
+    setLoadError("");
     setState(next);
     setSelected(next.selection);
     setIds(next.selectedFileIds);
@@ -253,6 +265,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     lock.current = epoch;
     setBusy(true);
     setError("");
+    setLoadError("");
     try {
       const options = await verify(epoch);
       const next = await client.getResolution(props.caseId, options);
@@ -270,7 +283,18 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       await verify(epoch);
       if (epoch === sequence.current) accept(next);
     } catch (e) {
-      if (epoch === sequence.current) handleFailure(e);
+      if (epoch === sequence.current) {
+        const code = (e as { code?: string })?.code;
+        if (
+          !hasState.current &&
+          code !== "NOT_FOUND" &&
+          code !== "UNAUTHENTICATED" &&
+          code !== "CONSENT_REQUIRED" &&
+          code !== "REVIEW_REQUIRED"
+        )
+          setLoadError(metadataMessage);
+        else handleFailure(e);
+      }
     } finally {
       finish(epoch);
     }
@@ -352,6 +376,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       }, false);
       return;
     }
+    if (!state) {
+      setLoadError(metadataMessage);
+      return;
+    }
     const readOnly = needsConsent;
     await run(async (options, epoch) => {
       const [available, currentReport, historical] = await Promise.all([
@@ -368,7 +396,6 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         setSelected(choice);
         return null;
       }
-      if (!state) throw new Error("NOT_READY");
       const base = state.basis
         ? { reportId: state.basis.reportId, reportRevision: state.basis.reportRevision }
         : { reportId: currentReport.id, reportRevision: currentReport.revision };
@@ -529,9 +556,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           </Button>
         ))}
       </div>
-      {error && (
+      {(loadError || error) && (
         <div role="alert" className="resolution-error">
-          <p>{error}</p>
+          {loadError && <p>{loadError}</p>}
+          {error && <p>{error}</p>}
           <Button variant="outline" disabled={busy} onClick={() => void load()}>
             다시 확인
           </Button>
