@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 test.beforeEach(async ({ request }) => {
   await request.post("/fixture/control", { data: { reset: true } });
@@ -574,6 +574,7 @@ for (const code of ["STALE_REVISION", "REVIEW_REQUIRED", "POLICY_REJECTED"] as c
     await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-code", "CONFLICT");
     await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-http-status", "409");
     await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-transport", "unknown");
+    expect(await page.getByRole("alert").getAttribute("data-action-error-step")).toBeNull();
     expect(await page.getByRole("alert").getAttribute("data-load-error-code")).toBeNull();
     await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
     await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
@@ -630,6 +631,7 @@ test("diagnostic HTTP load/action channels clear at their own request and succes
     await expect(alert).toHaveAttribute("data-action-error-http-status", "503");
     await expect(alert).toHaveAttribute("data-action-error-transport", "unknown");
     await expect(alert).toHaveAttribute("data-load-error-http-status", "503");
+    expect(await alert.getAttribute("data-action-error-step")).toBeNull();
     holdAction = true;
     await page.getByRole("button", { name: /^리포트만 저장/ }).click();
     await expect.poll(() => alert.getAttribute("data-action-error-code")).toBeNull();
@@ -729,3 +731,237 @@ for (const [mode, transport] of [
     await expect(page.getByRole("button", { name: /^직접 해결/ })).toBeEnabled();
     await expect(alert).toHaveCount(0);
   });
+
+async function openResolutionForStepTest(page: Page) {
+  const loaded = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/rework/resolution") &&
+      response.request().method() === "GET" &&
+      response.status() === 200,
+  );
+  await page.goto("/?default");
+  await loaded;
+  await expect(page.getByRole("button", { name: "대화·리포트 보기 전환" })).toBeEnabled();
+}
+
+for (const step of ["files_read", "report_read", "resolution_read", "selection_update"] as const)
+  test(`selection ${step} exposes only its failed facade step and clears on confirmation and success`, async ({
+    page,
+    request,
+  }) => {
+    if (step === "resolution_read")
+      await request.post("/fixture/control", { data: { needsConsent: true } });
+    await openResolutionForStepTest(page);
+    let fail = true,
+      failed = 0,
+      patches = 0;
+    const pattern =
+      step === "files_read"
+        ? "**/fixture/files?*"
+        : step === "report_read"
+          ? "**/api/v2/cases/case/rework/report"
+          : "**/api/v2/cases/case/rework/resolution";
+    await page.route(pattern, async (route) => {
+      const method = route.request().method();
+      if (method === "PATCH") patches++;
+      if (fail && (step === "selection_update" ? method === "PATCH" : method === "GET")) {
+        failed++;
+        return route.fulfill({
+          status: 503,
+          json: {
+            error: {
+              code: "DEPENDENCY_UNAVAILABLE",
+              message: "SYNTHETIC-STEP-PRIVATE",
+              step: "SYNTHETIC-STEP-PRIVATE",
+            },
+          },
+        });
+      }
+      await route.continue();
+    });
+    await page
+      .getByRole("button", { name: step === "files_read" ? /^직접 해결/ : /^변호사와 해결/ })
+      .click();
+    const alert = page.getByRole("alert");
+    await expect(alert).toHaveAttribute("data-action-error-step", step);
+    await expect(alert).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+    await expect(alert).toHaveAttribute("data-action-error-http-status", "503");
+    await expect(alert).toHaveAttribute("data-action-error-transport", "unknown");
+    expect(await alert.getAttribute("data-load-error-code")).toBeNull();
+    expect(failed).toBe(1);
+    expect(patches).toBe(step === "selection_update" ? 1 : 0);
+    expect(await page.content()).not.toContain("SYNTHETIC-STEP-PRIVATE");
+    fail = false;
+    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(page.getByRole("button", { name: "대화·리포트 보기 전환" })).toBeEnabled();
+    await expect(alert).toHaveCount(0);
+    await expect(page.locator("[data-action-error-step]")).toHaveCount(0);
+    await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+    await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toBeVisible();
+    await expect(page.locator("[data-action-error-step]")).toHaveCount(0);
+    const calls = await (await request.get("/fixture/counts")).json();
+    expect(calls.update).toBe(step === "resolution_read" ? 0 : 1);
+    expect(calls.draft).toBe(0);
+  });
+
+test("selection session failure before any facade call has an unknown step and cannot claim a PATCH", async ({
+  page,
+  request,
+}) => {
+  await openResolutionForStepTest(page);
+  const before = await (await request.get("/fixture/counts")).json();
+  await page.route("**/fixture/session", (route) =>
+    route.fulfill({ status: 503, json: { error: { code: "DEPENDENCY_UNAVAILABLE" } } }),
+  );
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-step", "unknown");
+  await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+  const after = await (await request.get("/fixture/counts")).json();
+  expect(after).toEqual(before);
+});
+
+for (const next of ["success", "failure", "owner"] as const)
+  test(`late parallel failure cannot overwrite the first selection step or a new ${next} outcome`, async ({
+    page,
+    request,
+  }) => {
+    await openResolutionForStepTest(page);
+    let releaseFiles = () => {},
+      releaseReport = () => {},
+      releasePatch = () => {};
+    const filesGate = new Promise<void>((resolve) => {
+      releaseFiles = resolve;
+    });
+    const reportGate = new Promise<void>((resolve) => {
+      releaseReport = resolve;
+    });
+    const patchGate = new Promise<void>((resolve) => {
+      releasePatch = resolve;
+    });
+    let files = 0,
+      reports = 0,
+      patches = 0,
+      held = 0,
+      settled = 0,
+      heldPatch = 0;
+    await page.route("**/fixture/files?*", async (route) => {
+      files++;
+      if (files === 1) {
+        await filesGate;
+        return route.fulfill({ status: 503, json: { error: { code: "DEPENDENCY_UNAVAILABLE" } } });
+      }
+      await route.continue();
+    });
+    await page.route("**/api/v2/cases/case/rework/report", async (route) => {
+      reports++;
+      if (reports === 1) {
+        held++;
+        await reportGate;
+        try {
+          await route.fulfill({
+            status: 503,
+            json: { error: { code: "DEPENDENCY_UNAVAILABLE", message: "SYNTHETIC-STEP-PRIVATE" } },
+          });
+        } finally {
+          settled++;
+        }
+        return;
+      }
+      await route.continue();
+    });
+    await page.route("**/api/v2/cases/case/rework/resolution", async (route) => {
+      if (route.request().method() === "PATCH") {
+        patches++;
+        if (next === "failure") {
+          heldPatch++;
+          await patchGate;
+          return route.fulfill({
+            status: 503,
+            json: { error: { code: "DEPENDENCY_UNAVAILABLE" } },
+          });
+        }
+      }
+      await route.continue();
+    });
+    try {
+      await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+      await expect.poll(() => held).toBe(1);
+      releaseFiles();
+      const alert = page.getByRole("alert");
+      await expect(alert).toHaveAttribute("data-action-error-step", "files_read");
+      expect(patches).toBe(0);
+      if (next === "owner") {
+        await request.post("/fixture/control", { data: { owner: "other-owner" } });
+        await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+        await expect(alert).toHaveAttribute("data-load-error-code", "NOT_FOUND");
+        expect(await alert.getAttribute("data-action-error-step")).toBeNull();
+      } else {
+        await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+        if (next === "success") {
+          await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toBeVisible();
+          await expect(alert).toHaveCount(0);
+        } else {
+          await expect.poll(() => heldPatch).toBe(1);
+          await expect(alert).toHaveCount(0);
+          await expect(page.locator("[data-action-error-step]")).toHaveCount(0);
+          releasePatch();
+          await expect(alert).toHaveAttribute("data-action-error-step", "selection_update");
+        }
+      }
+      releaseReport();
+      await expect.poll(() => settled).toBe(1);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+      if (next === "success") {
+        await expect(alert).toHaveCount(0);
+        await expect(page.locator("[data-action-error-step]")).toHaveCount(0);
+      } else if (next === "failure") {
+        await expect(alert).toHaveAttribute("data-action-error-step", "selection_update");
+        await expect(alert).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+      } else {
+        await expect(alert).toHaveAttribute("data-load-error-code", "NOT_FOUND");
+        expect(await alert.getAttribute("data-action-error-step")).toBeNull();
+      }
+      expect(patches).toBe(next === "owner" ? 0 : 1);
+      expect(await page.content()).not.toContain("SYNTHETIC-STEP-PRIVATE");
+    } finally {
+      releaseFiles();
+      releaseReport();
+      releasePatch();
+    }
+  });
+
+test("selection update facade failure does not prove that a PATCH was transmitted", async ({
+  page,
+  request,
+}) => {
+  let transmitted = 0;
+  page.on("request", (event) => {
+    if (event.method() === "PATCH" && event.url().endsWith("/rework/resolution")) transmitted++;
+  });
+  await page.addInitScript(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("/rework/resolution") && init?.method === "PATCH")
+        return Promise.reject(new DOMException("SYNTHETIC-STEP-PRIVATE", "TimeoutError"));
+      return original(input, init);
+    }) as unknown as typeof window.fetch;
+  });
+  await openResolutionForStepTest(page);
+  await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+  const alert = page.getByRole("alert");
+  await expect(alert).toHaveAttribute("data-action-error-step", "selection_update");
+  await expect(alert).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+  await expect(alert).toHaveAttribute("data-action-error-http-status", "none");
+  await expect(alert).toHaveAttribute("data-action-error-transport", "timeout");
+  expect(transmitted).toBe(0);
+  const calls = await (await request.get("/fixture/counts")).json();
+  expect(calls.update).toBe(0);
+  expect(calls.draft).toBe(0);
+  expect(await page.content()).not.toContain("SYNTHETIC-STEP-PRIVATE");
+});

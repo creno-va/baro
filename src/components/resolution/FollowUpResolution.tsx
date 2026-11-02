@@ -18,7 +18,12 @@ import {
 import { downloadBlob } from "../reports/download";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-import { type ResolutionErrorDiagnostic, resolutionErrorDiagnostic } from "./error-diagnostic";
+import {
+  createResolutionSelectionFailureTracker,
+  type ResolutionErrorDiagnostic,
+  type ResolutionSelectionFailureStep,
+  resolutionErrorDiagnostic,
+} from "./error-diagnostic";
 import "../../styles/resolution.css";
 
 type Options = { expectedOwner: string; signal: AbortSignal };
@@ -130,6 +135,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const [loadError, setLoadError] = useState("");
   const [loadDiagnostic, setLoadDiagnostic] = useState<ResolutionErrorDiagnostic | null>(null);
   const [actionDiagnostic, setActionDiagnostic] = useState<ResolutionErrorDiagnostic | null>(null);
+  const [actionFailureStep, setActionFailureStep] = useState<ResolutionSelectionFailureStep>();
   const [notice, setNotice] = useState("");
   const [pendingChoice, setPendingChoice] = useState<typeof selected>(null);
   const sequence = useRef(0),
@@ -201,9 +207,14 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setLoadError("");
     setLoadDiagnostic(null);
     setActionDiagnostic(null);
+    setActionFailureStep(undefined);
   }, []);
   const handleFailure = useCallback(
-    (error: unknown, source: "load" | "action" = "action") => {
+    (
+      error: unknown,
+      source: "load" | "action" = "action",
+      step?: ResolutionSelectionFailureStep,
+    ) => {
       const code = (error as { code?: string })?.code;
       if (code === "NOT_FOUND" || code === "UNAUTHENTICATED") purge();
       else if (code === "STALE_REVISION" || code === "CONFLICT")
@@ -213,7 +224,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       else if (code === "CONSENT_REQUIRED") setNeedsConsent(true);
       const diagnostic = resolutionErrorDiagnostic(error);
       if (source === "load") setLoadDiagnostic(diagnostic);
-      else setActionDiagnostic(diagnostic);
+      else {
+        setActionDiagnostic(diagnostic);
+        setActionFailureStep(step);
+      }
       setError(failureMessage(error));
     },
     [purge],
@@ -242,6 +256,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setLoadError("");
     setLoadDiagnostic(null);
     setActionDiagnostic(null);
+    setActionFailureStep(undefined);
     setState(next);
     setSelected(next.selection);
     setIds(next.selectedFileIds);
@@ -278,6 +293,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setLoadError("");
     setLoadDiagnostic(null);
     setActionDiagnostic(null);
+    setActionFailureStep(undefined);
     try {
       const options = await verify(epoch);
       const next = await client.getResolution(props.caseId, options);
@@ -357,6 +373,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   async function run(
     work: (options: Options, epoch: number) => Promise<V2ResolutionState | null>,
     write = true,
+    selectionFailureStep?: () => ResolutionSelectionFailureStep,
   ) {
     if (lock.current !== null) return;
     const epoch = sequence.current;
@@ -364,6 +381,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setBusy(true);
     setError("");
     setActionDiagnostic(null);
+    setActionFailureStep(undefined);
     if (!loadError) setLoadDiagnostic(null);
     setNotice("");
     try {
@@ -375,7 +393,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         if (next && write) props.onChanged?.();
       }
     } catch (e) {
-      if (epoch === sequence.current) handleFailure(e);
+      if (epoch === sequence.current) handleFailure(e, "action", selectionFailureStep?.());
     } finally {
       finish(epoch);
     }
@@ -396,37 +414,46 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       return;
     }
     const readOnly = needsConsent;
-    await run(async (options, epoch) => {
-      const [available, currentReport, historical] = await Promise.all([
-        client.files(props.caseId),
-        client.report(props.caseId, options),
-        readOnly ? client.getResolution(props.caseId, options) : Promise.resolve(null),
-      ]);
-      await verify(epoch);
-      if (epoch !== sequence.current) return null;
-      setFiles(available.filter((f) => !currentReport.excludedFileIds.includes(f.id)));
-      setReport(currentReport);
-      if (historical) {
-        accept(historical);
-        setSelected(choice);
-        return null;
-      }
-      const base = state.basis
-        ? { reportId: state.basis.reportId, reportRevision: state.basis.reportRevision }
-        : { reportId: currentReport.id, reportRevision: currentReport.revision };
-      return client.updateResolution(
-        props.caseId,
-        {
-          ...base,
-          expectedRevision: state.revision,
-          action: "select",
-          choice,
-          selectedFileIds: state.selectedFileIds,
-          maskIdentifiers: state.maskIdentifiers,
-        },
-        options,
-      );
-    }, !readOnly);
+    const failure = createResolutionSelectionFailureTracker();
+    await run(
+      async (options, epoch) => {
+        const [available, currentReport, historical] = await Promise.all([
+          failure.observe("files_read", () => client.files(props.caseId)),
+          failure.observe("report_read", () => client.report(props.caseId, options)),
+          readOnly
+            ? failure.observe("resolution_read", () => client.getResolution(props.caseId, options))
+            : Promise.resolve(null),
+        ]);
+        await verify(epoch);
+        if (epoch !== sequence.current) return null;
+        setFiles(available.filter((f) => !currentReport.excludedFileIds.includes(f.id)));
+        setReport(currentReport);
+        if (historical) {
+          accept(historical);
+          setSelected(choice);
+          return null;
+        }
+        const base = state.basis
+          ? { reportId: state.basis.reportId, reportRevision: state.basis.reportRevision }
+          : { reportId: currentReport.id, reportRevision: currentReport.revision };
+        return failure.observe("selection_update", () =>
+          client.updateResolution(
+            props.caseId,
+            {
+              ...base,
+              expectedRevision: state.revision,
+              action: "select",
+              choice,
+              selectedFileIds: state.selectedFileIds,
+              maskIdentifiers: state.maskIdentifiers,
+            },
+            options,
+          ),
+        );
+      },
+      !readOnly,
+      failure.snapshot,
+    );
   }
   function requestChoice(choice: NonNullable<typeof selected>) {
     if (dirty) {
@@ -581,6 +608,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           data-action-error-code={actionDiagnostic?.code}
           data-action-error-http-status={actionDiagnostic?.httpStatus}
           data-action-error-transport={actionDiagnostic?.transport}
+          data-action-error-step={actionFailureStep}
         >
           {loadError && <p>{loadError}</p>}
           {error && <p>{error}</p>}
