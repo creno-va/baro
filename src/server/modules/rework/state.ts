@@ -235,15 +235,30 @@ export function createReworkStateService(
     async get(ownerId: string, id: string) {
       const a = { ownerId, now: now() };
       if (!(await reworkAccess(core, ownerId, id))) throw new ReworkError("NOT_FOUND");
+      // Capture the revision anchor before launching metadata reads. Otherwise
+      // older context/scope could be combined with a later first workspace read.
       const w = await workspaces.findWorkspace(a, id);
       if (!w) throw new ReworkError("NOT_FOUND");
-      const context = await createReworkCaseService(core, { clock: now }).get(ownerId, id);
-      const scope = await readAnalysisScope(core, a, id),
-        loaded = await loadAnalysisInput(core, a, id, scope);
-      const raw = await records.read(a, id, "analysis", id, preparedAnalysisRecordSchema);
-      const task = w.currentJobId
-        ? await records.read(a, id, "task", w.currentJobId, analysisTaskSchema)
-        : null;
+      const [context, scope] = await Promise.all([
+        createReworkCaseService(core, { clock: now }).get(ownerId, id),
+        readAnalysisScope(core, a, id),
+      ]);
+      // Independent owner-fenced reads create no work. The final fresh
+      // revision/owner and source-authority checks remain authoritative.
+      const [loaded, raw, task, automatic, report, continuation] = await Promise.all([
+        loadAnalysisInput(core, a, id, scope),
+        records.read(a, id, "analysis", id, preparedAnalysisRecordSchema),
+        w.currentJobId ? records.read(a, id, "task", w.currentJobId, analysisTaskSchema) : null,
+        records.read(
+          a,
+          id,
+          "checkpoint",
+          "automatic-preparation",
+          automaticPreparationRecordSchema,
+        ),
+        deps.peekReport?.(ownerId, id) ?? null,
+        records.read(a, id, "checkpoint", "report-continuation", reportContinuationSchema),
+      ]);
       const job = task
         ? await core
             .statement(
@@ -312,13 +327,6 @@ export function createReworkStateService(
           failure: null,
           missingItems: [],
         };
-      const automatic = await records.read(
-        a,
-        id,
-        "checkpoint",
-        "automatic-preparation",
-        automaticPreparationRecordSchema,
-      );
       if (
         automatic?.value.status === "failed" &&
         automatic.value.failure &&
@@ -341,7 +349,6 @@ export function createReworkStateService(
       }
       const reportPending =
         !!task?.value.continueWithReport && ["pending", "running"].includes(analysis.status);
-      const report = (await deps.peekReport?.(ownerId, id)) ?? null;
       const reportReady =
         !!report &&
         !report.stale &&
@@ -355,13 +362,6 @@ export function createReworkStateService(
           (analysis.status === "failed" &&
             report.analysisReview?.analysisId === null &&
             report.analysisReview.status === "review_required"));
-      const continuation = await records.read(
-        a,
-        id,
-        "checkpoint",
-        "report-continuation",
-        reportContinuationSchema,
-      );
       const reportFailure =
         continuation?.value.status === "failed" &&
         analysis.basis !== null &&
