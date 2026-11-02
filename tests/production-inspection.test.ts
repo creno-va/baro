@@ -129,6 +129,26 @@ test("preview inspection pins its own release, database and workflow without mut
           },
         ],
       });
+    if (calls.length === 4)
+      return Response.json({
+        success: true,
+        result: [
+          {
+            success: true,
+            results: [
+              {
+                attempt: 1,
+                state: "final",
+                transport: "response",
+                maximum_output_tokens: 2400,
+                output_tokens: 1200,
+                providerRequestId: "private-id",
+                output: "private-output",
+              },
+            ],
+          },
+        ],
+      });
     return Response.json({
       success: true,
       result: calls.length === 3 ? { output: { policyReason: "audit_rejected" } } : {},
@@ -148,8 +168,83 @@ test("preview inspection pins its own release, database and workflow without mut
   expect(calls[2]?.url).toContain("workflows/baro-workspace-preview/instances/synthetic-chat-1");
   expect(JSON.parse(calls[1]?.body ?? "").sql).toStartWith("SELECT ");
   expect(result.jobs[0]?.diagnostic).toEqual({ policyReason: "audit_rejected" });
+  expect(result.jobs[0]?.policyAttempts).toEqual([
+    {
+      attempt: 1,
+      state: "final",
+      transport: "response",
+      maximum_output_tokens: 2400,
+      output_tokens: 1200,
+    },
+  ]);
+  expect(result.jobs[0]?.schemaAttempts).toBeUndefined();
   expect(result.environment).toBe("preview");
   expect(JSON.stringify(result)).not.toContain("private");
+});
+
+test("policy receipts preserve absent, not-sent and unknown observations without inferring refusal", async () => {
+  const time = new Date().toISOString();
+  for (const receipts of [
+    [],
+    [{ attempt: 1, state: "prepared", transport: "not_sent" }],
+    [{ attempt: 1, state: "unknown", transport: "unknown" }],
+  ]) {
+    const rows = receipts.map((row) => ({
+      ...row,
+      maximum_output_tokens: null,
+      output_tokens: null,
+    }));
+    const queries: string[] = [];
+    const result = await inspectProductionWorkspace(
+      {
+        token: "private",
+        sha: "a".repeat(40),
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        environment: "preview",
+      },
+      async (url, init) => {
+        if (url === "https://preview.baro.site/api/health/ready")
+          return Response.json({
+            release: "a".repeat(40),
+            environment: "preview",
+            status: "ready",
+          });
+        expect(url).toStartWith("https://api.cloudflare.com/client/v4/");
+        const query = init?.body ? JSON.parse(String(init.body)) : null;
+        if (query?.sql) {
+          queries.push(query.sql);
+          return Response.json({
+            success: true,
+            result: [
+              {
+                success: true,
+                results: query.sql.startsWith("SELECT a.attempt,")
+                  ? rows
+                  : [
+                      {
+                        id: "synthetic-chat",
+                        runtime_instance_id: "synthetic-chat-1",
+                        kind: "chat_response",
+                        status: "failed",
+                        failure_code: "POLICY_REJECTED",
+                        attempts: 1,
+                        created_at: time,
+                        updated_at: time,
+                      },
+                    ],
+              },
+            ],
+          });
+        }
+        return Response.json({ success: true, result: {} });
+      },
+    );
+    expect(result.jobs[0]?.policyAttempts).toEqual(rows);
+    expect(result.jobs[0]?.failure_code).toBe("POLICY_REJECTED");
+    expect(queries).toHaveLength(2);
+    expect(queries.every((sql) => sql.startsWith("SELECT "))).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("private");
+  }
 });
 
 test("invalid target and changed serving release stop before authenticated reads", async () => {
