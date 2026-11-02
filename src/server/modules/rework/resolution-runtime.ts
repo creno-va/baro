@@ -262,6 +262,7 @@ export function createReworkResolutionRuntime(
       ownerId: string,
       caseId: string,
       mode: "read" | "write" = "read",
+      allowLargeNullCheck = false,
     ) => {
       if (!anchor) {
         const loaded = await source(ownerId, caseId);
@@ -276,7 +277,10 @@ export function createReworkResolutionRuntime(
       }
       if (anchor.ownerId !== ownerId || anchor.caseId !== caseId)
         throw new ReworkError("NOT_FOUND");
-      if (!anchor.loaded.reusable) {
+      // Null-basis preflights previously checked access only. Retain a bounded
+      // guard without multiplying large-record reads. Load/publication and
+      // non-null basis checks still reconstruct the complete large source.
+      if (!anchor.loaded.reusable && !allowLargeNullCheck) {
         const fresh = await source(ownerId, caseId);
         if (
           fresh.workspaceRevision !== anchor.loaded.workspaceRevision ||
@@ -307,7 +311,7 @@ export function createReworkResolutionRuntime(
         authorize: async (owner, id, basis, mode) => {
           if (!(await reworkAccess(core, owner, id, mode === "write"))) return false;
           if (!anchor) return basis === null;
-          const fresh = await currentSource(owner, id, mode);
+          const fresh = await currentSource(owner, id, mode, basis === null);
           return (
             !basis || canonicalAnalysisJson(fresh.value.basis) === canonicalAnalysisJson(basis)
           );

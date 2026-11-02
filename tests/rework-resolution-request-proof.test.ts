@@ -406,7 +406,7 @@ test("large prepared records use full reconstruction without changing the existi
     selection: "lawyer",
     status: "not_ready",
   });
-  expect(peeks).toBeGreaterThan(1);
+  expect(peeks).toBe(2);
 });
 async function fixture() {
   const f = await reportFixture();
