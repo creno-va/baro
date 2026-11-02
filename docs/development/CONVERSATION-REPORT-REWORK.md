@@ -4,10 +4,11 @@
 
 2026-11-02 KST 기준의 최종 통합 상태는 이 절과 [#621의 실제 실행 기록](https://github.com/creno-va/baro/issues/621)을 따른다. 아래 연혁의 “현재/남은” 표현은 각 기록 당시의 상태이며 실패 증거도 보존한다.
 
-- 이 기록 PR 작성 시 PR628~705 총78개가 CI 성공 후 main에 병합됐다. 선행 main은 `12f100409632b35eb9d86fcbfff9c2443e905099`이며 push CI41373960461과 native41373960333도 성공했다. 마지막 [PR706](https://github.com/creno-va/baro/pull/706)의 실제 CI·병합·최종 SHA의 full/preview 결과는#621을 정본으로 기록한다.
-- ACA의 수동 full41366848207은 전체 종료/실패다. core raw audit16건, browser722 PASS/3 WebKit FAIL이며 native는 성공했다. CSP 미도달·최종 join SKIP·성공 영수증0이다. 첫 full41357435897/main1fb의60분 취소와 구분한다.
-- 00은 `codex/621-rework-policy-diagnostics`에서 제한된 운영 진단과 이 문서를 소유한다. 공통 상태 조회705는 통합됐다.04는 `codex/625-final-webkit-journeys`에서 위3개 소유 여정의 비동기 검사 단계를 수리했고 최신 main에서 actual28/shared4를 통과했다.05 공식 원문 링크704와 이전 SHA별 PDF QA를 보존하며 다른 담당은 동결한다.
-- ACA preview41367271794는 schema0022·9개 route smoke와 비공개 배포에 성공했다. 사용자 직접 로그인 뒤 합성 청구·방어의 실제 intake/요약을 확인했다. 청구 재조율·원격 TXT 처리는 완료됐지만 후속 분석은 POLICY_REJECTED이며 상태 조회 지연·revision 충돌을 관측했다. 실제 법률 분석 성공·전체 OAuth/철회·기기·법률 승인을 주장하지 않는다.
+- PR628~706 총79개가 CI 성공 후 main에 병합됐다. PR706 exact head `d11aca066c24a17fd8383ff908e51900e0bd907b`의 Quality41375376494·Legal41375376455·native41375376408 성공을 확인해 main `c9dea1f08e6e4a76534bd23e2697838193cfab11`에 정상 병합했다. main push CI41375969962도 성공했다. 다음 수정 PR의 실제 CI·병합·최종 SHA 결과는#621을 정본으로 기록한다.
+- c9 수동 full41376225616은 종료/실패다. core5209 PASS/8 SKIP/0 FAIL·183276 assertions, DB/eval/build/local workerd는 통과한 뒤 raw audit16건(7 high/5 moderate/4 low)에서 실패했다. native는 실제 Docker PDF/ZIP2 PASS/174 assertions와 전체 native 검사를 통과했다. browser는727 PASS/2 FAIL이며 두 실패 모두 Chromium/WebKit의 방어→리포트만 저장 사진 첨부 link 확인이다. CSP 미도달·최종 join SKIP·성공 영수증0을 보존한다. ACA의722 PASS/3 WebKit FAIL 및 첫1fb의60분 취소와 구분한다.
+- 00은 `codex/621-rework-resolution-read`에서 공통 실행 workflow와 이 문서를 소유한다.04는 clean c9 기반 `codex/625-photo-send-revision`에서 사진 처리/대기 전송/revision을 진단한다.706의 로컬 actual28/shared4 PASS는 c9 full의 사진2 FAIL을 대체하지 않는다.05 공식 원문 링크704와 각 SHA별 PDF QA를 보존하며 다른 담당은 동결한다.
+- c9 preview41376461804는 schema0022·9개 route smoke와 비공개 배포7482690686/status21137146315에 성공했다. recovery artifact13110939344의 정확한5개 필드·238B 원본·SHA와 시각을 검증했으며 복원 훈련 성공으로 표현하지 않는다. production 배포는 없다.
+- 사용자 직접 로그인 뒤 합성 청구·방어의 실제 intake/요약과 청구 재조율·원격 TXT 처리를 확인했다. 실제 분석 POLICY_REJECTED·queued send409를 보존하고 새 모델 재시도로 숨기지 않았다. c9에서 읽기 상태와 inline 리포트를 확인했고 실제 청구/방어 PDF 각각3쪽을 내려받아 Poppler 전페이지 시각 검토했다. 양쪽 입장 각각 웹/HTML의13개 본문과 PDF의 정규화된13개 본문이 일치했다. PDF 전후 기존 policy model receipt3건과 chat job 집합이 바뀌지 않았다. 실제 법률 분석 성공·전체 OAuth/철회·기기·법률 승인을 주장하지 않는다. 방어 후속 변호사 선택의 보존형 오류는06과 진단 중이다.
 - 비용 관측 전용, 실제 AI200/일·초기2×3·기술/시간/시도·owner/동의/암호화/삭제/revision/lease/독립 audit·ledger/hold를 유지한다. main 직접 push·새 채팅/하위 에이전트/자동화 생성·production 배포는 하지 않았다.
 
 | 소유 담당 | 구현·선행 검증 PR 목록 |
@@ -78,11 +79,11 @@
 
 | 세션 제목 | thread ID / host | 이슈·브랜치 | 소유 범위 | PR/상태 |
 | --- | --- | --- | --- | --- |
-| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-policy-diagnostics` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | PR628~705 merged; root-owned operator/document commits in PR706; exact-SHA evidence in #621 |
+| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-resolution-read` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | PR628~705 merged; root-owned operator/document commits in PR706; exact-SHA evidence in #621 |
 | BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-final-intake-regressions` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636-690 and703 merged; intake28/customer9 per engine, focus/320px PASS; frozen |
 | BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-hono-legal-fixtures` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644/652/658 merged; legal binding/rights/TTL/audit preserved; PR702 independent review complete; frozen |
 | BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-full-browser-recovery` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629/635/664/671/698 merged; attachments17/correction7 per engine PASS; device/provider acceptance separate; frozen |
-| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-final-webkit-journeys` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633/642/660/672/701 merged; PR706 phase repair; latest-main actual28/shared4 PASS |
+| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-photo-send-revision` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633/642/660/672/701 merged; PR706 phase repair; latest-main actual28/shared4 PASS |
 | BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-official-source-links` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641-694/699/704 merged; ACA10PDF40p read-only QA complete; product frozen |
 | BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-resolution-browser-lifecycle` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632-693 and697 merged; follow-up22 per engine/override/cleanup PASS; frozen |
 
@@ -441,3 +442,21 @@ PR705 exact6a21f3c3d8342ecda29f52c9e9cdedfce5fca7bd는 Quality41373519909·Legal
 12f를 통합한04 브랜치는 actual Chromium14/WebKit14와 shared각2=32개를 모두 통과했다. 이는 실제 Hono/worker·브라우저·격리 native PDF와 합성 gateway/source 포트를 연결한 검사이며 실제 모델/법률 API/OAuth 인수가 아니다. 새12PDF48쪽·protocol/HTML/PNG는 별도 경로에 보존했고 예전160파일 hash 변경/누락0이다. 중단한 b12 부분 실행C11은 완료32와 구분한다. 최종 PR head·CI/main·수동 full 산출물은#621을 따른다.
 
 POLICY_REJECTED는 workspace 사전 조건이나 provider refusal 등 여러 경로에서 발생하므로 현재 코드만으로 공급자 거절 원인을 단정하지 않는다.00의846118abe7e0febe3808bdf26fe707cefa5ff7fb는 기존 운영자 inspection의 MODEL_SCHEMA numeric-only SELECT와 동일 엄격 schema를 재사용해 policyAttempts를 추가한다. 기존 schemaAttempts·최대12행·숫자 한도/null·[]/not_sent/unknown을 보존하며 원문·credential·providerRequestId·금액·phase ID를 추가 출력하지 않는다. 새 SQL/DB·권한·원장 쓰기·모델/법률 호출·제품 gate 변경은 없다.8 tests61 assertions·bun ci/quick708 및02 privacy 정적 검토 추가 finding0을 확인했다. receipt 존재/부재만으로 특정 phase·provider refusal/독립 audit의 원인이나 성공을 추론하지 않는다. 최종 main에서 실제 비내용 관측을 확인하며 분석 실패를 재시도로 숨기지 않는다.
+
+## c9 최종 검증과 실패 protocol 보존
+
+c9 full native artifact13111273947의3PDF11쪽은05가 전페이지 Poppler/시각 검토했다. HTML172/172 본문·bbox2141 단어의 페이지 이탈0·runtime PDF의공식 URI2개씩·receipt URL/SHA·ZIP CRC/원본 일치를 확인했고 원본14파일의 전체 해시는 불변이다.00도 공식 출처 페이지를 직접 시각 확인했다. legacy PDF에는 HTML/receipt가 없어 해당 비교는 주장하지 않는다.
+
+c9 browser artifact13112951445(2081876B, SHA256 `20b65335f3377a8a63f4df483a6ec68dc71a2a927e6d61dd2ad407a64845c32a`)는 실패한 사진2경로의 성공 PDF를 포함하지 않는다. 기존 finally가 쓰는 합성 `protocol.json`이 workflow whitelist에 없어 당시 CI 원본의 단계별 finite protocol을 복구할 수 없었다.00은 다음 실행부터 해당 파일을 기존14일 artifact에 함께 보존한다. request/response 원문·사건/계정/파일 ID·토큰·스택/SQL은 추가하지 않으며 기존 proxy의 허용된 kind/method/status/error enum·수치 revision/바이트만 기록한다. 제품 시간/시도/처리 용량·assertion·artifact 권한을 바꾸지 않는다.
+
+실제 preview PDF는 합성 사건만 로컬에서 보존했다. 청구52014B/3쪽 SHA256 `6971e3b21c3e7249af2927c6482f858969b85d587fc9723ac4ee1f5ef5599093`, 방어49681B/3쪽 SHA256 `f7494ba346fd171d30ba7198cef5e4c404390b7b6d744c30134bdb11e88fd1c7`다. 둘 다 자료 부족·검증 법률 분석 부재를 명시하고 불리한 사실을 유지한다. 실제 사건/계정 식별자·개인정보·다운로드 원본 이름은 이 문서나 GitHub에 남기지 않는다. 양쪽 웹/HTML/PDF 비교는 알려진 페이지 footer를 제외한 표시 본문 비교이며 citation 권한·보안 증명의 대체가 아니다. 기존 읽기 전용 운영 진단의2400/189·10000/2475·8000/1795 토큰 수치3건은 정확한 phase나 정책 거절 원인·법률 승인 성공을 식별하지 않는다.
+
+## 제한 리포트 후속 조회의 현재성 검증
+
+00은 common `rework/resolution-runtime.ts`의 loaded 입력 anchor 뒤 독립 report 읽기만 raw→readPreparedAnalysis 검증과 동시 진행한다. raw와 validated analysis의 순서는 유지하고 non-null analysis는 raw의 전체 canonical snapshot과 같아야 하며 raw의 workspace revision이 loaded W보다 미래면 거절한다. source 반환 전 기존에 조립하던 owner/alive/loaded W·session·latest report/analysis ID·report ciphertext/review·정본/자료·공식 원문 proof/현재 clock TTL guard를 실제 SELECT로 검사한다. mutation의 최종 CAS는 별도로 유지한다. null basis를 verified로 승격하거나 raw snapshot으로 대체하지 않는다.
+
+c9에서 실제 입력 anchor 뒤 W변경·요청 session 삭제·report proof 읽은 뒤 revision변경의3회귀가 잘못 성공하는 RED를 재현했다. 수정 뒤 이3개와 유효 failed analysis의늦은게시·정상 limited not_ready 유지가 통과했다. 신규5검사9 assertions와 관련 resolution/runtime/state9파일118검사1109 assertions가 통과했다.02는 의존 순서·canonical 결합·현재성 SELECT·최종 CAS를 독립 정적 검토해 추가 blocker/P1/P2 없음으로 회신했다. 이는 실제 preview의 이전 timeout이나 POLICY_REJECTED 원인을 확정하지 않는다.
+
+합성10ms/D1읽기 지연 profile은61 query/peak2/737ms에서 검증 SELECT를 추가한62 query/peak2/682ms로 변했다. 쿼리·권한을 줄인 것이 아니며 이 숫자를 실제 서버 지연·오류 해결 인수로 사용하지 않는다. 기존30초 client deadline·lease·시도·AI200·기술 용량은 동일하다.06은 독립 UI에서 state=null과 유효 basis=null을 구분하고 실제 공통 responseError의CONFLICT를 통과하는 보존형 오류 회귀를 담당한다.
+
+위00변경은 bun ci(고정 의존 변경0), validate:quick(모바일534·rework/법률/후속457 PASS/4 SKIP·tooling708 PASS/7084 assertions), validate:build의 production worker dry-run/local workerd와 diff check를 통과했다. 최초 quick의 신규 테스트1곳 formatting 실패는 해당 파일 formatter로 수정한 뒤 전체 quick을 재실행해 성공했다. DB migration·클라이언트 DTO·모델/법률 API·production 변경은 없다. 실제 최종 exact head CI·정상 병합·새 final SHA는#621에 남긴다.

@@ -2,7 +2,7 @@ import type { ReworkReportView } from "@baro/api-client";
 import type { V2ResolutionDraftRequest, V2ResolutionMutation } from "../../../contracts/v2";
 import { v2ResolutionStateForGuidesSchema } from "../../../contracts/v2";
 import { createV2AccountingRepository, operationStatements } from "../../db/v2-accounting";
-import { sqlClaim, type V2Core } from "../../db/v2-core";
+import { aliveWorkspace, sqlClaim, type V2Core } from "../../db/v2-core";
 import { createV2FilesRepository } from "../../db/v2-files";
 import { createV2ReworkRepository } from "../../db/v2-rework";
 import { canonicalAnalysisJson } from "../legal-retrieval/analysis/context";
@@ -52,8 +52,21 @@ export function createReworkResolutionRuntime(
     const a = actor(ownerId),
       scope = await readAnalysisScope(core, a, caseId);
     const loaded = await loadAnalysisInput(core, a, caseId, scope);
-    const report = await deps.peekReport(ownerId, caseId);
-    const raw = await records.read(a, caseId, "analysis", caseId, preparedAnalysisRecordSchema);
+    // Keep the input anchor first and raw before validated analysis. The
+    // independent report read need not serialize that analysis validation.
+    const [report, { raw, analysis }] = await Promise.all([
+      deps.peekReport(ownerId, caseId),
+      (async () => {
+        const raw = await records.read(a, caseId, "analysis", caseId, preparedAnalysisRecordSchema);
+        const analysis = await readPreparedAnalysis(core, a, caseId, scope);
+        return { raw, analysis };
+      })(),
+    ]);
+    if (
+      (raw && raw.workspaceRevision > loaded.workspace.workspaceRevision) ||
+      (analysis && canonicalAnalysisJson(raw?.value.snapshot) !== canonicalAnalysisJson(analysis))
+    )
+      throw new ReworkError("STALE_REVISION");
     const reportProof = report
       ? await core
           .statement(
@@ -91,7 +104,6 @@ export function createReworkResolutionRuntime(
           }
         : { sql: "1", values: [] };
 
-    const analysis = await readPreparedAnalysis(core, a, caseId, scope);
     const chunks = raw?.value.procedureCitations.length
       ? await readBoundSourceBatch(
           core,
@@ -185,6 +197,19 @@ export function createReworkResolutionRuntime(
         raw?.id ?? null,
       ],
     });
+    // Reads also need the exact source proof. A null analysis basis must not
+    // skip a late workspace, report, source or authenticated-session change.
+    // Publication still evaluates this authority again in its final CAS.
+    const final = guard(deps.clock());
+    if (
+      !(await core
+        .statement(
+          `SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace} AND (${final.sql})`,
+          [caseId, ownerId, loaded.workspace.workspaceRevision, ...final.values],
+        )
+        .first())
+    )
+      throw new ReworkError("STALE_REVISION");
     return { value, guard, workspaceRevision: loaded.workspace.workspaceRevision };
   }
   function service(receipt?: {
