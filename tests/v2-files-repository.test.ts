@@ -1173,3 +1173,253 @@ for (const path of ["direct", "staged"] as const) {
     expect((await f.files.read(f.actor, u.value.id))?.manifest).toEqual(before);
   });
 }
+
+test("a stable HTTP metadata page rereads once when actual file publication completes during decryption", async () => {
+  const f = await fixture();
+  const p = await processing(f);
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+  const statement = f.core.statement.bind(f.core);
+  let published = false,
+    pages = 0;
+  f.core.statement = (sql, values) => {
+    if (
+      sql.startsWith(
+        "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+      )
+    )
+      pages++;
+    return statement(sql, values);
+  };
+  f.core.cipher.decrypt = async (value, context) => {
+    const result = await decrypt(value, context);
+    if (!published && context.table === "v2_files") {
+      published = true;
+      expect(await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {})).toBe(
+        true,
+      );
+    }
+    return result;
+  };
+  const result = await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+    requireStablePage: true,
+  });
+  expect(published).toBe(true);
+  expect(pages).toBe(2);
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({
+    id: p.current.id,
+    revision: p.current.revision + 1,
+    status: "ready",
+    currentJobId: null,
+  });
+  expect(result[0]?.processing).toBeUndefined();
+});
+
+for (const changes of [2, 3])
+  test(`stable metadata permits at most three complete reads during ${changes} file changes`, async () => {
+    const f = await fixture(),
+      p = await processing(f);
+    const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
+      statement = f.core.statement.bind(f.core);
+    let pages = 0,
+      changed = 0;
+    f.core.statement = (sql, values) => {
+      if (
+        sql.startsWith(
+          "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+        )
+      )
+        pages++;
+      return statement(sql, values);
+    };
+    f.core.cipher.decrypt = async (value, context) => {
+      const result = await decrypt(value, context);
+      if (context.table === "v2_files" && changed < changes) {
+        changed++;
+        if (changes === 2 && changed === 2)
+          expect(
+            await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {}),
+          ).toBe(true);
+        else
+          f.database.sqlite
+            .query(
+              "UPDATE v2_files SET state=CASE WHEN state='queued' THEN 'processing' ELSE 'queued' END WHERE id=?",
+            )
+            .run(p.current.id);
+      }
+      return result;
+    };
+    const read = f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+      requireStablePage: true,
+    });
+    if (changes === 3) await expect(read).rejects.toMatchObject({ code: "SNAPSHOT_INVALID" });
+    else
+      expect((await read)[0]).toMatchObject({
+        id: p.current.id,
+        revision: p.current.revision + 1,
+        status: "ready",
+        currentJobId: null,
+        contentHash: HASH,
+      });
+    expect(pages).toBe(3);
+    expect(changed).toBe(changes);
+  });
+
+for (const failure of ["database", "crypto", "schema"] as const)
+  for (const afterChange of [false, true])
+    test(`stable metadata never retries ${failure} failure ${afterChange ? "after a changed page" : "on its first page"}`, async () => {
+      const f = await fixture(),
+        p = await processing(f);
+      const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
+        statement = f.core.statement.bind(f.core);
+      const failedPage = afterChange ? 2 : 1;
+      let pages = 0;
+      f.core.statement = (sql, values) => {
+        if (
+          sql.startsWith(
+            "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+          )
+        )
+          pages++;
+        const query = statement(sql, values);
+        if (failure === "database" && pages === failedPage && sql.includes("AS processing_status"))
+          query.all = async () => {
+            throw new Error("synthetic database failure");
+          };
+        return query;
+      };
+      f.core.cipher.decrypt = async (value, context) => {
+        if (context.table === "v2_files" && pages === failedPage) {
+          if (failure === "crypto") throw new Error("synthetic cipher failure");
+          if (failure === "schema") return "{}";
+        }
+        const result = await decrypt(value, context);
+        if (context.table === "v2_files" && afterChange && pages === 1)
+          f.database.sqlite
+            .query("UPDATE v2_files SET state='processing' WHERE id=?")
+            .run(p.current.id);
+        return result;
+      };
+      await expect(
+        f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, { requireStablePage: true }),
+      ).rejects.toMatchObject({
+        code: failure === "schema" ? "REPOSITORY_INPUT_INVALID" : "DB_OPERATION_FAILED",
+      });
+      expect(pages).toBe(failedPage);
+    });
+
+for (const target of ["file", "workspace", "account", "owner"] as const)
+  test(`a stable page cannot return old plaintext after ${target} access changes`, async () => {
+    const f = await fixture(),
+      p = await processing(f);
+    const foreign = await seedTestSession(f.database, { now: Date.parse(NOW), consent: true });
+    const decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+    let changed = false;
+    f.core.cipher.decrypt = async (value, context) => {
+      const result = await decrypt(value, context);
+      if (!changed && context.table === "v2_files") {
+        changed = true;
+        if (target === "owner")
+          f.database.sqlite
+            .query("UPDATE v2_workspaces SET owner_id=? WHERE id=?")
+            .run(foreign.userId, f.workspaceId);
+        else
+          f.database.sqlite
+            .query("INSERT INTO v2_tombstones VALUES(?,?,?)")
+            .run(
+              target,
+              target === "file"
+                ? p.current.id
+                : target === "workspace"
+                  ? f.workspaceId
+                  : f.actor.ownerId,
+              NOW,
+            );
+      }
+      return result;
+    };
+    expect(
+      await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+        requireStablePage: true,
+      }),
+    ).toEqual([]);
+    expect(changed).toBe(true);
+  });
+
+test("stable pagination reconstructs all twenty rows at the same cursor after one publication", async () => {
+  const f = await fixture(),
+    p = await processing(f);
+  for (let i = 0; i < 19; i++) await upload(f);
+  const cursor = "00000000-0000-4000-8000-000000000000";
+  const original = f.database.sqlite
+    .query("SELECT manifest_snapshot_id FROM v2_files WHERE id=?")
+    .get(p.current.id);
+  const decrypt = f.core.cipher.decrypt.bind(f.core.cipher),
+    statement = f.core.statement.bind(f.core);
+  let published = false,
+    pages = 0;
+  f.core.statement = (sql, values) => {
+    if (
+      sql.startsWith(
+        "SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=?",
+      )
+    ) {
+      pages++;
+      expect(values).toContain(cursor);
+    }
+    return statement(sql, values);
+  };
+  f.core.cipher.decrypt = async (value, context) => {
+    const result = await decrypt(value, context);
+    if (!published && context.table === "v2_files" && context.rowId === p.current.id) {
+      published = true;
+      expect(await f.files.writeProcessed(guard(f), ready(p, [observation()]), p.lease, {})).toBe(
+        true,
+      );
+    }
+    return result;
+  };
+  const result = await f.files.listMetadata(f.actor, f.workspaceId, 20, cursor, {
+    requireStablePage: true,
+  });
+  expect(result).toHaveLength(20);
+  expect(new Set(result.map((file) => file.id)).size).toBe(20);
+  expect(pages).toBe(2);
+  expect(result.find((file) => file.id === p.current.id)).toMatchObject({
+    status: "ready",
+    revision: p.current.revision + 1,
+    contentHash: HASH,
+  });
+  expect(
+    f.database.sqlite
+      .query("SELECT manifest_snapshot_id FROM v2_files WHERE id=?")
+      .get(p.current.id),
+  ).toEqual(original);
+});
+
+test("stable file heads need no extra query when only workspace revision changes", async () => {
+  const f = await fixture(),
+    p = await processing(f),
+    decrypt = f.core.cipher.decrypt.bind(f.core.cipher);
+  let changed = false;
+  f.core.cipher.decrypt = async (value, context) => {
+    const result = await decrypt(value, context);
+    if (!changed && context.table === "v2_files") {
+      changed = true;
+      f.database.sqlite
+        .query("UPDATE v2_workspaces SET revision=revision+1 WHERE id=?")
+        .run(f.workspaceId);
+    }
+    return result;
+  };
+  const before = f.database.queryCount;
+  const result = await f.files.listMetadata(f.actor, f.workspaceId, 20, undefined, {
+    requireStablePage: true,
+  });
+  expect(f.database.queryCount - before).toBe(2);
+  expect(result[0]).toMatchObject({
+    id: p.current.id,
+    revision: p.current.revision,
+    status: "queued",
+  });
+});
