@@ -419,8 +419,161 @@ test("a stale mutation immediately hides the previous draft before a parent refr
     route.fulfill({ status: 409, json: { code: "STALE_REVISION" } }),
   );
   await page.getByRole("button", { name: "검토한 초안 저장" }).click();
-  await expect(page.getByRole("alert")).toContainText("사건이나 리포트가 바뀌었어요");
+  await expect(page.getByRole("alert")).toContainText("내용이 변경됐어요");
   await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
   await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
   await expect(page.locator("body")).not.toContainText("PRIVATE-STALE-EDIT");
 });
+
+for (const failure of ["503", "network", "invalid-response"] as const)
+  test(`initial metadata ${failure} remains distinct after PDF success until explicit confirmation`, async ({
+    page,
+    request,
+  }) => {
+    await request.post("/fixture/control", { data: { noAnalysis: true } });
+    let unavailable = true;
+    let gets = 0,
+      patches = 0;
+    await page.route("**/api/v2/cases/case/rework/resolution", async (route) => {
+      if (route.request().method() === "GET") {
+        gets++;
+        if (unavailable) {
+          if (failure === "network") return route.abort("failed");
+          return route.fulfill(
+            failure === "503"
+              ? { status: 503, json: { error: { code: "DEPENDENCY_UNAVAILABLE" } } }
+              : { status: 200, json: { invalid: "synthetic metadata" } },
+          );
+        }
+      } else if (route.request().method() === "PATCH") patches++;
+      await route.continue();
+    });
+    await page.goto("/?default");
+    await expect(page.getByRole("alert")).toContainText("후속 해결 상태를 확인하지 못했어요");
+    expect(gets).toBe(1);
+    await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+    await expect(page.getByRole("status")).toContainText("저장 요청");
+    await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+    await page.getByRole("button", { name: /^직접 해결/ }).click();
+    await expect(page.getByRole("alert")).toContainText("후속 해결 상태를 확인하지 못했어요");
+    await expect(page.getByRole("alert")).not.toContainText("작업을 완료하지 못했어요");
+    await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveCount(0);
+    expect(gets).toBe(1);
+    expect(patches).toBe(0);
+    const before = await (await request.get("/fixture/counts")).json();
+    expect(before).toMatchObject({
+      get: 0,
+      update: 0,
+      draft: 0,
+      files: 0,
+      reportReads: 0,
+      saveReport: 1,
+      observations: 0,
+      legacyGets: 0,
+    });
+    unavailable = false;
+    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^변호사와 해결/ })).toBeEnabled();
+    expect(gets).toBe(2);
+    await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+    await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+      "href",
+      "/lawyers",
+    );
+    expect(patches).toBe(1);
+    const after = await (await request.get("/fixture/counts")).json();
+    expect(after).toMatchObject({
+      update: 1,
+      draft: 0,
+      saveReport: 1,
+      observations: 0,
+      legacyGets: 0,
+    });
+  });
+
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
+  test(`${purpose}: a valid basis-null limited report can select a lawyer while draft publication stays blocked`, async ({
+    page,
+    request,
+  }) => {
+    await request.post("/fixture/control", {
+      data: { purpose, criminal: purpose === "respond_to_claim", noAnalysis: true },
+    });
+    await page.goto("/?default");
+    await expect(page.getByRole("button", { name: /^리포트만 저장/ })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+    await expect(page.getByRole("status")).toContainText("저장 요청");
+    await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+    await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+      "href",
+      "/lawyers",
+    );
+    if (purpose === "respond_to_claim") {
+      await expect(
+        page.getByRole("heading", { name: "국선변호·법률구조 공식 안내" }),
+      ).toBeVisible();
+      await expect(page.getByText(/자격·선정·선임을 보장하지 않아요/)).toBeVisible();
+    }
+    const headers = { "x-fixture-owner": "owner" };
+    const selected = await (await request.get("/fixture/resolution", { headers })).json();
+    expect(selected).toMatchObject({
+      basis: null,
+      status: "not_ready",
+      selection: "lawyer",
+      revision: 2,
+      allowedDocumentKinds: ["fact_statement"],
+    });
+    await page.getByRole("button", { name: /^직접 해결/ }).click();
+    await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+    await expect(page.getByRole("button", { name: "검토용 초안 준비" })).toBeDisabled();
+    const state = await (await request.get("/fixture/resolution", { headers })).json();
+    const denied = await request.post("/fixture/draft", {
+      headers,
+      data: {
+        expectedRevision: state.revision,
+        reportId: "report",
+        reportRevision: 1,
+        documentKind: "fact_statement",
+        selectedFileIds: state.selectedFileIds,
+        maskIdentifiers: state.maskIdentifiers,
+        factsConfirmed: true,
+      },
+    });
+    expect(denied.status()).toBe(409);
+    expect(await denied.json()).toEqual({ code: "REVIEW_REQUIRED" });
+    expect((await (await request.get("/fixture/resolution", { headers })).json()).draft).toBeNull();
+  });
+
+for (const code of ["STALE_REVISION", "REVIEW_REQUIRED", "POLICY_REJECTED"] as const)
+  test(`actual facade 409 ${code} is a conflict confirmation without overwriting the saved draft`, async ({
+    page,
+    request,
+  }) => {
+    await page.goto("/?default");
+    await page.getByRole("button", { name: /^직접 해결/ }).click();
+    await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+    await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+    await page.getByLabel("초안 검토·수정").fill(`SYNTHETIC-SAVED-${code}`);
+    await page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.").check();
+    await page.getByRole("button", { name: "검토한 초안 저장" }).click();
+    await expect(page.getByRole("button", { name: "초안 다운로드", exact: true })).toBeEnabled();
+    const headers = { "x-fixture-owner": "owner" };
+    const before = await (await request.get("/fixture/resolution", { headers })).json();
+    let attempts = 0;
+    await page.route("**/api/v2/cases/case/rework/resolution/draft", (route) => {
+      attempts++;
+      return route.fulfill({ status: 409, json: { error: { code } } });
+    });
+    await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+    await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+    await expect(page.getByRole("alert")).toContainText("내용이 변경됐어요");
+    await expect(page.getByRole("alert")).not.toContainText("작업을 완료하지 못했어요");
+    await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
+    await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
+    expect(attempts).toBe(1);
+    const after = await (await request.get("/fixture/resolution", { headers })).json();
+    expect(after).toEqual(before);
+  });
