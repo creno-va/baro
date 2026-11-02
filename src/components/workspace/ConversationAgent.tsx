@@ -7,11 +7,13 @@ import type {
   V2ConversationActionRequest,
   V2ConversationActionResult,
   V2ConversationIntent,
+  V2ConversationProgress,
   V2ConversationState,
 } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { ConversationAnalysis } from "./ConversationAnalysis";
 import { ConversationPanel } from "./ConversationPanel";
+import { observeReportContinuation, type ReportConfirmation } from "./conversation-progress";
 import {
   conversationActionLabels,
   conversationPaneTitles,
@@ -42,7 +44,10 @@ function failureMessage(cause: unknown) {
     : "요청 결과를 확인하지 못했어요. 같은 요청으로 다시 확인할 수 있어요.";
 }
 export type ConversationClient = {
-  getConversation: (caseId: string, options?: RequestOptions) => Promise<V2ConversationState>;
+  getConversationProgress: (
+    caseId: string,
+    options?: RequestOptions,
+  ) => Promise<V2ConversationProgress>;
   executeAction: (
     caseId: string,
     request: V2ConversationActionRequest,
@@ -104,11 +109,37 @@ export function ConversationAgent({
   const [state, setState] = useState<V2ConversationState | null>(null);
   const refreshHint = useRef(refreshKey);
   refreshHint.current = refreshKey;
+  const queuedHint = useRef(queuedWork);
+  queuedHint.current = queuedWork;
   const [acceptedRefresh, setAcceptedRefresh] = useState(refreshKey);
   const [readFailures, setReadFailures] = useState(0);
+  const confirmation = useRef<ReportConfirmation | null>(null);
+  const [confirmationView, setConfirmationView] = useState<ReportConfirmation | null>(null);
+  const [checkingConfirmation, setCheckingConfirmation] = useState(false);
+  const continuationPending = confirmationView?.pending === true;
+  const continuationUnconfirmed = confirmationView?.unconfirmed === true;
+  const observeProgress = useCallback(
+    (progress: V2ConversationProgress, started: number, reset = false) => {
+      const next = observeReportContinuation(
+        reset ? null : confirmation.current,
+        progress.reportContinuation !== null,
+        started,
+        performance.now(),
+      );
+      confirmation.current = next;
+      setConfirmationView(next);
+    },
+    [],
+  );
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
   const backgroundBusy =
-    (queuedWork && acceptedRefresh !== refreshKey) ||
+    (queuedWork &&
+      (acceptedRefresh !== refreshKey ||
+        !stateIsCurrent ||
+        !!state?.pendingEvidenceIds.length ||
+        continuationPending ||
+        continuationUnconfirmed ||
+        checkingConfirmation)) ||
     (!!state &&
       (["pending", "running"].includes(state.analysis.status) ||
         state.report.status === "pending"));
@@ -160,6 +191,7 @@ export function ConversationAgent({
       reads.current++;
       attempt.current = null;
       owner.current = null;
+      confirmation.current = null;
       callbacks.current.onBusyChange(false);
     };
   }, []);
@@ -174,60 +206,130 @@ export function ConversationAgent({
     },
     [verify, current],
   );
-  const load = useCallback(async () => {
-    const serial = ++reads.current;
+  const load = useCallback(
+    async (resetConfirmation = false) => {
+      if (confirmation.current?.unconfirmed && !resetConfirmation) return null;
+      const serial = ++reads.current;
+      const epoch = ticket();
+      const hint = refreshHint.current;
+      try {
+        const expectedOwner = await authorizedOwner(epoch, false);
+        if (!expectedOwner || serial !== reads.current) return null;
+        const started = performance.now();
+        const progress = await client.getConversationProgress(caseId, {
+          expectedOwner,
+          signal: abort.current.signal,
+        });
+        const value = progress.state;
+        if (
+          !(await verify(false, false)) ||
+          !current(epoch) ||
+          !mounted.current ||
+          serial !== reads.current
+        )
+          return null;
+        if (value.workspaceRevision < workspace.case.revision) {
+          setReadFailures((n) => n + 1);
+          setError("사건의 최신 작업 상태를 아직 확인하지 못했어요. 다시 확인해 주세요.");
+          return null;
+        }
+        observeProgress(progress, started, resetConfirmation);
+        setState(value);
+        setAcceptedRefresh(hint);
+        setReadFailures(0);
+        if (readError.current && !attempt.current && !locked.current) {
+          readError.current = false;
+          setError("");
+        }
+        if (
+          value.workspaceRevision > workspace.case.revision &&
+          !(
+            queuedHint.current &&
+            (value.pendingEvidenceIds.length > 0 || progress.reportContinuation !== null)
+          ) &&
+          !["pending", "running"].includes(value.analysis.status) &&
+          value.report.status !== "pending"
+        ) {
+          if ((await callbacks.current.onChanged()) === false)
+            throw Object.assign(
+              new Error("최신 사건을 불러오지 못했어요. 상태를 다시 확인해 주세요."),
+              {
+                code: "UNAVAILABLE",
+              },
+            );
+        }
+        return value;
+      } catch (cause) {
+        if (mounted.current && current(epoch) && serial === reads.current) {
+          if (!attempt.current && !locked.current) readError.current = true;
+          const code = (cause as { code?: string })?.code;
+          setReadFailures((n) => (["CONFLICT", "STALE_REVISION"].includes(code ?? "") ? n + 1 : 3));
+          setError(failureMessage(cause));
+        }
+        return null;
+      }
+    },
+    [
+      authorizedOwner,
+      ticket,
+      current,
+      verify,
+      client,
+      caseId,
+      workspace.case.revision,
+      observeProgress,
+    ],
+  );
+  useEffect(() => {
+    const deadline = confirmationView?.deadline;
+    if (deadline === undefined || continuationUnconfirmed) return;
     const epoch = ticket();
-    const hint = refreshHint.current;
+    const timer = setTimeout(
+      () => {
+        if (!mounted.current || !current(epoch) || confirmation.current?.deadline !== deadline)
+          return;
+        const next = { ...confirmation.current, unconfirmed: true };
+        confirmation.current = next;
+        setConfirmationView(next);
+      },
+      Math.max(0, deadline - performance.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [confirmationView?.deadline, continuationUnconfirmed, ticket, current]);
+  const recheck = async (button: HTMLButtonElement) => {
+    button.focus();
+    const epoch = ticket();
+    const panel = button.closest<HTMLElement>(".conversation-panel");
+    setCheckingConfirmation(true);
+    setError("");
+    setReadFailures(0);
     try {
-      const expectedOwner = await authorizedOwner(epoch, false);
-      if (!expectedOwner || serial !== reads.current) return null;
-      const value = await client.getConversation(caseId, {
-        expectedOwner,
-        signal: abort.current.signal,
-      });
-      if (
-        !(await verify(false, false)) ||
-        !current(epoch) ||
-        !mounted.current ||
-        serial !== reads.current
-      )
-        return null;
-      if (value.workspaceRevision < workspace.case.revision) {
-        setReadFailures((n) => n + 1);
-        setError("사건의 최신 작업 상태를 아직 확인하지 못했어요. 다시 확인해 주세요.");
-        return null;
-      }
-      setState(value);
-      setAcceptedRefresh(hint);
-      setReadFailures(0);
-      if (readError.current && !attempt.current && !locked.current) {
-        readError.current = false;
-        setError("");
-      }
-      if (
-        value.workspaceRevision > workspace.case.revision &&
-        !["pending", "running"].includes(value.analysis.status) &&
-        value.report.status !== "pending"
-      ) {
-        if ((await callbacks.current.onChanged()) === false)
-          throw Object.assign(
-            new Error("최신 사건을 불러오지 못했어요. 상태를 다시 확인해 주세요."),
-            {
-              code: "UNAVAILABLE",
-            },
+      await load(true);
+    } finally {
+      if (mounted.current && current(epoch)) {
+        setCheckingConfirmation(false);
+        requestAnimationFrame(() => {
+          if (
+            !mounted.current ||
+            !current(epoch) ||
+            button.isConnected ||
+            document.activeElement !== document.body
+          )
+            return;
+          const heading = panel?.isConnected ? panel.querySelector<HTMLElement>("h3") : null;
+          if (heading) {
+            heading.focus();
+            return;
+          }
+          const root = menu.current?.closest(".workspace");
+          const composer = root?.querySelector<HTMLTextAreaElement>(
+            "#workspace-message:not(:disabled)",
           );
+          (composer ?? root?.querySelector<HTMLElement>(".workspace-messages"))?.focus();
+        });
       }
-      return value;
-    } catch (cause) {
-      if (mounted.current && current(epoch) && serial === reads.current) {
-        if (!attempt.current && !locked.current) readError.current = true;
-        const code = (cause as { code?: string })?.code;
-        setReadFailures((n) => (["CONFLICT", "STALE_REVISION"].includes(code ?? "") ? n + 1 : 3));
-        setError(failureMessage(cause));
-      }
-      return null;
     }
-  }, [authorizedOwner, ticket, current, verify, client, caseId, workspace.case.revision]);
+  };
   useEffect(() => {
     if (ready && Number.isSafeInteger(refreshKey) && refreshKey >= 0 && !locked.current)
       void load();
@@ -237,11 +339,14 @@ export function ConversationAgent({
       !ready ||
       !state ||
       readFailures >= 3 ||
+      continuationUnconfirmed ||
       !(
         (queuedWork && acceptedRefresh !== refreshKey) ||
+        (queuedWork && state.pendingEvidenceIds.length > 0) ||
         !stateIsCurrent ||
         ["pending", "running"].includes(state.analysis.status) ||
-        state.report.status === "pending"
+        state.report.status === "pending" ||
+        (continuationPending && (queuedWork || reportRequested || pane === "report"))
       )
     )
       return;
@@ -249,7 +354,20 @@ export function ConversationAgent({
       if (locked.current || paneLocked.current) return;
       await load();
     }, 1800);
-  }, [ready, state, stateIsCurrent, acceptedRefresh, refreshKey, queuedWork, readFailures, load]);
+  }, [
+    ready,
+    state,
+    stateIsCurrent,
+    acceptedRefresh,
+    refreshKey,
+    queuedWork,
+    readFailures,
+    load,
+    continuationPending,
+    continuationUnconfirmed,
+    reportRequested,
+    pane,
+  ]);
   const changed = useCallback(async () => {
     const epoch = ticket();
     try {
@@ -305,10 +423,12 @@ export function ConversationAgent({
       try {
         const expectedOwner = await authorizedOwner(epoch, canMutate);
         if (!expectedOwner) return;
-        const fresh = await client.getConversation(caseId, {
+        const started = performance.now();
+        const progress = await client.getConversationProgress(caseId, {
           expectedOwner,
           signal: abort.current.signal,
         });
+        const fresh = progress.state;
         if (!(await verify(false, false)) || !current(epoch) || !mounted.current) return;
         if (fresh.workspaceRevision < workspace.case.revision)
           throw Object.assign(new Error("최신 사건 상태를 다시 확인해 주세요."), {
@@ -325,6 +445,7 @@ export function ConversationAgent({
             ),
             { code: "STALE_REVISION" },
           );
+        observeProgress(progress, started, true);
         setState(fresh);
         if (!canMutate) {
           // Withdrawal keeps authorized stored reads. The children enforce their
@@ -418,6 +539,7 @@ export function ConversationAgent({
       load,
       stateIsCurrent,
       workspace.case.revision,
+      observeProgress,
     ],
   );
   useEffect(() => {
@@ -533,12 +655,8 @@ export function ConversationAgent({
       <Button
         variant="outline"
         size="sm"
-        disabled={busy}
-        onClick={() => {
-          setError("");
-          setReadFailures(0);
-          void load();
-        }}
+        disabled={busy || checkingConfirmation}
+        onClick={(event) => void recheck(event.currentTarget)}
       >
         상태 다시 확인
       </Button>
@@ -610,6 +728,25 @@ export function ConversationAgent({
             </details>
           </fieldset>
         </>
+      )}
+      {(continuationPending || continuationUnconfirmed) && (
+        <div className="workspace-muted" role="status">
+          <p>
+            {continuationUnconfirmed
+              ? "리포트 준비 결과를 직접 다시 확인해 주세요. 입력과 자료는 보존돼요."
+              : "리포트 준비 결과를 확인하고 있어요. 아직 완료된 결과는 아니에요."}
+          </p>
+          {continuationUnconfirmed && !error && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy || checkingConfirmation}
+              onClick={(event) => void recheck(event.currentTarget)}
+            >
+              리포트 상태 다시 확인
+            </Button>
+          )}
+        </div>
       )}
       {!state && !error && (
         <p className="workspace-muted" role="status">

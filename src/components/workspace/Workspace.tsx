@@ -904,10 +904,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       if (!queuedUpload.current) {
         let prepared = false;
         await run("queue-prepare", async (epoch) => {
-          const [item, state] = await Promise.all([
+          const [item, progress] = await Promise.all([
             api.cases.get(caseId),
-            api.rework.getConversation(caseId),
+            api.rework.getConversationProgress(caseId),
           ]);
+          const state = progress.state;
           if (!(await verify(false, true)) || !current(epoch)) return;
           queuedUpload.current = beginConversationUpload(
             view,
@@ -947,27 +948,44 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       let revision = view.case.revision;
       if (queuedUpload.current && !sendAttempt.current) {
         const queue = queuedUpload.current;
-        const [fresh, item, state] = await Promise.all([
-          api.workspace.get(caseId),
-          api.cases.get(caseId),
-          api.rework.getConversation(caseId),
-        ]);
-        if (!(await verify(false, true)) || !current(epoch)) return;
-        const processed = new Set<string>();
+        // Review can wait for a large photo's canonical observations. Capture
+        // the final workspace revision only after that IO and its access checks.
+        const reviewed = new Map<string, FileView["revision"]>();
         for (const id of fileIds) {
           if (queue.files.get(id)?.status === "ready") continue;
           const review = await api.files.review(caseId, id);
           if (!(await verify(false, true)) || !current(epoch)) return;
           if (
-            review.file.revision === fresh.files.find((f) => f.id === id)?.revision &&
             !review.pendingReview &&
             review.nextAfterOrdinal === null &&
             review.observations.every(
               (o) => uploadCanonical(o.value) === uploadCanonical(o.original),
             )
           )
-            processed.add(id);
+            reviewed.set(id, review.file.revision);
         }
+        const progress = await api.rework.getConversationProgress(caseId);
+        const state = progress.state;
+        if (
+          progress.reportContinuation !== null ||
+          ["pending", "running"].includes(state.analysis.status) ||
+          state.report.status === "pending"
+        ) {
+          if (!(await verify(false, true)) || !current(epoch)) return;
+          setAgentBusy(true);
+          // Notify the existing reader once; skip the two workspace/case reads
+          // while completion is unconfirmed. This creates no new admission.
+          setConversationRefresh((value) => value + 1);
+          setNotice("사건과 리포트 준비의 완료 확인을 기다려요. 입력과 자료는 보존돼요.");
+          return;
+        }
+        const [fresh, item] = await Promise.all([api.workspace.get(caseId), api.cases.get(caseId)]);
+        if (!(await verify(false, true)) || !current(epoch)) return;
+        // A newer W never authorizes an older file review. Keep the exact
+        // reviewed revision, frozen source checks and the final server CAS.
+        const processed = new Set<string>();
+        for (const [id, revision] of reviewed)
+          if (revision === fresh.files.find((file) => file.id === id)?.revision) processed.add(id);
         const decision = queuedConversationUpload(
           queue,
           fresh,
@@ -1718,11 +1736,20 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       )}
                       {(busy === "upload" || queuedSend) && (
                         <div className="workspace-chat-upload-status" role="status">
-                          <LoaderCircle size={16} className="workspace-spin" />
+                          {!uploadProgress &&
+                          chatAttachments.length > 0 &&
+                          chatAttachments.every((file) => file.status === "ready") ? (
+                            <Clock3 size={16} />
+                          ) : (
+                            <LoaderCircle size={16} className="workspace-spin" />
+                          )}
                           <span>
                             {uploadProgress
                               ? `${uploadProgress.fileName} · ${uploadProgressLabel(uploadProgress.value)}`
-                              : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
+                              : chatAttachments.length > 0 &&
+                                  chatAttachments.every((file) => file.status === "ready")
+                                ? "사건과 리포트 준비의 완료 확인을 기다려요. 입력과 자료는 보존돼요."
+                                : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
                             {uploadProgress && (
                               <ElapsedTime
                                 startedAt={uploadProgress.startedAt}
@@ -1730,6 +1757,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                               />
                             )}
                             {!busy &&
+                              !chatAttachments.every((file) => file.status === "ready") &&
                               " 파일 전송은 끝났고, 내용을 읽는 중이에요. 큰 문서나 음성·영상은 더 걸릴 수 있어요."}
                           </span>
                           {!busy && (

@@ -10,7 +10,7 @@ import { conversationState } from "./conversation-state";
 /** Isolated UI reads. No simulated paid analysis/report success or production fallback. */
 export function workspaceConversationFixture(runtime: WorkspaceMockRuntime): ConversationClient {
   return {
-    async getConversation(id, options) {
+    async getConversationProgress(id, options) {
       options?.signal?.throwIfAborted();
       const saved = runtime.read();
       const owner = saved.session.user?.id;
@@ -33,10 +33,14 @@ export function workspaceConversationFixture(runtime: WorkspaceMockRuntime): Con
             !file.uploadRejection && ["uploading", "processing", "waiting"].includes(file.status),
         )
         .map((file) => file.id);
-      return v2ConversationStateSchema().parse(state);
+      return {
+        contractVersion: "conversation-report-progress-v1",
+        state: v2ConversationStateSchema().parse(state),
+        reportContinuation: null,
+      };
     },
     async executeAction(id, raw, options) {
-      const state = await this.getConversation(id, options);
+      const { state } = await this.getConversationProgress(id, options);
       const request = v2ConversationActionRequestSchema.parse(raw);
       if (runtime.read().session.needsConsent)
         throw new ApiError("CONSENT_REQUIRED", "현재 동의를 확인해 주세요.");
