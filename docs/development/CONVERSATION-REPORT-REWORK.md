@@ -4,10 +4,10 @@
 
 2026-11-02 KST 기준의 최종 통합 상태는 이 절과 [#621의 실제 실행 기록](https://github.com/creno-va/baro/issues/621)을 따른다. 아래 연혁의 “현재/남은” 표현은 각 기록 당시의 상태이며 실패 증거도 보존한다.
 
-- PR628~703 총76개가 CI 성공 후 main에 병합됐다. PR702 통합 main은 `aca66ac902a09ead5788ed5567509180f22c3199`이며 main push CI41366828610도 성공했다. 이후 변경과 최종 검사 SHA는#621을 정본으로 기록한다.
-- ACA의 수동 full41366848207은 core의 raw audit16건으로 실패했고 native는 성공했다. 브라우저 구간의 완료 결과는#621에 추가한다. 성공한 full/security 영수증은 없다. 첫 full41357435897/main1fb의60분 취소와 원래 회귀 증거도 보존한다.
-- 00의 현재 브랜치는 `codex/621-rework-source-link-record`다. 05만 `codex/626-report-official-source-links`에서 실제 공식 원문 링크 누락을 보완한다. 다른 담당의 제품·소유 테스트는 동결한다.01 intake28/복구9,03 첨부17/교정7,06 후속22는 C/W 각각 PASS이며04 기본각33과05 수동편집 C9/W1 증거를 보존한다. ACA native3PDF11쪽과 기존 UI12PDF48쪽·1fb8PDF32쪽 QA는 각각 검사한 SHA의 증거다.
-- ACA preview41367271794는 schema0022·9개 route smoke와 비공개 preview 배포에 성공했다. 사용자가 직접 로그인하겠다고 답했으며, 이 답을 로그인·동의 완료로 간주하지 않는다. 실제 공급자·OAuth·기기·법률 승인과 합성 검증을 구분한다.
+- PR628~704 총77개가 CI 성공 후 main에 병합됐다. 중간 후보 main은 `b12e09f4c951e6ee83360798223c9775c549ecc4`이며 push CI41371062283도 성공했다. 이후 수리와 최종 검사 SHA는#621을 정본으로 기록한다.
+- ACA의 수동 full41366848207은 전체 종료/실패다. core raw audit16건, browser722 PASS/3 WebKit FAIL이며 native는 성공했다. CSP 미도달·최종 join SKIP·성공 영수증0이다. 첫 full41357435897/main1fb의60분 취소와 구분한다.
+- 00은 `codex/621-rework-state-read-latency`에서 공통 상태 조회와 이 문서를 소유한다.04는 `codex/625-final-webkit-journeys`에서 위3개 소유 여정의 비동기 검사 단계를 수리한다.05 공식 원문 링크 보완은704로 통합했고 다른 담당은 동결한다. ACA browser10PDF40쪽·native3PDF11쪽,704의4PDF13쪽과 이전 QA는 검사한 SHA별 증거로 보존한다.
+- ACA preview41367271794는 schema0022·9개 route smoke와 비공개 배포에 성공했다. 사용자 직접 로그인 뒤 합성 청구·방어의 실제 intake/요약을 확인했다. 청구 재조율·원격 TXT 처리는 완료됐지만 후속 분석은 POLICY_REJECTED이며 상태 조회 지연·revision 충돌을 관측했다. 실제 법률 분석 성공·전체 OAuth/철회·기기·법률 승인을 주장하지 않는다.
 - 비용 관측 전용, 실제 AI200/일·초기2×3·기술/시간/시도·owner/동의/암호화/삭제/revision/lease/독립 audit·ledger/hold를 유지한다. main 직접 push·새 채팅/하위 에이전트/자동화 생성·production 배포는 하지 않았다.
 
 | 소유 담당 | 구현·선행 검증 PR 목록 |
@@ -78,12 +78,12 @@
 
 | 세션 제목 | thread ID / host | 이슈·브랜치 | 소유 범위 | PR/상태 |
 | --- | --- | --- | --- | --- |
-| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-source-link-record` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | PR628~703 merged; ACA full core audit failed/native passed; preview passed; exact-SHA evidence in #621 |
+| BARO-REWORK-00 통합 | `01a1969a-2358-7bc3-be20-f37be534c897` / local | #621 / `codex/621-rework-state-read-latency` | 공통 계약/DB/중앙 client·gateway·router·전역 shell/token·실행문서/PRD/ADR | PR628~704 merged; passive state read concurrency fix; exact-SHA evidence in #621 |
 | BARO-REWORK-01 사건정리 | `01a1969a-845b-7381-9353-35f61e9a740e` / local | #622 / `codex/622-final-intake-regressions` | CaseInput, IntakeQuestions, SummaryReview, 독립 재조율 UI/service/client/mock, 해당 CSS/tests | PR636-690 and703 merged; intake28/customer9 per engine, focus/320px PASS; frozen |
 | BARO-REWORK-02 법률근거 | `01a1969a-e609-7b53-b4fd-c005a5823052` / local | #623 / `codex/623-hono-legal-fixtures` | legal-retrieval/analysis/*, 전용 analysis prompt/helper·tests/fixture | PR631/638/644/652/658 merged; legal binding/rights/TTL/audit preserved; PR702 independent review complete; frozen |
 | BARO-REWORK-03 자료분석 | `01a1969b-76c9-7223-94c1-619b8d81cef9` / local | #624 / `codex/624-full-browser-recovery` | FileReview, CaseMaterials, ChatAttachments, EvidencePicker/EvidenceUpload/useEvidenceUpload/evidence-state, evidence.css·tests | PR629/635/664/671/698 merged; attachments17/correction7 per engine PASS; device/provider acceptance separate; frozen |
-| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-full-browser-projects` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633/642/660/672/701 merged; default33 per engine, customer6 per engine, existing PDF48p preserved; frozen |
-| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-official-source-links` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641-694 and699 merged; PR704 source navigation final CI/main tracked in #621; ACA native QA preserved |
+| BARO-REWORK-04 대화에이전트 | `01a1969c-6a7f-71c2-9c1a-0f8e2743d9bd` / local | #625 / `codex/625-final-webkit-journeys` | Workspace.tsx·대화 components/workspace service/context/pipeline/execution/stored-message·일반 prompts·영역 CSS/tests | PR633/642/660/672/701 merged; ACA3 WebKit asynchronous-phase repairs active |
+| BARO-REWORK-05 리포트 | `01a1969c-c6f0-7122-8f39-c6ac535fa494` / local | #626 / `codex/626-report-official-source-links` | ReportReview/ReportReading·reports 독립 본문/HTML/PDF/service/helpers·CSS/tests | PR641-694/699/704 merged; ACA10PDF40p read-only QA complete; product frozen |
 | BARO-REWORK-06 후속해결 | `01a1969e-174c-7280-81ac-eb9813ebffb2` / local | #627 / `codex/627-resolution-browser-lifecycle` | resolution 독립 서비스/재사용 UI·초안 prompt/helper·영역 CSS/tests | PR632-693 and697 merged; follow-up22 per engine/override/cleanup PASS; frozen |
 
 한 파일 한 소유자다.03/06은 Workspace.tsx·ReportReview.tsx를 수정하지 않는다. 공통 src/contracts/, src/server/db/, drizzle/, 공통 API/client·facade·export, gateway service/중앙 schemas/등록, router/runtime 조립은00만 변경한다. 기존 `src/server/api/v2/workspaces.ts`는00 소유이며01은 독립 재조율 서비스를 제공한다. handler 신설/위임은 정확 경로를 먼저 기록한다.
@@ -419,3 +419,15 @@ ACA 출력 검토에서 공식 URL이 본문에는 있지만 HTML anchor가0개�
 PR704의 제품 exactff6e8ea3와 문서만 추가한 bdf48188은 제품/테스트가 동일하다. bdf의 Quality41369861509·HTML/PDF native41369861624 SUCCESS와02 읽기 검토 추가 finding0을 확인했다.05의 새 합성 증거는 quick708/7084·reports351/3882·actual native PDF/ZIP2/159·focused8/85·C/W 웹/HTML 클릭4·build/local workerd와4PDF13쪽 전페이지 시각 검토다. HTML172본문/URI annotation/receipt SHA/ZIP CRC를 확인했고00도 실제 PDF의 공식 출처 페이지를 독립 시각 확인했다. 이 목록에 PR704를 추가하는00 문서 commit 이후 최종 exact head CI·실제 정상 병합·새 final SHA/run은#621에 기록한다.
 
 사용자 직접 로그인 뒤 ACA 비공개 preview에서 명확한 합성 사건을 새로 저장하고 실제 공급자의 질문2회×3개와6답변 저장까지 UI로 확인했다. 첫 질문의 기존 읽기 전용 inspection41369851635는 completed/attempt1/failure null 및 generation/audit/publication 완료를 보고했다. 기존 사용자 사건 열람·재시도·삭제·민감자료 전달은 없었다. 이는 실제 intake 일부의 실행 증거이며 전체 OAuth·동의철회·공식 법률 분석/의미 품질·원격 촬영·독립 법률 승인 인수는 아니다. 후속 실제 화면의 결과와 검사한 release는#621에 구분해 기록한다.
+
+### ACA 전체 결과·실제 preview와 상태 읽기 수리 (2026-11-02)
+
+ACA full41366848207/browser125028704500은49분 안에 종료했다.36개 그룹 summary722 PASS/3 FAIL이며 timeout이 아니다.04 소유 WebKit shared defense 입장 확인 Dialog 미발견1개, 실제 defense 직접/변호사 경로 addMaterial 링크 미발견2개다. 뒤 그룹도 모두 실행했고 CSP는 browser 실패로 미도달했다. core audit 실패·native 성공·join SKIP·성공 receipt0을 보존한다.04는 실제 완료 ACK/이미 admitted된 pending 작업과 UI 검사 순서를 조사하며 기존 단언·120초 test/5초 expect·provider 기술 한도·retry 수는 완화하지 않는다.
+
+browser artifact13108889848/2057406bytes/digest8f6ce28348c7c551e7dd81ad248982571306554135735f2a8803f478f7bc80ee의 실제10PDF40쪽을05가 전부 렌더·직접 시각 확인했다. HTML922/922 본문·basis PDF/HTML SHA 일치, bbox8904단어/밖0, 원본97파일 whole hash 불변이다. WebKit 방어2경로는 자료 단계에서 실패해 PDF가 없으며12개 성공으로 표시하지 않는다. report/followup20개 PNG도 확인했으나 고정 header/composer와 scroll viewport 때문에 일부 카드가 화면 밖이다. 정적 이미지로 전체 웹 조판·상호작용을 새로 인수하지 않는다. 카메라2경로도 합성/partial-low-quality이며 실기기 인수가 아니다. ACA anchor0은704 이전 누락이다.
+
+실제 ACA preview에서 청구6질문과 방어5질문(2차2개)을 생성하고 요약 확인→작업 공간까지 갔다. 청구 재조율은 기존 불리한 사실을 유지했고, 확정 응답의 연결 오류 뒤 동일 쓰기를 반복하지 않고 reload로 새 canonical을 확인했다.517bytes 합성 TXT는 browser chooser와 개별 자동 처리 동의를 거쳐 native 검증/처리 두 job이 각각 completed/attempt1/transport response였다. 뒤 analysis 성격의 chat_response는 POLICY_REJECTED/attempt1이며 읽기 전용 JSON은 analysis failed/report ready다. 원인과 실제 법률 품질은 미확정이고 같은 provider 재시도를 반복하지 않는다. 첨부 게시의 revision 충돌·입력 보존과 metadata 연결 오류를 성공으로 숨기지 않는다. inspection41371680186은 허용 enum/숫자 metadata만 읽었으며 실제 사건/owner ID·본문·credential·stack/SQL을 이슈·문서에 남기지 않는다.
+
+상태 GET은 별도 같은 origin 문서 탐색에서도20초 command 제한을 넘긴 뒤 정상 JSON을 반환했다. client30초 오류의 원인 후보이며 정확한 서버 지연이나 해결 성공은 단정하지 않는다.00의 독립10ms 지연 fixture는 단순 state+peek56 DB read가 직렬 peak1/약634ms임을 확인했다. 수정은 첫 workspace revision anchor를 먼저 고정한 뒤 독립 context/scope 및 passive loaded/record/peek 읽기를 병렬화한다. 조회 수56·최종 owner/revision/원문 권한·TTL·CAS 검사를 유지하며 마지막 fixture는 peak5/약375ms다. 합성 성능 수치는 실제 preview 개선 보장이 아니다.
+
+02가 첫 초안의 metadata가 anchor보다 먼저 끝나는 P2를 발견했다. 첫 workspace decrypt hold→old context/scope→실제 context update→repo Wnew 재읽기로 옛 unconfirmed 반환을 RED 재현했고 w를 먼저 await하도록 고쳐 GREEN을 확인했다. 새 concurrency4+기존 state8=12 tests50 assertions, 관련 runtime/public/intent/neutral/bound-source87 PASS/1 opt-in SKIP·1220 assertions다.02 수정 재검토 추가 finding0이다. DB/DTO/새 cache·추상화·공급자/모델·가격 gate/30초 한도 변경은 없다.05 peek 중복read 삭제는 추가 무결성 증명이 필요해 보류하고 보고서 제품을 동결한다. 이 root PR과04 수리의 실제 CI/main·새 최종 SHA 수동 full/preview 및 실제 화면 결과는#621에 기록한다.
