@@ -4,7 +4,7 @@ import { createSessionScope } from "@baro/client-core";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
 import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
 import { createReworkMock } from "../src/client/api/mock/rework";
-import type { WorkspaceMockState } from "../src/client/api/mock/workspace";
+import { ensureMockWorkspace, type WorkspaceMockState } from "../src/client/api/mock/workspace";
 import { reconfirmationCase } from "./helpers/intake-reconfirmation";
 
 function fixture() {
@@ -310,3 +310,81 @@ test("mock account switch, consent withdrawal and deletion cannot reuse private 
   ).toBe(false);
   await expect(f.client.getContext(f.item.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
 });
+
+test("explicit mock progress uses the real SDK route without extending the legacy conversation DTO", async () => {
+  const f = fixture();
+  f.runtime.update((state) => ensureMockWorkspace(state, f.item.id));
+  const conversation = await f.client.getConversation(f.item.id);
+  const before = structuredClone(f.read());
+  const progress = await f.client.getConversationProgress(f.item.id);
+  expect(progress).toEqual({
+    contractVersion: "conversation-report-progress-v1",
+    state: conversation,
+    reportContinuation: null,
+  });
+  expect(await f.client.getConversation(f.item.id)).toEqual(conversation);
+  expect(conversation).not.toHaveProperty("reportContinuation");
+  expect(f.read()).toEqual(before);
+  f.reload();
+  expect(await f.client.getConversationProgress(f.item.id)).toEqual(progress);
+});
+
+for (const denied of ["owner", "deleted"] as const)
+  test(`explicit mock progress retains ${denied} denial through the SDK`, async () => {
+    const f = fixture();
+    f.change((state) => {
+      if (denied === "owner") state.caseOwners = { [f.item.id]: "foreign-owner" };
+      if (denied === "deleted") delete state.cases[f.item.id];
+    });
+    const before = structuredClone(f.read());
+    await expect(f.client.getConversationProgress(f.item.id)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    expect(f.read()).toEqual(before);
+  });
+
+for (const failed of [false, true])
+  test(`explicit mock progress observes due ${failed ? "failed" : "ready"} processing and retains withdrawn-consent reads`, async () => {
+    const f = fixture();
+    f.runtime.update((state) => {
+      ensureMockWorkspace(state, f.item.id);
+      state.files[f.item.id] = [
+        {
+          id: "due-material",
+          name: "합성.txt",
+          mimeType: "text/plain",
+          sizeBytes: 4,
+          status: "processing",
+          coverage: "처리 중",
+          extractedText: "",
+        },
+      ];
+      state.fileProcessing = { "due-material": { at: Date.now() + 60000, failed } };
+      state.fileExtractions = { "due-material": "합성 원문" };
+    });
+    const pending = await f.client.getConversationProgress(f.item.id);
+    expect(pending.state.pendingEvidenceIds).toEqual(["due-material"]);
+    const before = pending.state.workspaceRevision;
+    f.change((state) => {
+      state.session.needsConsent = true;
+      state.fileProcessing!["due-material"]!.at = 0;
+    });
+    const ready = await f.client.getConversationProgress(f.item.id);
+    expect(ready.state.pendingEvidenceIds).toEqual([]);
+    expect(ready.state.workspaceRevision).toBe(before + 1);
+    expect(ready.reportContinuation).toBeNull();
+    expect(f.read().files[f.item.id]?.[0]).toMatchObject({
+      status: failed ? "failed" : "ready",
+      extractedText: failed ? "" : "합성 원문",
+      canRetry: failed,
+    });
+    expect(f.read().fileProcessing?.["due-material"]).toBeUndefined();
+    expect(await f.client.getConversation(f.item.id)).toEqual(ready.state);
+    await expect(
+      f.client.executeAction(f.item.id, {
+        action: "prepare_report",
+        requestId: crypto.randomUUID(),
+        expectedRevision: ready.state.workspaceRevision,
+      }),
+    ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" });
+  });
