@@ -6,7 +6,11 @@ import {
   type OperationRequestOptions,
 } from "@baro/api-client";
 import { createSessionScope, type SessionView } from "@baro/client-core";
-import { v2ReworkVersionSchema } from "../src/contracts/v2";
+import {
+  v2ConversationProgressSchema,
+  v2ConversationStateSchema,
+  v2ReworkVersionSchema,
+} from "../src/contracts/v2";
 import { workspace } from "./fixtures/contracts/v2";
 
 const owner = "synthetic_owner";
@@ -197,4 +201,64 @@ test("invalid action commands do not reach transport", async () => {
     } as never),
   ).toThrow();
   expect(calls).toBe(0);
+});
+
+test("logical report progress is explicit and never changes the installed conversation response", async () => {
+  const state = v2ConversationStateSchema().parse({
+    contractVersion: v2ReworkVersionSchema.value,
+    workspaceRevision: 1,
+    caseContext: context,
+    summaryConfirmed: false,
+    pendingEvidenceIds: [],
+    snapshot: null,
+    intents: [],
+    analysis: {
+      status: "not_started",
+      basis: null,
+      currentJobId: null,
+      failure: null,
+      missingItems: [],
+    },
+    report: {
+      status: "not_started",
+      id: null,
+      revision: null,
+      basis: null,
+      currentJobId: null,
+      failure: null,
+    },
+  });
+  const calls: OperationRequestOptions[] = [];
+  const envelope = v2ConversationProgressSchema().parse({
+    contractVersion: "conversation-report-progress-v1",
+    state,
+    reportContinuation: null,
+  });
+  let invalid = false;
+  const f = fixture(
+    async <T>(_operation: string, _input: unknown, options: OperationRequestOptions = {}) => {
+      calls.push(options);
+      return (
+        options.path?.endsWith("conversation-progress")
+          ? { ...envelope, ...(invalid ? { unexpected: true } : {}) }
+          : state
+      ) as T;
+    },
+  );
+  const client = f.create();
+  expect(await client.getConversation("case")).toEqual(state);
+  expect(
+    v2ConversationStateSchema().safeParse({ ...state, reportContinuation: null }).success,
+  ).toBe(false);
+  expect(await client.getConversationProgress("case")).toEqual(envelope);
+  expect(calls.map((c) => c.path)).toEqual([
+    "/api/v2/cases/case/rework/conversation",
+    "/api/v2/cases/case/rework/conversation-progress",
+  ]);
+  expect(
+    calls.every((c) => c.method === "GET" && c.expectedOwner === owner && c.key === undefined),
+  ).toBe(true);
+  expect(f.records.size).toBe(0);
+  invalid = true;
+  await expect(client.getConversationProgress("case")).rejects.toBeInstanceOf(ApiError);
 });
