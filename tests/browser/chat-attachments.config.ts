@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: ".",
   testMatch: "chat-attachments.e2e.ts",
   workers: 1,
+  outputDir: "../../.wrangler/ui624-chat-attachments",
   timeout: 45000,
   use: { baseURL: "http://127.0.0.1:4517", browserName: "chromium", trace: "off" },
   webServer: {
