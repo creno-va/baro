@@ -1,8 +1,18 @@
 import { spawn } from "node:child_process";
-import { expect, type Page, test } from "@playwright/test";
+import { type BrowserContext, expect, type Page, test } from "@playwright/test";
 
 const originalSummary = "사용자의 거래 자료 확인 준비를 정리했습니다.";
 const peerSummary = "다른 화면에서 수정한 새로운 합성 요약입니다.";
+
+async function closeSummaryPage(page: Page, context: BrowserContext, failed: boolean) {
+  try {
+    await page.close();
+    await context.unrouteAll({ behavior: "wait" });
+  } catch (error) {
+    // Preserve the original failure if its timeout already closed the context.
+    if (!failed) throw error;
+  }
+}
 
 async function summarySnapshot(page: Page, id: string) {
   return page.evaluate(async (id) => {
@@ -57,8 +67,9 @@ for (const { operation, loseSession, recovery } of scenarios) {
   test(`real summary ${operation}; ${operation === "draft" ? "foreground" : "final"} session failure=${loseSession}${recovery === "same" ? "" : `; recovery=${recovery}`}`, async ({
     page,
     context,
+    baseURL,
   }) => {
-    const browserOrigin = "http://127.0.0.1:4355";
+    const browserOrigin = new URL(baseURL ?? "http://127.0.0.1:4685").origin;
     const server = spawn("bun", ["tests/helpers/customer-browser-server.ts", browserOrigin], {
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -270,8 +281,9 @@ for (const { operation, loseSession, recovery } of scenarios) {
 test("chat additions require the new summary confirmation in the real customer UI", async ({
   page,
   context,
+  baseURL,
 }) => {
-  const browserOrigin = "http://127.0.0.1:4355";
+  const browserOrigin = new URL(baseURL ?? "http://127.0.0.1:4685").origin;
   const server = spawn(
     "bun",
     ["tests/helpers/customer-browser-server.ts", browserOrigin, "pending-chat-summary"],
@@ -302,6 +314,7 @@ test("chat additions require the new summary confirmation in the real customer U
       if (code) reject(new Error("Synthetic API failed"));
     });
   });
+  let failed = false;
   try {
     await context.addCookies([info.ownerCookie]);
     await context.route("**/api/**", async (route) => {
@@ -328,9 +341,11 @@ test("chat additions require the new summary confirmation in the real customer U
       }),
     ).toBeVisible();
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeDisabled();
-    await page.getByRole("link", { name: "요약 확인하기", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/cases/${info.id}/summary$`));
-    await expect(page.getByText(originalSummary, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "요약 확인하기", exact: true }).click();
+    const review = page.getByRole("region", { name: "사건 정리 재확인", exact: true });
+    await expect(review).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
+    await expect(review.getByText(originalSummary, { exact: true })).toBeVisible();
     await expect(page.getByLabel("요약 편집")).toHaveCount(0);
     // Individual fact controls were removed from the review screen. The new
     // fact must still be retained in the exact summary revision being confirmed.
@@ -346,12 +361,13 @@ test("chat additions require the new summary confirmation in the real customer U
     expect(pending.facts).toEqual(
       expect.arrayContaining([expect.objectContaining({ text: "새로운 자료를 찾았습니다." })]),
     );
-    await page.getByRole("button", { name: "맞아요", exact: true }).click();
+    await review.getByRole("button", { name: "맞아요", exact: true }).click();
     await page
       .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
       .getByRole("button", { name: "확인하고 계속", exact: true })
       .click();
     await expect(page).toHaveURL(new RegExp(`/cases/${info.id}$`));
+    await expect(review).not.toBeVisible();
     await expect(page.getByLabel("추가 사실 또는 질문")).toBeEnabled();
     const intake = await page.evaluate(
       async (id) =>
@@ -363,10 +379,17 @@ test("chat additions require the new summary confirmation in the real customer U
     );
     expect(intake.summary.revision).toBe(2);
     expect(intake.confirmedSummaryRevision).toBe(2);
+    const confirmed = await page.evaluate(
+      async (id) => (await fetch(`/api/v2/cases/${id}/summary`)).json(),
+      info.id,
+    );
+    expect(confirmed).toEqual(pending);
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
     try {
-      await page.close();
-      await context.unrouteAll({ behavior: "wait" });
+      await closeSummaryPage(page, context, failed);
     } finally {
       server.stdin.end();
       server.kill();
