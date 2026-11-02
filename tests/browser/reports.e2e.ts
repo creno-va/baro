@@ -234,18 +234,27 @@ test("peer account switch clears settings usage and an account deletion confirma
 });
 test("manual review and PDF-only download preserve exact saved content and cascading deletion", async ({
   page,
+  baseURL,
 }) => {
   const external: string[] = [];
+  const localOrigin = new URL(baseURL as string).origin;
   page.on("request", (request) => {
-    if (!request.url().startsWith("http://127.0.0.1:"))
-      external.push(new URL(request.url()).origin);
+    const origin = new URL(request.url()).origin;
+    if (origin !== localOrigin) external.push(origin);
   });
   await page.goto("/cases/case-demo/reports");
   await openReportEditor(page);
-  await page
-    .getByRole("textbox", { name: / 수정$/ })
-    .first()
-    .fill("합성 검토 내용: [전화번호 직접 삭제] / [이메일 직접 삭제]. 반환 날짜는 미확인입니다.");
+  // This legacy fixture has no verified legal analysis. The leading editor is
+  // its synthetic/unverified notice; manual redaction belongs to the overview.
+  const overview = page.getByRole("textbox", { name: "사건 개요 수정", exact: true });
+  await expect(overview).toHaveValue("합성 사실: 010-1234-5678, demo@example.test");
+  const before = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}");
+    return { summary: state.cases["case-demo"].summary, report: state.reports["case-demo"] };
+  });
+  const edited =
+    "합성 검토 내용: [전화번호 직접 삭제] / [이메일 직접 삭제]. 반환 날짜는 미확인입니다.";
+  await overview.fill(edited);
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   const pdf = await downloading;
@@ -255,9 +264,16 @@ test("manual review and PDF-only download preserve exact saved content and casca
   const html = await savedHtml(page);
   expect(html).toContain("[전화번호 직접 삭제]");
   expect(html).not.toContain("010-1234-5678");
+  expect(html).not.toContain("demo@example.test");
+  expect(html).toContain("합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다");
+  const preserved = await page.evaluate((id) => {
+    const state = JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}");
+    return { summary: state.cases["case-demo"].summary, content: state.reportHistory[id]?.content };
+  }, before.report.id);
+  expect(preserved).toEqual({ summary: before.summary, content: before.report.content });
   await page.reload();
   await openReportEditor(page);
-  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveValue(/합성 검토 내용/);
+  await expect(overview).toHaveValue(edited);
   await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(0);
   if (evidence) {
     await mkdir(evidence, { recursive: true });
