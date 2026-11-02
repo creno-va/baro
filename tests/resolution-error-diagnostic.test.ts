@@ -39,7 +39,7 @@ test("only normalized codes and integer HTTP statuses are retained", () => {
     "EXPORT_LIMIT_EXCEEDED",
     "EXPORT_RETRY_EXHAUSTED",
     "UNAVAILABLE",
-  ])
+  ] as const)
     expect(resolutionErrorDiagnostic({ code }).code).toBe(code);
   for (const code of [sentinel, "STALE_REVISION", 409, null, { toString: () => sentinel }])
     expect(resolutionErrorDiagnostic({ code }).code).toBe("unknown");

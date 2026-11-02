@@ -706,7 +706,7 @@ for (const [mode, transport] of [
     await page.addInitScript((failure) => {
       const original = window.fetch.bind(window);
       let pending = true;
-      window.fetch = (input, init) => {
+      window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
         const url =
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
         if (pending && url.includes("/rework/resolution")) {
@@ -716,7 +716,7 @@ for (const [mode, transport] of [
           return Promise.reject(new DOMException("SYNTHETIC-DIAGNOSTIC-PRIVATE", failure));
         }
         return original(input, init);
-      };
+      }) as unknown as typeof window.fetch;
     }, mode);
     await page.goto("/?default");
     const alert = page.getByRole("alert");
