@@ -1,4 +1,4 @@
-import { createReworkClient } from "@baro/api-client";
+import { createReworkClient, responseError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -64,6 +64,37 @@ const client: ResolutionClient = {
   files: () => json("/fixture/files"),
   report: () => json("/fixture/report"),
 };
+const diagnosticMode = new URLSearchParams(location.search).get("synthetic-error");
+let diagnosticPending = true;
+const diagnosticClient: ResolutionClient = {
+  ...client,
+  async getResolution(id, options) {
+    if (diagnosticPending && ["timeout", "abort", "hostile"].includes(diagnosticMode ?? "")) {
+      diagnosticPending = false;
+      const secret = "SYNTHETIC-DIAGNOSTIC-PRIVATE";
+      throw Object.assign(new Error(secret), {
+        code: secret,
+        httpStatus: `${secret}-503`,
+        name:
+          diagnosticMode === "timeout"
+            ? "TimeoutError"
+            : diagnosticMode === "abort"
+              ? "AbortError"
+              : secret,
+        body: secret,
+        stack: secret,
+        url: secret,
+        ids: [secret],
+        token: secret,
+      });
+    }
+    return client.getResolution(id, options);
+  },
+};
+async function saveReport() {
+  const response = await fetch("/fixture/save-report", { method: "POST" });
+  if (!response.ok) throw await responseError(response);
+}
 function Host() {
   const [surface, setSurface] = useState("report");
   const [dirty, setDirty] = useState(false);
@@ -83,9 +114,11 @@ function Host() {
       <FollowUpResolution
         key={surface}
         caseId="case"
-        {...(new URLSearchParams(location.search).has("default") ? {} : { client })}
+        {...(new URLSearchParams(location.search).has("default")
+          ? {}
+          : { client: diagnosticMode ? diagnosticClient : client })}
         embedded={surface === "chat"}
-        onSaveReport={() => json<void>("/fixture/save-report", { method: "POST" })}
+        onSaveReport={saveReport}
         onDirtyChange={setDirty}
         onBusyChange={setBusy}
       />

@@ -1,5 +1,6 @@
-import { createReworkClient, responseError } from "@baro/api-client";
+import { createJsonRequester, createReworkClient, responseError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
+import { apiRequest } from "../../src/client/api/core";
 
 /** Explicit synthetic facade for the component's default client; Astro glob imports stay out of Bun's harness. */
 async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -8,6 +9,11 @@ async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 const scope = createSessionScope();
+const request = createJsonRequester({
+  transport: apiRequest,
+  scope,
+  newKey: () => crypto.randomUUID(),
+});
 async function session() {
   const value = await json<{ ownerId: string; needsConsent: boolean }>("/fixture/session");
   return {
@@ -19,24 +25,12 @@ const make = () =>
   createReworkClient({
     scope,
     session,
-    request: async <T>(_operation: string, _input: unknown, options = {}) => {
-      const params = options as {
-        path?: string;
-        method?: string;
-        body?: unknown;
-        expectedOwner?: string;
-        signal?: AbortSignal;
-      };
-      return json<T>(params.path ?? "/invalid", {
-        method: params.method ?? "GET",
-        headers: {
-          "x-fixture-owner": params.expectedOwner ?? "",
-          "content-type": "application/json",
-        },
-        ...(params.body === undefined ? {} : { body: JSON.stringify(params.body) }),
-        ...(params.signal ? { signal: params.signal } : {}),
-      });
-    },
+    request: (_operation, _input, options = {}) =>
+      request({
+        ...options,
+        path: options.path ?? "/api/invalid",
+        headers: { "x-fixture-owner": options.expectedOwner ?? "" },
+      }),
     challenge: async () => "synthetic",
     newKey: () => crypto.randomUUID(),
     guideHosts: ["www.easylaw.go.kr"],
