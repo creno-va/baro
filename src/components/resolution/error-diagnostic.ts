@@ -19,6 +19,36 @@ export type ResolutionErrorDiagnostic = Readonly<{
   transport: "timeout" | "abort" | "unknown";
 }>;
 
+export type ResolutionSelectionFailureStep =
+  | "files_read"
+  | "report_read"
+  | "resolution_read"
+  | "selection_update"
+  | "unknown";
+
+/** One choose invocation only. Late parallel rejections cannot replace its first failure. */
+export function createResolutionSelectionFailureTracker() {
+  let firstFailure: ResolutionSelectionFailureStep | undefined;
+  return {
+    // Keep synchronous throws synchronous: later parallel reads must not start in that case.
+    observe<T>(
+      step: Exclude<ResolutionSelectionFailureStep, "unknown">,
+      request: () => Promise<T>,
+    ): Promise<T> {
+      try {
+        return request().catch((error: unknown) => {
+          firstFailure ??= step;
+          throw error;
+        });
+      } catch (error) {
+        firstFailure ??= step;
+        throw error;
+      }
+    },
+    snapshot: (): ResolutionSelectionFailureStep => firstFailure ?? "unknown",
+  };
+}
+
 function field(error: unknown, key: "code" | "httpStatus" | "name" | "transportFailure"): unknown {
   try {
     return error !== null && (typeof error === "object" || typeof error === "function")
