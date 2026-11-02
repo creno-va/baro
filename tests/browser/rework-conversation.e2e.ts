@@ -282,7 +282,17 @@ async function addMaterial(
   // and queued send. Observe its real admission before checking rendered UI.
   // Match failures as well, so a genuine CAS rejection cannot become success.
   if (!admitted) throw new Error("SYNTHETIC_MESSAGE_ADMISSION_MISSING");
-  const admission = await admitted;
+  const admission = afterSend
+    ? await admitted
+    : await Promise.race([
+        admitted,
+        page
+          .locator("section.workspace-error")
+          .waitFor({ state: "visible" })
+          .then(() => {
+            throw new Error("SYNTHETIC_QUEUED_SEND_FAILED_BEFORE_ADMISSION");
+          }),
+      ]);
   expect(admission.status()).toBe(202);
   v2AcceptedOperationSchema.parse(await admission.json());
   const admittedFiles = z
