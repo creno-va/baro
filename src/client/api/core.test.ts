@@ -66,14 +66,14 @@ test("real transport failures keep only a finite class without changing retry or
       error: { name: "TimeoutError", message: privateText, stack: privateText, httpStatus: 503 },
       kind: "unknown",
     },
-  ];
+  ] as const;
   let calls = 0;
   try {
     for (const sample of cases) {
       globalThis.fetch = (() => {
         calls++;
         return Promise.reject(sample.error);
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const error = await apiRequest("/api/synthetic-transport", {
         method: "PATCH",
         body: "{}",
