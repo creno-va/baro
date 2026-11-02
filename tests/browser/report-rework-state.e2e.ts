@@ -709,9 +709,20 @@ test("embedded report preserves stale edits before generating a new snapshot and
     /유실하면 안 되는 직접 편집/,
   );
   await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "true");
+  const preservedBody = await page
+    .getByRole("textbox", { name: "보관한 리포트 편집 내용" })
+    .inputValue();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "보관한 편집 내용 저장", exact: true }).click();
-  expect((await download).suggestedFilename()).toContain("편집보관.txt");
+  const saved = await download;
+  // WebKit on macOS returns canonically equivalent decomposed Korean names.
+  expect(saved.suggestedFilename().normalize("NFC")).toBe("BARO-synthetic-new-report-편집보관.txt");
+  const savedPath = await saved.path();
+  if (!savedPath) throw new Error("SYNTHETIC_PRESERVED_EDIT_DOWNLOAD_MISSING");
+  const savedBody = readFileSync(savedPath, "utf8");
+  expect(savedBody).toBe(preservedBody);
+  expect(savedBody).toContain("저장 전이지만 유실하면 안 되는 직접 편집입니다.");
+  expect(savedBody).not.toContain("최신 사건으로 생성한 새로운 합성 리포트입니다.");
   await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
   owner = "synthetic-another-owner";
   await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
@@ -880,6 +891,13 @@ for (const outcome of ["lost_ack", "rejected"] as const)
     const receipts = new Map<string, { body: string; operationId: string }>();
     const readRevisions: number[] = [];
     let admissions = 0;
+    let releaseRetryAck = () => {};
+    const retryAckGate = new Promise<void>((resolve) => {
+      releaseRetryAck = resolve;
+    });
+    let retryAwaitingAck = false;
+    let retryAckReleased = false;
+    let acknowledgedReadbacks = 0;
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         path = new URL(request.url()).pathname;
@@ -894,6 +912,7 @@ for (const outcome of ["lost_ack", "rejected"] as const)
       if (path.endsWith("/rework/report")) return route.fulfill({ json: null });
       if (path.endsWith("/rework/conversation")) {
         readRevisions.push(state.workspaceRevision);
+        if (retryAckReleased) acknowledgedReadbacks++;
         return route.fulfill({ json: state });
       }
       if (path.endsWith("/rework/actions")) {
@@ -926,6 +945,11 @@ for (const outcome of ["lost_ack", "rejected"] as const)
             status: 503,
             json: { error: { code: "INTERNAL_ERROR", message: "합성 ACK 유실" } },
           });
+        // Separate actual replay admission from delivery of its receipt. The
+        // refreshed running title is already visible before this ACK exists.
+        retryAwaitingAck = true;
+        await retryAckGate;
+        retryAckReleased = true;
         return route.fulfill({
           json: {
             contractVersion: "conversation-report-v1",
@@ -945,7 +969,53 @@ for (const outcome of ["lost_ack", "rejected"] as const)
     await expect(page.getByRole("alert")).toBeVisible();
     expect(requests).toHaveLength(1);
     expect(state.workspaceRevision).toBe(8);
-    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+    const retryResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/rework/actions") &&
+        response.status() === 200,
+    );
+    // A failed assertion still releases the fixture's in-flight response below.
+    void retryResponse.catch(() => {});
+    try {
+      await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+      // prepareReport refreshes revision 8 before its session-fenced POST. A
+      // running heading alone is not evidence that the second request arrived.
+      await expect.poll(() => requests.length).toBe(2);
+      await expect.poll(() => retryAwaitingAck).toBe(true);
+      expect(retryAckReleased).toBe(false);
+      expect(acknowledgedReadbacks).toBe(0);
+      const running = page.getByRole("heading", {
+        name: "법 조항과 판례를 확인하고 있어요",
+      });
+      if (outcome === "lost_ack") await expect(running).toBeVisible();
+      // A confirmed rejection did not admit the first request. Its refreshed
+      // metadata cannot show the later admission until the held ACK/readback.
+      else await expect(running).toHaveCount(0);
+      expect(requests).toHaveLength(2);
+      expect(readRevisions).toContain(8);
+      expect(requests[0]?.key).toBeTruthy();
+      expect(admissions).toBe(1);
+      expect(receipts.size).toBe(1);
+      if (outcome === "lost_ack") {
+        expect(requests[1]).toEqual(requests[0]);
+        expect(requests[1]?.body.expectedRevision).toBe(7);
+      } else {
+        expect(requests[1]?.body.expectedRevision).toBe(8);
+        expect(requests[1]?.body.requestId).not.toBe(requests[0]?.body.requestId);
+        expect(requests[1]?.key).not.toBe(requests[0]?.key);
+      }
+    } finally {
+      releaseRetryAck();
+    }
+    const receipt = await (await retryResponse).json();
+    expect(receipt).toMatchObject({
+      requestId: requests[1]?.body.requestId,
+      operationId: receipts.get(requests[1]?.key ?? "")?.operationId,
+      workspaceRevision: 8,
+      status: "pending",
+    });
+    await expect.poll(() => acknowledgedReadbacks).toBeGreaterThan(0);
     await expect(
       page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
     ).toBeVisible();
@@ -953,12 +1023,5 @@ for (const outcome of ["lost_ack", "rejected"] as const)
     expect(readRevisions).toContain(8);
     expect(requests[0]?.key).toBeTruthy();
     expect(admissions).toBe(1);
-    if (outcome === "lost_ack") {
-      expect(requests[1]).toEqual(requests[0]);
-      expect(requests[1]?.body.expectedRevision).toBe(7);
-    } else {
-      expect(requests[1]?.body.expectedRevision).toBe(8);
-      expect(requests[1]?.body.requestId).not.toBe(requests[0]?.body.requestId);
-      expect(requests[1]?.key).not.toBe(requests[0]?.key);
-    }
+    expect(receipts.size).toBe(1);
   });
