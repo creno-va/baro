@@ -777,3 +777,28 @@ for (const viewport of [
     await expect(log.locator("article")).toHaveCount(24);
     await expect(page.locator(".case-options")).toHaveCount(0);
   });
+
+test("installed mock SDK reads attachment admission progress without changing the confirmed case", async ({
+  page,
+}) => {
+  await seed(page);
+  const result = await page.evaluate(async (id) => {
+    const path = "/src/client/api/index.ts";
+    const { api } = await import(path);
+    const before = await api.cases.get(id);
+    const progress = await api.rework.getConversationProgress(id, {
+      expectedOwner: "synthetic-owner",
+    });
+    const after = await api.cases.get(id);
+    return { before, progress, after };
+  }, id);
+  expect(result.progress.contractVersion).toBe("conversation-report-progress-v1");
+  expect(result.progress.state.workspaceRevision).toBe(result.before.revision);
+  expect(result.progress.state.summaryConfirmed).toBe(true);
+  expect(result.progress.state.pendingEvidenceIds).toEqual([]);
+  expect(result.progress.state.analysis.status).toBe("not_started");
+  expect(result.progress.state.report.status).toBe("not_started");
+  expect(result.progress.reportContinuation).toBeNull();
+  expect(result.after).toEqual(result.before);
+  expect(await messages(page)).toEqual([]);
+});
