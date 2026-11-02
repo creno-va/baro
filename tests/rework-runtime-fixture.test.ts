@@ -350,6 +350,21 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         "statute",
       ]);
       const before = await stats(f);
+      for (let settle = 0; settle < 2; settle++) {
+        expect(
+          (
+            await f.control(
+              new Request("http://127.0.0.1:4396/__rework-test/settle", {
+                method: "POST",
+                body: "{}",
+              }),
+            )
+          )?.ok,
+        ).toBe(true);
+      }
+      // Waiting for admitted tasks is passive even when the fixture is idle.
+      // It must not admit/retry jobs, research, models, or report generation.
+      expect(await stats(f)).toEqual(before);
       for (let read = 0; read < 3; read++) {
         expect((await json(f, "/rework/conversation")).report.id).toBe(state.report.id);
         expect((await json(f, "/rework/report")).id).toBe(state.report.id);

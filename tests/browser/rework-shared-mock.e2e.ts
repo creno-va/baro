@@ -79,9 +79,12 @@ for (const purpose of ["고소·청구를 준비하고 싶어요", "상대방 �
       name: "입장·절차 확인",
       exact: true,
     });
+    await expect(contextOpener).toBeEnabled();
     await contextOpener.focus();
+    await expect(contextOpener).toBeFocused();
     await page.keyboard.press("Enter");
     const contextDialog = page.getByRole("dialog", { name: "입장과 절차 확인", exact: true });
+    await expect(contextDialog).toBeVisible();
     await expect(
       contextDialog.getByRole("combobox", { name: "사건 입장", exact: true }),
     ).toHaveValue(purpose.startsWith("고소") ? "prepare_claim" : "respond_to_claim");
