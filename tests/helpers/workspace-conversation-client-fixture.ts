@@ -1,5 +1,8 @@
 import { ApiError } from "../../src/client/api/core";
-import type { WorkspaceMockRuntime } from "../../src/client/api/mock/workspace";
+import {
+  ensureMockWorkspace,
+  type WorkspaceMockRuntime,
+} from "../../src/client/api/mock/workspace";
 import type { ConversationClient } from "../../src/components/workspace/ConversationAgent";
 import {
   v2ConversationActionRequestSchema,
@@ -23,11 +26,14 @@ export function workspaceConversationFixture(runtime: WorkspaceMockRuntime): Con
         saved.deletedCaseIds?.includes(id)
       )
         throw new ApiError("NOT_FOUND", "사건을 확인할 수 없어요.");
+      // Match the metadata files read: observe only already admitted mock work
+      // whose existing deadline elapsed. A progress read starts no processing.
+      const observed = runtime.update((value) => ensureMockWorkspace(value, id));
       const state = conversationState("unconfirmed");
-      state.workspaceRevision = item.revision;
+      state.workspaceRevision = observed.case.revision;
       state.caseContext.subjectContext = item.subjectContext;
       state.summaryConfirmed = item.stage === "active";
-      state.pendingEvidenceIds = (saved.files[id] ?? [])
+      state.pendingEvidenceIds = observed.files
         .filter(
           (file) =>
             !file.uploadRejection && ["uploading", "processing", "waiting"].includes(file.status),
