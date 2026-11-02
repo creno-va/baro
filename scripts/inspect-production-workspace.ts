@@ -211,14 +211,18 @@ export async function inspectProductionWorkspace(
       diagnostic = finiteWorkspaceOutput(instance.output);
     }
     let schemaAttempts: unknown;
-    if (row.kind === "chat_response" && row.failure_code === "MODEL_SCHEMA_INVALID") {
+    let policyAttempts: unknown;
+    if (
+      row.kind === "chat_response" &&
+      ["MODEL_SCHEMA_INVALID", "POLICY_REJECTED"].includes(row.failure_code ?? "")
+    ) {
       const observations = await api(`d1/database/${databases[input.environment]}/query`, {
         // Existing numeric observations only: never read wire text, identifiers,
         // amounts, credentials or model output. The ledger remains untouched.
         sql: "SELECT a.attempt,a.state,a.transport,(SELECT CAST(json_extract(q.value,'$.maximumQuantity') AS INTEGER) FROM json_each(a.payload_json,'$.plan.quantities') q WHERE json_extract(q.value,'$.sku')='model_output_tokens') AS maximum_output_tokens,(SELECT CAST(json_extract(q.value,'$.quantity') AS INTEGER) FROM v2_execution_cost_observations o,json_each(o.payload_json,'$.quantities') q WHERE o.attempt_id=a.attempt_id AND json_extract(q.value,'$.sku')='model_output_tokens' ORDER BY o.observed_at DESC LIMIT 1) AS output_tokens FROM v2_execution_admissions a WHERE a.job_id=? AND a.service='model' ORDER BY a.created_at,a.attempt LIMIT 12",
         params: [row.id],
       });
-      schemaAttempts = z
+      const attempts = z
         .array(
           z.object({
             success: z.literal(true),
@@ -239,8 +243,17 @@ export async function inspectProductionWorkspace(
         )
         .length(1)
         .parse(observations)[0]?.results;
+      // Receipts distinguish not-sent from observed responses; they never
+      // establish whether policy rejection came from the provider or an audit.
+      if (row.failure_code === "MODEL_SCHEMA_INVALID") schemaAttempts = attempts;
+      else policyAttempts = attempts;
     }
-    jobs.push({ ...row, diagnostic, ...(schemaAttempts ? { schemaAttempts } : {}) });
+    jobs.push({
+      ...row,
+      diagnostic,
+      ...(schemaAttempts ? { schemaAttempts } : {}),
+      ...(policyAttempts ? { policyAttempts } : {}),
+    });
   }
   let telemetry: unknown = { status: "not_requested" };
   if (rows.length) {

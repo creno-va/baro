@@ -196,6 +196,7 @@ async function preserveReport(page: Page, directory: string, fixture: Fixture) {
 }
 async function addMaterial(
   page: Page,
+  fixture: Fixture,
   expectProcessingFailure = false,
   afterSend?: () => Promise<void>,
   camera = false,
@@ -226,7 +227,28 @@ async function addMaterial(
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+  const completed = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /^\/api\/v2\/cases\/[^/]+\/files\/[^/]+\/complete$/.test(new URL(response.url()).pathname),
+  );
   await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const ack = await completed;
+  expect(ack.status()).toBe(200);
+  const completedFile = z
+    .object({
+      fileId: z.string().min(1),
+      revision: z.number().int().positive(),
+      status: z.enum(["uploaded", "queued", "processing", "ready", "failed"]),
+      processingQueued: z.boolean(),
+    })
+    .parse(await ack.json());
+  expect(completedFile.fileId).toBe(
+    decodeURIComponent(new URL(ack.url()).pathname.split("/").at(-2) ?? ""),
+  );
+  // Await only work already admitted by the real completion request. This
+  // fixture control starts no job or provider call; all UI assertions remain.
+  expect((await fixture.control("settle", {})).ok()).toBe(true);
   await afterSend?.();
   if (expectProcessingFailure) {
     await expect(materials.getByText("처리 실패 · 확인 필요", { exact: true })).toBeVisible();
@@ -424,7 +446,7 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await reportReady(page);
     await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
-    const attachment = await addMaterial(page, true);
+    const attachment = await addMaterial(page, f, true);
     await attachment.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("status")).toContainText(
@@ -702,6 +724,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         await expect(composer).toBeEnabled();
         const attachment = await addMaterial(
           page,
+          f,
           false,
           loseQueuedAck
             ? async () => {

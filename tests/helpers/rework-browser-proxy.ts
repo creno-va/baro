@@ -123,7 +123,11 @@ export async function openReworkBrowserFixture(
           ? "workspace"
           : url.pathname.endsWith("/summary")
             ? "summary"
-            : url.pathname.split("/rework/")[1];
+            : url.pathname.endsWith("/messages")
+              ? "messages"
+              : /\/files(?:\/[^/]+\/complete)?$/.test(url.pathname)
+                ? "file-admission"
+                : url.pathname.split("/rework/")[1];
         if (
           kind &&
           [
@@ -134,6 +138,8 @@ export async function openReworkBrowserFixture(
             "summary-reconciliation/request",
             "summary-reconciliation/cancel",
             "summary-reconciliation/confirm",
+            "messages",
+            "file-admission",
           ].includes(kind)
         ) {
           const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
@@ -147,10 +153,22 @@ export async function openReworkBrowserFixture(
             kind,
             method: request.method(),
             status: response.status(),
+            requestBytes: request.postDataBuffer()?.byteLength,
+            errorCode:
+              body?.error &&
+              typeof body.error === "object" &&
+              "code" in body.error &&
+              typeof body.error.code === "string" &&
+              /^(CONFLICT|VALIDATION_ERROR|STALE_REVISION|UNAVAILABLE|USER_QUOTA_EXCEEDED|CONSENT_REQUIRED|NOT_FOUND|INVALID_STATE|RATE_LIMITED|ROLE_REQUIRED|POLICY_REJECTED)$/.test(
+                body.error.code,
+              )
+                ? body.error.code
+                : undefined,
             expectedW: number(input?.expectedRevision),
             expectedS: number(input?.summaryRevision),
             W: number(body?.workspaceRevision),
-            S: number(body?.revision),
+            S: kind === "file-admission" ? undefined : number(body?.revision),
+            fileRevision: kind === "file-admission" ? number(body?.revision) : undefined,
             confirmedW: number(body?.confirmedWorkspaceRevision),
             confirmedS: number(body?.confirmedSummaryRevision),
             state:
