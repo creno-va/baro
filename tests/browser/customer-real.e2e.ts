@@ -301,7 +301,15 @@ for (const viewport of [
       await page.getByLabel("추가 사실 또는 질문").fill("계정 전환 후 비워야 할 이전 초안");
       sessionUnavailable = true;
       await page.getByRole("button", { name: "보내기", exact: true }).click();
-      await expect(page.getByRole("alert")).toBeVisible();
+      // The agent can independently report a failed read at the same time.
+      // Assert the failed send's recovery surface, not every alert on the page.
+      const sendFailure = page.getByRole("alert").filter({
+        has: page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }),
+      });
+      await expect(sendFailure).toHaveCount(1);
+      await expect(sendFailure).toBeVisible();
+      await expect(sendFailure).toContainText("연결하지 못했어요.");
+      await expect(sendFailure).toContainText("입력한 내용은 보존돼요.");
       await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue(
         "계정 전환 후 비워야 할 이전 초안",
       );
