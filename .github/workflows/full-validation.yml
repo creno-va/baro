@@ -118,6 +118,7 @@ jobs:
         with:
           name: rework-journeys-${{ inputs.target_sha }}
           path: |
+            /tmp/baro-625-journeys/**/protocol.json
             /tmp/baro-625-journeys/**/report.pdf
             /tmp/baro-625-journeys/**/report.html
             /tmp/baro-625-journeys/**/reviewed-draft.txt

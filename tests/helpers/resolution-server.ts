@@ -65,6 +65,7 @@ Bun.serve({
         missingReport?: boolean;
         criminal?: boolean;
         limitedGuide?: boolean;
+        noAnalysis?: boolean;
       };
       if (input.reset) {
         h = resolutionHarness();
@@ -107,6 +108,13 @@ Bun.serve({
           detail:
             "공식 안내가 개정 검토 중입니다. https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=568&ccfNo=5&cciNo=2&cnpClsNo=1 (확인 시점: 2026-11-01T10:00:00.000Z)",
         });
+      if (input.noAnalysis)
+        h.source = {
+          ...h.source,
+          basis: null,
+          analysis: null,
+          report: h.source.report ? { ...h.source.report, stale: true } : null,
+        };
       if (input.owner) {
         ownerId = input.owner;
         h.setAccess(ownerId === "owner");
