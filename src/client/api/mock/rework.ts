@@ -585,6 +585,12 @@ export function createReworkMock(
       }
       if (route === "conversation" && request.method === "GET")
         return mockResponse(await stateFor(id));
+      if (route === "conversation-progress" && request.method === "GET")
+        return mockResponse({
+          contractVersion: "conversation-report-progress-v1",
+          state: await stateFor(id),
+          reportContinuation: null,
+        });
       if (route === "report" && request.method === "GET") return mockResponse(await peek(id));
       if (route === "actions" && request.method === "POST")
         return mockResponse(

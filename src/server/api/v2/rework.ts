@@ -140,45 +140,51 @@ export function createReworkApi(
     z.strictObject({}).parse(c.req.query());
     return c.json(await (await service(c)).get(a.ownerId, opaqueIdSchema.parse(c.req.param("id"))));
   });
-  app.get("/:id/rework/conversation", async (c) => {
-    const a = await access(c);
-    if (a.response) return a.response;
-    z.strictObject({}).parse(c.req.query());
-    const core = await domainCore(c),
-      id = opaqueIdSchema.parse(c.req.param("id")),
-      state = createReworkStateService(
-        core,
-        (await options.stateDependencies?.(c.env, core, a.ownerId)) ?? {
-          peekReport: async (ownerId, id) =>
+  for (const readPath of ["conversation", "conversation-progress"] as const)
+    app.get(`/:id/rework/${readPath}`, async (c) => {
+      const a = await access(c);
+      if (a.response) return a.response;
+      z.strictObject({}).parse(c.req.query());
+      const core = await domainCore(c),
+        id = opaqueIdSchema.parse(c.req.param("id")),
+        dependencies = (await options.stateDependencies?.(c.env, core, a.ownerId)) ?? {
+          peekReport: async (ownerId: string, id: string) =>
             createReportsService(
               core,
               await createCaseReportDependencies(c.env, core, ownerId, id),
             ).peek(ownerId, id),
         },
-      );
-    // Publication can advance the case between the independently fenced reads.
-    // Re-read only this passive snapshot; never replay admission or a mutation.
-    for (let attempt = 0; ; attempt++) {
-      if (attempt) {
-        const fresh = await access(c);
-        if (fresh.response) return fresh.response;
-        if (fresh.ownerId !== a.ownerId || fresh.sessionId !== a.sessionId)
-          return c.json(errorBody(c, "UNAUTHENTICATED", "로그인 상태를 다시 확인해 주세요."), 401);
-      }
-      try {
-        return c.json(await state.get(a.ownerId, id));
-      } catch (error) {
-        if (
-          attempt >= 2 ||
-          !(
-            (error instanceof ReworkError || error instanceof ReportError) &&
-            error.code === "STALE_REVISION"
+        state = createReworkStateService(core, { ...dependencies, sessionId: a.sessionId });
+      // Publication can advance the case between the independently fenced reads.
+      // Re-read only this passive snapshot; never replay admission or a mutation.
+      for (let attempt = 0; ; attempt++) {
+        if (attempt) {
+          const fresh = await access(c);
+          if (fresh.response) return fresh.response;
+          if (fresh.ownerId !== a.ownerId || fresh.sessionId !== a.sessionId)
+            return c.json(
+              errorBody(c, "UNAUTHENTICATED", "로그인 상태를 다시 확인해 주세요."),
+              401,
+            );
+        }
+        try {
+          return c.json(
+            await (readPath === "conversation-progress"
+              ? state.getProgress(a.ownerId, id)
+              : state.get(a.ownerId, id)),
+          );
+        } catch (error) {
+          if (
+            attempt >= 2 ||
+            !(
+              (error instanceof ReworkError || error instanceof ReportError) &&
+              error.code === "STALE_REVISION"
+            )
           )
-        )
-          throw error;
+            throw error;
+        }
       }
-    }
-  });
+    });
   app.get("/:id/rework/report", async (c) => {
     const a = await access(c);
     if (a.response) return a.response;

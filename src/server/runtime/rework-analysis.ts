@@ -418,6 +418,14 @@ export function createLegalAnalysisJobs(
             snapshot,
             failure: null,
             completedAt: clock(),
+            ...(task.continueWithReport
+              ? {
+                  continuationObligation: {
+                    requestId: task.requestId,
+                    expectedReportRevision: task.reportExpectedRevision ?? null,
+                  },
+                }
+              : {}),
             procedureCitations: procedure.citations,
             procedureSources: procedure,
           },
@@ -476,6 +484,14 @@ export function createLegalAnalysisJobs(
             snapshot: null,
             failure,
             completedAt: clock(),
+            ...(task.continueWithReport
+              ? {
+                  continuationObligation: {
+                    requestId: task.requestId,
+                    expectedReportRevision: task.reportExpectedRevision ?? null,
+                  },
+                }
+              : {}),
             procedureCitations: [],
           },
           ...(loaded ? { authority: loaded.authority } : {}),

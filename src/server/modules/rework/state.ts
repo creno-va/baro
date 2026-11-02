@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
 import {
+  type V2ConversationProgress,
   type V2ConversationState,
   type V2LegalAnalysisSnapshot,
   v2ConversationIntentSchema,
+  v2ConversationProgressSchema,
   v2ConversationStateSchema,
   v2ReworkVersionSchema,
 } from "../../../contracts/v2";
@@ -19,6 +21,7 @@ import {
 import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
 import { capturePublicationSourceAuthority } from "../legal-retrieval/v2/publication-authority";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
+import { reportSessionFence } from "../reports/fence";
 import type { WorkspaceContext } from "../workspace/pipeline";
 import { type AnalysisScope, loadAnalysisInput, readAnalysisScope } from "./analysis-input";
 import { createReworkCaseService, ReworkError } from "./case-context";
@@ -92,12 +95,17 @@ export async function reworkAccess(core: V2Core, ownerId: string, id: string, wr
   const access = await readCustomerConsentSnapshot(core.binding, ownerId);
   return ["customer", "lawyer"].includes(access.accountType) && (!write || access.currentConsent);
 }
+type AnalysisSourceAuthority = NonNullable<
+  Awaited<ReturnType<typeof capturePublicationSourceAuthority>>
+>;
+
 /** Current case/scope proof plus exact official bindings. All reads remain local. */
 export async function readPreparedAnalysis(
   core: V2Core,
   a: Actor,
   id: string,
   desiredScope?: AnalysisScope,
+  onAuthority?: (proof: AnalysisSourceAuthority) => void,
 ) {
   // Currentness is a local owner read. A withdrawn processing consent blocks
   // admission/publication, while the previously stored report remains readable.
@@ -177,6 +185,7 @@ export async function readPreparedAnalysis(
     !(await reworkAccess(core, a.ownerId, id))
   )
     throw new ReworkError("STALE_REVISION");
+  onAuthority?.(sourceAuthority);
   return snapshot;
 }
 export async function preparedAnalysisMatchesScope(
@@ -225,14 +234,15 @@ export function createReworkStateService(
   core: V2Core,
   deps: {
     clock?: () => string;
+    sessionId?: string;
     peekReport?: (ownerId: string, id: string) => Promise<ReportSummary | null>;
   } = {},
 ) {
   const now = deps.clock ?? (() => new Date().toISOString()),
     records = createV2ReworkRepository(core),
     workspaces = createV2WorkspaceRepository(core.binding, core.cipher);
-  return {
-    async get(ownerId: string, id: string) {
+  const reader = {
+    async read(ownerId: string, id: string, progress: boolean): Promise<V2ConversationProgress> {
       const a = { ownerId, now: now() };
       if (!(await reworkAccess(core, ownerId, id))) throw new ReworkError("NOT_FOUND");
       // Capture the revision anchor before launching metadata reads. Otherwise
@@ -267,6 +277,7 @@ export function createReworkStateService(
             )
             .first<{ status: string; failure_code: string | null }>()
         : null;
+      let sourceAuthority: AnalysisSourceAuthority | null = null;
       let snapshot = raw?.value.snapshot ?? null;
       let analysis: V2ConversationState["analysis"] = {
         status: "not_started",
@@ -276,7 +287,17 @@ export function createReworkStateService(
         missingItems: [],
       };
       if (raw) {
-        const current = await readPreparedAnalysis(core, a, id, scope);
+        const current = await readPreparedAnalysis(
+          core,
+          a,
+          id,
+          scope,
+          progress
+            ? (proof) => {
+                sourceAuthority = proof;
+              }
+            : undefined,
+        );
         const failureCurrent =
           loaded.input &&
           canonicalAnalysisJson(await analysisBasis(loaded.input)) ===
@@ -418,7 +439,7 @@ export function createReworkStateService(
         !(await reworkAccess(core, ownerId, id))
       )
         throw new ReworkError("STALE_REVISION");
-      return v2ConversationStateSchema(GUIDE_HOSTS).parse({
+      const state = v2ConversationStateSchema(GUIDE_HOSTS).parse({
         contractVersion: v2ReworkVersionSchema.value,
         workspaceRevision: w.workspaceRevision,
         caseContext: context.context,
@@ -444,6 +465,105 @@ export function createReworkStateService(
         },
         intents,
       });
+      if (!progress)
+        return {
+          contractVersion: "conversation-report-progress-v1",
+          state,
+          reportContinuation: null,
+        };
+      // Private metadata can change without advancing W. Fence its exact heads
+      // together with the source proof and current report identity.
+      const proof = sourceAuthority as AnalysisSourceAuthority | null;
+      const endNow = now();
+      const session = reportSessionFence(deps.sessionId);
+      if (
+        !(await core
+          .statement(
+            `SELECT w.id FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND w.revision=? AND ${aliveWorkspace}
+         AND coalesce((SELECT value FROM app_metadata WHERE key='account-type:'||w.owner_id),'customer') IN ('customer','lawyer') ${session.sql}
+         AND (${loaded.authority.sql}) AND (${proof?.sql ?? "1"})
+         AND (SELECT id FROM v2_rework_records WHERE workspace_id=w.id AND kind='analysis' AND entity_id=w.id AND state='published' ORDER BY revision DESC LIMIT 1) IS ?
+         AND (SELECT id FROM v2_rework_records WHERE workspace_id=w.id AND kind='checkpoint' AND entity_id='report-continuation' AND state='published' ORDER BY revision DESC LIMIT 1) IS ?
+         AND (SELECT id FROM v2_reports WHERE workspace_id=w.id AND id NOT LIKE 'export-%' AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='report' AND target_id=v2_reports.id) ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1) IS ?
+         AND (? IS NULL OR EXISTS(SELECT 1 FROM v2_reports WHERE id=? AND workspace_id=w.id AND revision=?))`,
+            [
+              id,
+              ownerId,
+              w.workspaceRevision,
+              ...session.values,
+              ...loaded.authority.values,
+              ...(proof?.values(endNow) ?? []),
+              raw?.id ?? null,
+              continuation?.id ?? null,
+              report?.id ?? null,
+              report?.id ?? null,
+              report?.id ?? null,
+              report?.revision ?? null,
+            ],
+          )
+          .first())
+      )
+        throw new ReworkError("STALE_REVISION");
+      let reportContinuation: V2ConversationProgress["reportContinuation"] = null;
+      const basis = analysis.basis;
+      const terminal = !["not_started", "pending", "running", "stale"].includes(analysis.status);
+      if (!reportReady && terminal && basis) {
+        const obligation = raw?.value.continuationObligation;
+        const checkpoint = continuation?.value;
+        const sameCheckpoint =
+          checkpoint &&
+          canonicalAnalysisJson(checkpoint.basis) === canonicalAnalysisJson(basis) &&
+          checkpoint.expectedReportRevision === (report?.revision ?? null);
+        const obligationCurrent =
+          obligation &&
+          raw &&
+          raw.workspaceRevision <= w.workspaceRevision &&
+          canonicalAnalysisJson(raw.value.basis) === canonicalAnalysisJson(basis) &&
+          obligation.expectedReportRevision === (report?.revision ?? null);
+        if (
+          checkpoint?.registeredWorkspaceRevision !== undefined &&
+          checkpoint.registeredWorkspaceRevision > w.workspaceRevision
+        )
+          throw new ReworkError("STALE_REVISION");
+        const supersedes =
+          sameCheckpoint &&
+          (!obligationCurrent ||
+            checkpoint.requestId === obligation.requestId ||
+            (checkpoint.registeredWorkspaceRevision !== undefined &&
+              checkpoint.registeredWorkspaceRevision >= raw.workspaceRevision));
+        if (sameCheckpoint && checkpoint.status === "pending" && supersedes)
+          reportContinuation = {
+            phase: "registered",
+            requestId: checkpoint.requestId,
+            basis,
+            expectedReportRevision: checkpoint.expectedReportRevision,
+          };
+        else if (obligationCurrent && !supersedes)
+          reportContinuation = {
+            phase: "requested",
+            requestId: obligation.requestId,
+            basis,
+            expectedReportRevision: obligation.expectedReportRevision,
+          };
+        // A legacy pending checkpoint is still a real registration. Its missing
+        // origin revision never turns an old terminal record into a new request.
+        else if (!obligationCurrent && sameCheckpoint && checkpoint.status === "pending")
+          reportContinuation = {
+            phase: "registered",
+            requestId: checkpoint.requestId,
+            basis,
+            expectedReportRevision: checkpoint.expectedReportRevision,
+          };
+      }
+      return v2ConversationProgressSchema(GUIDE_HOSTS).parse({
+        contractVersion: "conversation-report-progress-v1",
+        state,
+        reportContinuation,
+      });
     },
+  };
+  return {
+    get: async (ownerId: string, id: string) => (await reader.read(ownerId, id, false)).state,
+    getProgress: (ownerId: string, id: string) => reader.read(ownerId, id, true),
   };
 }

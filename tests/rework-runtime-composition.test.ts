@@ -15,6 +15,7 @@ import { ReportError } from "../src/server/modules/reports/source";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
 import { createReworkRuntime } from "../src/server/modules/rework/runtime";
 import {
+  createReworkStateService,
   preparedAnalysisMatchesScope,
   readPreparedAnalysis,
 } from "../src/server/modules/rework/state";
@@ -648,4 +649,85 @@ test("automatic preparation retains the real account rate boundary before paid a
   await f.drain();
   expect((await f.runtime.state.get(f.actor.ownerId, f.workspaceId)).report.status).toBe("ready");
   expect(f.calls).toHaveLength(1);
+});
+
+test("opt-in conversation progress preserves the installed DTO and private bounded read gates", async () => {
+  const f = await fixture();
+  const old = await (await f.request("conversation")).json();
+  const response = await f.request("conversation-progress");
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toContain("no-store");
+  const value = (await response.json()) as {
+    contractVersion: string;
+    state: unknown;
+    reportContinuation: unknown;
+  };
+  expect(value).toEqual({
+    contractVersion: "conversation-report-progress-v1",
+    state: old,
+    reportContinuation: null,
+  });
+  expect(Object.hasOwn(old as object, "reportContinuation")).toBe(false);
+  expect((await f.request("conversation-progress?unknown=1")).status).toBe(400);
+  expect(
+    (
+      await f.request("conversation-progress", undefined, {
+        foreignOwner: true,
+        expectedOwner: f.foreign.userId,
+      })
+    ).status,
+  ).toBe(404);
+  expect(
+    (await f.request("conversation-progress", undefined, { expectedOwner: f.foreign.userId }))
+      .status,
+  ).toBe(401);
+  expect(f.calls).toEqual([]);
+  expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
+});
+
+test("progress cannot return after its exact request session disappears without a W change", async () => {
+  let onPeek: () => Promise<null> = async () => null;
+  const f = await fixture("prepare_claim", false, {
+    stateDependencies: async () => ({ peekReport: () => onPeek() }),
+  });
+  const before = f.rev();
+  onPeek = async () => {
+    f.db.sqlite.query("DELETE FROM session WHERE user_id=?").run(f.actor.ownerId);
+    return null;
+  };
+  expect((await f.request("conversation-progress")).status).toBe(401);
+  expect(f.rev()).toBe(before);
+  expect(f.calls).toEqual([]);
+});
+
+test("progress keeps the verified source TTL proof through its final metadata read", async () => {
+  const f = await fixture("prepare_claim", true);
+  const action = await f.request("actions", {
+    requestId: crypto.randomUUID(),
+    expectedRevision: f.rev(),
+    action: "analyze_legal",
+  });
+  expect(action.status).toBe(202);
+  await f.drain();
+  let changed = false;
+  const core: typeof f.core = {
+    ...f.core,
+    statement(sql, values = []) {
+      if (sql.includes("entity_id='report-continuation'")) {
+        f.db.sqlite
+          .query("UPDATE v2_official_sources SET expires_at=?")
+          .run(new Date(Date.parse(f.actor.now) + 30_000).toISOString());
+        changed = true;
+      }
+      return f.core.statement(sql, values);
+    },
+  };
+  const state = createReworkStateService(core, {
+    clock: () => new Date(Date.parse(f.actor.now) + 60_000).toISOString(),
+    peekReport: (owner, id) => f.reports.peek(owner, id),
+  });
+  await expect(state.getProgress(f.actor.ownerId, f.workspaceId)).rejects.toMatchObject({
+    code: "STALE_REVISION",
+  });
+  expect(changed).toBe(true);
 });
