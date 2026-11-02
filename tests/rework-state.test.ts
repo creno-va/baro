@@ -11,7 +11,10 @@ import {
   loadAnalysisInput,
 } from "../src/server/modules/rework/analysis-input";
 import { createReworkCaseService } from "../src/server/modules/rework/case-context";
-import { preparedAnalysisRecordSchema } from "../src/server/modules/rework/records";
+import {
+  preparedAnalysisRecordSchema,
+  reportContinuationSchema,
+} from "../src/server/modules/rework/records";
 import {
   createReworkStateService,
   preparedAnalysisMatchesScope,
@@ -68,6 +71,7 @@ async function publish(
   f: Awaited<ReturnType<typeof fixture>>,
   scope = defaultAnalysisScope(),
   failure = false,
+  continuationObligation?: { requestId: string; expectedReportRevision: number | null },
 ) {
   const loaded = await loadAnalysisInput(f.core, f.actor, f.workspaceId, scope);
   if (!loaded.input) throw new Error("missing input");
@@ -86,6 +90,7 @@ async function publish(
         snapshot: failure ? null : snapshot,
         failure: failure ? "MODEL_UNAVAILABLE" : null,
         completedAt: f.actor.now,
+        ...(continuationObligation ? { continuationObligation } : {}),
         procedureCitations: [],
       },
     },
@@ -361,4 +366,186 @@ test("failure remains failure, consent withdrawal stops current proof, and anoth
   f.db.sqlite.query("DELETE FROM user_consents WHERE user_id=?").run(f.actor.ownerId);
   expect(await readPreparedAnalysis(f.core, f.actor, f.workspaceId)).toBeNull();
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_reports").get()).toEqual({ n: 0 });
+});
+
+for (const failure of [false, true])
+  test(`logical continuation ${failure ? "failure" : "unavailable"} distinguishes registration and terminal history`, async () => {
+    const f = await fixture();
+    const requestId = crypto.randomUUID();
+    const { snapshot } = await publish(f, defaultAnalysisScope(), failure, {
+      requestId,
+      expectedReportRevision: null,
+    });
+    const service = createReworkStateService(f.core, { clock: () => f.actor.now });
+    expect(
+      (await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation?.phase,
+    ).toBe("requested");
+    const repo = createV2ReworkRepository(f.core);
+    let version = 0;
+    const checkpoint = async (status: "pending" | "failed", key = requestId) => {
+      const saved = await repo.write(
+        { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+        {
+          kind: "checkpoint",
+          entityId: "report-continuation",
+          expectedVersion: version,
+          schema: reportContinuationSchema,
+          value: {
+            format: "report-continuation-v1",
+            requestId: key,
+            requestHash: "a".repeat(64),
+            basis: snapshot.basis,
+            expectedReportRevision: null,
+            registeredWorkspaceRevision: f.rev(),
+            status,
+            failure: status === "failed" ? "STORAGE_UNAVAILABLE" : null,
+            errorCode: status === "failed" ? "STORAGE_UNAVAILABLE" : null,
+            reportId: null,
+            reportRevision: null,
+          },
+        },
+      );
+      if (!saved) throw Error("missing synthetic checkpoint");
+      version = saved.revision;
+    };
+    await checkpoint("pending");
+    expect(
+      (await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation?.phase,
+    ).toBe("registered");
+    await checkpoint("failed");
+    expect(
+      (await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation,
+    ).toBeNull();
+    // A distinct explicit retry supersedes the old immutable obligation.
+    const retryId = crypto.randomUUID();
+    await checkpoint("pending", retryId);
+    expect(
+      (await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation?.requestId,
+    ).toBe(retryId);
+    await checkpoint("failed", retryId);
+    expect(
+      (await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation,
+    ).toBeNull();
+  });
+
+test("a legacy analysis without an explicit continuation obligation stays unchanged", async () => {
+  const f = await fixture();
+  await publish(f);
+  const service = createReworkStateService(f.core, { clock: () => f.actor.now });
+  const old = await service.get(f.actor.ownerId, f.workspaceId);
+  const progress = await service.getProgress(f.actor.ownerId, f.workspaceId);
+  expect(progress.state).toEqual(old);
+  expect(progress.reportContinuation).toBeNull();
+  expect(Object.hasOwn(old, "reportContinuation")).toBe(false);
+});
+
+test("same-W continuation metadata replacement invalidates one progress snapshot", async () => {
+  const f = await fixture();
+  const requestId = crypto.randomUUID();
+  const { snapshot } = await publish(f, defaultAnalysisScope(), true, {
+    requestId,
+    expectedReportRevision: null,
+  });
+  const repo = createV2ReworkRepository(f.core);
+  const pending = reportContinuationSchema.parse({
+    format: "report-continuation-v1",
+    requestId,
+    requestHash: "b".repeat(64),
+    basis: snapshot.basis,
+    expectedReportRevision: null,
+    registeredWorkspaceRevision: f.rev(),
+    status: "pending",
+    failure: null,
+    errorCode: null,
+    reportId: null,
+    reportRevision: null,
+  });
+  const registered = await repo.write(
+    { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+    {
+      kind: "checkpoint",
+      entityId: "report-continuation",
+      expectedVersion: 0,
+      schema: reportContinuationSchema,
+      value: pending,
+    },
+  );
+  if (!registered) throw Error("missing synthetic checkpoint");
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let held = false;
+  const core: typeof f.core = {
+    ...f.core,
+    statement(sql, values = []) {
+      const statement = f.core.statement(sql, values);
+      if (!sql.includes("FROM v2_rework_records") || !values.includes("report-continuation"))
+        return statement;
+      return new Proxy(statement, {
+        get(target, property) {
+          if (property === "first")
+            return async (...args: Parameters<typeof target.first>) => {
+              const value = await target.first(...args);
+              if (!held) {
+                held = true;
+                entered.resolve();
+                await release.promise;
+              }
+              return value;
+            };
+          const value = Reflect.get(target, property);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    },
+  };
+  const outcome = createReworkStateService(core, { clock: () => f.actor.now })
+    .getProgress(f.actor.ownerId, f.workspaceId)
+    .then(
+      () => ({ completed: true }),
+      (error: { code?: string }) => ({ completed: false, code: error.code }),
+    );
+  await entered.promise;
+  const before = f.rev();
+  await repo.write(
+    { ...f.actor, workspaceId: f.workspaceId, expectedRevision: f.rev() },
+    {
+      kind: "checkpoint",
+      entityId: "report-continuation",
+      expectedVersion: registered.revision,
+      schema: reportContinuationSchema,
+      value: {
+        ...pending,
+        status: "failed",
+        failure: "STORAGE_UNAVAILABLE",
+        errorCode: "STORAGE_UNAVAILABLE",
+      },
+    },
+  );
+  expect(f.rev()).toBe(before);
+  release.resolve();
+  expect(await outcome).toEqual({ completed: false, code: "STALE_REVISION" });
+});
+
+test("a continuation obligation cannot make a different report CAS or changed case current", async () => {
+  const f = await fixture();
+  await publish(f, defaultAnalysisScope(), false, {
+    requestId: crypto.randomUUID(),
+    expectedReportRevision: 7,
+  });
+  const service = createReworkStateService(f.core, { clock: () => f.actor.now });
+  expect((await service.getProgress(f.actor.ownerId, f.workspaceId)).reportContinuation).toBeNull();
+  await createReworkCaseService(f.core, { clock: () => f.actor.now }).update(
+    f.actor.ownerId,
+    f.workspaceId,
+    crypto.randomUUID(),
+    {
+      expectedRevision: f.rev(),
+      casePurpose: "respond_to_claim",
+      subjectContext: "individual",
+      procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+    },
+  );
+  const changed = await service.getProgress(f.actor.ownerId, f.workspaceId);
+  expect(changed.state.analysis.status).toBe("stale");
+  expect(changed.reportContinuation).toBeNull();
 });

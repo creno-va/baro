@@ -75,6 +75,12 @@ export const preparedAnalysisRecordSchema = z
     snapshot: v2LegalAnalysisSnapshotSchema(GUIDE_HOSTS).nullable(),
     failure: v2FailureCodeSchema.nullable(),
     completedAt: timestampSchema,
+    continuationObligation: z
+      .strictObject({
+        requestId: opaqueIdSchema,
+        expectedReportRevision: revisionSchema.nullable(),
+      })
+      .optional(),
     procedureCitations: z.array(v2OfficialCitationSchema(GUIDE_HOSTS)).max(2),
     procedureSources: procedureSourcesSchema.optional(),
   })
@@ -87,6 +93,7 @@ export const reportContinuationSchema = z
     requestHash: z.string().regex(/^[a-f0-9]{64}$/),
     basis: v2AnalysisBasisSchema,
     expectedReportRevision: revisionSchema.nullable(),
+    registeredWorkspaceRevision: revisionSchema.optional(),
     status: z.enum(["pending", "ready", "failed"]),
     failure: v2FailureCodeSchema.nullable(),
     errorCode: z.string().min(1).max(100).nullable(),

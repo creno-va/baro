@@ -22,7 +22,10 @@ afterEach(() => {
   setSystemTime();
   for (const f of fixtures.splice(0)) f.db.close();
 });
-async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim") {
+async function fixture(
+  purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim",
+  beforeReport?: () => Promise<void>,
+) {
   const f = await reportFixture();
   fixtures.push(f);
   setSystemTime(new Date(f.actor.now));
@@ -142,6 +145,7 @@ async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_
     waitUntil: (p) => pending.push(p),
     prepareReport: async (owner, caseId, requestId, expectedRevision) => {
       continuations.push(requestId);
+      await beforeReport?.();
       await reportContinuation.prepare(owner, caseId, requestId, expectedRevision);
     },
   });
@@ -354,3 +358,57 @@ test("report continuation preserves a human revision and its original CAS across
     f.db.sqlite.query("SELECT count(*) n FROM v2_reports WHERE id NOT LIKE 'export-%'").get(),
   ).toEqual({ n: 2 });
 });
+
+for (const failed of [false, true])
+  test(`atomic ${failed ? "failed" : "completed"} analysis exposes its report request before registration`, async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const f = await fixture("prepare_claim", async () => {
+      entered.resolve();
+      await release.promise;
+    });
+    if (failed) f.outage();
+    const requestId = crypto.randomUUID();
+    const admission = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+      requestId,
+      expectedRevision: f.rev(),
+      continueWithReport: true,
+    });
+    const execution = f.execute(admission.operationId);
+    await entered.promise;
+    const stateService = createReworkStateService(f.core, {
+      clock: () => f.actor.now,
+      peekReport: (owner, id) => f.reports.peek(owner, id),
+    });
+    try {
+      const progress = await stateService.getProgress(f.actor.ownerId, f.workspaceId);
+      expect(progress.reportContinuation).toMatchObject({
+        phase: "requested",
+        requestId,
+        expectedReportRevision: null,
+      });
+      expect(progress.state.analysis.status).toBe(failed ? "failed" : "unavailable");
+      expect(progress.state.report.currentJobId).toBeNull();
+      expect(progress.state.report.status).not.toBe("pending");
+      expect(await stateService.get(f.actor.ownerId, f.workspaceId)).toEqual(progress.state);
+      const raw = await createV2ReworkRepository(f.core).read(
+        f.actor,
+        f.workspaceId,
+        "analysis",
+        f.workspaceId,
+        preparedAnalysisRecordSchema,
+      );
+      expect(raw?.value.continuationObligation).toEqual({
+        requestId,
+        expectedReportRevision: null,
+      });
+    } finally {
+      release.resolve();
+    }
+    await execution;
+    const completed = await stateService.getProgress(f.actor.ownerId, f.workspaceId);
+    expect(completed.reportContinuation).toBeNull();
+    expect(completed.state.report.status).toBe("ready");
+    // The queued PDF job is not an active logical body-generation job.
+    expect(completed.state.report.currentJobId).toBeNull();
+  });

@@ -117,6 +117,7 @@ export function createReportContinuation(
             requestHash: hash,
             basis,
             expectedReportRevision: expectedRevision,
+            registeredWorkspaceRevision: g.expectedRevision,
             status: "pending",
             failure: null,
             errorCode: null,

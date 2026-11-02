@@ -65,6 +65,33 @@ export function v2ConversationStateSchema(guideHosts: readonly string[] = []) {
 }
 export type V2ReworkReportState = z.infer<typeof v2ReworkReportStateSchema>;
 export type V2ConversationState = z.infer<ReturnType<typeof v2ConversationStateSchema>>;
+/** Opt-in logical continuation progress. Neither phase asserts an active job,
+ * lease, provider attempt or permission to retry. Installed state DTOs stay unchanged. */
+export function v2ConversationProgressSchema(guideHosts: readonly string[] = []) {
+  return z
+    .strictObject({
+      contractVersion: z.literal("conversation-report-progress-v1"),
+      state: v2ConversationStateSchema(guideHosts),
+      reportContinuation: z
+        .strictObject({
+          phase: z.enum(["requested", "registered"]),
+          requestId: opaqueIdSchema,
+          basis: v2AnalysisBasisSchema,
+          expectedReportRevision: revisionSchema.nullable(),
+        })
+        .nullable(),
+    })
+    .refine(
+      (p) =>
+        !p.reportContinuation ||
+        (p.state.report.status !== "ready" &&
+          !["not_started", "pending", "running", "stale"].includes(p.state.analysis.status) &&
+          JSON.stringify(p.reportContinuation.basis) === JSON.stringify(p.state.analysis.basis) &&
+          p.reportContinuation.expectedReportRevision === p.state.report.revision),
+      "Continuation must describe an unresolved request for the current report basis",
+    );
+}
+export type V2ConversationProgress = z.infer<ReturnType<typeof v2ConversationProgressSchema>>;
 export const v2ConversationActionResultSchema = z.strictObject({
   contractVersion: v2ReworkVersionSchema,
   requestId: opaqueIdSchema,
