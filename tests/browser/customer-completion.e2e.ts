@@ -149,6 +149,9 @@ test("answer evidence opens source correction, exclusion and exact coverage pers
   await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
   await expect(page.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();
   await page.reload();
+  // Source review is inline: reconnect the saved source instead of assuming
+  // an ephemeral dialog remains open across a document reload.
+  await page.getByRole("link", { name: "합성 원본.txt · 1쪽", exact: true }).click();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue(
     "사용자가 원본을 보고 교정한 합성 문장",
   );
