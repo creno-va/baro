@@ -475,61 +475,70 @@ export function createV2FilesRepository(core: V2Core) {
         parse(opaqueIdSchema, workspaceId);
         parse(z.number().int().min(1).max(50), limit);
         if (afterId) parse(opaqueIdSchema, afterId);
-        const rows = await core
-          .statement(
-            `SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${afterId ? "AND f.id>?" : ""} ORDER BY f.id LIMIT ?`,
-            [workspaceId, actor.ownerId, ...(afterId ? [afterId] : []), limit],
-          )
-          .all<FileRow>();
-        const values = [];
-        for (const row of rows.results) values.push(await fileMetadata(actor, row));
-        const current = await core
-          .statement(
-            `SELECT f.id,f.revision,f.encrypted_payload,f.state,f.current_job_id,f.operation_id,j.status AS processing_status,j.phase AS processing_phase,j.updated_at AS processing_updated_at FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id LEFT JOIN v2_jobs j ON j.id=f.current_job_id AND j.operation_id=f.operation_id AND j.workspace_id=w.id AND j.target_kind='file' AND j.target_id=f.id AND j.target_revision=f.revision AND j.kind='file_processing' AND j.status IN ('queued','running','validating') AND f.state IN ('queued','processing') AND w.status IN ('active','intake') AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=j.operation_id AND o.owner_id=w.owner_id AND o.workspace_id=w.id AND o.kind IN ('file_extract','file_interpretation') AND o.state IN ('admitted','ambiguous')) WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND f.id IN (SELECT value FROM json_each(?))`,
-            [workspaceId, actor.ownerId, JSON.stringify(rows.results.map((row) => row.id))],
-          )
-          .all<
-            Pick<
-              FileRow,
-              "id" | "revision" | "encrypted_payload" | "state" | "current_job_id" | "operation_id"
-            > & {
-              processing_status: string | null;
-              processing_phase: string | null;
-              processing_updated_at: string | null;
-            }
-          >();
-        const result = values.flatMap((value) => {
-          const now = current.results.find((entry) => entry.id === value.id);
-          if (
-            !now ||
-            now.revision !== value.revision ||
-            now.state !== value.status ||
-            now.current_job_id !== value.currentJobId ||
-            now.operation_id !== value.operationId ||
-            now.encrypted_payload !==
-              rows.results.find((row) => row.id === value.id)?.encrypted_payload
-          )
-            return [];
-          return [
-            {
-              ...value,
-              ...(now.processing_status
-                ? {
-                    processing: parse(v2FileProcessingSchema, {
-                      status: now.processing_status,
-                      phase: now.processing_phase,
-                      updatedAt: now.processing_updated_at,
-                    }),
-                  }
-                : {}),
-            },
-          ];
-        });
-        // Array pagination treats a short page as the end. An HTTP caller must
-        // not confuse rows lost at the existing final fence with exhaustion.
-        if (options.requireStablePage && result.length !== rows.results.length)
-          throw new V2RepositoryError("SNAPSHOT_INVALID");
-        return result;
+        // Only a known final-page change may restart this read. Never retry
+        // decryption, schema, database or other failures, or mix old rows into
+        // the fresh page. Queued/processing/ready can change twice in flight.
+        for (let attempt = 0; attempt < (options.requireStablePage ? 3 : 1); attempt++) {
+          const rows = await core
+            .statement(
+              `SELECT f.* FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) ${afterId ? "AND f.id>?" : ""} ORDER BY f.id LIMIT ?`,
+              [workspaceId, actor.ownerId, ...(afterId ? [afterId] : []), limit],
+            )
+            .all<FileRow>();
+          const values = [];
+          for (const row of rows.results) values.push(await fileMetadata(actor, row));
+          const current = await core
+            .statement(
+              `SELECT f.id,f.revision,f.encrypted_payload,f.state,f.current_job_id,f.operation_id,j.status AS processing_status,j.phase AS processing_phase,j.updated_at AS processing_updated_at FROM v2_files f JOIN v2_workspaces w ON w.id=f.workspace_id LEFT JOIN v2_jobs j ON j.id=f.current_job_id AND j.operation_id=f.operation_id AND j.workspace_id=w.id AND j.target_kind='file' AND j.target_id=f.id AND j.target_revision=f.revision AND j.kind='file_processing' AND j.status IN ('queued','running','validating') AND f.state IN ('queued','processing') AND w.status IN ('active','intake') AND EXISTS(SELECT 1 FROM v2_operations o WHERE o.id=j.operation_id AND o.owner_id=w.owner_id AND o.workspace_id=w.id AND o.kind IN ('file_extract','file_interpretation') AND o.state IN ('admitted','ambiguous')) WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace} AND NOT EXISTS(SELECT 1 FROM v2_tombstones WHERE target_kind='file' AND target_id=f.id) AND f.id IN (SELECT value FROM json_each(?))`,
+              [workspaceId, actor.ownerId, JSON.stringify(rows.results.map((row) => row.id))],
+            )
+            .all<
+              Pick<
+                FileRow,
+                | "id"
+                | "revision"
+                | "encrypted_payload"
+                | "state"
+                | "current_job_id"
+                | "operation_id"
+              > & {
+                processing_status: string | null;
+                processing_phase: string | null;
+                processing_updated_at: string | null;
+              }
+            >();
+          const result = values.flatMap((value) => {
+            const now = current.results.find((entry) => entry.id === value.id);
+            if (
+              !now ||
+              now.revision !== value.revision ||
+              now.state !== value.status ||
+              now.current_job_id !== value.currentJobId ||
+              now.operation_id !== value.operationId ||
+              now.encrypted_payload !==
+                rows.results.find((row) => row.id === value.id)?.encrypted_payload
+            )
+              return [];
+            return [
+              {
+                ...value,
+                ...(now.processing_status
+                  ? {
+                      processing: parse(v2FileProcessingSchema, {
+                        status: now.processing_status,
+                        phase: now.processing_phase,
+                        updatedAt: now.processing_updated_at,
+                      }),
+                    }
+                  : {}),
+              },
+            ];
+          });
+          // Array pagination treats a short page as the end. An HTTP caller must
+          // not confuse rows lost at the existing final fence with exhaustion.
+          if (!options.requireStablePage || result.length === rows.results.length) return result;
+        }
+        throw new V2RepositoryError("SNAPSHOT_INVALID");
       });
     },
     async *coverageFragments(actor: Actor, id: string) {
