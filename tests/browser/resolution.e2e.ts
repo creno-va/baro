@@ -571,9 +571,161 @@ for (const code of ["STALE_REVISION", "REVIEW_REQUIRED", "POLICY_REJECTED"] as c
     await page.getByRole("button", { name: "검토용 초안 준비" }).click();
     await expect(page.getByRole("alert")).toContainText("내용이 변경됐어요");
     await expect(page.getByRole("alert")).not.toContainText("작업을 완료하지 못했어요");
+    await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-code", "CONFLICT");
+    await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-http-status", "409");
+    await expect(page.getByRole("alert")).toHaveAttribute("data-action-error-transport", "unknown");
+    expect(await page.getByRole("alert").getAttribute("data-load-error-code")).toBeNull();
     await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
     await expect(page.getByText(/이전 기준의 초안이에요/)).toBeVisible();
     expect(attempts).toBe(1);
     const after = await (await request.get("/fixture/resolution", { headers })).json();
     expect(after).toEqual(before);
+  });
+
+test("diagnostic HTTP load/action channels clear at their own request and success boundaries", async ({
+  page,
+  request,
+}) => {
+  let failLoad = true,
+    holdLoad = false,
+    holdAction = false;
+  let releaseLoad = () => {},
+    releaseAction = () => {};
+  const loadGate = new Promise<void>((resolve) => {
+    releaseLoad = resolve;
+  });
+  const actionGate = new Promise<void>((resolve) => {
+    releaseAction = resolve;
+  });
+  await page.route("**/api/v2/cases/case/rework/resolution", async (route) => {
+    if (route.request().method() === "GET") {
+      if (failLoad)
+        return route.fulfill({
+          status: 503,
+          json: {
+            error: { code: "DEPENDENCY_UNAVAILABLE", message: "SYNTHETIC-DIAGNOSTIC-PRIVATE" },
+          },
+        });
+      if (holdLoad) await loadGate;
+    }
+    await route.continue();
+  });
+  await page.route("**/fixture/save-report", async (route) => {
+    if (holdAction) {
+      await actionGate;
+      return route.fulfill({ json: null });
+    }
+    await route.continue();
+  });
+  try {
+    await page.goto("/?default");
+    const alert = page.getByRole("alert");
+    await expect(alert).toHaveAttribute("data-load-error-code", "UNAVAILABLE");
+    await expect(alert).toHaveAttribute("data-load-error-http-status", "503");
+    await expect(alert).toHaveAttribute("data-load-error-transport", "unknown");
+    expect(await alert.getAttribute("data-action-error-code")).toBeNull();
+    await request.post("/fixture/control", { data: { failDownload: true } });
+    await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+    await expect(alert).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+    await expect(alert).toHaveAttribute("data-action-error-http-status", "503");
+    await expect(alert).toHaveAttribute("data-action-error-transport", "unknown");
+    await expect(alert).toHaveAttribute("data-load-error-http-status", "503");
+    holdAction = true;
+    await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+    await expect.poll(() => alert.getAttribute("data-action-error-code")).toBeNull();
+    await expect(alert).toHaveAttribute("data-load-error-code", "UNAVAILABLE");
+    releaseAction();
+    await expect(page.getByRole("status")).toContainText("저장 요청");
+    expect(await alert.getAttribute("data-action-error-code")).toBeNull();
+    await expect(alert).toHaveAttribute("data-load-error-code", "UNAVAILABLE");
+    failLoad = false;
+    holdLoad = true;
+    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(alert).toHaveCount(0);
+    await expect(page.locator("[data-load-error-code], [data-action-error-code]")).toHaveCount(0);
+    releaseLoad();
+    await expect(page.getByRole("button", { name: /^변호사와 해결/ })).toBeEnabled();
+    await expect(alert).toHaveCount(0);
+    await page.getByRole("button", { name: /^변호사와 해결/ }).click();
+    await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toBeVisible();
+    await expect(alert).toHaveCount(0);
+    expect(await page.content()).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+  } finally {
+    releaseLoad();
+    releaseAction();
+  }
+});
+
+for (const [mode, transport] of [
+  ["timeout", "timeout"],
+  ["abort", "abort"],
+  ["hostile", "unknown"],
+] as const)
+  test(`diagnostic ${mode} never exposes arbitrary fields and is cleared after recovery and owner purge`, async ({
+    page,
+    request,
+  }) => {
+    const consoleMessages: string[] = [];
+    page.on("console", (message) => {
+      consoleMessages.push(message.text());
+    });
+    await page.goto(`/?synthetic-error=${mode}`);
+    const alert = page.getByRole("alert");
+    await expect(alert).toHaveAttribute("data-load-error-code", "unknown");
+    await expect(alert).toHaveAttribute("data-load-error-http-status", "none");
+    await expect(alert).toHaveAttribute("data-load-error-transport", transport);
+    expect(await alert.getAttribute("data-action-error-code")).toBeNull();
+    expect(await page.content()).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+    expect(consoleMessages.join("\n")).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^직접 해결/ })).toBeEnabled();
+    await expect(alert).toHaveCount(0);
+    await request.post("/fixture/control", { data: { failDownload: true } });
+    await page.getByRole("button", { name: /^리포트만 저장/ }).click();
+    await expect(alert).toHaveAttribute("data-action-error-code", "UNAVAILABLE");
+    await expect(alert).toHaveAttribute("data-action-error-http-status", "503");
+    await expect(alert).toHaveAttribute("data-action-error-transport", "unknown");
+    expect(await alert.getAttribute("data-load-error-code")).toBeNull();
+    await request.post("/fixture/control", { data: { owner: "other-owner" } });
+    await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+    await expect(alert).toHaveAttribute("data-load-error-code", "NOT_FOUND");
+    await expect(alert).toHaveAttribute("data-load-error-transport", "unknown");
+    expect(await alert.getAttribute("data-action-error-code")).toBeNull();
+    expect(await page.content()).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+    expect(consoleMessages.join("\n")).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+  });
+
+for (const [mode, transport] of [
+  ["TimeoutError", "timeout"],
+  ["AbortError", "abort"],
+  ["invalid-json", "unknown"],
+] as const)
+  test(`real facade ${mode} preserves finite diagnostics without exposing the original failure`, async ({
+    page,
+  }) => {
+    await page.addInitScript((failure) => {
+      const original = window.fetch.bind(window);
+      let pending = true;
+      window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (pending && url.includes("/rework/resolution")) {
+          pending = false;
+          if (failure === "invalid-json")
+            return Promise.resolve(new Response("SYNTHETIC-DIAGNOSTIC-PRIVATE", { status: 200 }));
+          return Promise.reject(new DOMException("SYNTHETIC-DIAGNOSTIC-PRIVATE", failure));
+        }
+        return original(input, init);
+      }) as unknown as typeof window.fetch;
+    }, mode);
+    await page.goto("/?default");
+    const alert = page.getByRole("alert");
+    await expect(alert).toHaveAttribute("data-load-error-code", "UNAVAILABLE");
+    await expect(alert).toHaveAttribute("data-load-error-http-status", "none");
+    await expect(alert).toHaveAttribute("data-load-error-transport", transport);
+    expect(await alert.getAttribute("data-action-error-code")).toBeNull();
+    expect(await page.content()).not.toContain("SYNTHETIC-DIAGNOSTIC-PRIVATE");
+    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^직접 해결/ })).toBeEnabled();
+    await expect(alert).toHaveCount(0);
   });

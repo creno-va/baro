@@ -18,6 +18,7 @@ import {
 import { downloadBlob } from "../reports/download";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { type ResolutionErrorDiagnostic, resolutionErrorDiagnostic } from "./error-diagnostic";
 import "../../styles/resolution.css";
 
 type Options = { expectedOwner: string; signal: AbortSignal };
@@ -127,6 +128,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const [needsConsent, setNeedsConsent] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [loadDiagnostic, setLoadDiagnostic] = useState<ResolutionErrorDiagnostic | null>(null);
+  const [actionDiagnostic, setActionDiagnostic] = useState<ResolutionErrorDiagnostic | null>(null);
   const [notice, setNotice] = useState("");
   const [pendingChoice, setPendingChoice] = useState<typeof selected>(null);
   const sequence = useRef(0),
@@ -196,9 +199,11 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setNotice("");
     setError("");
     setLoadError("");
+    setLoadDiagnostic(null);
+    setActionDiagnostic(null);
   }, []);
   const handleFailure = useCallback(
-    (error: unknown) => {
+    (error: unknown, source: "load" | "action" = "action") => {
       const code = (error as { code?: string })?.code;
       if (code === "NOT_FOUND" || code === "UNAUTHENTICATED") purge();
       else if (code === "STALE_REVISION" || code === "CONFLICT")
@@ -206,6 +211,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           current ? { ...current, status: current.basis ? "stale" : "not_ready" } : null,
         );
       else if (code === "CONSENT_REQUIRED") setNeedsConsent(true);
+      const diagnostic = resolutionErrorDiagnostic(error);
+      if (source === "load") setLoadDiagnostic(diagnostic);
+      else setActionDiagnostic(diagnostic);
       setError(failureMessage(error));
     },
     [purge],
@@ -232,6 +240,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const accept = useCallback((next: V2ResolutionState) => {
     hasState.current = true;
     setLoadError("");
+    setLoadDiagnostic(null);
+    setActionDiagnostic(null);
     setState(next);
     setSelected(next.selection);
     setIds(next.selectedFileIds);
@@ -266,6 +276,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     setBusy(true);
     setError("");
     setLoadError("");
+    setLoadDiagnostic(null);
+    setActionDiagnostic(null);
     try {
       const options = await verify(epoch);
       const next = await client.getResolution(props.caseId, options);
@@ -291,9 +303,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           code !== "UNAUTHENTICATED" &&
           code !== "CONSENT_REQUIRED" &&
           code !== "REVIEW_REQUIRED"
-        )
+        ) {
           setLoadError(metadataMessage);
-        else handleFailure(e);
+          setLoadDiagnostic(resolutionErrorDiagnostic(e));
+        } else handleFailure(e, "load");
       }
     } finally {
       finish(epoch);
@@ -350,6 +363,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     lock.current = epoch;
     setBusy(true);
     setError("");
+    setActionDiagnostic(null);
+    if (!loadError) setLoadDiagnostic(null);
     setNotice("");
     try {
       const options = await verify(epoch, write);
@@ -557,7 +572,16 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         ))}
       </div>
       {(loadError || error) && (
-        <div role="alert" className="resolution-error">
+        <div
+          role="alert"
+          className="resolution-error"
+          data-load-error-code={loadDiagnostic?.code}
+          data-load-error-http-status={loadDiagnostic?.httpStatus}
+          data-load-error-transport={loadDiagnostic?.transport}
+          data-action-error-code={actionDiagnostic?.code}
+          data-action-error-http-status={actionDiagnostic?.httpStatus}
+          data-action-error-transport={actionDiagnostic?.transport}
+        >
           {loadError && <p>{loadError}</p>}
           {error && <p>{error}</p>}
           <Button variant="outline" disabled={busy} onClick={() => void load()}>

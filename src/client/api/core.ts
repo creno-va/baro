@@ -61,8 +61,15 @@ export async function apiRequest(path: string, init: RequestInit = {}): Promise<
   if (apiMode === "real") {
     try {
       return await apiFetch(path, init);
-    } catch {
-      throw new ApiError("UNAVAILABLE", "연결하지 못했어요. 다시 시도해 주세요.", true);
+    } catch (error) {
+      const name = error instanceof Error || error instanceof DOMException ? error.name : null;
+      throw new ApiError(
+        "UNAVAILABLE",
+        "연결하지 못했어요. 다시 시도해 주세요.",
+        true,
+        undefined,
+        name === "TimeoutError" ? "timeout" : name === "AbortError" ? "abort" : "unknown",
+      );
     }
   }
   const incoming = new Request(
