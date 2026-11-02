@@ -507,6 +507,7 @@ export function createV2FilesRepository(core: V2Core) {
                 processing_updated_at: string | null;
               }
             >();
+          let nonProcessingTransition = false;
           const result = values.flatMap((value) => {
             const now = current.results.find((entry) => entry.id === value.id);
             if (
@@ -517,8 +518,32 @@ export function createV2FilesRepository(core: V2Core) {
               now.operation_id !== value.operationId ||
               now.encrypted_payload !==
                 rows.results.find((row) => row.id === value.id)?.encrypted_payload
-            )
+            ) {
+              const prior = rows.results.find((row) => row.id === value.id);
+              // Recover only the same admitted processing run moving forward.
+              // Expiry, replacement, edits, deletion and access loss retain the
+              // original failure. Staged completion may skip prior failed R's.
+              const sameRun =
+                now &&
+                prior &&
+                prior.current_job_id !== null &&
+                ["queued", "processing"].includes(prior.state) &&
+                now.operation_id === prior.operation_id;
+              const progress =
+                sameRun &&
+                prior.state === "queued" &&
+                now.state === "processing" &&
+                now.revision === prior.revision &&
+                now.current_job_id === prior.current_job_id &&
+                now.encrypted_payload === prior.encrypted_payload;
+              const published =
+                sameRun &&
+                now.state === "ready" &&
+                now.revision > prior.revision &&
+                now.current_job_id === null;
+              if (!progress && !published) nonProcessingTransition = true;
               return [];
+            }
             return [
               {
                 ...value,
@@ -537,6 +562,7 @@ export function createV2FilesRepository(core: V2Core) {
           // Array pagination treats a short page as the end. An HTTP caller must
           // not confuse rows lost at the existing final fence with exhaustion.
           if (!options.requireStablePage || result.length === rows.results.length) return result;
+          if (nonProcessingTransition) throw new V2RepositoryError("SNAPSHOT_INVALID");
         }
         throw new V2RepositoryError("SNAPSHOT_INVALID");
       });

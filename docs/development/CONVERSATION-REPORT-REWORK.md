@@ -4,9 +4,9 @@
 
 2026-11-02 KST 기준의 최종 통합 상태는 이 절과 [#621의 실제 실행 기록](https://github.com/creno-va/baro/issues/621)을 따른다. 아래 연혁의 “현재/남은” 표현은 각 기록 당시의 상태이며 실패 증거도 보존한다.
 
-- 이 기록 작성 시 PR628~712와715 총86개가 CI 성공 후 main에 병합됐다. 현재 main은 `4a186fa5e4acebbc3ff984e0f066f75acba4de11`(PR715)이다.715 exact `407462c0c05d77fc5aff62045d645d705f80cf2b`의 Quality41398601692·native41398601734 SUCCESS/CLEAN·최신 main ancestry를 확인해2026-11-02T06:19:24Z 정상 squash했다. 선행711·712의 main CI도 성공했다.00의 검증 원본 유지 PR713을 이 main 위에서 갱신하고 마지막 exact head CI·정상 병합·최종 main SHA 수동 full/같은SHApreview 결과는[#621 실제 실행 기록](https://github.com/creno-va/baro/issues/621)을 정본으로 남긴다.
+- 2026-11-02T07:20Z 재검증 기준 PR628~713와715 총87개가 병합됐고 main은 `3f83809289393f3bda47b4e3cfe991b043b8a742`(PR713)다.713 exact095c07cd의 Quality41399772310·Legal41399772356·native41399772289 SUCCESS와 최신 main ancestry를 확인해 정상 squash했다. main CI41400416558·native41400416516도 성공했다. 같은SHA 수동 full41400468393은 core/native/browser=실패/성공/실패이며 최종 완료가 아니다.00은 재개한#714의 만료 처리 계약을 수리하고03·04·05는 명시 배정한 독립 browser 실패를 수리한다. 마지막 exact head·새 최종 main SHA full/같은SHA preview 결과는[#621 실행 기록](https://github.com/creno-va/baro/issues/621)을 정본으로 남긴다.
 - c9 수동 full41376225616은 종료/실패다. core5209 PASS/8 SKIP/0 FAIL·183276 assertions, DB/eval/build/local workerd는 통과한 뒤 raw audit16건(7 high/5 moderate/4 low)에서 실패했다. native는 실제 Docker PDF/ZIP2 PASS/174 assertions와 전체 native 검사를 통과했다. browser는727 PASS/2 FAIL이며 두 실패 모두 Chromium/WebKit의 방어→리포트만 저장 사진 첨부 link 확인이다. CSP 미도달·최종 join SKIP·성공 영수증0을 보존한다. ACA의722 PASS/3 WebKit FAIL 및 첫1fb의60분 취소와 구분한다.
-- 00은 `codex/621-resolution-source-proof`에서 이 문서를 단독 소유한다. 공통 source GET 현재성707·초기 metadata/정상 basisnull 구분708·별도 진행 계약709·실제 facade 오류 진단710은 통합됐다.04의 새 진행 계약·유한 대기·명시 재확인 소비711도 통합됐고 담당은 동결한다.00은 후속 요청 내부 검증 원본 유지713을 검증한다.706의 로컬 actual28/shared4 PASS는 c9 full의 사진2 FAIL을 대체하지 않는다.05 공식 원문 링크704와 SHA별 PDF QA를 보존하며 다른 담당은 동결한다.
+- 00은 `codex/714-metadata-failure-boundary`에서 이 문서를 단독 소유한다. 공통 source GET 현재성707·초기 metadata/정상 basisnull 구분708·별도 진행 계약709·실제 facade 오류 진단710은 통합됐다.04의 새 진행 계약·유한 대기·명시 재확인 소비711도 통합됐고 담당은 동결한다.00은 후속 요청 내부 검증 원본 유지713을 검증한다.706의 로컬 actual28/shared4 PASS는 c9 full의 사진2 FAIL을 대체하지 않는다.05 공식 원문 링크704와 SHA별 PDF QA를 보존하며 다른 담당은 동결한다.
 - c9 preview41376461804는 schema0022·9개 route smoke와 비공개 배포7482690686/status21137146315에 성공했다. recovery artifact13110939344의 정확한5개 필드·238B 원본·SHA와 시각을 검증했으며 복원 훈련 성공으로 표현하지 않는다. production 배포는 없다.
 - 사용자 직접 로그인 뒤 합성 청구·방어의 실제 intake/요약과 청구 재조율·원격 TXT 처리를 확인했다. 실제 분석 POLICY_REJECTED·queued send409를 보존하고 새 모델 재시도로 숨기지 않았다. c9에서 읽기 상태와 inline 리포트를 확인했고 실제 청구/방어 PDF 각각3쪽을 내려받아 Poppler 전페이지 시각 검토했다. 양쪽 입장 각각 웹/HTML의13개 본문과 PDF의 정규화된13개 본문이 일치했다. PDF 전후 기존 policy model receipt3건과 chat job 집합이 바뀌지 않았다. 실제 법률 분석 성공·전체 OAuth/철회·기기·법률 승인을 주장하지 않는다. 방어 후속 선택은710 preview에서 client timeout을 확인했다. 쓰기 없는 재조회에서는 세 선택이 미선택 상태였으며 어느 façade 단계인지는 아직 미확정이다.712의 유한 단계와713의 요청 원본 유지를 새 최종 preview에서 구분해 검증한다.
 - 비용 관측 전용, 실제 AI200/일·초기2×3·기술/시간/시도·owner/동의/암호화/삭제/revision/lease/독립 audit·ledger/hold를 유지한다. main 직접 push·새 채팅/하위 에이전트/자동화 생성·production 배포는 하지 않았다.
@@ -557,3 +557,20 @@ report-rendering.yml의 기존 pull_request/push filter가 v2-files.ts 변경을
 
 
 715 main4a186fa5를 정상 merge한713 최종 로컬 후보는 bun ci·quick(모바일534/domain510 PASS+4 opt-in SKIP/tooling708·7084)·DB drift/fresh/upgrade·build/dry-run/local workerd와 문서139 Markdown/18 ADR 검사를 재통과했다. root 최종 문서/코드 commit의 정확CI와 main SHA는#621에 남긴다. 마지막 PR을 아직 병합하지 않은 이 작성 시점의 상위/담당 실제 외부 인수 상태는 OPEN이며, 원래 c9 full의audit16·사진2 FAIL과8ae native filelist503, 실제 POLICY_REJECTED·selection_update client timeout을 성공으로 덮지 않는다.
+
+
+## 3f 최종 후보 검증과 만료 실패 경계 수리
+
+3f 수동 full41400468393의 core125130990791은 전체Bun5283 PASS/8 SKIP/1 FAIL·183815 assertions로 실패했다. 기존 v2-expired-undispatched-job HTTP/client 회귀가 만료로 failed 전환된 첫 metadata read의503을 기대했지만715의 넓은 재조회가200으로 흡수했다. 이 실행은 audit 단계에 도달하지 않았으며 과거c9 audit16건과 구분한다.00은 순수 구현 이슈714를 다시 OPEN/in-progress로 바꾸고 clean3f의 별도 브랜치에서 수리한다. 기존 HTTP 실패 assertion은 변경하지 않는다.
+
+stable page의 재조회는 같은 operation·이미 입장된 job의 queued→processing(동일R/job/cipher) 또는 queued/processing→ready(상승R/jobnull)라는 관측 전후 변화에만 허용한다. publication은 실패한 staging namespace를 건너뛸 수 있어 R+1로 제한하지 않는다. 만료·failed·삭제·owner 이탈·역방향·job/operation 대체·동일R cipher 교체·ready 내용 편집이 하나라도 섞인 페이지는 즉시 기존 SNAPSHOT_INVALID→503이다. 다음 명시 읽기는 새 failed/ready 사실을 읽을 수 있다. 기존2쿼리 일반 읽기·전체 페이지3회 한도·네 번째 읽기 금지·실제crypto/DB오류 전파·strict DTO/설치 client는 그대로다. 이는 읽기 전후 head 비교이며 숨은 중간 이력 전체의 새 증명이 아니다.
+
+변경별 집중88 PASS/66487 assertions는 실제 expiry HTTP, 실제 writeProcessed publication, 상승R4, 혼합 페이지와8개 실패/대체 경계를 포함한다.03은 정확 diff를 읽기 전용 검토해 추가 finding0을 회신했다. bun ci·quick(모바일534/domain510 PASS+4 opt-in SKIP/tooling708·7084)과 DB/build를 통과했다. 첫 전체 로컬Bun은 Python pypdf 환경을 누락해 PDF 링크 검사1건에서 실패했다(5295 PASS/6 SKIP/1 FAIL·183928 assertions). 별도 고정 검증 Python을 PATH에 넣은 같은 PDF 검사1 PASS/7 assertions를 확인했으며 전체 재검증을 수행한다. 이 환경 실패를 제품 변경으로 우회하지 않았다.
+
+3f native125130990770은 실제 Docker PDF/ZIP2 PASS/174 assertions와 전체 native 검사를 통과했다. artifact13121715634(692031B, sha2566b9d9302e074a5190e63e17d8fa6060928cce61a2eba1c48c3c77b5d7474c073)를00이 한 번 내려받고05가 복사본을 검토했다. 합성 청구/방어 각4쪽과 구형3쪽 총11쪽을 새 Poppler 렌더로 시각 검토했고 본문172/172·bbox2141 outside0·공식URI2개씩·UTF16 quote58/89·PDF/ZIP receipt/hash/CRC/110B 원본을 확인했다. 원본14개 전후 hash는 동일하며00도 contact sheet 전쪽과 대표 원본 페이지를 확인했다. 실제 법률 인수의 대체가 아니다.
+
+3f browser125130990457은 네 그룹에서9건 실패했다:03 소유 chat-attachments3,05 소유 report-rework-state lost_ack1,04 소유 shared-mock 양입장 Chromium/WebKit4 및 workspace 첨부link1이다. 실패/현재계약 원인에 따라 독립 PR로 수리하며 timeout이나 assertion을 임의로 완화하지 않는다. artifact13122817433(2528003B, sha256fe25068c506968cc9838ff27750275f4ed82e918d7b101630d59375194c9749c)를00이 한 번 내려받았다.132개(12PDF/12HTML/36PNG/68JSON/4TXT)와 protocol을 보존하고 최종 join SKIP·성공receipt0을 유지한다.
+
+3f preview41400980459는 Foundation06:43:05.882Z의 exactSHA/schema0022와 endpoint06:43:07.527Z의9 routes, 비공개 deployment7485985598/status21147945712 success를 확인했다. recovery artifact13121795010(333B archive, sha256d93cbf10fc2478b6ceaecf2094ec03da6f26aa3bd133d729aa022e70e88e2dd9)의238B 원본·정확5필드·preview/DB/SHA를 확인했다. 원본SHA d48a0206b3a1d2112ae4d6fbc33fcde422b6db5418c6c1f4b9d776113f9c8181·관측2026-11-02T06:36:49.246Z이며 bookmark 값은 비공개다. 복원 drill·전체full 성공 증거가 아니다.
+
+이 preview에서 사용자 직접 로그인한 기존 합성 방어 사건의 “변호사와 해결” 선택1회가 성공해 상담 준비/공유 범위 화면을 확인했다. 쓰기 없는 별도 정상 GET의 저장 결과는 revision2/selection lawyer/basisnull/status not_ready/draftnull이다. 분석 미준비를 준비 완료로 바꾸지 않았고 식별정보·실제 사건 ID·토큰을 이슈/artifact에 남기지 않는다. 이전 client timeout과 미선택 결과도 보존한다. 새 모델/법률 재시도·변호사 연락/제출·production 배포는 없다. 청구 화면의 미전송 입력/첨부는 그대로 보존한다.
