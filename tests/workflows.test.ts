@@ -46,7 +46,7 @@ test("full validation actually scans committed history before a later advisory f
     await Bun.file(".github/workflows/full-validation.yml").text(),
   ) as {
     jobs: {
-      validation: {
+      core: {
         steps: {
           name?: string;
           uses?: string;
@@ -58,8 +58,8 @@ test("full validation actually scans committed history before a later advisory f
       };
     };
   };
-  const steps = workflow.jobs.validation.steps;
-  const full = steps.findIndex((step) => step.run === "bun run validate:full");
+  const steps = workflow.jobs.core.steps;
+  const full = steps.findIndex((step) => step.run === "bun run validate full-core");
   const scanner = steps.findIndex(
     (step) => step.run === "gitleaks git --log-opts=HEAD --redact=100 --no-banner --log-level warn",
   );
@@ -224,8 +224,13 @@ test("automatic CI runs only the fast source gate; heavy validation remains expl
   expect(
     Object.values(manual.jobs)
       .flatMap((entry) => entry.steps)
-      .some((step) => step.run === "bun run validate:full"),
-  ).toBe(true);
+      .flatMap((step) => (step.run?.startsWith("bun run validate full-") ? [step.run] : []))
+      .sort(),
+  ).toEqual([
+    "bun run validate full-browser",
+    "bun run validate full-core",
+    "bun run validate full-native",
+  ]);
 });
 
 interface DeploymentStep {
@@ -517,4 +522,85 @@ test("legal reliability PR checks use only offline fixtures and cannot receive p
   expect(workflow).toContain("tests/legal-reliability.test.ts");
   expect(workflow).toContain("tests/browser/precedents.config.ts");
   expect(workflow).toContain("persist-credentials: false");
+});
+
+test("full sections remain independent and only their successful join can issue release evidence", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/full-validation.yml").text(),
+  ) as {
+    jobs: Record<
+      string,
+      {
+        name: string;
+        needs?: string[];
+        if: string;
+        env: Record<string, string>;
+        permissions?: Record<string, string>;
+        "timeout-minutes": number;
+        "continue-on-error"?: boolean;
+        steps: (DeploymentStep & { "continue-on-error"?: boolean })[];
+      }
+    >;
+  };
+  expect(Object.keys(workflow.jobs).sort()).toEqual(["browser", "core", "native", "validation"]);
+  for (const [key, job] of Object.entries(workflow.jobs)) {
+    expect(job.if).toBe("github.ref == 'refs/heads/main'");
+    expect(job["timeout-minutes"]).toBe(60);
+    expect(job["continue-on-error"]).toBeUndefined();
+    expect(job.env.TARGET_SHA).toBe("$" + "{{ inputs.target_sha }}");
+    expect(job.steps.find((step) => step.name === "Checkout")?.with?.ref).toBe(
+      "$" + "{{ inputs.target_sha }}",
+    );
+    const guard = job.steps.findIndex(
+      (step) => step.name === "Verify actual checkout and main ancestry",
+    );
+    expect(guard).toBeGreaterThan(0);
+    expect(job.steps[guard]?.run).toContain('test "$(git rev-parse HEAD)" = "$TARGET_SHA"');
+    expect(job.steps[guard]?.run).toContain(
+      'git merge-base --is-ancestor "$TARGET_SHA" origin/main',
+    );
+    expect(job.steps.every((step) => step["continue-on-error"] === undefined)).toBe(true);
+    if (key !== "validation") {
+      expect(job.needs).toBeUndefined();
+      const command = job.steps.findIndex((step) => step.run === `bun run validate full-${key}`);
+      expect(command).toBeGreaterThan(guard);
+      expect(job.steps[command]?.if).toBeUndefined();
+      expect(job.steps.some((step) => step.name === "Record actual tested candidate")).toBe(false);
+      expect(job.steps.find((step) => step.uses?.startsWith("actions/upload-artifact@"))?.if).toBe(
+        "always()",
+      );
+    } else {
+      expect(job.needs).toEqual(["core", "browser", "native"]);
+      expect(job.env.FULL_VALIDATION_SECTIONS).toBe("$" + "{{ toJSON(needs) }}");
+      expect(job.permissions).toEqual({ contents: "read", actions: "read" });
+      const verify = job.steps.findIndex(
+        (step) => step.run === "bun scripts/full-validation-receipt.ts --check",
+      );
+      const record = job.steps.findIndex((step) => step.name === "Record actual tested candidate");
+      expect(verify).toBeGreaterThan(guard);
+      expect(record).toBeGreaterThan(verify);
+      expect(job.steps[record]?.if).toBeUndefined();
+      expect(job.steps.at(-1)?.if).toBeUndefined();
+    }
+  }
+  const browser = workflow.jobs.browser,
+    native = workflow.jobs.native;
+  expect(
+    browser?.steps.some((step) =>
+      step.run?.includes("playwright install --with-deps chromium webkit"),
+    ),
+  ).toBe(true);
+  const nativeSeed = native?.steps.find(
+    (step) => step.name === "Verify native report and originals after final integration",
+  );
+  expect(nativeSeed?.env).toEqual({
+    BARO_REWORK_NATIVE_FIXTURE: "true",
+    BARO_REPORT_EXPORT_ARTIFACT_DIR: ".wrangler/report-export-budget-final",
+  });
+  expect(nativeSeed?.run).toBe("bun test tests/reports-export-query-budget.test.ts");
+  expect(
+    native?.steps.find((step) => step.name === "Build pinned report runtime for acceptance")?.run,
+  ).toBe(
+    "docker build --target office-runtime -f services/file-processor/Dockerfile -t baro-report-rendering .",
+  );
 });

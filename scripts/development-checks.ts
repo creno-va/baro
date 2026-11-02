@@ -95,6 +95,14 @@ export function browserTargets(files: string[], available: string[]): string[] {
     [/^tests\/helpers\/(?:conversation-agent|rework-)[^/]*\.(?:ts|tsx)$/, caseFlows],
     [/^tests\/browser\/lawyer-public\.config\.ts$/, lawyerFlows],
     [
+      /^tests\/(?:browser\/resolution\.config\.ts|helpers\/resolution-[^/]+\.(?:ts|tsx))$/,
+      /\/resolution\.e2e\.ts$/,
+    ],
+    [
+      /^src\/(?:components\/resolution\/|styles\/resolution\.css|server\/modules\/resolution\/)/,
+      /\/resolution\.e2e\.ts$/,
+    ],
+    [
       /^tests\/browser\/integration\.config\.ts$/,
       /\/(?:shell-integration|lawyer-api-mock)\.e2e\.ts$/,
     ],
@@ -231,10 +239,12 @@ export async function runBrowserTargets(
   const reworkTargets = targets.filter((path) =>
     reworkGroups.some((group) => group.target === path),
   );
-  const mockTargets = targets.filter((path) =>
-    /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
-      path,
-    ),
+  const mockTargets = targets.filter(
+    (path) =>
+      !existsSync(path.replace(".e2e.ts", ".config.ts")) &&
+      /\/(shell-integration|lawyer-api-mock|intake103|conversation-home|workspace-shared|customer-completion|workspace|reports-integrated)\.e2e\.ts$/.test(
+        path,
+      ),
   );
   const corpusTargets = targets.filter((path) => path.endsWith("/evals.e2e.ts"));
   const customerRealTargets = targets.filter((path) => path.endsWith("/customer-real.e2e.ts"));

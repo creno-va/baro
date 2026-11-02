@@ -831,6 +831,11 @@ bun ci 후 validate:quick과 해당 기능의 인증·소유권·CAS·멱등 재
 
 모든 구현·문서가 병합된 최종 main SHA를 명시해 GitHub 수동 validate:full을 한 차례
 수행한다. 실제 checkout SHA를 증거에 기록하고 CI에서는 유료 호출을 하지 않는다.
+수동 full은 core/browser/native 독립 job으로 전체 명령을 실행한다. 각 job의60분·기술
+한도를 유지하고 같은 run/attempt/dispatcher와 실제 checkout 검사를 결합한다. 세 구간과
+완료된 결합 job이 모두 성공한 경우에만 성공 영수증을 발행한다. 실패·취소·skip·서로
+다른 재실행의 결과를 합쳐 성공으로 만들지 않는다. 로컬 `validate:full`은 기존 전체
+순서이며 독립 실행이 필요한 경우 `validate full-core|full-browser|full-native`를 쓴다.
 같은 SHA를 preview에 배포해 합성 계정·자료로 업로드, 리포트·다운로드·삭제,
 디렉터리를 제한 검증한다. production은 같은 SHA와 #71의 유효한 운영자 승인 기록이
 필수다. 승인자는 hyunhomon 또는 hwangeunchan, 정확한 SHA와 최대24시간 유효기간을 검사한다.

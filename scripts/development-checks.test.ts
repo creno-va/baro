@@ -35,7 +35,38 @@ test("browser failures do not hide later adapter failures and still reject the c
   expect(failure).not.toContain("tests/browser/precedents.e2e.ts");
   expect(calls[0]?.env).toBeUndefined();
   expect(calls[1]?.env).toBeUndefined();
-  expect(calls[2]?.env?.PUBLIC_API_MODE).toBe("mock");
+  // The dedicated config owns its mock server and environment.
+  expect(calls[2]?.command).toContain("tests/browser/intake103.config.ts");
+  expect(calls[2]?.env).toBeUndefined();
+});
+
+test("dedicated mock configurations execute once with their own managed server", async () => {
+  const calls: string[][] = [];
+  const targets = ["tests/browser/intake103.e2e.ts", "tests/browser/reports-integrated.e2e.ts"];
+  await runBrowserTargets(targets, async (command) => {
+    calls.push(command);
+    return 0;
+  });
+  expect(calls).toHaveLength(targets.length);
+  for (const target of targets) {
+    expect(calls.filter((command) => command.includes(target))).toEqual([
+      ["bunx", "playwright", "test", "--config", target.replace(".e2e.ts", ".config.ts"), target],
+    ]);
+  }
+});
+
+test("follow-up fixture, configuration and product changes retain the managed browser flow", () => {
+  for (const source of [
+    "tests/browser/resolution.config.ts",
+    "tests/helpers/resolution-server.ts",
+    "tests/helpers/resolution-fixture.tsx",
+    "src/components/resolution/ResolutionPanel.tsx",
+    "src/styles/resolution.css",
+    "src/server/modules/resolution/service.ts",
+  ])
+    expect(
+      browserTargets([source], ["tests/browser/resolution.e2e.ts", "tests/browser/auth.e2e.ts"]),
+    ).toEqual(["tests/browser/resolution.e2e.ts"]);
 });
 
 test("browser validation succeeds only when every selected group succeeds", async () => {
