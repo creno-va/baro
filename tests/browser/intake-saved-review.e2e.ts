@@ -245,11 +245,11 @@ test("clean final admission failure retries only advance with the same revision"
   await expect(
     page.getByRole("button", { name: "저장하고 요약 보기", exact: true }),
   ).toBeDisabled();
-  await page
-    .locator("form")
-    .evaluate((form) =>
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
-    );
+  await page.getByRole("textbox", { name: "답변", exact: true }).evaluate((answer) => {
+    const form = answer.closest("form");
+    if (!form) throw new Error("Synthetic answer form missing");
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
   expect(await calls(page)).toEqual({ advance: 1, save: 0 });
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
   await expect.poll(() => calls(page)).toEqual({ advance: 2, save: 0 });
@@ -304,11 +304,11 @@ test("pending clean final advance locks repeated submission and ignores a signed
   await expect(
     page.getByRole("status").filter({ hasText: "사건 요약을 정리하고 있어요" }),
   ).toBeVisible();
-  await page
-    .locator("form")
-    .evaluate((form) =>
-      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
-    );
+  await page.getByRole("textbox", { name: "답변", exact: true }).evaluate((answer) => {
+    const form = answer.closest("form");
+    if (!form) throw new Error("Synthetic answer form missing");
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
   expect(await calls(page)).toEqual({ advance: 1, save: 0 });
   await page.evaluate(() => {
     localStorage.setItem(
@@ -361,19 +361,23 @@ for (const retryable of [true, false]) {
 test("generation recovery has two actions with outline resume and space above the panel", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await savedIntake(page);
   const panel = page.locator(".intake-recovery");
-  await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(panel.getByRole("button")).toHaveText(["다시 시도", "나중에 이어하기"]);
   await expect(panel.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveClass(
     /ui-button--outline/,
   );
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
-    const action = await page.locator(".intake-scene-navigation").boundingBox();
-    const recovery = await panel.boundingBox();
-    if (!action || !recovery) throw new Error("Missing synthetic recovery layout");
-    expect(recovery.y - action.y - action.height).toBeGreaterThanOrEqual(24);
+    // Measure both boxes in one frame: viewport/focus scrolling between two
+    // protocol reads must not be mistaken for overlap inside the same form.
+    const gap = await panel.evaluate((recovery) => {
+      const action = recovery.parentElement?.querySelector(".intake-scene-navigation");
+      if (!action) throw new Error("Missing synthetic recovery layout");
+      return recovery.getBoundingClientRect().top - action.getBoundingClientRect().bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(24);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
       .toBe(true);
@@ -383,6 +387,36 @@ test("generation recovery has two actions with outline resume and space above th
       animations: "disabled",
     });
   }
+});
+
+test("case purpose and context keep visible inset keyboard focus without pointer frames", async ({
+  page,
+  browserName,
+}) => {
+  await savedIntake(page, { failed: false });
+  await page.goto("/app");
+  const nextControlKey =
+    browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+  for (const name of ["고소·청구를 준비하고 싶어요", "개인"]) {
+    const radio = page.getByRole("radio", { name, exact: true });
+    const label = radio.locator("..");
+    await expect(radio).toBeEnabled();
+    const idleShadow = await label.evaluate((node) => getComputedStyle(node).boxShadow);
+    await radio.click();
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
+    await expect(label).toHaveCSS("outline-style", "none");
+    await expect(label).toHaveCSS("box-shadow", idleShadow);
+    await page.keyboard.press("Tab");
+    // Establish normal keyboard modality before macOS WebKit's modifier-based
+    // navigation, which includes its otherwise skipped compact radio controls.
+    if (nextControlKey !== "Tab") await page.keyboard.press(nextControlKey);
+    await radio.focus();
+    await expect(radio).toBeFocused();
+    await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "keyboard");
+    await expect(label).toHaveCSS("outline-style", "none");
+    await expect(label).toHaveCSS("box-shadow", /inset/);
+  }
+  expect(await calls(page)).toEqual({ advance: 0, save: 0 });
 });
 
 test("resume later saves the current draft before leaving and never generates", async ({

@@ -1108,10 +1108,8 @@
   border-color: #2364e8;
   background: #eff5ff;
 }
-.conversation-purpose label:focus-within,
-.conversation-composer .conversation-context label:focus-within {
-  outline: 2px solid #2364e8;
-  outline-offset: 3px;
+:root[data-focus-input="keyboard"] .conversation-purpose label:has(input:focus-visible) {
+  box-shadow: inset 0 0 0 2px #526178;
 }
 .conversation-purpose input {
   accent-color: #2364e8;
