@@ -5,6 +5,8 @@ export class ApiError extends Error implements ApiErrorView {
     message: string,
     public retryable = false,
     public readonly httpStatus?: number,
+    /** Local transport classification only; never copied from an HTTP body. */
+    public readonly transportFailure?: "timeout" | "abort" | "unknown",
   ) {
     super(message);
     this.name = "ApiError";

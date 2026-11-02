@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cacheClient, responseError } from "./core";
+import { ApiError, apiRequest, cacheClient, responseError } from "./core";
 
 test("real API errors preserve consent and security-check boundaries without echoing server details", async () => {
   const consent = await responseError(
@@ -53,4 +53,51 @@ test("a failed load retries but an API failure retains its domain instance and p
   expect(await get()).toBe(loaded);
   expect((await get()).key).toBe("same-request");
   expect(loads).toBe(2);
+});
+
+test("real transport failures keep only a finite class without changing retry or HTTP semantics", async () => {
+  const originalFetch = globalThis.fetch;
+  const privateText = "SYNTHETIC_PRIVATE_BODY_URL_TOKEN_STACK";
+  const cases = [
+    { error: new DOMException(privateText, "TimeoutError"), kind: "timeout" },
+    { error: new DOMException(privateText, "AbortError"), kind: "abort" },
+    { error: new Error(privateText), kind: "unknown" },
+    {
+      error: { name: "TimeoutError", message: privateText, stack: privateText, httpStatus: 503 },
+      kind: "unknown",
+    },
+  ];
+  let calls = 0;
+  try {
+    for (const sample of cases) {
+      globalThis.fetch = (() => {
+        calls++;
+        return Promise.reject(sample.error);
+      }) as typeof fetch;
+      const error = await apiRequest("/api/synthetic-transport", {
+        method: "PATCH",
+        body: "{}",
+      }).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      if (!(error instanceof ApiError)) throw Error("missing normalized transport failure");
+      expect(error.code).toBe("UNAVAILABLE");
+      expect(error.retryable).toBe(true);
+      expect(error.httpStatus).toBeUndefined();
+      expect(error.transportFailure).toBe(sample.kind);
+      expect(error.message).toBe("연결하지 못했어요. 다시 시도해 주세요.");
+      expect(JSON.stringify(error)).not.toContain(privateText);
+      expect(Object.hasOwn(error, "cause")).toBe(false);
+    }
+    expect(calls).toBe(cases.length);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  const server = await responseError(
+    Response.json({ error: { code: "UNAVAILABLE", message: privateText } }, { status: 503 }),
+  );
+  expect(server.httpStatus).toBe(503);
+  expect(server.transportFailure).toBeUndefined();
+  expect(server.message).not.toContain(privateText);
 });
