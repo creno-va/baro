@@ -93,6 +93,12 @@ test("foreign owner or aborted reads cannot observe or advance prior-account pro
   await expect(
     client.getConversationProgress("example", { signal: AbortSignal.abort() }),
   ).rejects.toBeDefined();
+  runtime.update((state) => {
+    if (state.session.user) state.session.user.id = "other-owner";
+  });
+  await expect(client.getConversationProgress("example")).rejects.toMatchObject({
+    code: "NOT_FOUND",
+  });
   expect(runtime.read().files.example?.[0]?.status).toBe("processing");
   expect(runtime.read().cases.example?.revision).toBe(8);
 });
