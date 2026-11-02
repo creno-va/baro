@@ -28,6 +28,7 @@ import { makeMockQuestions } from "./cases";
 import { createReconciliationMock } from "./mock-reconciliation";
 import { createReportsMockHandler, ReportMockError, type ReportMockState } from "./reports";
 import {
+  ensureMockWorkspace,
   mockFailure,
   mockResponse,
   requireMockCase,
@@ -455,7 +456,7 @@ export function createReworkMock(
   return async (request: Request): Promise<Response | null> => {
     const parsed = new URL(request.url),
       match =
-        /^\/api\/v2\/cases\/([^/]+)\/rework\/(context|conversation|actions|report|resolution(?:\/draft)?)$/.exec(
+        /^\/api\/v2\/cases\/([^/]+)\/rework\/(context|conversation|conversation-progress|actions|report|resolution(?:\/draft)?)$/.exec(
           parsed.pathname,
         );
     if (parsed.pathname !== "/api/v2/cases/rework" && !match) return reconciliation(request);
@@ -585,12 +586,17 @@ export function createReworkMock(
       }
       if (route === "conversation" && request.method === "GET")
         return mockResponse(await stateFor(id));
-      if (route === "conversation-progress" && request.method === "GET")
+      if (route === "conversation-progress" && request.method === "GET") {
+        update((state) => {
+          owned(state as MockState, id, false, expected);
+          ensureMockWorkspace(state, id);
+        });
         return mockResponse({
           contractVersion: "conversation-report-progress-v1",
           state: await stateFor(id),
           reportContinuation: null,
         });
+      }
       if (route === "report" && request.method === "GET") return mockResponse(await peek(id));
       if (route === "actions" && request.method === "POST")
         return mockResponse(
