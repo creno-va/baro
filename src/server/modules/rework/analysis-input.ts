@@ -14,7 +14,7 @@ import {
   utf8Bytes,
   type V2Core,
 } from "../../db/v2-core";
-import { createV2FilesRepository } from "../../db/v2-files";
+import { storedFileMetadataSchema } from "../../db/v2-file-metadata";
 import { researchRevisionBase } from "../../db/v2-research-revision";
 import type { ReworkWriteGuard } from "../../db/v2-rework";
 import { createV2WorkspaceRepository } from "../../db/v2-workspace";
@@ -69,8 +69,7 @@ export async function loadAnalysisInput(
   scope: AnalysisScope = defaultAnalysisScope(),
 ) {
   scope = legalAnalysisInputSchema.shape.scope.parse(scope);
-  const repo = createV2WorkspaceRepository(core.binding, core.cipher),
-    files = createV2FilesRepository(core);
+  const repo = createV2WorkspaceRepository(core.binding, core.cipher);
   const workspace = await repo.findWorkspace(a, id);
   if (!workspace) throw new ReworkError("NOT_FOUND");
   const context = await createReworkCaseService(core, { clock: () => a.now }).get(a.ownerId, id);
@@ -113,6 +112,8 @@ export async function loadAnalysisInput(
       )
       .first());
   const limits: string[] = [];
+  // Private projection of the exact frozen headers; never part of model input.
+  const evidenceMetadata: Record<string, { revision: number; name: string }> = Object.create(null);
   if (rows.some((r) => r.state === "failed" && !scope.excludedFileIds.includes(r.id)))
     limits.push(
       "처리에 실패한 자료는 분석 근거로 사용하지 않았어요. 자료 화면에서 실제 오류와 원본을 확인해 주세요.",
@@ -126,6 +127,7 @@ export async function loadAnalysisInput(
       pendingEvidenceIds,
       authority,
       limits,
+      evidenceMetadata,
     };
   }
   let text = "",
@@ -146,18 +148,23 @@ export async function loadAnalysisInput(
   let materialBytes = 0;
   for (const row of rows) {
     if (row.state !== "ready" || scope.excludedFileIds.includes(row.id)) continue;
-    const metadata = await files.metadata(a, row.id);
-    if (!metadata?.manifestSnapshotId) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
+    const metadata = await core.decrypt(
+      "v2_files",
+      row.id,
+      a.ownerId,
+      row.revision,
+      row.encrypted_payload,
+      storedFileMetadataSchema,
+    );
+    if (!row.manifest_snapshot_id) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
     const manifestRevision = await core
-      .statement("SELECT revision FROM v2_private_snapshots WHERE id=?", [
-        metadata.manifestSnapshotId,
-      ])
+      .statement("SELECT revision FROM v2_private_snapshots WHERE id=?", [row.manifest_snapshot_id])
       .first<number>("revision");
     const manifest = manifestRevision
       ? await readSnapshot(
           core,
           a,
-          metadata.manifestSnapshotId,
+          row.manifest_snapshot_id,
           "file_manifest",
           row.id,
           manifestRevision,
@@ -165,6 +172,7 @@ export async function loadAnalysisInput(
         )
       : null;
     if (!manifest) throw new ReworkError("DEPENDENCY_UNAVAILABLE");
+    evidenceMetadata[row.id] = { revision: row.revision, name: metadata.name };
     includedEvidence.push({
       fileId: row.id,
       fileRevision: row.revision,
@@ -267,5 +275,13 @@ export async function loadAnalysisInput(
     scope,
   });
   if (!(await current())) throw new ReworkError("STALE_REVISION");
-  return { workspace, context: context.context, input, pendingEvidenceIds, authority, limits };
+  return {
+    workspace,
+    context: context.context,
+    input,
+    pendingEvidenceIds,
+    authority,
+    limits,
+    evidenceMetadata,
+  };
 }
