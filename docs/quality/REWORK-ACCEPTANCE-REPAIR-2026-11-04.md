@@ -48,3 +48,17 @@ raw advisory 차이는 보존하며 새 수리는 별도 이슈/PR로 연결한�
 `validate:build` 전체와 실제 local workerd의 익명 login HTML 부팅이 성공했다.
 초기 sandbox 부팅 실패·동시 파일검사 timeout, PATH의 sh/unzip 부재 및 단독 재검사
 성공을 구분한다. 현재 최종 quick 전체는 도구 PATH를 바로잡아 재실행 중이다.
+
+## 완료 작업의 실제 시도 수
+
+operator inspector의 CLI는 성공한 질문·요약·분석·자료 처리 작업도 기존 모델 admission
+receipt로 확인한다. 최근 작업12개/작업당 receipt12개 창을 명시하며, 별도 read-only
+집계는 그 창 밖의 작업까지 포함한 전체 workspace model admission을 state/transport별로
+센다. prepared/not_sent와 unknown/null은 실제 공급자 성공으로 바꾸지 않는다. 완료 job의
+모델 receipt와 분석·PDF 성공은 별도로 해석한다. SQL은 고정 parameterized SELECT이고
+원장·hold·관측 시각/금액·실행을 변경하거나 공급자를 호출하지 않는다. prompt·원문·출력·
+credential·오류 stack/SQL은 내보내지 않는다. 기존 실패용 policy/schema 필드는 유지한다.
+
+실제 migrated schema에서 SELECT를 실행하고 독립 API envelope로 완료 작업4종·불명확한
+receipt·범위·과거 창의 집계·private field 제거를 검증한다. 이 검증은 합성/offline이며
+실제 원격 시도 수는 병합 후 같은 SHA preview의 read-only 검사로 기록한다.

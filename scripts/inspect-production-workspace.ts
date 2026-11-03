@@ -18,6 +18,11 @@ const inputSchema = z.object({
   workspaceId: z.uuid(),
   environment: z.enum(["production", "preview"]).default("production"),
 });
+const modelReceiptGroupSchema = z.object({
+  state: z.enum(["prepared", "dispatched", "final", "unknown"]),
+  transport: z.enum(["not_sent", "response", "unknown", "provider_error"]).nullable(),
+  receipts: z.number().int().min(0).max(1_000_000),
+});
 const jobSchema = z.object({
   id: opaqueIdSchema,
   runtime_instance_id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -151,6 +156,7 @@ export async function inspectProductionWorkspace(
   raw: unknown,
   fetcher: (input: string, init?: RequestInit) => Promise<Response> = fetch,
   observe: (stage: "release" | "jobs" | "workflow" | "telemetry") => void = () => {},
+  options: { completedModelReceipts?: boolean } = {},
 ) {
   const input = inputSchema.parse(raw);
   observe("release");
@@ -216,9 +222,14 @@ export async function inspectProductionWorkspace(
     }
     let schemaAttempts: unknown;
     let policyAttempts: unknown;
+    let modelAttempts: unknown;
     if (
-      row.kind === "chat_response" &&
-      ["MODEL_SCHEMA_INVALID", "POLICY_REJECTED"].includes(row.failure_code ?? "")
+      (options.completedModelReceipts &&
+        ["intake_questions", "intake_summary", "chat_response", "file_processing"].includes(
+          row.kind,
+        )) ||
+      (row.kind === "chat_response" &&
+        ["MODEL_SCHEMA_INVALID", "POLICY_REJECTED"].includes(row.failure_code ?? ""))
     ) {
       const observations = await api(`d1/database/${databases[input.environment]}/query`, {
         // Existing numeric observations only: never read wire text, identifiers,
@@ -250,14 +261,51 @@ export async function inspectProductionWorkspace(
       // Receipts distinguish not-sent from observed responses; they never
       // establish whether policy rejection came from the provider or an audit.
       if (row.failure_code === "MODEL_SCHEMA_INVALID") schemaAttempts = attempts;
-      else policyAttempts = attempts;
+      else if (row.failure_code === "POLICY_REJECTED") policyAttempts = attempts;
+      if (options.completedModelReceipts) modelAttempts = attempts;
     }
     jobs.push({
       ...row,
       diagnostic,
       ...(schemaAttempts ? { schemaAttempts } : {}),
       ...(policyAttempts ? { policyAttempts } : {}),
+      ...(modelAttempts ? { modelAttempts } : {}),
     });
+  }
+  // Job detail is a bounded recent window. These finite aggregates cover every
+  // model admission in this workspace, including older jobs outside that window.
+  // A prepared or unknown receipt is never promoted to a successful paid call.
+  let modelReceipts:
+    | {
+        scope: "all_workspace_model_admissions";
+        receiptCount: number;
+        byStateAndTransport: z.infer<typeof modelReceiptGroupSchema>[];
+        recentJobWindow: number;
+        attemptsPerJobWindow: number;
+      }
+    | undefined;
+  if (options.completedModelReceipts) {
+    const total = await api(`d1/database/${databases[input.environment]}/query`, {
+      sql: "SELECT a.state,a.transport,COUNT(*) AS receipts FROM v2_execution_admissions a JOIN v2_jobs j ON j.id=a.job_id WHERE j.workspace_id=? AND a.service='model' GROUP BY a.state,a.transport LIMIT 20",
+      params: [input.workspaceId],
+    });
+    const byStateAndTransport =
+      z
+        .array(
+          z.object({
+            success: z.literal(true),
+            results: z.array(modelReceiptGroupSchema).max(20),
+          }),
+        )
+        .length(1)
+        .parse(total)[0]?.results ?? [];
+    modelReceipts = {
+      scope: "all_workspace_model_admissions" as const,
+      receiptCount: byStateAndTransport.reduce((sum, row) => sum + row.receipts, 0),
+      byStateAndTransport,
+      recentJobWindow: 12,
+      attemptsPerJobWindow: 12,
+    };
   }
   let telemetry: unknown = { status: "not_requested" };
   if (rows.length) {
@@ -391,6 +439,7 @@ export async function inspectProductionWorkspace(
     observedAt: new Date().toISOString(),
     jobs,
     telemetry,
+    ...(modelReceipts ? { modelReceipts } : {}),
   };
 }
 if (import.meta.main) {
@@ -404,6 +453,7 @@ if (import.meta.main) {
       },
       fetch,
       (stage) => console.info(JSON.stringify({ event: "production_inspection_stage", stage })),
+      { completedModelReceipts: true },
     );
     await Bun.write(
       ".wrangler/readiness/production-inspection.json",
