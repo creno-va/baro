@@ -27,7 +27,9 @@ test.each(["intake_questions", "intake_summary", "chat_response", "file_processi
         output_tokens: null,
       },
     ];
-    const totals = [
+    const totals: NonNullable<
+      Awaited<ReturnType<typeof inspectProductionWorkspace>>["modelReceipts"]
+    >["byStateAndTransport"] = [
       { state: "final", transport: "response", receipts: 2 },
       { state: "prepared", transport: "not_sent", receipts: 1 },
       { state: "unknown", transport: "unknown", receipts: 1 },
