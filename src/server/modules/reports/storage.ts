@@ -615,10 +615,14 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
       // The legacy text writer is an explicit preview test adapter only. Real
       // runtimes must render the same HTML document as the review screen.
       const renderPdf = deps.renderPdf;
+      let renderAuthorizationQueries = 0;
       const pdf = renderPdf
         ? await reportReadStep("render", () =>
             renderPdf(html, {
-              authorize,
+              authorize: async () => {
+                renderAuthorizationQueries++;
+                await authorize();
+              },
               lease: l,
               reportId: r.id,
               operationId: r.operation_id,
@@ -673,6 +677,7 @@ export function createReportExports(core: V2Core, deps: ReportDependencies, port
         sourceRows: fence.rows,
         reportFiles: data.body.selectedFiles.length,
         applicationCostLimitsEnabled: core.applicationCostLimitsEnabled,
+        renderAuthorizationQueries,
       });
       applyReportWorkPlan(core, workPlan);
       const pdfArtifact = await reportReadStep("persist", () =>

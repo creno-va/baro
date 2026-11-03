@@ -25,6 +25,8 @@ export function reportWorkPlan(input: {
   originalParts?: number;
   sourceRows: number;
   reportFiles: number;
+  /** Measured one-query live fences during this render, independent of network chunk size. */
+  renderAuthorizationQueries?: number;
   applicationCostLimitsEnabled?: boolean;
 }): ReportWorkPlan {
   const chunks = Math.ceil(input.pdfBytes / 262144) + Math.ceil((input.zipBytes ?? 0) / 262144);
@@ -37,8 +39,12 @@ export function reportWorkPlan(input: {
   // retain all three original passes and the unchanged hard request ceiling.
   const originalPartQueries = input.applicationCostLimitsEnabled === false ? 10 : 32;
   const originalFileQueries = input.applicationCostLimitsEnabled === false ? 20 : 24;
+  const renderAuthorizationQueries = input.renderAuthorizationQueries ?? 0;
+  if (!Number.isSafeInteger(renderAuthorizationQueries) || renderAuthorizationQueries < 0)
+    throw new ReportError("EXPORT_LIMIT_EXCEEDED");
   const queries =
     300 +
+    renderAuthorizationQueries +
     5 * chunks +
     input.reportFiles * 15 +
     3 *
