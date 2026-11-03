@@ -10,6 +10,7 @@ import { GUIDE_HOSTS } from "../v2/registry";
 import { createV2LegalRetrieval } from "../v2/service";
 import type { Transport } from "../v2/transport";
 import { type LegalAnalysisInput, legalAnalysisInputSchema } from "./context";
+import type { LegalAnalysisFailure } from "./diagnostics";
 import { analysisPrecedentDiscovery } from "./discovery";
 import {
   createAutomaticLegalAnalysis,
@@ -24,6 +25,7 @@ export type LegalAnalysisGatewayPhase =
   | "workspace_legal_analysis"
   | "workspace_legal_audit";
 export type LegalAnalysisRuntimeDependencies = {
+  onStage?: (stage: LegalAnalysisFailure["stage"]) => void;
   core: V2Core;
   env: Pick<Env, "LAW_API_OC">;
   guard: WorkspaceGuard;
@@ -170,6 +172,7 @@ export function createLegalAnalysisRuntimeAdapter(deps: LegalAnalysisRuntimeDepe
             (await authorize()) && sources.bindCitation(guard(), citation),
         });
         service = createAutomaticLegalAnalysis({
+          ...(deps.onStage ? { onStage: deps.onStage } : {}),
           model: {
             plan: (value) => call("workspace_legal_plan", value),
             analyze: (value) => call("workspace_legal_analysis", value),

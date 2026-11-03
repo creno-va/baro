@@ -55,6 +55,13 @@ object is not itself a durable publication receipt. Shared DB, API, client and r
 registration are owned by00; task orchestration is04; report copying/export is05;
 official procedural guidance is06 using the existing registry-approved guide key.
 
+Quotation coordinates use the existing exact-excerpt resolver before independent audit.
+Only a unique verbatim match can move numeric coordinates; text, citation identity,
+ambiguous/missing text, source binding and the final claim validator are unchanged.
+Private workflow failures retain finite stage/reason and sanitized audit/claim diagnostics.
+They contain no drafts, prompts, source text, identifiers or offsets. Older generic
+POLICY_REJECTED receipts do not retrospectively establish which policy check failed.
+
 One factory coalesces concurrent/same-input calls and retains a failed attempt instead
 of silently starting it again. A reused result still rechecks authorization and source
 authority, and caller mutation cannot change its cached result. Cross-instance replay,

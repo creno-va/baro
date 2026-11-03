@@ -1,5 +1,12 @@
 # 에이전트 실행 기준
 
+2026-11-04 개편 실제 인수 후속은 현재 `BARO 개편 최종 오류 수정·실제 인수` 채팅이
+#723(분석·진단·preview 인수), #724(새 보안 수리)로 수행한다. 시작 main65f2f867의
+기존 실패와 #620/#621 및 담당 이슈의 미완료 상태를 보존한다.
+[새 조사·수리 증거](../quality/REWORK-ACCEPTANCE-REPAIR-2026-11-04.md)를 따르며
+정상 PR 병합 후 같은 SHA preview에서 검증한다. production 배포와 새 채팅·하위 에이전트·
+자동화·Goal 생성은 하지 않는다. 과거 generic POLICY_REJECTED를 공급자 거절로 단정하지 않는다.
+
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·
 전역 shell/token·이 문서/PRD/ADR를 단독 소유하고01~06은 명시 파일을 소유한다. 사용자가 만든 여섯 채팅과

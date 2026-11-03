@@ -5,6 +5,64 @@ import {
 } from "../scripts/inspect-production-workspace";
 import { createTestDatabase } from "./helpers/d1";
 
+test("analysis inspection keeps only stage/reason and finite audit evidence", () => {
+  const result = finiteWorkspaceOutput({
+    analysisFailure: {
+      stage: "audit",
+      reason: "audit_rejected",
+      draft: "private-draft",
+      token: "secret",
+      auditFailure: {
+        pass: false,
+        legalClaimsSupported: false,
+        strategyDetected: false,
+        unsupportedFactCount: 1,
+        unsupportedFactIds: ["private-id"],
+        findings: [
+          {
+            severity: "critical",
+            code: "unsupported_legal_claim",
+            target: "source_claim",
+            basis: "verified_source",
+            sourceClaimReason: "quotation_text_or_span_mismatch",
+            text: "private-text",
+          },
+        ],
+      },
+    },
+  });
+  expect(result?.analysisFailure).toMatchObject({ stage: "audit", reason: "audit_rejected" });
+  expect(
+    finiteWorkspaceOutput({
+      analysisFailure: {
+        stage: "audit",
+        reason: "audit_rejected",
+        auditFailure: {
+          pass: false,
+          legalClaimsSupported: false,
+          strategyDetected: false,
+          unsupportedFactCount: 0,
+          findings: [
+            {
+              severity: "critical",
+              code: "unsupported_legal_claim",
+              target: "source_claim",
+              basis: "verified_source",
+              sourceClaimReason: "source_semantics_mismatch",
+            },
+          ],
+        },
+      },
+    })?.analysisFailure?.auditFailure?.findings,
+  ).toHaveLength(1);
+  expect(JSON.stringify(result)).not.toMatch(/private|secret|token|draft|unsupportedFactIds/);
+  expect(
+    finiteWorkspaceOutput({
+      analysisFailure: { stage: "private-stage", reason: "audit_rejected" },
+    }),
+  ).toEqual({});
+});
+
 test("schema failure inspection projects existing timing and numeric usage without model calls", async () => {
   const db = await createTestDatabase();
   const time = new Date().toISOString();
