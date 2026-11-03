@@ -41,6 +41,7 @@ async function fixture(renderChecks: number, revokeAt?: number) {
     p.actor.ownerId,
     () => p.actor.now,
   ).costs;
+  if (!costs) throw new Error("SYNTHETIC_STORAGE_COST_ADAPTER_UNAVAILABLE");
   let checked = 0;
   const reports = createReportsService(core, {
     ...deps,
