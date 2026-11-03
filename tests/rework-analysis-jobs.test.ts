@@ -264,6 +264,29 @@ test("AI200 and actual missing configuration stop admission; missing cost observ
   expect(f.db.sqlite.query("SELECT count(*) n FROM v2_jobs").get()).toEqual({ n: 0 });
   expect(f.calls).toHaveLength(0);
 });
+test("report continuation failure keeps completed analysis and a separate finite diagnostic", async () => {
+  const f = await fixture("prepare_claim", async () => {
+    throw new Error("private continuation detail");
+  });
+  const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+    requestId: crypto.randomUUID(),
+    expectedRevision: f.rev(),
+    continueWithReport: true,
+  });
+  const result = await f.execute(admitted.operationId);
+  expect(result).toMatchObject({
+    status: "completed",
+    analysisFailure: { stage: "report_continuation", reason: "unknown" },
+  });
+  expect(JSON.stringify(result)).not.toContain("private continuation detail");
+  expect(
+    f.db.sqlite.query("SELECT status FROM v2_jobs WHERE id=?").get(admitted.operationId),
+  ).toEqual({ status: "completed" });
+  expect(await readPreparedAnalysis(f.core, f.actor, f.workspaceId)).toMatchObject({
+    status: "unavailable",
+  });
+});
+
 test("provider failure remains a failed encrypted analysis and retains every admitted execution", async () => {
   const f = await fixture();
   f.outage();
@@ -272,7 +295,10 @@ test("provider failure remains a failed encrypted analysis and retains every adm
     expectedRevision: f.rev(),
     continueWithReport: false,
   });
-  expect((await f.execute(admitted.operationId))?.status).toBe("failed");
+  expect(await f.execute(admitted.operationId)).toMatchObject({
+    status: "failed",
+    analysisFailure: { stage: "planning", reason: "dependency_unavailable" },
+  });
   const raw = await createV2ReworkRepository(f.core).read(
     f.actor,
     f.workspaceId,

@@ -12,6 +12,10 @@ import {
   canonicalAnalysisJson,
   type LegalAnalysisInput,
 } from "../modules/legal-retrieval/analysis/context";
+import {
+  type LegalAnalysisFailure,
+  safeLegalAnalysisFailure,
+} from "../modules/legal-retrieval/analysis/diagnostics";
 import { createLegalAnalysisRuntimeAdapter } from "../modules/legal-retrieval/analysis/runtime-adapter";
 import { textHash } from "../modules/legal-retrieval/service";
 import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2/publication-authority";
@@ -320,6 +324,7 @@ export function createLegalAnalysisJobs(
         )
           throw new ModelError("MODEL_UNAVAILABLE");
       };
+      let stage: LegalAnalysisFailure["stage"] = "context";
       try {
         loaded = await loadAnalysisInput(
           core,
@@ -350,6 +355,9 @@ export function createLegalAnalysisJobs(
         });
         let requests = 0;
         const adapter = createLegalAnalysisRuntimeAdapter({
+          onStage: (value) => {
+            stage = value;
+          },
           core,
           env,
           additionalPlans: selectReviewedProcedurePlans(task.input.context),
@@ -390,6 +398,7 @@ export function createLegalAnalysisJobs(
           ].slice(0, 100),
         };
         const citations = [...snapshot.citations, ...procedure.citations];
+        stage = "publication";
         const sourceAuthority = await capturePublicationSourceAuthority(
           core,
           guard(),
@@ -442,6 +451,7 @@ export function createLegalAnalysisJobs(
           ],
         });
         if (!publication) throw new ReworkError("STALE_REVISION");
+        stage = "report_continuation";
         if (task.continueWithReport)
           await deps.prepareReport?.(
             params.ownerId,
@@ -451,11 +461,35 @@ export function createLegalAnalysisJobs(
           );
         return { jobId: task.jobId, status: "completed" as const };
       } catch (error) {
-        // A downstream report failure cannot undo a completed analysis job.
-        if ((await jobs.find(actor(params.ownerId), task.jobId))?.status === "completed")
-          return { jobId: task.jobId, status: "completed" as const };
         // Authority loss cannot publish facts or release an ambiguous execution.
         const code = (error as { code?: string })?.code;
+        const analysisFailure =
+          safeLegalAnalysisFailure((error as { diagnostic?: unknown })?.diagnostic) ??
+          safeLegalAnalysisFailure({
+            stage,
+            reason:
+              code === "POLICY_REJECTED" && error instanceof ModelError
+                ? "provider_refusal"
+                : code === "MODEL_SCHEMA_INVALID"
+                  ? "model_schema"
+                  : code === "INVALID_PLAN"
+                    ? "invalid_plan"
+                    : code === "STALE_REVISION"
+                      ? "stale_revision"
+                      : code === "SOURCE_UNAVAILABLE"
+                        ? "source_unavailable"
+                        : code === "MODEL_UNAVAILABLE"
+                          ? "dependency_unavailable"
+                          : "unknown",
+          });
+        // A downstream report failure cannot undo completed analysis, but its
+        // private finite receipt must distinguish continuation from analysis.
+        if ((await jobs.find(actor(params.ownerId), task.jobId))?.status === "completed")
+          return {
+            jobId: task.jobId,
+            status: "completed" as const,
+            ...(analysisFailure ? { analysisFailure } : {}),
+          };
         const failure: V2FailureCode =
           code === "MODEL_SCHEMA_INVALID" || code === "POLICY_REJECTED"
             ? code
@@ -518,7 +552,11 @@ export function createLegalAnalysisJobs(
             task.requestId,
             task.reportExpectedRevision ?? null,
           );
-        return { jobId: task.jobId, status: written ? ("failed" as const) : ("stopped" as const) };
+        return {
+          jobId: task.jobId,
+          status: written ? ("failed" as const) : ("stopped" as const),
+          ...(analysisFailure ? { analysisFailure } : {}),
+        };
       }
     },
   };

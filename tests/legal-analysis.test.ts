@@ -174,7 +174,7 @@ async function setup(
   options: {
     transport?: (f: Awaited<ReturnType<typeof legalAnalysisFixture>>) => Transport;
     draft?: (draft: V2LegalAnalysisDraft, input: LegalAnalysisModelInput) => void;
-    audit?: () => unknown;
+    audit?: (input: { draft: unknown }) => unknown;
     noBinding?: boolean;
     plan?: () => unknown;
     additionalPlans?: readonly RetrievalPlan[];
@@ -247,9 +247,9 @@ async function setup(
         options.draft?.(draft, context);
         return draft;
       },
-      audit: async () => {
+      audit: async (input) => {
         counts.audit++;
-        return (options.audit ?? (() => approved))();
+        return (options.audit ?? (() => approved))(input);
       },
     },
     retrieve: (request, access) => {
@@ -992,6 +992,81 @@ test("two skipped reviewed guides do not expand the twelve-attempt technical cei
     expect(result.snapshot.limitations.some((s) => s.includes("안내 2개는 조회하지"))).toBe(true);
     expect(result.snapshot.status).toBe("unavailable");
     expect(f.counts).toEqual({ plan: 1, analyze: 0, audit: 0, attempts: 12 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("analysis resolves a unique exact quotation before independent audit and final validation", async () => {
+  let audited = false;
+  const f = await setup("prepare_claim", {
+    draft: (draft) => {
+      for (const claim of draft.sourceClaims)
+        if (claim.kind === "quotation") {
+          claim.startUtf16 = 1;
+          claim.endUtf16 = 2;
+        }
+    },
+    audit: ({ draft }) => {
+      audited = true;
+      const claims = (draft as V2LegalAnalysisDraft).sourceClaims.filter(
+        (c) => c.kind === "quotation",
+      );
+      expect(claims.length).toBeGreaterThan(0);
+      for (const claim of claims) expect(claim.endUtf16 - claim.startUtf16).toBe(claim.text.length);
+      return approved;
+    },
+  });
+  try {
+    const result = await f.service.prepare(f.input);
+    expect(result.snapshot.precedents.length).toBeGreaterThan(0);
+    expect(audited).toBe(true);
+    expect(f.counts.audit).toBe(1);
+    expect(f.counts.analyze).toBe(1);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("analysis never repairs missing quotation text even with a permissive synthetic audit", async () => {
+  const f = await setup("prepare_claim", {
+    draft: (draft) => {
+      const claim = draft.sourceClaims.find((c) => c.kind === "quotation");
+      if (!claim) throw new Error("Synthetic quotation missing");
+      claim.text = "원문에 없는 합성 문장";
+      claim.startUtf16 = 1;
+      claim.endUtf16 = 2;
+    },
+  });
+  try {
+    await expect(f.service.prepare(f.input)).rejects.toMatchObject({
+      code: "POLICY_REJECTED",
+      diagnostic: {
+        stage: "claims",
+        reason: "claim_validation",
+        claimFailure: "quotation_mismatch",
+      },
+    });
+    expect(f.counts.audit).toBe(1);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("analysis retains independent audit refusal after exact quotation resolution", async () => {
+  const f = await setup("respond_to_claim", {
+    audit: () => ({ ...approved, pass: false, strategyDetected: true }),
+  });
+  try {
+    await expect(f.service.prepare(f.input)).rejects.toMatchObject({
+      code: "POLICY_REJECTED",
+      diagnostic: {
+        stage: "audit",
+        reason: "audit_rejected",
+        auditFailure: { pass: false, strategyDetected: true },
+      },
+    });
+    expect(f.counts.audit).toBe(1);
   } finally {
     f.db.close();
   }

@@ -7,6 +7,7 @@ import { legalFailureMessages } from "../../../../contracts/v2/legal-availabilit
 import type { V2PrecedentTopic } from "../../../../contracts/v2/precedent-research";
 import { v2ReworkVersionSchema } from "../../../../contracts/v2/rework";
 import { instrumentNumbersGrounded } from "../../citation/instrument-numbers";
+import { resolveQuotationSpans } from "../../citation/quotation-spans";
 import { claimReviewHash, validateV2Claims } from "../../citation/v2-validate";
 import {
   type LegalAnalysisPlan,
@@ -29,6 +30,7 @@ import {
   type LegalAnalysisInput,
   legalAnalysisInputSchema,
 } from "./context";
+import type { LegalAnalysisFailure } from "./diagnostics";
 import { analysisDraftGrounded } from "./grounding";
 
 export type LegalPlanningInput = LegalAnalysisInput & { asOfDate: string };
@@ -62,6 +64,7 @@ export class LegalAnalysisError extends Error {
       | "POLICY_REJECTED"
       | "SOURCE_UNAVAILABLE"
       | "STALE_REVISION",
+    readonly diagnostic?: LegalAnalysisFailure,
   ) {
     super(code);
   }
@@ -84,6 +87,7 @@ export function reviewedAdditionalGuidePlans(raw: readonly RetrievalPlan[] = [])
  * quota/lease/attempt ledger, encrypted persistence and atomic publication fence.
  * Public reads/polls/export never call prepare. No model or legal fallback exists. */
 export function createAutomaticLegalAnalysis(deps: {
+  onStage?: (stage: LegalAnalysisFailure["stage"]) => void;
   model: LegalAnalysisModel;
   retrieve: (
     request: { plans: RetrievalPlan[]; asOfDate: string; now: string },
@@ -144,6 +148,7 @@ export function createAutomaticLegalAnalysis(deps: {
     // Old official/AI facts remain in storage, but cannot establish case-side evidence.
     planning.confirmedSummary = { ...input.confirmedSummary, facts: planning.facts };
     await authorize();
+    deps.onStage?.("planning");
     const planParsed = legalAnalysisPlanSchema.safeParse(
       await deps.model.plan(structuredClone(planning)),
     );
@@ -181,6 +186,7 @@ export function createAutomaticLegalAnalysis(deps: {
       : controller.signal;
     let retrieval: RetrievalOutput;
     try {
+      deps.onStage?.("retrieval");
       retrieval = await deps.retrieve(
         { plans, asOfDate, now },
         {
@@ -243,6 +249,7 @@ export function createAutomaticLegalAnalysis(deps: {
     );
     const projection = await projectWorkspaceSources(relevant, irrelevant.size);
     retrieval = projection.sourceRetrieval;
+    deps.onStage?.("source_recheck");
     await bound(retrieval); // Public originals/search readTokens never establish this authority.
     const availability: V2LegalAnalysisSnapshot["availability"] = retrieval.outcomes.map((o) => ({
       kind: o.kind,
@@ -346,17 +353,33 @@ export function createAutomaticLegalAnalysis(deps: {
       sourceCoverage: projection.sourceCoverage,
     };
     await authorize();
+    deps.onStage?.("generation");
     const draftParsed = legalAnalysisOutputSchema.safeParse(
       await deps.model.analyze(structuredClone(modelInput)),
     );
     if (!draftParsed.success) throw new LegalAnalysisError("MODEL_SCHEMA_INVALID");
+    deps.onStage?.("grounding");
     const draft = draftParsed.data;
-    if (
-      !analysisDraftGrounded(draft, input, plan, retrieval.chunks) ||
-      !instrumentNumbersGrounded(draft, draft.sourceClaims, projection.sourceTexts)
-    )
-      throw new LegalAnalysisError("POLICY_REJECTED");
+    // Resolve numeric coordinates only against the exact verified excerpt sent to
+    // the model. Text, source identity, ambiguity and final validation stay intact.
+    draft.sourceClaims = resolveQuotationSpans(draft.sourceClaims, {
+      citations: projection.citations,
+      sourceTexts: projection.sourceTexts,
+      sourceRetrieval: retrieval,
+      references: { verifiedCitationIds: projection.citations.map((c) => c.id) },
+    }).claims;
+    if (!analysisDraftGrounded(draft, input, plan, retrieval.chunks))
+      throw new LegalAnalysisError("POLICY_REJECTED", {
+        stage: "grounding",
+        reason: "draft_grounding",
+      });
+    if (!instrumentNumbersGrounded(draft, draft.sourceClaims, projection.sourceTexts))
+      throw new LegalAnalysisError("POLICY_REJECTED", {
+        stage: "grounding",
+        reason: "unsupported_instrument_number",
+      });
     await authorize();
+    deps.onStage?.("audit");
     const auditParsed = legalAnalysisAuditSchema.safeParse(
       await deps.model.audit({
         phase: "legal_analysis",
@@ -373,7 +396,26 @@ export function createAutomaticLegalAnalysis(deps: {
       audit.unsupportedFactIds.length ||
       audit.findings.some((f) => f.severity === "critical")
     )
-      throw new LegalAnalysisError("POLICY_REJECTED");
+      throw new LegalAnalysisError("POLICY_REJECTED", {
+        stage: "audit",
+        reason: "audit_rejected",
+        auditFailure: {
+          pass: audit.pass,
+          legalClaimsSupported: audit.legalClaimsSupported,
+          strategyDetected: audit.strategyDetected,
+          unsupportedFactCount: audit.unsupportedFactIds.length,
+          findings: audit.findings.map(({ severity, code, target, basis, sourceClaimReason }) => ({
+            severity,
+            code,
+            target,
+            basis,
+            ...(severity === "critical" && target === "source_claim" && basis === "verified_source"
+              ? { sourceClaimReason }
+              : {}),
+          })),
+        },
+      });
+    deps.onStage?.("claims");
     const reviews = await Promise.all(
       draft.sourceClaims.map(async (claim) => ({
         claimId: claim.id,
@@ -387,8 +429,14 @@ export function createAutomaticLegalAnalysis(deps: {
     );
     const usedIds = new Set(draft.sourceClaims.map((c) => c.citationId));
     const citations = projection.citations.filter((c) => usedIds.has(c.id));
-    if (!(await validateV2Claims(draft.sourceClaims, citations, retrieval, reviews)).valid)
-      throw new LegalAnalysisError("POLICY_REJECTED");
+    const validation = await validateV2Claims(draft.sourceClaims, citations, retrieval, reviews);
+    if (!validation.valid)
+      throw new LegalAnalysisError("POLICY_REJECTED", {
+        stage: "claims",
+        reason: "claim_validation",
+        ...(validation.failure ? { claimFailure: validation.failure } : {}),
+      });
+    deps.onStage?.("source_recheck");
     await bound(retrieval);
     const complete =
       input.context.casePurpose !== "unconfirmed" &&
