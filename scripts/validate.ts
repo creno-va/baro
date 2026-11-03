@@ -75,6 +75,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/apple-revoke.test.ts",
       "tests/native-deletion.test.ts",
       "tests/native-deletion-http.test.ts",
+      "tests/cleanup-dependency-repro.test.ts",
       "tests/mobile-ios-accessibility.test.ts",
       "tests/mobile-ios-auth-cancel.test.ts",
       "tests/mobile-ios-directory-ui.test.ts",

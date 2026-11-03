@@ -340,6 +340,10 @@ test("cleanup never serializes circular, throwing-getter, proxy or non-error det
     throw new Error("PRIVATE_SERIALIZATION_CALLED");
   };
   const hostile = new Error("PRIVATE");
+  // Linux Bun formats native Error.stack lazily and may read name/message
+  // while replacing it. Materialize it before installing any hostile getters
+  // so the fixture reaches the cleanup boundary on both Windows and Linux.
+  void hostile.stack;
   for (const key of ["name", "message", "code", "status", "stack"])
     Object.defineProperty(hostile, key, {
       get() {
@@ -429,13 +433,15 @@ for (const kind of [
     if (kind === "non_error_exact")
       error = { message: "instance.not_found", name: "WorkflowError", status: 404, code: 10001 };
     if (kind === "hostile") {
-      error = new Error("PRIVATE");
+      const hostile = new Error("PRIVATE");
+      void hostile.stack;
       for (const field of ["message", "name", "code", "status", "stack"])
-        Object.defineProperty(error, field, {
+        Object.defineProperty(hostile, field, {
           get() {
             throw new Error("PRIVATE_GETTER");
           },
         });
+      error = hostile;
     }
     if (kind === "circular") {
       const value: Record<string, unknown> = { name: "PRIVATE", message: "PRIVATE" };
