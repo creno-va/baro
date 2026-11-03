@@ -1,10 +1,40 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import {
   browserTargets,
   runBrowserTargets,
   unitTargets,
   validationScope,
 } from "./development-checks";
+
+test("bounded concurrent selection retains cycles and shared consumers, then reads changed imports afresh", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "baro-selector-"));
+  const source = (name: string) => resolve(directory, name);
+  const roots = Array.from({ length: 12 }, (_, i) => source(`root-${i}.test.ts`));
+  try {
+    await Promise.all([
+      writeFile(source("first.ts"), "export const value = 1;"),
+      writeFile(source("second.ts"), "export const value = 2;"),
+      writeFile(source("shared.ts"), "export { value } from './first'; import './cycle';"),
+      writeFile(source("cycle.ts"), "import './shared';"),
+      ...roots.map((path) => writeFile(path, "import './shared';")),
+    ]);
+    const expected = roots.map((path) => path.replaceAll("\\", "/")).sort();
+    const [first, second] = await Promise.all([
+      unitTargets([source("first.ts")], roots),
+      unitTargets([source("second.ts")], roots),
+    ]);
+    expect(first).toEqual(expected);
+    expect(second).toEqual([]);
+    await writeFile(source("shared.ts"), "export { value } from './second'; import './cycle';");
+    expect(await unitTargets([source("first.ts")], roots)).toEqual([]);
+    expect(await unitTargets([source("second.ts")], roots)).toEqual(expected);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("browser failures do not hide later adapter failures and still reject the complete run", async () => {
   const calls: { command: string[]; env: Record<string, string | undefined> | undefined }[] = [];
@@ -206,47 +236,52 @@ const aiRuntimeTests = [
   "tests/asset-processing-runtime.test.ts",
 ];
 
-test("dependency and deployment-only changes cannot skip AI admission and execution regressions", async () => {
-  for (const file of [
-    "package.json",
-    "bun.lock",
-    ".bun-version",
-    "wrangler.jsonc",
-    "wrangler.json",
-    "wrangler.toml",
-    "astro.config.ts",
-    "tsconfig.json",
-    ".github/workflows/deploy-preview.yml",
-    ".github/actions/deploy-worker/action.yml",
-    "scripts/smoke.ts",
-    "scripts/check-deployment.ts",
-    "scripts/check-runtime-secrets.ts",
-    "scripts/ai-preflight.ts",
-  ]) {
+// Independent configurations each retain the original deadline and assertions.
+test.each([
+  "package.json",
+  "bun.lock",
+  ".bun-version",
+  "wrangler.jsonc",
+  "wrangler.json",
+  "wrangler.toml",
+  "astro.config.ts",
+  "tsconfig.json",
+  ".github/workflows/deploy-preview.yml",
+  ".github/actions/deploy-worker/action.yml",
+  "scripts/smoke.ts",
+  "scripts/check-deployment.ts",
+  "scripts/check-runtime-secrets.ts",
+  "scripts/ai-preflight.ts",
+])(
+  "dependency/deployment changes retain AI admission and execution regressions: %s",
+  async (file) => {
     const selected = await unitTargets([file], unitTests);
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
     expect(selected.some((path) => path.startsWith("tests/evals/"))).toBe(false);
-  }
-}, 15_000);
+  },
+  15_000,
+);
 
-test("AI runtime, schema, capability and dispatch changes retain the complete focused suite", async () => {
-  for (const file of [
-    "src/server/model-policy.ts",
-    "docs/operations/GEMINI-MODEL-CAPABILITY.json",
-    "src/server/runtime/workspace.ts",
-    "src/server/runtime/processing-proofs.ts",
-    "src/server/modules/llm-gateway/service.ts",
-    "src/server/modules/budget/gateway-ledger.ts",
-    "src/workflows/workspace.ts",
-    "src/server/api/v2/workspaces.ts",
-    "drizzle/0007_runtime_paid_execution.sql",
-    "scripts/provision-ai-budget.ts",
-    "scripts/development-checks.ts",
-  ]) {
+test.each([
+  "src/server/model-policy.ts",
+  "docs/operations/GEMINI-MODEL-CAPABILITY.json",
+  "src/server/runtime/workspace.ts",
+  "src/server/runtime/processing-proofs.ts",
+  "src/server/modules/llm-gateway/service.ts",
+  "src/server/modules/budget/gateway-ledger.ts",
+  "src/workflows/workspace.ts",
+  "src/server/api/v2/workspaces.ts",
+  "drizzle/0007_runtime_paid_execution.sql",
+  "scripts/provision-ai-budget.ts",
+  "scripts/development-checks.ts",
+])(
+  "AI runtime/schema/capability changes retain the complete focused suite: %s",
+  async (file) => {
     const selected = await unitTargets([file], unitTests);
     for (const required of aiRuntimeTests) expect(selected).toContain(required);
-  }
-}, 15_000);
+  },
+  15_000,
+);
 
 test("a missing required AI regression fails closed while unrelated styles stay scoped", async () => {
   for (const missing of aiRuntimeTests)
@@ -260,17 +295,15 @@ test("a missing required AI regression fails closed while unrelated styles stay 
   expect(selected.some((path) => aiRuntimeTests.includes(path))).toBe(false);
 });
 
-test("deployment actions and runtime configuration cannot skip environment parity checks", async () => {
-  for (const file of [
-    ".github/actions/deploy-worker/action.yml",
-    ".github/workflows/deploy-production.yml",
-    "wrangler.jsonc",
-    "astro.config.ts",
-  ]) {
-    const selected = await unitTargets([file], unitTests);
-    expect(selected).toContain("tests/workflows.test.ts");
-    expect(selected).toContain("tests/deployment-config.test.ts");
-  }
+test.each([
+  ".github/actions/deploy-worker/action.yml",
+  ".github/workflows/deploy-production.yml",
+  "wrangler.jsonc",
+  "astro.config.ts",
+])("deployment/runtime changes retain environment parity checks: %s", async (file) => {
+  const selected = await unitTargets([file], unitTests);
+  expect(selected).toContain("tests/workflows.test.ts");
+  expect(selected).toContain("tests/deployment-config.test.ts");
 });
 
 test("source-only authentication and file changes run existing consumer tests", async () => {

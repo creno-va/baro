@@ -53,6 +53,11 @@ are regression tested to cover the major glob/minimatch API changes.
 - Actual CLI/MCP/product-validator/URI/mobile-runtime tests37 PASS/267 assertions.
 - Actual coverage/glob consumer compatibility3 PASS/17 assertions.
 - Workers build, anonymous local workerd boot and both iOS/Android bundle exports passed. No deploy.
+- Windows full quick exposed aggregate selector test deadlines (five tooling timeouts; mobile534,
+  native UI108 and rework529/4skip passed). Independent selector configurations now retain their
+  original deadlines individually; one selection shares in-flight reads across at most eight roots.
+  No source/import assertion or candidate is dropped, and no deadline constant is increased.
+  Fresh-import/cycle/shared-consumer regression plus existing selectors:53 PASS/590 assertions.
 - Fresh unfiltered `bun audit --json`: deepmerge low1 remains. Local mitigation is not an official
   advisory fix and does not make the raw audit or full security gate pass. #724 remains open for
   an official compatible fix or separately approved technical replacement, with raw evidence preserved.
