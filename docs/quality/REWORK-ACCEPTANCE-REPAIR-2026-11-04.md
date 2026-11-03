@@ -62,3 +62,13 @@ credential·오류 stack/SQL은 내보내지 않는다. 기존 실패용 policy/
 실제 migrated schema에서 SELECT를 실행하고 독립 API envelope로 완료 작업4종·불명확한
 receipt·범위·과거 창의 집계·private field 제거를 검증한다. 이 검증은 합성/offline이며
 실제 원격 시도 수는 병합 후 같은 SHA preview의 read-only 검사로 기록한다.
+
+## 중간 full의 Linux 예외 fixture 수리 (#730)
+
+main167fa692의 수동 full41683147245 core는 5344 PASS/8 SKIP/2 FAIL로 끝났다.
+두 실패는 cleanup 호출 전에 native Error의 throwing getter를 설치하던 중 발생했다.
+Linux Bun1.4.0이 lazy stack을 materialize하면서 이미 교체된 name/message getter를
+읽은 경계다. private 오류를 사용하지 않은 합성 marker fixture다. stack을 먼저 읽은 뒤
+기존의 name/message/code/status/stack throwing getter를 모두 설치한다. 실제 정리기의
+retry 및 거짓 absence receipt 거절 assertions와 제품 동작은 유지한다. Windows 집중
+검증은 23 PASS/0 FAIL/204 assertions이며 Linux exact-head CI와 최종 full은 별도로 기록한다.
