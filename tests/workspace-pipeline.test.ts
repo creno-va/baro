@@ -1746,6 +1746,178 @@ function materialChatContext(source: string) {
   return { saved, reference, fact };
 }
 
+const materialTimelineRejection = {
+  ...approved,
+  pass: false,
+  findings: [
+    { severity: "critical", code: "unsupported_fact", target: "unknown", basis: "user_message" },
+    {
+      severity: "critical",
+      code: "unsupported_fact",
+      target: "timeline",
+      basis: "selected_material",
+    },
+  ],
+};
+function materialTimelineDraft(
+  reference: ReturnType<typeof materialChatContext>["reference"],
+  repaired: boolean,
+) {
+  return {
+    ...chatText(
+      repaired ? "자료의 기재와 실제 송금 사실을 구분했어요." : "송금 경위를 정리했어요.",
+    ),
+    unknowns: repaired ? ["실제 은행명과 송금 시각", "자료의 진정성"] : ["소장을 받은 날짜"],
+    timeline: [
+      {
+        id: "synthetic-material-timeline",
+        revision: 1,
+        date: "2026-10-25",
+        datePrecision: "day",
+        event: repaired
+          ? "자료상 2026-10-25 일부 반환 500,000원 기재 · 진정성 미확인"
+          : "신청인이 500,000원을 돌려받음",
+        certainty: "uncertain",
+        factIds: [],
+        userEdited: false,
+        references: [reference],
+      },
+    ],
+  };
+}
+for (const repaired of [true, false])
+  test(`selected material timeline rejection gets one new draft and full independent re-audit, repaired=${repaired}`, async () => {
+    const f = materialChatContext("2026-10-25 일부 반환 500,000원. 합성 대여인은 수령을 인정함.");
+    f.saved.intake.narrative =
+      "저는 300만 원을 빌렸고 50만 원을 돌려보냈습니다. 소송 문서를 받은 적은 없습니다.";
+    let generations = 0,
+      audits = 0;
+    const p = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        audits++;
+        if (audits === 2) {
+          expect(input).toMatchObject({ draft: { timeline: [{ certainty: "uncertain" }] } });
+          return repaired ? approved : materialTimelineRejection;
+        }
+        return materialTimelineRejection;
+      }
+      generations++;
+      if (generations === 2) {
+        expect(input).toMatchObject({
+          draftCorrection: {
+            reason: "audit_rejected",
+            auditFailure: {
+              code: "unsupported_fact",
+              findings: materialTimelineRejection.findings.map(({ code, target, basis }) => ({
+                code,
+                target,
+                basis,
+              })),
+            },
+          },
+        });
+        const feedback = JSON.stringify((input as { draftCorrection: unknown }).draftCorrection);
+        expect(feedback).not.toContain("돌려받음");
+        expect(feedback).not.toContain(f.reference.fileId);
+      }
+      return materialTimelineDraft(f.reference, generations === 2);
+    });
+    if (repaired) {
+      const result = await p.value.chat(f.saved, "synthetic-material-timeline-repair");
+      expect(result.timeline[0]?.event).toContain("자료상");
+      expect(result.timeline[0]?.certainty).toBe("uncertain");
+      expect("unknowns" in result && result.unknowns).toEqual([
+        "실제 은행명과 송금 시각",
+        "자료의 진정성",
+      ]);
+    } else
+      await expect(p.value.chat(f.saved, "synthetic-material-timeline-stop")).rejects.toMatchObject(
+        { reason: "audit_rejected" },
+      );
+    expect(p.calls.map((call) => call.phase)).toEqual([
+      "workspace_chat",
+      "workspace_audit",
+      "workspace_chat",
+      "workspace_audit",
+    ]);
+    expect(new Set(p.calls.map((call) => call.invocation)).size).toBe(4);
+    expect(generations).toBe(2);
+    expect(audits).toBe(2);
+  });
+
+test.each([
+  "privacy",
+  "legal",
+  "strategy",
+  "fact",
+  "unknown_only",
+  "wrong_basis",
+  "no_selection",
+  "no_material",
+] as const)(
+  "selected material correction cannot admit unrelated or unsafe audit findings: %s",
+  async (mode) => {
+    const f = materialChatContext("2026-10-25 일부 반환 500,000원");
+    if (mode === "no_selection" && f.saved.latestMessage)
+      f.saved.latestMessage.selectedFileIds = [];
+    if (mode === "no_material") f.saved.materials = [];
+    const findings =
+      mode === "privacy"
+        ? [
+            ...materialTimelineRejection.findings,
+            { severity: "critical", code: "privacy", target: "response_text", basis: "policy" },
+          ]
+        : mode === "unknown_only"
+          ? materialTimelineRejection.findings.slice(0, 1)
+          : mode === "wrong_basis"
+            ? [
+                {
+                  severity: "critical",
+                  code: "unsupported_fact",
+                  target: "timeline",
+                  basis: "unknown",
+                },
+              ]
+            : materialTimelineRejection.findings;
+    const p = pipeline((phase) =>
+      phase === "workspace_audit"
+        ? {
+            ...materialTimelineRejection,
+            findings,
+            legalClaimsSupported: mode !== "legal",
+            strategyDetected: mode === "strategy",
+            unsupportedFactIds: mode === "fact" ? ["synthetic-unsupported-fact"] : [],
+          }
+        : materialTimelineDraft(f.reference, false),
+    );
+    await expect(p.value.chat(f.saved, "synthetic-material-repair-guard")).rejects.toMatchObject({
+      reason: "audit_rejected",
+    });
+    expect(p.calls.map((call) => call.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+  },
+);
+
+test("selected material audit correction cannot request another external lookup", async () => {
+  const f = materialChatContext("2026-10-25 일부 반환 500,000원");
+  let generations = 0;
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? materialTimelineRejection
+      : {
+          ...materialTimelineDraft(f.reference, ++generations === 2),
+          requestedTools: generations === 2 ? ["thecheat"] : [],
+        },
+  );
+  await expect(p.value.chat(f.saved, "synthetic-material-repair-lookup")).rejects.toMatchObject({
+    reason: "unauthorized_reference",
+  });
+  expect(p.calls.map((call) => call.phase)).toEqual([
+    "workspace_chat",
+    "workspace_audit",
+    "workspace_chat",
+  ]);
+});
+
 test("receipt whitespace is repaired to an exact quote before fact validation and audit", async () => {
   const source = "거래일자 : 2026. 10. 01.";
   const f = materialChatContext(source);

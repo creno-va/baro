@@ -91,3 +91,30 @@ physical permit·R2 암호화 저장에서400회 검사를 모두 실행해 성�
 기존 hold는 dispatched로, 저장 artifact는 held/stopped로 보존하는 것도 확인한다.
 이 경계 회귀를 quick CI에 포함하며 최종 head CI/main/동일 SHA preview의 실제 첫
 다운로드는 후속 기록한다. 이전 사용자 편집본과 저장 PDF는 그대로 보존한다.
+
+## 선택 자료 대화 반영의 독립 audit 거절 (#734)
+
+previeweb1f5d9에서 청구 새 요약3/분석47/리포트6의 실제 분석과 첫 사진 PDF 전달은
+성공했다.9페이지 전체 시각 검사 및 웹/실제 HTML/PDF13절 일치까지 확인했다. 같은
+배포의 방어 자료 추가 자동 분석도 완료됐으나, 후속 자료 대화 반영은 attempt1에서
+실패했다. 별도 검사41697549756은 생성/schema 완료, 모델2개 final/response,
+독립 audit 실패를 보여준다. finite critical unsupported_fact2개는 target=unknown/
+basis=user_message와 target=timeline/basis=selected_material이며 legalClaimsSupported=true,
+strategyDetected=false,unsupportedFactCount=0이다. 공급자 거절·법률 금지로 단정하지
+않으며, 보존하지 않은 거절 초안의 특정 문장을 원인이라고 주장하지 않는다.
+
+기존 단일 교정 경로는 intake_narrative 기반 타임라인 거절에 한정돼 있었다. 선택된
+자료가 실제 제공되고 위 제한된 finding 조합이 있는 경우만 같은1회 교정 경로에
+연결한다. 유한 code/target/basis만 새 생성에 전달하며 거절 출력·식별자·원문은
+feedback에 보내지 않는다. 문서 화자와 사건 당사자, 약정일과 실제 사건, 미확인
+질문의 전제를 구분하도록 지시한다. unknown 진단을 유효성의 근거로 사용하지 않는다.
+새 초안도 모든 source/reference/날짜/개인정보 검증 및 독립 audit를 통과해야 한다.
+재차 거절·privacy/법률/strategy/지원 없는 fact·관측 부족·다른 근거 조합은 그대로
+실패하며 새 lookup은 거절한다. 기존1회 공유 교정 상한·새 admission·권한/lease와
+실패 receipt·과거 snapshot/편집/PDF/hold는 유지한다. 이 복구를 감사 우회나
+POLICY_REJECTED의 성공 변환으로 해석하지 않는다.
+
+기존 조건에서는 새 회귀3개 RED, 수정 후 관련148 PASS/0 FAIL/782 assertions다.
+실제 자료 반영 재검증은 코드 조건 변경·정확 head CI·병합·동일 SHA preview 뒤로
+보류했고 같은 외부 실패를 그대로 다시 호출하지 않았다. eb1 full5358 PASS/8 SKIP/
+0 FAIL·native SUCCESS와 raw audit deepmerge low1은 이 후속 수리 전의 중간 증거다.

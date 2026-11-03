@@ -1046,6 +1046,24 @@ export function createWorkspacePipeline(
               finding.target === "timeline" &&
               finding.basis === "intake_narrative",
           );
+        const materialTimelineFailure =
+          error.reason === "audit_rejected" &&
+          draft.timeline.length > 0 &&
+          (context.latestMessage?.selectedFileIds.length ?? 0) > 0 &&
+          context.materials.length > 0 &&
+          auditFailure?.legalClaimsSupported === true &&
+          auditFailure.strategyDetected === false &&
+          auditFailure.unsupportedFactCount === 0 &&
+          auditFailure.findings.some(
+            (finding) => finding.target === "timeline" && finding.basis === "selected_material",
+          ) &&
+          auditFailure.findings.every(
+            (finding) =>
+              finding.severity === "critical" &&
+              finding.code === "unsupported_fact" &&
+              ((finding.target === "timeline" && finding.basis === "selected_material") ||
+                (finding.target === "unknown" && finding.basis === "user_message")),
+          );
         const metadataFailure =
           error.reason === "unsupported_fact" &&
           error.claimFailure === "unsupported_instrument_number";
@@ -1062,6 +1080,7 @@ export function createWorkspacePipeline(
         if (
           !bodyFailure &&
           !timelineFailure &&
+          !materialTimelineFailure &&
           !metadataFailure &&
           !materialFactFailure &&
           !materialIdentifierFailure
@@ -1095,19 +1114,31 @@ export function createWorkspacePipeline(
                         reason: "prohibited_content",
                         contentFailure: { field: "chat_text", category: "strategy" },
                       }
-                    : metadataFailure
+                    : materialTimelineFailure
                       ? {
-                          reason: "unsupported_fact",
-                          claimFailure: "unsupported_instrument_number",
-                        }
-                      : {
                           reason: "audit_rejected",
                           auditFailure: {
                             code: "unsupported_fact",
-                            target: "timeline",
-                            basis: "intake_narrative",
+                            findings: auditFailure.findings.map(({ code, target, basis }) => ({
+                              code,
+                              target,
+                              basis,
+                            })),
                           },
-                        },
+                        }
+                      : metadataFailure
+                        ? {
+                            reason: "unsupported_fact",
+                            claimFailure: "unsupported_instrument_number",
+                          }
+                        : {
+                            reason: "audit_rejected",
+                            auditFailure: {
+                              code: "unsupported_fact",
+                              target: "timeline",
+                              basis: "intake_narrative",
+                            },
+                          },
             },
             requestId,
           ),
