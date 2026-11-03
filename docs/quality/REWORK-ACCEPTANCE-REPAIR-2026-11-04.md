@@ -72,3 +72,22 @@ Linux Bun1.4.0이 lazy stack을 materialize하면서 이미 교체된 name/messa
 기존의 name/message/code/status/stack throwing getter를 모두 설치한다. 실제 정리기의
 retry 및 거짓 absence receipt 거절 assertions와 제품 동작은 유지한다. Windows 집중
 검증은 23 PASS/0 FAIL/204 assertions이며 Linux exact-head CI와 최종 full은 별도로 기록한다.
+
+## 사진 PDF의 첫 전달/저장 실패 (#732)
+
+preview167fa692의 사진 포함 정규 리포트에서 native response 뒤 저장 실패를 관측했다.
+finite 진단은 unclassified/unknown/DB_OPERATION_FAILED였다. 원격 재시도 대신 합성
+signed Hono/runtime·SQLite·암호화 저장 harness로 원인을 좁혔다. 동일 PDF25,842bytes와
+미사용 공식 원문40개는 native 응답1조각에서 성공(300쿼리)했으나 512byte 조각에서는
+동일503/DB_OPERATION_FAILED로 실패했다. 조각마다 수행하는 live 권한 SELECT가
+post-render 저장 계획에 누락돼 있었다. 실제 native renderer·공급자는 이 offline
+재현의 대역이며 실제 분석/PDF 인수와 구분한다.
+
+모든 renderer 권한 검사를 계속 실행하며 실제 검사 횟수를 저장 계획에 더한다.
+900쿼리·행·쓰기 상한과 reserve/lease/암호화/인용/owner 검사는 유지한다. 변경 후
+동일 fragment 재현은 349쿼리로 저장·복호화 전달에 성공했다. 독립 회귀는 실제 SQL·
+physical permit·R2 암호화 저장에서400회 검사를 모두 실행해 성공하고, 과도한 검사와
+렌더 도중 요약 변경은 PUT 전에 거절한다. 원래 계획은 같은 긍정 회귀에서 RED였다.
+기존 hold는 dispatched로, 저장 artifact는 held/stopped로 보존하는 것도 확인한다.
+이 경계 회귀를 quick CI에 포함하며 최종 head CI/main/동일 SHA preview의 실제 첫
+다운로드는 후속 기록한다. 이전 사용자 편집본과 저장 PDF는 그대로 보존한다.

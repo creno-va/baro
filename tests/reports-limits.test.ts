@@ -9,6 +9,20 @@ import {
 } from "../src/server/modules/reports/limits";
 import { readyFile, reportFixture } from "./helpers/report-fixture";
 
+test.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 900])(
+  "invalid or excessive measured render queries never expand the hard plan (%s)",
+  (renderAuthorizationQueries) => {
+    expect(() =>
+      reportWorkPlan({
+        pdfBytes: 100,
+        sourceRows: 1,
+        reportFiles: 0,
+        renderAuthorizationQueries,
+      }),
+    ).toThrow("EXPORT_LIMIT_EXCEEDED");
+  },
+);
+
 test("large synchronous ZIP plans fail before original GET/PUT; the same reviewed report can export a smaller selection", async () => {
   const f = await reportFixture(),
     ids: string[] = [];
