@@ -5,6 +5,111 @@ import {
 } from "../scripts/inspect-production-workspace";
 import { createTestDatabase } from "./helpers/d1";
 
+test.each(["intake_questions", "intake_summary", "chat_response", "file_processing"])(
+  "completed %s receipts and all-history finite totals remain read-only and preserve ambiguity",
+  async (kind) => {
+    const db = await createTestDatabase();
+    const time = new Date().toISOString();
+    const queries: string[] = [];
+    const receipts = [
+      {
+        attempt: 1,
+        state: "final",
+        transport: "response",
+        maximum_output_tokens: 2400,
+        output_tokens: 90,
+      },
+      {
+        attempt: 1,
+        state: "final",
+        transport: "response",
+        maximum_output_tokens: 8000,
+        output_tokens: null,
+      },
+    ];
+    const totals: NonNullable<
+      Awaited<ReturnType<typeof inspectProductionWorkspace>>["modelReceipts"]
+    >["byStateAndTransport"] = [
+      { state: "final", transport: "response", receipts: 2 },
+      { state: "prepared", transport: "not_sent", receipts: 1 },
+      { state: "unknown", transport: "unknown", receipts: 1 },
+      { state: "dispatched", transport: null, receipts: 1 },
+    ];
+    try {
+      const result = await inspectProductionWorkspace(
+        {
+          token: "private-token",
+          sha: "a".repeat(40),
+          environment: "preview",
+          workspaceId: "00000000-0000-4000-8000-000000000001",
+        },
+        async (url, init) => {
+          if (url === "https://preview.baro.site/api/health/ready")
+            return Response.json({
+              release: "a".repeat(40),
+              environment: "preview",
+              status: "ready",
+            });
+          expect(url).toStartWith("https://api.cloudflare.com/client/v4/accounts/");
+          const query = init?.body ? JSON.parse(String(init.body)) : null;
+          if (!query?.sql) return Response.json({ success: true, result: {} });
+          queries.push(query.sql);
+          expect(query.sql).toStartWith("SELECT ");
+          expect(query.sql).not.toMatch(/encrypted|owner_id|lease_token|UPDATE|INSERT|DELETE/);
+          expect(query.params).toEqual([
+            query.sql.startsWith("SELECT a.attempt,")
+              ? "synthetic-completed"
+              : "00000000-0000-4000-8000-000000000001",
+          ]);
+          // Every selector executes against the real migrated schema. The API
+          // envelopes below independently test finite projection, not real IO.
+          expect(db.sqlite.query(query.sql).all(...query.params)).toEqual([]);
+          const rows = query.sql.includes("COUNT(*)")
+            ? totals.map((r) => ({ ...r, token: "private-token", prompt: "private-prompt" }))
+            : query.sql.startsWith("SELECT a.attempt,")
+              ? receipts.map((r) => ({
+                  ...r,
+                  output: "private-output",
+                  providerRequestId: "private-id",
+                }))
+              : [
+                  {
+                    id: "synthetic-completed",
+                    runtime_instance_id: "synthetic-completed-1",
+                    kind,
+                    status: "completed",
+                    failure_code: null,
+                    attempts: 1,
+                    created_at: time,
+                    updated_at: time,
+                  },
+                ];
+          return Response.json({ success: true, result: [{ success: true, results: rows }] });
+        },
+        undefined,
+        { completedModelReceipts: true },
+      );
+      expect(result.jobs[0]?.modelAttempts).toEqual(receipts);
+      expect(result.jobs[0]?.policyAttempts).toBeUndefined();
+      expect(result.jobs[0]?.schemaAttempts).toBeUndefined();
+      expect(result.modelReceipts).toEqual({
+        scope: "all_workspace_model_admissions",
+        receiptCount: 5,
+        byStateAndTransport: totals,
+        recentJobWindow: 12,
+        attemptsPerJobWindow: 12,
+      });
+      expect(queries).toHaveLength(3);
+      const aggregate = queries.find((sql) => sql.includes("COUNT(*)")) ?? "";
+      expect(aggregate).toContain("j.workspace_id=? AND a.service='model'");
+      expect(aggregate).toContain("GROUP BY a.state,a.transport LIMIT 20");
+      expect(JSON.stringify(result)).not.toContain("private");
+    } finally {
+      db.close();
+    }
+  },
+);
+
 test("analysis inspection keeps only stage/reason and finite audit evidence", () => {
   const result = finiteWorkspaceOutput({
     analysisFailure: {
