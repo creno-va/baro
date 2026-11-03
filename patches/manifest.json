@@ -56,62 +56,41 @@
       ]
     },
     {
-      "name": "node-forge",
-      "version": "1.4.0",
-      "registryIntegrity": "sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==",
-      "patch": "patches/node-forge@1.4.0.patch",
-      "patchSha256": "3ac844818a01ba4b9111f9ecb3dd486aea5cfcde7afcc8271b98f784c523eaf5",
-      "beforeTreeSha256": "0f7eccb60abe54fbb129532f52c28d1ce8f2c5b221c9d942500b221c531d75fe",
-      "afterTreeSha256": "55c33729304a15b4c1f0d96799e036ca404d3717a36ccf48e712daa211fa5fe0",
-      "entryPoint": "lib/index.js",
-      "licenseSha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
-      "coverage": "commonjs-and-browser-rsa-verifier",
+      "name": "deepmerge",
+      "version": "4.3.1",
+      "registryIntegrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==",
+      "patch": "patches/deepmerge@4.3.1.patch",
+      "patchSha256": "377225c453bedc89f0796ca03fa476c7c981ffc85db5bb4ebb89c7cbe1b77dc9",
+      "beforeTreeSha256": "e055dbe60fd190fb2111d7477c17b5b38476110bd2b750617deaa3a7e3ebf7bf",
+      "afterTreeSha256": "46fac8e6fb08ab38c4721edbf8b1ee459229fb2e11b1e9cfa06909351ed0bcbb",
+      "entryPoint": "dist/cjs.js",
+      "licenseFile": "license.txt",
+      "licenseSha256": "6cfc4687cb2f2d86f4a77e6b526290d3878e5e512f3fec2f4cb36a9cb36f798b",
+      "coverage": "safe-own-data-properties-commonjs-and-browser",
       "changes": [
         {
-          "path": "lib/rsa.js",
-          "beforeSha256": "fd4740238145ec26470eb3f06a627c72039538ce1307dbdce40521f94dfd0a50",
-          "afterSha256": "f2ecaedd70fa7939cc8ea79f30f339af402f28b85e996245d45c6404a954ec78"
+          "path": "dist/cjs.js",
+          "beforeSha256": "2e5160f84a1141bd927264afe4d15766f1e6cf07daef182b37ff53fea121de7d",
+          "afterSha256": "c97f78cdfcf948cc98ed7ae0feb3c84fdea87bfb4a3c933fe198c8e3c3daae0d"
         },
         {
-          "path": "dist/forge.min.js",
-          "beforeSha256": "d9b9074e6861200d676e25dcfe97889db5e8f4150bb766d29c491ad709a51b58",
-          "afterSha256": "4b650c68d70f3c0e1295e3093ad0502a12126bc42e7d1319a6a9d230d56789b1"
+          "path": "dist/umd.js",
+          "beforeSha256": "f33e6596482d1fb5c7c427f8ef92f2aa849eea9223acd974176b2fb27ddbf73a",
+          "afterSha256": "393606d2bbd54bcec0d564d357ffa270265e500ec21324256b8c5f8f3cb7c511"
         },
         {
-          "path": "dist/forge.all.min.js",
-          "beforeSha256": "cb9ba4045a81825f8edb646c38d53a1ac30ce07665bf26042c8dea86d7208642",
-          "afterSha256": "ff9651b3368253244a74ccd05117d1b93e80ea21cb891fd51796a1f5d48d95dc"
+          "path": "index.js",
+          "beforeSha256": "12440c84957c1990ea2d5e33dc0091722dc1dc1585c6d20e0c780e568ffa9d30",
+          "afterSha256": "a202f2d86e1637265e0741cb664f9f56995a9439e71043a8c448e280aad7bbec"
         }
       ],
-      "unmodifiedBrowserDistributions": [
-        {
-          "path": "dist/forge.all.min.js.map",
-          "sha256": "0b21eb8fb1c124e963d564b6462177331027f6e739f48e73184e0f6a81cac3f1"
-        },
-        {
-          "path": "dist/forge.min.js.map",
-          "sha256": "5f11be794b0ad083ce9b2bcee1079e7ee1f0771d37beb90d6f13b2b9a8a0eba3"
-        },
-        {
-          "path": "dist/prime.worker.min.js",
-          "sha256": "877bd31b0cc79ecb9163649034fbafaeec45e8e2861fc4fa9fb11335f28c4ef9"
-        },
-        {
-          "path": "dist/prime.worker.min.js.map",
-          "sha256": "73f786b89ef54b00e0cfb6969b2881e7cffa77b4be3f03e998f70993290716a8"
-        }
-      ],
-      "source": "https://github.com/nitrog7/forge/commit/85446800199c4995d3cd4b0ab5a8409df4455859",
+      "unmodifiedBrowserDistributions": [],
+      "source": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
       "consumers": [
         {
-          "name": "@expo/cli",
-          "version": "58.1.14",
-          "entryPoint": "build/src/index.js"
-        },
-        {
-          "name": "@expo/code-signing-certificates",
-          "version": "0.0.7",
-          "entryPoint": "build/main.js"
+          "name": "jest-config",
+          "version": "30.5.2",
+          "entryPoint": "build/index.js"
         }
       ]
     }

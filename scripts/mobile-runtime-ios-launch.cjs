@@ -15,7 +15,7 @@ function validateOwnedIosDevice(inventory, udid, name) {
 }
 function sdk() {
   const metadata = require.resolve("@expo/cli/package.json");
-  if (require(metadata).version !== "58.1.14") throw new Error("RUNTIME_IOS_LAUNCH_SDK_CHANGED");
+  if (require(metadata).version !== "58.1.18") throw new Error("RUNTIME_IOS_LAUNCH_SDK_CHANGED");
   const api = require(resolve(dirname(metadata), "build/src/start/platforms/ios/simctl.js"));
   if (typeof api.openUrlAsync !== "function") throw new Error("RUNTIME_IOS_LAUNCH_API_REQUIRED");
   return api;
