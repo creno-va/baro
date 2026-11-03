@@ -38,7 +38,15 @@ const observation = z.strictObject({
   rawAuditPassed: z.literal(false),
   entireCliReachabilityProven: z.literal(false),
 });
-test("actual CLI validators accept supported synthetic commands and reject malformed input in a bounded Node child", async () => {
+const currentObservation = observation
+  .omit({ cliZodVersion: true, constrainedLegacy: true })
+  .extend({
+    kind: z.literal("bounded-upstream-cli-schema-observation"),
+    cliVersion: z.literal("58.1.18"),
+    cliDeclaresZod: z.literal(false),
+  });
+
+test("upgraded CLI JSON Schema and MCP validators accept supported synthetic commands and reject malformed input", async () => {
   const node = Bun.which("node");
   if (!node) throw Error("NODE_RUNTIME_REQUIRED");
   const child = Bun.spawn(
@@ -59,12 +67,11 @@ test("actual CLI validators accept supported synthetic commands and reject malfo
     const output = await new Response(child.stdout).text();
     expect(await child.exited).toBe(0);
     expect(output.length).toBeLessThan(8192);
-    const result = observation.parse(JSON.parse(output));
+    const result = currentObservation.parse(JSON.parse(output));
     // The fixed production validator must reject the excessive array before running its elements.
     expect(result.constrainedProduct.elementVisits).toBe(0);
     expect(result.constrainedProduct.issues).toBe(1);
-    expect(result.constrainedLegacy.elementVisits).toBe(0);
-    expect(result.constrainedLegacy.issues).toBe(1);
+    expect(result.cliDeclaresZod).toBe(false);
     expect(result.malformedOutputs.map((v) => v.syntheticElements)).toEqual([128, 256, 512]);
   } finally {
     clearTimeout(timer);

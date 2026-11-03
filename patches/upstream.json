@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "rawAuditRequired": true,
+  "packages": [
+    {
+      "name": "node-forge",
+      "version": "1.4.2",
+      "registryIntegrity": "sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==",
+      "treeSha256": "81ad44d22e1fb9b8ba39b2681b74044c51c1f2983b52d1f74f2565cb297ca4c7",
+      "licenseSha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
+      "entryPoint": "lib/index.js",
+      "consumers": [
+        {
+          "name": "@expo/cli",
+          "version": "58.1.18",
+          "entryPoint": "build/src/index.js"
+        },
+        {
+          "name": "@expo/code-signing-certificates",
+          "version": "0.0.7",
+          "entryPoint": "build/main.js"
+        }
+      ]
+    },
+    {
+      "name": "@expo/cli",
+      "version": "58.1.18",
+      "registryIntegrity": "sha512-voZUcir9mEwvLKBNqQM6Jy2Yp67z8ONmcINXb6ZrLMayb7yxzwvEnN0eeH8ADzUABKL288pv1eJ1WRqtYxXQ/Q==",
+      "treeSha256": "b2afa2f51f7e0d968a7aafbcfa81b838691c79fca20a92b53e57ef39abc5b8f8",
+      "licenseSha256": "fb3ca4a837f5779e83cef89b78253a8949cfb9429c340309f62d0465ec6610b4",
+      "entryPoint": "build/src/index.js",
+      "consumers": [
+        {
+          "name": "expo",
+          "version": "58.0.17",
+          "entryPoint": "bin/cli"
+        }
+      ]
+    }
+  ],
+  "retired": [
+    {
+      "path": "patches/node-forge@1.4.0.patch",
+      "sha256": "3ac844818a01ba4b9111f9ecb3dd486aea5cfcde7afcc8271b98f784c523eaf5"
+    },
+    {
+      "path": "patches/cli-zod.json",
+      "sha256": "90d42549baa2db12af3ca5615d8b793b153a5628769d20c1262e9ed694113369"
+    },
+    {
+      "path": "patches/zod@3.25.76.patch",
+      "sha256": "3ef28a056fbcd9b86ce5d5d726c94567d2f90b585b34252800e09c2e6c317ab4"
+    },
+    {
+      "path": "patches/archive/2026-10-27-manifest.json",
+      "sha256": "b9545c4e849d73b837b96356f31ecf145a423d8589319168c19752eb0da4e530"
+    },
+    {
+      "path": "tests/fixtures/toolchain-security/zod-cli-probe-58.1.14.cjs",
+      "sha256": "bc1986769325d877f0dfa379f3625a06854050050ec31eb999a19bf7622dd84d"
+    }
+  ]
+}

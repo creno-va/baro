@@ -40,7 +40,32 @@ const outcome = (action) => {
     return "rejected";
   }
 };
-if (mode === "braces") {
+if (mode === "deepmerge") {
+  const merge = dependency;
+  const poisoned = (value) =>
+    Object.getPrototypeOf(value) !== Object.prototype || value.syntheticPoison === true;
+  const source = JSON.parse('{"__proto__":{"syntheticPoison":true}}');
+  const target = Object.create(null);
+  const malformed = {
+    targetOwnProto: poisoned(merge(source, {})) ? "poisoned" : "safe",
+    nullPrototypeTarget: poisoned(merge(target, source)) ? "poisoned" : "safe",
+  };
+  const left = { nested: { a: 1 }, list: [1] },
+    right = { nested: { b: 2 }, list: [2] };
+  const value = merge(left, right);
+  const symbol = Symbol("synthetic");
+  const symbolic = merge({ [symbol]: { a: 1 } }, { [symbol]: { b: 2 } });
+  const compatibility = {
+    nested: JSON.stringify(value),
+    left: JSON.stringify(left),
+    right: JSON.stringify(right),
+    independentClone: value.nested !== left.nested && value.list !== left.list,
+    symbols: JSON.stringify(symbolic[symbol]),
+    custom: JSON.stringify(merge({ value: [1] }, { value: [2] }, { arrayMerge: (_a, b) => b })),
+    globalPrototypeIntact: !Object.hasOwn(Object.prototype, "syntheticPoison"),
+  };
+  console.log(JSON.stringify({ mode, malformed, compatibility }));
+} else if (mode === "braces") {
   const braces = dependency;
   const deep = "{".repeat(4000) + "x" + "}".repeat(4000);
   const parens = "(".repeat(4000) + "x" + ")".repeat(4000);

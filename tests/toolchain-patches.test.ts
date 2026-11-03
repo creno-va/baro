@@ -34,7 +34,7 @@ type Probe = {
   compatibility: unknown;
   rangeLimitPreserved?: boolean;
 };
-async function probe(mode: "braces" | "forge", directory: string): Promise<Probe> {
+async function probe(mode: "braces" | "deepmerge", directory: string): Promise<Probe> {
   const node = Bun.which("node");
   if (!node) throw new Error("PINNED_NODE_REQUIRED");
   return JSON.parse(
@@ -57,7 +57,7 @@ test("frozen package versions, patch/lock/complete installed tree and original l
   expect(manifest.rawAuditRequired).toBe(true);
   expect(manifest.packages.map((item) => `${item.name}@${item.version}`)).toEqual([
     "braces@3.0.3",
-    "node-forge@1.4.0",
+    "deepmerge@4.3.1",
   ]);
   expect(validationCommands("security")[0]).toEqual(["bun", "audit"]);
 });
@@ -85,7 +85,7 @@ test("registry baseline reconstruction demonstrates original failures and strict
     expect(await packageTreeHash(before)).toBe(item.beforeTreeSha256);
     for (const file of item.changes)
       expect(bytesHash(await readFile(resolve(before, file.path)))).toBe(file.beforeSha256);
-    const mode = item.name === "braces" ? "braces" : "forge";
+    const mode = item.name === "braces" ? "braces" : "deepmerge";
     const baseline = await probe(mode, before),
       patched = await probe(mode, installed);
     expect(patched.compatibility).toEqual(baseline.compatibility);
@@ -97,19 +97,12 @@ test("registry baseline reconstruction demonstrates original failures and strict
       expect(new Set(Object.values(patched.attacks ?? {}))).toEqual(new Set(["depth-rejected"]));
       expect(patched.rangeLimitPreserved).toBe(true);
     } else {
-      const malformed = [
-        "extraChild",
-        "garbageInsteadOfNull",
-        "repeatedNull",
-        "nonemptyNull",
-        "constructedNull",
-      ];
-      for (const field of malformed) {
-        expect(baseline.malformed?.[field]).toBe("accepted");
-        expect(patched.malformed?.[field]).toBe("rejected");
+      for (const field of ["targetOwnProto", "nullPrototypeTarget"]) {
+        expect(baseline.malformed?.[field]).toBe("poisoned");
+        expect(patched.malformed?.[field]).toBe("safe");
       }
-      expect(patched.malformed?.trailingBytes).toBe("rejected");
-      expect(patched.malformed?.wrongDigest).toBe("rejected");
+      const browser = await probe(mode, resolve(installed, "dist/umd.js"));
+      expect(browser).toEqual(patched);
     }
   }
 }, 20000);

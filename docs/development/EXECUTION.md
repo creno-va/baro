@@ -7,6 +7,10 @@
 정상 PR 병합 후 같은 SHA preview에서 검증한다. production 배포와 새 채팅·하위 에이전트·
 자동화·Goal 생성은 하지 않는다. 과거 generic POLICY_REJECTED를 공급자 거절로 단정하지 않는다.
 
+#724의 [항목별 보안 수리 기록](../quality/TOOLCHAIN-SECURITY-REPAIR-2026-11-04.md)은
+공식 도구 의존성 수정과 deepmerge vendor 완화를 구분한다. raw audit low1은 남아 있으며
+allowlist·검사 생략 없이 보존한다. 과거 #339 결정과 vendor patch 증거도 변경하지 않는다.
+
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·
 전역 shell/token·이 문서/PRD/ADR를 단독 소유하고01~06은 명시 파일을 소유한다. 사용자가 만든 여섯 채팅과

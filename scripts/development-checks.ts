@@ -153,10 +153,17 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
   if (requiredAiTests.some((test) => !tests.includes(test)))
     throw new Error("AI_RUNTIME_TEST_MISSING");
   const changed = new Set(files.map((file) => resolve(file)));
-  const cache = new Map<string, string[]>();
-  const imports = async (path: string) => {
+  // Share in-flight reads within this one selection only. Independent graph
+  // roots may load concurrently, but no later invocation can reuse stale bytes.
+  const cache = new Map<string, Promise<string[]>>();
+  const imports = (path: string): Promise<string[]> => {
     const prior = cache.get(path);
     if (prior) return prior;
+    const pending = readImports(path);
+    cache.set(path, pending);
+    return pending;
+  };
+  const readImports = async (path: string) => {
     const source = await Bun.file(path).text();
     const paths: string[] = [];
     for (const entry of ts.preProcessFile(source, true, true).importedFiles) {
@@ -175,12 +182,13 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
       );
       if (found) paths.push(found);
     }
-    cache.set(path, paths);
     return paths;
   };
   const selected: string[] = [...requiredAiTests];
-  for (const test of tests) {
-    if (test.startsWith("tests/evals/") || test.startsWith("tests/fixtures/")) continue;
+  const eligible = tests.filter(
+    (test) => !test.startsWith("tests/evals/") && !test.startsWith("tests/fixtures/"),
+  );
+  const inspect = async (test: string) => {
     const visited = new Set<string>();
     const touches = async (path: string): Promise<boolean> => {
       if (changed.has(path)) return true;
@@ -190,6 +198,11 @@ export async function unitTargets(files: string[], tests: string[]): Promise<str
       return false;
     };
     if (await touches(resolve(test))) selected.push(test);
+  };
+  // Bound filesystem concurrency while retaining every candidate and its own
+  // cycle detection. Final sorting keeps the public selection deterministic.
+  for (let offset = 0; offset < eligible.length; offset += 8) {
+    await Promise.all(eligible.slice(offset, offset + 8).map(inspect));
   }
   if (files.some((file) => file.startsWith("src/server/auth/")))
     selected.push(
