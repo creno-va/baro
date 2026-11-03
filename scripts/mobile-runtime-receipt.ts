@@ -10,6 +10,11 @@ import { localXcodeControlReceiptSchema } from "./mobile-ios-xcode-control";
 import { repeatedDigest } from "./mobile-runtime-fixture";
 import { metroHttpProofSchema } from "./mobile-runtime-metro";
 
+// These are expectations for two immutable synthetic byte patterns, not
+// observations of a received file. Every receipt still compares its actual hash.
+const expectedUploadDigest = repeatedDigest(UPLOAD_BYTES);
+const expectedDownloadDigest = repeatedDigest(DOWNLOAD_BYTES);
+
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 export const pinnedRuntimeBinarySchema = z.strictObject({
   kind: z.literal("pinned-xcode-simulator-control"),
@@ -106,8 +111,8 @@ export function verifyRuntimeReceipt(
     receipt.transport.upload.sha256 !== receipt.result.upload.sha256 ||
     receipt.transport.cancelUploadBytes !== receipt.result.cancelUploadBytesReceived ||
     receipt.transport.requestCount !== receipt.result.nativeCalls ||
-    receipt.result.upload.sha256 !== repeatedDigest(UPLOAD_BYTES) ||
-    receipt.result.download.sha256 !== repeatedDigest(DOWNLOAD_BYTES)
+    receipt.result.upload.sha256 !== expectedUploadDigest ||
+    receipt.result.download.sha256 !== expectedDownloadDigest
   )
     throw new Error("RUNTIME_RECEIPT_IDENTITY_OR_TRANSPORT_MISMATCH");
   verifyRuntimeBinaryIdentity(receipt, sourceSha, platform);
