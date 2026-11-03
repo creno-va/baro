@@ -74,7 +74,9 @@ test("follow-up fixture, configuration and product changes retain the managed br
 });
 
 test("full browser dispatch retains every discovered flow exactly once", async () => {
-  const targets = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")].sort();
+  const targets = [...new Bun.Glob("tests/browser/*.e2e.ts").scanSync(".")]
+    .map((target) => target.replaceAll("\\", "/"))
+    .sort();
   expect(targets.length).toBeGreaterThan(0);
   const commands: string[][] = [];
   await runBrowserTargets(targets, async (command) => {
@@ -84,6 +86,17 @@ test("full browser dispatch retains every discovered flow exactly once", async (
   for (const target of targets)
     expect(commands.filter((command) => command.includes(target))).toHaveLength(1);
   expect(commands.filter((command) => command[0] === "docker")).toHaveLength(1);
+});
+
+test("Windows-discovered browser paths dispatch the same canonical flow once", async () => {
+  const commands: string[][] = [];
+  await runBrowserTargets(["tests\\browser\\auth.e2e.ts"], async (command) => {
+    commands.push(command);
+    return 0;
+  });
+  expect(commands.filter((command) => command.includes("tests/browser/auth.e2e.ts"))).toHaveLength(
+    1,
+  );
 });
 
 test("browser validation succeeds only when every selected group succeeds", async () => {
