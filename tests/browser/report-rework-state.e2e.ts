@@ -124,6 +124,109 @@ const preparedReport = () => ({
   },
 });
 
+test("slow status reads finish once and release terminal report controls without overlapping polls", async ({
+  page,
+}) => {
+  const state = conversationState();
+  let report = preparedReport();
+  report.stale = true;
+  state.analysis = {
+    status: "running",
+    basis,
+    currentJobId: "synthetic-running-analysis",
+    missingItems: [],
+    failure: null,
+  };
+  state.report = {
+    status: "pending",
+    id: report.id,
+    revision: 1,
+    basis: null,
+    currentJobId: "synthetic-running-analysis",
+    failure: null,
+  };
+  let slow = false,
+    inFlight = 0,
+    maximumInFlight = 0,
+    mutations = 0;
+  await page.route("**/api/**", async (route) => {
+    const request = route.request(),
+      path = new URL(request.url()).pathname;
+    if (request.method() !== "GET") mutations++;
+    if (path === "/api/me/session")
+      return route.fulfill({
+        json: {
+          user: { id: "synthetic-report-owner", name: "합성", accountType: "customer" },
+          needsConsent: false,
+        },
+      });
+    const metadata =
+      path.endsWith("/rework/report") ||
+      path.endsWith("/rework/conversation") ||
+      path.endsWith("/files");
+    const counted = path.endsWith("/rework/report");
+    if (metadata && slow) {
+      if (counted) {
+        inFlight++;
+        maximumInFlight = Math.max(maximumInFlight, inFlight);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 6500));
+      if (counted) inFlight--;
+    }
+    if (page.isClosed()) return;
+    if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+    if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
+    if (path.endsWith("/files")) return route.fulfill({ json: [] });
+    if (path.endsWith("/rework/resolution"))
+      return route.fulfill({
+        json: {
+          ...resolutionState(report),
+          basis: null,
+          status: "not_ready",
+          allowedDocumentKinds: [],
+        },
+      });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("heading", { name: "리포트를 준비하고 있어요" })).toBeVisible();
+  slow = true;
+  report = {
+    ...report,
+    id: "synthetic-terminal-report",
+    revision: 2,
+    stale: false,
+    content:
+      "리포트 준비 상태\n추가 확인이 필요합니다.\n\n사건 개요\n새로 보존한 제한 리포트입니다.",
+  };
+  state.analysis = {
+    status: "failed",
+    basis,
+    currentJobId: null,
+    missingItems: [],
+    failure: "POLICY_REJECTED",
+  };
+  state.report = {
+    status: "ready",
+    id: report.id,
+    revision: 2,
+    basis,
+    currentJobId: null,
+    failure: null,
+  };
+  await expect(page.getByRole("heading", { name: "분석을 완료하지 못했어요" })).toBeVisible({
+    timeout: 13000,
+  });
+  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  expect(maximumInFlight).toBe(1);
+  await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeEnabled();
+  slow = false;
+  await page.getByRole("button", { name: "새 리포트 열기", exact: true }).click();
+  await expect(page.locator(".report-reading")).toContainText("새로 보존한 제한 리포트입니다.");
+  expect(mutations).toBe(0);
+});
+
 test("report evidence uses the real upload and review components, requests case reflection, then prepares a new immutable report", async ({
   page,
 }) => {

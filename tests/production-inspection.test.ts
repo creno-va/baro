@@ -177,6 +177,41 @@ test.each(["intake_questions", "intake_summary", "chat_response", "file_processi
   },
 );
 
+test("quotation contract receipts retain only finite resolution counts and never draft text or positions", () => {
+  const quotationResolution = {
+    valid_span: 1,
+    unique_exact_match: 0,
+    text_not_found: 1,
+    ambiguous: 0,
+    invalid_text: 0,
+    source_unavailable: 0,
+  };
+  const result = finiteWorkspaceOutput({
+    analysisFailure: {
+      stage: "generation",
+      reason: "quotation_contract",
+      quotationResolution,
+      draft: "private-draft",
+      startUtf16: 173,
+      token: "private-token",
+    },
+  });
+  expect(result).toEqual({
+    analysisFailure: { stage: "generation", reason: "quotation_contract", quotationResolution },
+  });
+  expect(JSON.stringify(result)).not.toContain("private");
+  const invalid = finiteWorkspaceOutput({
+    analysisFailure: {
+      stage: "generation",
+      reason: "quotation_contract",
+      quotationResolution: { ...quotationResolution, text: "private-quote" },
+    },
+  });
+  expect(invalid).toEqual({
+    analysisFailure: { stage: "generation", reason: "quotation_contract" },
+  });
+});
+
 test("analysis inspection keeps only stage/reason and finite audit evidence", () => {
   const result = finiteWorkspaceOutput({
     analysisFailure: {

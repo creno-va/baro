@@ -39,6 +39,7 @@ async function fixture(
   purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim",
   legalReady = false,
   apiOptions: Pick<NonNullable<Parameters<typeof createReworkApi>[0]>, "stateDependencies"> = {},
+  quoteMismatch: false | "once" | "always" = false,
 ) {
   const f = await reportFixture();
   fixtures.push(f);
@@ -81,6 +82,7 @@ async function fixture(
     .query("SELECT id,token FROM session WHERE user_id=?")
     .get(f.actor.ownerId) as { id: string; token: string };
   const foreign = await seedTestSession(f.db, { now: Date.parse(f.actor.now), consent: true });
+  const runtimeResults: unknown[] = [];
   const instances = new Map<
       string,
       {
@@ -142,6 +144,17 @@ async function fixture(
                   }
                 : null;
         if (!output) throw new Error("Unexpected synthetic phase");
+        if (
+          (quoteMismatch === "always" ||
+            (quoteMismatch === "once" &&
+              calls.filter((p) => p === "workspace_legal_analysis").length === 1)) &&
+          phase === "workspace_legal_analysis" &&
+          "sourceClaims" in output
+        ) {
+          const quote = output.sourceClaims.find((claim) => claim.kind === "quotation");
+          if (!quote) throw new Error("Missing synthetic quotation");
+          quote.text = "합성: 제공된 원문에는 없는 인용문";
+        }
         return {
           id: `synthetic-central-${calls.length}`,
           service_tier: "default",
@@ -226,7 +239,9 @@ async function fixture(
       if (entry.status !== "queued") continue;
       entry.status = "running";
       const settlement: Promise<void>[] = [];
-      await runWorkspaceRuntime(env, entry.params, id, (p) => settlement.push(p), options);
+      runtimeResults.push(
+        await runWorkspaceRuntime(env, entry.params, id, (p) => settlement.push(p), options),
+      );
       await Promise.all(settlement);
       entry.status = "complete";
     }
@@ -240,6 +255,7 @@ async function fixture(
     drain,
     calls,
     instances,
+    runtimeResults,
     foreign,
     options,
     outage: () => {
@@ -247,6 +263,58 @@ async function fixture(
     },
   };
 }
+test("a real durable quote correction reaches audited publication and the matching current report", async () => {
+  const f = await fixture("prepare_claim", true, {}, "once");
+  await f.runtime.resume(f.actor.ownerId, f.workspaceId);
+  await f.drain();
+  expect(f.calls).toEqual([
+    "workspace_legal_plan",
+    "workspace_legal_analysis",
+    "workspace_legal_analysis",
+    "workspace_legal_audit",
+  ]);
+  expect(f.runtimeResults[0]).toMatchObject({ status: "completed" });
+  const state = await f.runtime.state.get(f.actor.ownerId, f.workspaceId);
+  expect(state.analysis.status).toBe("ready");
+  expect(state.report.status).toBe("ready");
+  expect(state.report.basis).toEqual(state.analysis.basis);
+  const receipts = f.db.sqlite
+    .query("SELECT state,transport FROM v2_execution_admissions WHERE service='model'")
+    .all();
+  expect(receipts).toEqual(
+    Array.from({ length: 4 }, () => ({ state: "final", transport: "response" })),
+  );
+});
+
+test("real durable analysis retains quotation-contract failure as generation policy instead of provider refusal", async () => {
+  const f = await fixture("prepare_claim", true, {}, "always");
+  await f.runtime.resume(f.actor.ownerId, f.workspaceId);
+  await f.drain();
+  expect(f.calls).toEqual([
+    "workspace_legal_plan",
+    "workspace_legal_analysis",
+    "workspace_legal_analysis",
+  ]);
+  expect(f.runtimeResults).toHaveLength(1);
+  expect(f.runtimeResults[0]).toMatchObject({
+    status: "failed",
+    analysisFailure: {
+      stage: "generation",
+      reason: "quotation_contract",
+      quotationResolution: { text_not_found: 1 },
+    },
+  });
+  expect(JSON.stringify(f.runtimeResults)).not.toContain("제공된 원문에는 없는");
+  const state = await f.runtime.state.get(f.actor.ownerId, f.workspaceId);
+  expect(state.analysis).toMatchObject({ status: "failed", failure: "POLICY_REJECTED" });
+  const receipts = f.db.sqlite
+    .query("SELECT state,transport FROM v2_execution_admissions WHERE service='model'")
+    .all();
+  expect(receipts).toEqual(
+    Array.from({ length: 3 }, () => ({ state: "final", transport: "response" })),
+  );
+});
+
 test("passive conversation reads retry only a bounded moving snapshot and never admit paid work", async () => {
   for (const writes of [2, 4]) {
     let reads = 0;

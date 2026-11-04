@@ -8,8 +8,13 @@ import {
   validationOutputSchema,
 } from "../../../contracts";
 import { type DependencyCategory, dependencyCategory } from "../../dependency-diagnostics";
+import type { QuotationResolution } from "../citation/literal-quotation";
 import { comparisonCandidateSchema } from "../legal-retrieval/research/comparison";
-import { LEGAL_ANALYSIS_PROMPT_VERSION } from "./analysis-prompts";
+import {
+  LEGAL_ANALYSIS_PROMPT_VERSION,
+  LEGAL_ANALYSIS_QUOTATION_CORRECTION,
+} from "./analysis-prompts";
+import { legalQuotationContractFailure } from "./analysis-quotation-contract";
 import {
   legalAnalysisAuditSchema,
   legalAnalysisOutputSchema,
@@ -92,6 +97,7 @@ export class ModelError extends Error {
   constructor(
     readonly code: "MODEL_UNAVAILABLE" | "MODEL_SCHEMA_INVALID" | "POLICY_REJECTED",
     readonly schemaFailure?: ModelSchemaFailure,
+    readonly quotationFailure?: QuotationResolution,
   ) {
     super(code);
   }
@@ -200,7 +206,9 @@ export function prepareGatewayWireInput(phase: Phase, input: unknown, correction
         content: JSON.stringify({
           data: input,
           correction: correction
-            ? "Previous output did not match schema. Return exactly the schema without new facts."
+            ? phase === "workspace_legal_analysis"
+              ? LEGAL_ANALYSIS_QUOTATION_CORRECTION
+              : "Previous output did not match schema. Return exactly the schema without new facts."
             : null,
         }),
       },
@@ -473,6 +481,16 @@ export function createLlmGateway(
           }
         }
         if (output !== null) {
+          const quotationFailure =
+            phase === "workspace_legal_analysis"
+              ? legalQuotationContractFailure(output, input)
+              : undefined;
+          if (quotationFailure) {
+            if (correction || call === 2 || !(await reserveCorrection()))
+              throw new ModelError("POLICY_REJECTED", undefined, quotationFailure);
+            correction = true;
+            continue;
+          }
           const usage = responseReceipt(raw);
           options.observe?.({
             requestId,

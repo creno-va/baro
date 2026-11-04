@@ -304,6 +304,7 @@ export function ReportReview({
   useEffect(() => {
     clearOwnerState();
     void load();
+    let pendingStatus: { sequence: number; request: number } | null = null;
     const check = (event: Event) => {
       if (isExplicitSignOut(event)) {
         clearOwnerState();
@@ -312,7 +313,13 @@ export function ReportReview({
       }
       if (document.visibilityState === "hidden") return;
       const sequence = loadSequence.current;
+      // A slow metadata read must finish before the next ordinary poll. Starting
+      // a fresh fence every four seconds otherwise supersedes every response.
+      // Focus/session/storage events retain their existing fresh owner checks.
+      if (event.type === "report-status" && pendingStatus?.sequence === sequence) return;
       const request = ++focusRequest.current;
+      const pending = { sequence, request };
+      pendingStatus = pending;
       const current = () => sequence === loadSequence.current && request === focusRequest.current;
       setAccessChecking(true);
       void (async () => {
@@ -366,6 +373,7 @@ export function ReportReview({
           setError(e instanceof Error ? e.message : "로그인 상태를 다시 확인해 주세요.");
         })
         .finally(() => {
+          if (pendingStatus === pending) pendingStatus = null;
           if (current()) setAccessChecking(false);
         });
     };

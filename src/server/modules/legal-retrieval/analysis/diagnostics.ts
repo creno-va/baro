@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safeClaimFailure } from "../../citation/claim-diagnostics";
+import { safeQuotationResolution } from "../../citation/literal-quotation";
 import { safeWorkspaceAuditFailure } from "../../workspace/audit-diagnostics";
 
 const header = z.object({
@@ -23,6 +24,7 @@ const header = z.object({
     "unsupported_instrument_number",
     "audit_rejected",
     "claim_validation",
+    "quotation_contract",
     "stale_revision",
     "source_unavailable",
     "dependency_unavailable",
@@ -32,6 +34,7 @@ const header = z.object({
 export type LegalAnalysisFailure = z.infer<typeof header> & {
   auditFailure?: NonNullable<ReturnType<typeof safeWorkspaceAuditFailure>>;
   claimFailure?: NonNullable<ReturnType<typeof safeClaimFailure>>;
+  quotationResolution?: NonNullable<ReturnType<typeof safeQuotationResolution>>;
 };
 
 /** Private workflow receipt: enums/counts only. Never retain draft, text, IDs or offsets. */
@@ -41,9 +44,11 @@ export function safeLegalAnalysisFailure(raw: unknown): LegalAnalysisFailure | u
   const value = raw as Record<string, unknown>;
   const auditFailure = safeWorkspaceAuditFailure(value.auditFailure);
   const claimFailure = safeClaimFailure(value.claimFailure);
+  const quotationResolution = safeQuotationResolution(value.quotationResolution);
   return {
     ...parsed.data,
     ...(auditFailure ? { auditFailure } : {}),
     ...(claimFailure ? { claimFailure } : {}),
+    ...(quotationResolution ? { quotationResolution } : {}),
   };
 }
