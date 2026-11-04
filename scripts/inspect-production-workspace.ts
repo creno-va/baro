@@ -2,6 +2,7 @@ import { z } from "zod";
 import { opaqueIdSchema } from "../src/contracts";
 import { safeClaimFailure } from "../src/server/modules/citation/claim-diagnostics";
 import { safeLegalAnalysisFailure } from "../src/server/modules/legal-retrieval/analysis/diagnostics";
+import { NO_NEWER_CONFLICTING_SOURCE_SQL } from "../src/server/modules/legal-retrieval/v2/source-authority";
 import { safeModelSchemaFailure } from "../src/server/modules/llm-gateway/schema-diagnostics";
 import { safeWorkspaceAuditFailure } from "../src/server/modules/workspace/audit-diagnostics";
 import { safeWorkspaceContentFailure } from "../src/server/modules/workspace/content-diagnostics";
@@ -22,6 +23,22 @@ const modelReceiptGroupSchema = z.object({
   state: z.enum(["prepared", "dispatched", "final", "unknown"]),
   transport: z.enum(["not_sent", "response", "unknown", "provider_error"]).nullable(),
   receipts: z.number().int().min(0).max(1_000_000),
+});
+const revisionBoundarySchema = z.object({
+  kind: z.enum([
+    "workspace",
+    "job",
+    "report",
+    "analysis",
+    "task",
+    "checkpoint",
+    "reconciliation",
+    "source_binding",
+  ]),
+  revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  relatedRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
+  summaryRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable(),
+  proof: z.number().int().min(0).max(1).nullable(),
 });
 const jobSchema = z.object({
   id: opaqueIdSchema,
@@ -156,7 +173,7 @@ export async function inspectProductionWorkspace(
   raw: unknown,
   fetcher: (input: string, init?: RequestInit) => Promise<Response> = fetch,
   observe: (stage: "release" | "jobs" | "workflow" | "telemetry") => void = () => {},
-  options: { completedModelReceipts?: boolean } = {},
+  options: { completedModelReceipts?: boolean; revisionBoundary?: boolean } = {},
 ) {
   const input = inputSchema.parse(raw);
   observe("release");
@@ -307,6 +324,30 @@ export async function inspectProductionWorkspace(
       attemptsPerJobWindow: 12,
     };
   }
+  let revisionBoundary: z.infer<typeof revisionBoundarySchema>[] | undefined;
+  if (options.revisionBoundary) {
+    const boundary = await api(`d1/database/${databases[input.environment]}/query`, {
+      // Numeric publication identities only. Never select private payloads,
+      // prompts, source bodies, tokens, amounts or unbounded error strings.
+      sql: `SELECT 'workspace' kind,revision,confirmed_summary_revision relatedRevision,NULL summaryRevision,CASE WHEN current_job_id IS NULL THEN 1 ELSE 0 END proof FROM v2_workspaces WHERE id=?
+UNION ALL SELECT 'job',target_revision,attempts,NULL,CASE WHEN status='completed' THEN 1 ELSE 0 END FROM v2_jobs WHERE workspace_id=? AND kind='chat_response'
+UNION ALL SELECT 'report',r.revision,r.workspace_revision,r.summary_revision,CASE WHEN EXISTS(SELECT 1 FROM v2_operations o JOIN v2_jobs j ON j.operation_id=o.id JOIN v2_private_snapshots s ON s.id=r.snapshot_id WHERE o.id=r.operation_id AND o.workspace_id=r.workspace_id AND o.kind='report' AND o.revision=r.workspace_revision AND j.target_kind='report' AND j.target_id=r.id AND j.target_revision=r.workspace_revision AND j.kind='report_build' AND s.owner_id=o.owner_id AND s.workspace_id=r.workspace_id AND s.target_id=r.id AND s.purpose='report' AND s.revision=r.workspace_revision AND s.state='published') THEN 1 ELSE 0 END FROM v2_reports r WHERE r.workspace_id=? AND r.id NOT LIKE 'export-%'
+UNION ALL SELECT kind,revision,workspace_revision,NULL,NULL FROM v2_rework_records WHERE workspace_id=? AND state='published' AND kind IN ('analysis','task','checkpoint','reconciliation')
+UNION ALL SELECT 'source_binding',count(*),coalesce(sum(CASE WHEN s.fetched_at<=? AND s.verified_at<=? AND s.expires_at>? AND ${NO_NEWER_CONFLICTING_SOURCE_SQL} THEN 1 ELSE 0 END),0),NULL,NULL FROM v2_citation_bindings c LEFT JOIN v2_official_sources s ON s.source_id=c.source_id WHERE c.workspace_id=? ORDER BY kind,revision DESC LIMIT 96`,
+      params: [
+        ...Array(4).fill(input.workspaceId),
+        ...Array(3).fill(new Date().toISOString()),
+        input.workspaceId,
+      ],
+    });
+    revisionBoundary =
+      z
+        .array(
+          z.object({ success: z.literal(true), results: z.array(revisionBoundarySchema).max(96) }),
+        )
+        .length(1)
+        .parse(boundary)[0]?.results ?? [];
+  }
   let telemetry: unknown = { status: "not_requested" };
   if (rows.length) {
     try {
@@ -440,6 +481,7 @@ export async function inspectProductionWorkspace(
     jobs,
     telemetry,
     ...(modelReceipts ? { modelReceipts } : {}),
+    ...(revisionBoundary ? { revisionBoundary } : {}),
   };
 }
 if (import.meta.main) {
@@ -453,7 +495,7 @@ if (import.meta.main) {
       },
       fetch,
       (stage) => console.info(JSON.stringify({ event: "production_inspection_stage", stage })),
-      { completedModelReceipts: true },
+      { completedModelReceipts: true, revisionBoundary: true },
     );
     await Bun.write(
       ".wrangler/readiness/production-inspection.json",
