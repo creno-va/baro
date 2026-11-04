@@ -1759,6 +1759,239 @@ const materialTimelineRejection = {
     },
   ],
 };
+const materialQuestionRejection = {
+  ...approved,
+  pass: false,
+  findings: [
+    {
+      severity: "critical",
+      code: "question_repetition",
+      target: "response_text",
+      basis: "intake_answer",
+    },
+    { severity: "critical", code: "coverage", target: "unknown", basis: "user_message" },
+  ],
+};
+function materialQuestionFixture() {
+  const f = materialChatContext("차용금: 3,000,000원. 합성 자료이며 진정성은 미확인입니다.");
+  const material = f.saved.materials[0];
+  if (!material) throw new Error("Missing synthetic observation");
+  material.coverage = { observationCertainty: "uncertain", userEdited: false };
+  const batch = f.saved.intake.batches[0];
+  if (!batch) throw new Error("Missing synthetic intake batch");
+  batch.questions = [question("q2", "차용증을 작성했나요?")];
+  batch.answers = [{ questionId: "q2", status: "answered", value: "작성하지 않음" }];
+  f.saved.references.answeredQuestionIds = ["q2"];
+  return f;
+}
+for (const repaired of [true, false])
+  test(`material response repeating a supplied intake answer gets one full re-audit, repaired=${repaired}`, async () => {
+    const f = materialQuestionFixture();
+    const before = structuredClone(f.saved);
+    let generations = 0,
+      audits = 0;
+    const p = pipeline((phase, input) => {
+      if (phase === "workspace_audit") {
+        audits++;
+        return audits === 2 && repaired ? approved : materialQuestionRejection;
+      }
+      generations++;
+      if (generations === 2) {
+        expect(input).toEqual({
+          ...before,
+          sourceLookupPerformed: false,
+          draftCorrection: {
+            reason: "audit_rejected",
+            auditFailure: {
+              code: "question_repetition",
+              findings: materialQuestionRejection.findings.map(({ code, target, basis }) => ({
+                code,
+                target,
+                basis,
+              })),
+            },
+          },
+        });
+        const feedback = JSON.stringify((input as { draftCorrection: unknown }).draftCorrection);
+        expect(feedback).not.toContain("차용증");
+        expect(feedback).not.toContain(f.reference.fileId);
+      }
+      return {
+        ...chatText(
+          generations === 1
+            ? "자료를 확인했어요. 차용증을 작성했나요?"
+            : "차용증 미작성 답변은 보존하고 자료의 기재를 반영했어요.",
+        ),
+        facts: generations === 2 ? [f.fact("차용금: 3,000,000원")] : [],
+        unknowns:
+          generations === 1 ? ["차용증 작성 여부"] : ["자료의 진정성", "금융기관 원본 확보 여부"],
+      };
+    });
+    if (repaired) {
+      const result = await p.value.chat(f.saved, "synthetic-material-question-repair");
+      expect(result.facts[0]?.text).toBe("차용금: 3,000,000원");
+      expect(result.facts[0]?.certainty).toBe("uncertain");
+      expect("unknowns" in result && result.unknowns).toEqual([
+        "자료의 진정성",
+        "금융기관 원본 확보 여부",
+      ]);
+    } else
+      await expect(p.value.chat(f.saved, "synthetic-material-question-stop")).rejects.toMatchObject(
+        { reason: "audit_rejected" },
+      );
+    expect(p.calls.map((c) => c.phase)).toEqual([
+      "workspace_chat",
+      "workspace_audit",
+      "workspace_chat",
+      "workspace_audit",
+    ]);
+    expect(new Set(p.calls.map((c) => c.invocation)).size).toBe(4);
+    expect(generations).toBe(2);
+    expect(audits).toBe(2);
+    expect(f.saved).toEqual(before);
+  });
+
+test.each([
+  "privacy",
+  "legal",
+  "strategy",
+  "fact",
+  "coverage_only",
+  "wrong_basis",
+  "wrong_target",
+  "no_selection",
+  "unrelated_selection",
+  "no_material",
+  "no_answer",
+  "missing_answer_reference",
+  "unmapped_question",
+] as const)("material question correction retains the failure boundary: %s", async (mode) => {
+  const f = materialQuestionFixture();
+  const batch = f.saved.intake.batches[0];
+  if (!batch) throw new Error("Missing synthetic intake batch");
+  if (f.saved.latestMessage && mode === "no_selection") f.saved.latestMessage.selectedFileIds = [];
+  if (f.saved.latestMessage && mode === "unrelated_selection")
+    f.saved.latestMessage.selectedFileIds = ["different-file"];
+  if (mode === "no_material") f.saved.materials = [];
+  if (mode === "no_answer") batch.answers = [];
+  if (mode === "missing_answer_reference") f.saved.references.answeredQuestionIds = [];
+  if (mode === "unmapped_question") batch.questions = [];
+  const findings =
+    mode === "privacy"
+      ? [
+          ...materialQuestionRejection.findings,
+          { severity: "critical", code: "privacy", target: "response_text", basis: "policy" },
+        ]
+      : mode === "coverage_only"
+        ? materialQuestionRejection.findings.slice(1)
+        : materialQuestionRejection.findings.map((finding) =>
+            finding.code !== "question_repetition"
+              ? finding
+              : {
+                  ...finding,
+                  ...(mode === "wrong_basis" ? { basis: "unknown" } : {}),
+                  ...(mode === "wrong_target" ? { target: "question" } : {}),
+                },
+          );
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? {
+          ...materialQuestionRejection,
+          findings,
+          legalClaimsSupported: mode !== "legal",
+          strategyDetected: mode === "strategy",
+          unsupportedFactIds: mode === "fact" ? ["unsupported"] : [],
+        }
+      : chatText("차용증을 작성했나요?"),
+  );
+  await expect(p.value.chat(f.saved, "synthetic-material-question-guard")).rejects.toMatchObject({
+    reason: "audit_rejected",
+  });
+  expect(p.calls.map((c) => c.phase)).toEqual(["workspace_chat", "workspace_audit"]);
+});
+
+test.each(["lookup", "unsupported_fact", "audit_privacy"] as const)(
+  "material question correction still runs complete validation: %s",
+  async (mode) => {
+    const f = materialQuestionFixture();
+    let generated = 0,
+      audits = 0;
+    const p = pipeline((phase) => {
+      if (phase === "workspace_audit")
+        return ++audits === 1
+          ? materialQuestionRejection
+          : {
+              ...approved,
+              pass: false,
+              findings: [
+                { severity: "critical", code: "privacy", target: "response_text", basis: "policy" },
+              ],
+            };
+      if (++generated === 1) return chatText("차용증을 작성했나요?");
+      return {
+        ...chatText("기존 답변을 보존하고 확인된 자료만 정리했어요."),
+        ...(mode === "lookup" ? { requestedCurrentTime: true } : {}),
+        ...(mode === "unsupported_fact" ? { facts: [f.fact("원문에 없는 송금 완료")] } : {}),
+      };
+    });
+    await expect(
+      p.value.chat(f.saved, "synthetic-material-question-validation"),
+    ).rejects.toMatchObject({
+      reason:
+        mode === "lookup"
+          ? "unauthorized_reference"
+          : mode === "unsupported_fact"
+            ? "unsupported_fact"
+            : "audit_rejected",
+    });
+    expect(generated).toBe(2);
+    expect(audits).toBe(mode === "audit_privacy" ? 2 : 1);
+  },
+);
+test("material question rejection after another correction cannot start a third draft", async () => {
+  const f = materialQuestionFixture();
+  let generated = 0;
+  const p = pipeline((phase) =>
+    phase === "workspace_audit"
+      ? materialQuestionRejection
+      : chatText(
+          ++generated === 1 ? "소송 전략을 추가하지 않고 정리했어요." : "차용증을 작성했나요?",
+        ),
+  );
+  await expect(p.value.chat(f.saved, "synthetic-material-shared-limit")).rejects.toMatchObject({
+    reason: "audit_rejected",
+  });
+  expect(p.calls.map((c) => c.phase)).toEqual([
+    "workspace_chat",
+    "workspace_chat",
+    "workspace_audit",
+  ]);
+  expect(generated).toBe(2);
+});
+
+test("material question correction cannot dispatch when its existing admission is denied", async () => {
+  const f = materialQuestionFixture();
+  const sent: Phase[] = [];
+  let reservations = 0;
+  const value = createWorkspacePipeline(
+    {
+      call: async (phase, _input, _id, reserve) => {
+        if (!(await reserve())) throw new ModelError("MODEL_UNAVAILABLE");
+        sent.push(phase);
+        return phase === "workspace_audit"
+          ? materialQuestionRejection
+          : chatText("차용증을 작성했나요?");
+      },
+    },
+    { reserve: async () => ++reservations <= 2, invocation: () => crypto.randomUUID() },
+  );
+  await expect(value.chat(f.saved, "synthetic-material-admission-limit")).rejects.toMatchObject({
+    code: "MODEL_UNAVAILABLE",
+  });
+  expect(sent).toEqual(["workspace_chat", "workspace_audit"]);
+  expect(reservations).toBe(3);
+});
+
 function materialTimelineDraft(
   reference: ReturnType<typeof materialChatContext>["reference"],
   repaired: boolean,
