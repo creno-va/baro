@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 // explicitly has no legal provider: these tests must never assert verified law.
 test.skip(process.env.BARO_REWORK_SHARED_MOCK !== "true", "Shared rework mock main gate required");
 
-for (const purpose of ["고소·청구를 준비하고 싶어요", "상대방 주장에 대응하고 싶어요"] as const)
+for (const purpose of ["고소 준비", "주장 대응"] as const)
   test(`shared mock ${purpose}: actual intake and inline limited report preserve unavailable law`, async ({
     page,
   }) => {

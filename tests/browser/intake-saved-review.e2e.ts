@@ -397,7 +397,7 @@ test("case purpose and context keep visible inset keyboard focus without pointer
   await page.goto("/app");
   const nextControlKey =
     browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
-  for (const name of ["고소·청구를 준비하고 싶어요", "개인"]) {
+  for (const name of ["고소 준비"]) {
     const radio = page.getByRole("radio", { name, exact: true });
     const label = radio.locator("..");
     await expect(radio).toBeEnabled();

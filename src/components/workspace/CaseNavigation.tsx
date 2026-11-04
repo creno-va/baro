@@ -26,13 +26,11 @@ export function CaseNavigation({
   title,
   active,
   fileCount,
-  subjectContext,
 }: {
   caseId: string;
   title: string;
   active: (typeof menus)[number]["id"];
   fileCount?: number | undefined;
-  subjectContext?: "individual" | "company" | undefined;
 }) {
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const navigation = useRef<HTMLElement>(null);
@@ -57,11 +55,6 @@ export function CaseNavigation({
   }, []);
   return (
     <div className="case-navigation">
-      {subjectContext && (
-        <p className="case-subject-context">
-          {subjectContext === "company" ? "기업 사건" : "개인 사건"}
-        </p>
-      )}
       <header className="workspace-header">
         <h1 title={title}>{title}</h1>
       </header>

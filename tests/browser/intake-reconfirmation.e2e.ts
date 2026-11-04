@@ -208,28 +208,24 @@ for (const focusInside of [true, false]) {
   });
 }
 
-for (const [purpose, subject] of [
-  ["고소·청구를 준비하고 싶어요", "개인"],
-  ["상대방 주장에 대응하고 싶어요", "기업"],
-] as const) {
-  test(`${purpose}: saves a separate subject context and resumes the same purpose`, async ({
+for (const purpose of ["고소 준비", "주장 대응"] as const) {
+  test(`${purpose}: saves the selected purpose and resumes without an owner-category choice`, async ({
     page,
   }) => {
     await seed(page);
     await page.goto("/app");
     await page.getByRole("radio", { name: purpose, exact: true }).check();
-    await page.getByRole("radio", { name: subject, exact: true }).check();
     await page
       .getByLabel("지금까지 있었던 일")
       .fill("실제 사건이 없는 합성 입력입니다. 서로 다른 입장과 기업 맥락을 따로 저장합니다.");
     await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
     await expect(page).toHaveURL(/\/intake$/);
     await expect(page.getByText(purpose, { exact: true })).toBeVisible();
-    await expect(page.getByText(`${subject} 사건`, { exact: true })).toBeVisible();
+    await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
     await page.reload();
     await expect(page.getByText(purpose, { exact: true })).toBeVisible();
-    await expect(page.getByText(`${subject} 사건`, { exact: true })).toBeVisible();
-    await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+    await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
+    await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
   });
 }
 
@@ -699,14 +695,12 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   const item = await seed(page, "active");
   await page.goto(`/cases/${item.id}/summary`);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await expect(
-    page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }),
-  ).not.toBeChecked();
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).not.toBeChecked();
   await page.getByRole("button", { name: "나중에 확인", exact: true }).click();
   await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
   expect((await canonical(page, item.id)).revision).toBe(12);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }).check();
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await page.getByRole("button", { name: "입장 저장", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "어떤 입장에서 정리하고 싶나요?" }),
@@ -714,10 +708,10 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("상대방 주장에 대응하고 싶어요", { exact: true }),
+      .getByText("주장 대응", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("기업 사건", { exact: true })).toBeVisible();
-  await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+  await expect(page.getByText("기업 사건", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
   const saved = await canonical(page, item.id);
   expect(saved.subjectContext).toBe("company");
   expect(saved.revision).toBe(13);
@@ -726,7 +720,7 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("상대방 주장에 대응하고 싶어요", { exact: true }),
+      .getByText("주장 대응", { exact: true }),
   ).toBeVisible();
 });
 
@@ -736,19 +730,13 @@ test("320px case input separates purpose from subject context without overflow",
   await seed(page);
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/app");
-  await page.getByRole("radio", { name: "상대방 주장에 대응하고 싶어요", exact: true }).check();
-  await page.getByRole("radio", { name: "기업", exact: true }).check();
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
     "placeholder",
     /상대방의 주장/,
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  for (const name of [
-    "고소·청구를 준비하고 싶어요",
-    "상대방 주장에 대응하고 싶어요",
-    "개인",
-    "기업",
-  ]) {
+  for (const name of ["고소 준비", "주장 대응", "개인", "기업"]) {
     const box = await page.getByRole("radio", { name, exact: true }).locator("..").boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }

@@ -47,19 +47,17 @@ test("a customer starts directly on home and reaches adaptive questions without 
   await narrative.fill(
     "합성 사건입니다. 회사 거래처에서 계약한 대금을 약속한 날짜가 지나도 지급하지 않았어요.",
   );
-  await page.getByRole("radio", { name: "기업", exact: true }).check();
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await submit.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/cases\/[^/]+\/intake/);
   await expect(page.getByRole("heading", { name: "언제부터 어떤 일을 했나요?" })).toBeVisible();
   expect(
     await page.evaluate(() => {
-      const items = JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}");
-      return (Object.values(items) as { subjectContext: string }[]).map(
-        (item) => item.subjectContext,
-      );
+      const items = JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}");
+      return (Object.values(items) as { casePurpose: string }[]).map((item) => item.casePurpose);
     }),
-  ).toEqual(["company"]);
+  ).toEqual(["respond_to_claim"]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -267,7 +265,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   await narrative.fill(
     "이전 고객만 입력한 합성 초안입니다. 약속한 날짜가 지나도 대금을 받지 못했어요.",
   );
-  await page.getByRole("radio", { name: "기업", exact: true }).check();
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   const peer = await context.newPage();
   await peer.goto("/login");
   // addInitScript seeds each page; change the session after the peer has loaded.
@@ -282,7 +280,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   });
   await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
   await expect(narrative).toHaveValue("");
-  await expect(page.getByRole("radio", { name: "개인", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

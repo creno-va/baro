@@ -226,9 +226,12 @@ test("customer completes intake workspace original PDF report and cascading dele
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
     );
-    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
-      2,
-    );
+    if (viewport.width <= 760)
+      expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) - viewport.height)).toBeLessThan(2);
+    else
+      expect(
+        Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2),
+      ).toBeLessThan(2);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 확인");
@@ -265,9 +268,12 @@ test("customer completes intake workspace original PDF report and cascading dele
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
     );
-    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
-      2,
-    );
+    if (viewport.width <= 760)
+      expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) - viewport.height)).toBeLessThan(2);
+    else
+      expect(
+        Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2),
+      ).toBeLessThan(2);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page

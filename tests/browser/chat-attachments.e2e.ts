@@ -165,7 +165,7 @@ test("case header shows a concise title below its small subject label and deleti
       };
     });
     expect(layout).toEqual({ above: true, small: true });
-    await expect(nav.locator(".case-subject-context")).toHaveText("기업 사건");
+    await expect(nav.locator(".case-subject-context")).toHaveCount(0);
     if (width !== 320) await page.screenshot({ path: `.wrangler/case-heading-${width}.png` });
   }
   const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
