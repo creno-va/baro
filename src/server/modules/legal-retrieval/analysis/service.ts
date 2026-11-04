@@ -390,12 +390,13 @@ export function createAutomaticLegalAnalysis(deps: {
     const draft = draftParsed.data;
     // Resolve numeric coordinates only against the exact verified excerpt sent to
     // the model. Text, source identity, ambiguity and final validation stay intact.
-    draft.sourceClaims = resolveQuotationSpans(draft.sourceClaims, {
+    const quotations = resolveQuotationSpans(draft.sourceClaims, {
       citations: projection.citations,
       sourceTexts: projection.sourceTexts,
       sourceRetrieval: retrieval,
       references: { verifiedCitationIds: projection.citations.map((c) => c.id) },
-    }).claims;
+    });
+    draft.sourceClaims = quotations.claims;
     if (!analysisDraftGrounded(draft, input, plan, retrieval.chunks))
       throw new LegalAnalysisError("POLICY_REJECTED", {
         stage: "grounding",
@@ -462,6 +463,7 @@ export function createAutomaticLegalAnalysis(deps: {
       throw new LegalAnalysisError("POLICY_REJECTED", {
         stage: "claims",
         reason: "claim_validation",
+        quotationResolution: quotations.resolution,
         ...(validation.failure ? { claimFailure: validation.failure } : {}),
       });
     deps.onStage?.("source_recheck");

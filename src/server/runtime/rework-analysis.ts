@@ -6,6 +6,7 @@ import { createV2ReworkRepository } from "../db/v2-rework";
 import { prepareReworkJobAdmission } from "../db/v2-rework-jobs";
 import { completeLeaseStatements } from "../db/v2-workspace";
 import { configuredBounds } from "../modules/budget/model-configuration";
+import { safeQuotationResolution } from "../modules/citation/literal-quotation";
 import {
   analysisBasis,
   canonicalAnalysisJson,
@@ -461,12 +462,15 @@ export function createLegalAnalysisJobs(
       } catch (error) {
         // Authority loss cannot publish facts or release an ambiguous execution.
         const code = (error as { code?: string })?.code;
+        const quotationResolution =
+          error instanceof ModelError ? safeQuotationResolution(error.quotationFailure) : undefined;
         const analysisFailure =
           safeLegalAnalysisFailure((error as { diagnostic?: unknown })?.diagnostic) ??
           safeLegalAnalysisFailure({
-            stage,
-            reason:
-              code === "POLICY_REJECTED" && error instanceof ModelError
+            stage: quotationResolution ? "generation" : stage,
+            reason: quotationResolution
+              ? "quotation_contract"
+              : code === "POLICY_REJECTED" && error instanceof ModelError
                 ? "provider_refusal"
                 : code === "MODEL_SCHEMA_INVALID"
                   ? "model_schema"
@@ -479,6 +483,7 @@ export function createLegalAnalysisJobs(
                         : code === "MODEL_UNAVAILABLE"
                           ? "dependency_unavailable"
                           : "unknown",
+            ...(quotationResolution ? { quotationResolution } : {}),
           });
         // A downstream report failure cannot undo completed analysis, but its
         // private finite receipt must distinguish continuation from analysis.

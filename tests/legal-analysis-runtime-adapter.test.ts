@@ -10,6 +10,7 @@ import { readBoundSourceBatch } from "../src/server/modules/legal-retrieval/v2/b
 import type { RetrievalPlan } from "../src/server/modules/legal-retrieval/v2/contracts";
 import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
 import { workspaceGuidePlans } from "../src/server/modules/legal-retrieval/v2/workspace-plans";
+import { legalAnalysisOutputSchema } from "../src/server/modules/llm-gateway/analysis-schema";
 import type {
   GatewayAttemptRequest,
   GatewayTransportReceipt,
@@ -55,6 +56,9 @@ async function fixture(
     stranger?: boolean;
     additionalPlans?: readonly RetrievalPlan[];
     guideLimited?: boolean;
+    quoteMismatch?: "once" | "always";
+    quoteMisindexed?: boolean;
+    rejectAudit?: boolean;
   } = {},
 ) {
   const f = await legalAnalysisFixture();
@@ -102,6 +106,7 @@ async function fixture(
     providerDispatches = 0,
     attempts = 0,
     clock = NOW;
+  let generatedDrafts = 0;
   const ledgerRequests: GatewayAttemptRequest[] = [];
   const receipts: GatewayTransportReceipt[] = [];
   const settled: Promise<void>[] = [];
@@ -131,7 +136,7 @@ async function fixture(
           });
           const value = wire as { contents: { parts: { text: string }[] }[] };
           const projected = JSON.parse(value.contents[0]?.parts[0]?.text ?? "null").data;
-          const output =
+          let output =
             phase === "workspace_legal_plan"
               ? syntheticLegalPlan(projected, { many: options.many ?? false })
               : phase === "workspace_legal_analysis"
@@ -143,6 +148,25 @@ async function fixture(
                     legalClaimsSupported: true,
                     strategyDetected: false,
                   };
+          if (phase === "workspace_legal_analysis") {
+            generatedDrafts++;
+            if (
+              options.quoteMisindexed ||
+              options.quoteMismatch === "always" ||
+              (options.quoteMismatch === "once" && generatedDrafts === 1)
+            ) {
+              const draft = legalAnalysisOutputSchema.parse(output);
+              const quotation = draft.sourceClaims.find((claim) => claim.kind === "quotation");
+              if (!quotation) throw new Error("Missing synthetic quotation");
+              if (options.quoteMisindexed) {
+                quotation.startUtf16 = 0;
+                quotation.endUtf16 = 1;
+              } else quotation.text = "합성: 제공된 원문에는 없는 인용문";
+              output = draft;
+            }
+          }
+          if (options.rejectAudit && phase === "workspace_legal_audit" && "pass" in output)
+            output.pass = false;
           providerDispatches++;
           return {
             candidates: [
@@ -324,6 +348,86 @@ test("admitted analysis refreshes a five-minute original through the real retrie
     expect(result.snapshot.citations.find((c) => c.kind === "statute")?.verifiedAt).toBe(NOW);
     expect(f.calls.map((c) => c.phase)).toEqual(phases);
     expect(f.counts().providerDispatches).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("native legal generation corrects one non-verbatim quotation within the original invocation before independent audit", async () => {
+  const f = await fixture({ nativeGateway: true, defaultReader: true, quoteMismatch: "once" });
+  try {
+    const result = await f.adapter.prepare(f.input);
+    expect(result.snapshot.status).toBe("ready");
+    expect(f.counts().providerDispatches).toBe(4);
+    expect(f.ledgerRequests.map((r) => r.phase)).toEqual([
+      phases[0],
+      phases[1],
+      phases[1],
+      phases[2],
+    ]);
+    const generation = f.ledgerRequests.filter((r) => r.phase === phases[1]);
+    expect(
+      generation.map((r) => ({
+        attempt: r.attemptOrdinal,
+        correction: r.correction,
+        invocation: r.invocationId,
+      })),
+    ).toEqual([
+      { attempt: 1, correction: false, invocation: f.ids.workspace_legal_analysis },
+      { attempt: 2, correction: true, invocation: f.ids.workspace_legal_analysis },
+    ]);
+    expect(f.admissions.filter((a) => a.correction)).toHaveLength(1);
+    expect(f.receipts).toHaveLength(4);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_rework_records").get()).toEqual({ n: 0 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("a repeated non-verbatim quotation remains policy rejected without audit, publication or another retry", async () => {
+  const f = await fixture({ nativeGateway: true, defaultReader: true, quoteMismatch: "always" });
+  try {
+    await expect(f.adapter.prepare(f.input)).rejects.toMatchObject({
+      code: "POLICY_REJECTED",
+      quotationFailure: { text_not_found: 1 },
+    });
+    expect(f.counts().providerDispatches).toBe(3);
+    expect(f.calls.map((c) => c.phase)).toEqual([phases[0], phases[1]]);
+    expect(f.admissions.filter((a) => a.correction)).toHaveLength(1);
+    await expect(f.adapter.prepare(f.input)).rejects.toMatchObject({ code: "POLICY_REJECTED" });
+    expect(f.counts().providerDispatches).toBe(3);
+    expect(f.receipts).toHaveLength(3);
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_rework_records").get()).toEqual({ n: 0 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("a unique literal with wrong numeric coordinates needs no extra model attempt", async () => {
+  const f = await fixture({ nativeGateway: true, defaultReader: true, quoteMisindexed: true });
+  try {
+    expect((await f.adapter.prepare(f.input)).snapshot.status).toBe("ready");
+    expect(f.counts().providerDispatches).toBe(3);
+    expect(f.admissions.some((a) => a.correction)).toBe(false);
+  } finally {
+    f.db.close();
+  }
+});
+test("independent audit still rejects a genuinely regenerated literal draft", async () => {
+  const f = await fixture({
+    nativeGateway: true,
+    defaultReader: true,
+    quoteMismatch: "once",
+    rejectAudit: true,
+  });
+  try {
+    await expect(f.adapter.prepare(f.input)).rejects.toMatchObject({
+      code: "POLICY_REJECTED",
+      diagnostic: { stage: "audit", reason: "audit_rejected" },
+    });
+    expect(f.counts().providerDispatches).toBe(4);
+    expect(f.ledgerRequests.at(-1)?.phase).toBe("workspace_legal_audit");
+    expect(f.db.sqlite.query("SELECT count(*) n FROM v2_rework_records").get()).toEqual({ n: 0 });
   } finally {
     f.db.close();
   }

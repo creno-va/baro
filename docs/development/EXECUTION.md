@@ -55,6 +55,28 @@ RED→수리 GREEN, root runtime adapter의 새 분석 연결도 확인했다. p
 generation과 독립 audit 양쪽을 명시하며, 없는 절차 원문을 기억으로 채우지 않는다.
 최종 PR/CI·full/같은 SHA preview의 새 분석·후속·PDF 인수는 아직 남아 있다.
 
+PR740 정상 병합 main/previewb7bb939f에서 실제 새 분석1회는 최종
+claims/claim_validation/quotation_mismatch로 차단됐다. 계획·생성·독립 audit의 모델
+응답3개는 final/response, 총receipt14→17, source header12/12 현재 적격이다.
+source TTL 수리와 별개의 인용 실패이며 제한 report3/실패 analysis3을 성공으로 세지
+않는다. [진단41826492246](https://github.com/creno-va/baro/actions/runs/41826492246)을
+보존하고 #741을 #620/#621/#723/#738에 연결했다. 기존 receipt만으로 missing/ambiguous
+세부 유형을 소급 단정하지 않는다. `codex/741-exact-quotation-contract`은 새 실제
+재호출 없이 합성 native gateway·실제 SQL 재현 RED→GREEN으로 수리한다.
+
+prompt1.0.4의 인용 output contract는 독립 audit 전에 원문과 다른 literal을 탐지해
+같은 invocation/기존 attempt·deadline 안의 한 번 교정으로 모델이 다시 생성하게 한다.
+문구를 자동으로 바꾸거나 final validator/audit를 끄지 않는다. 재실패는 POLICY_REJECTED,
+유일한 정확 문구의 숫자 좌표만 틀린 경우는 기존 resolver로 추가 호출0이다. 교정 뒤에도
+grounding·독립 audit·최종 claim·현재 source·publication 검사를 모두 통과해야 한다.
+실패 진단에는 텍스트/ID/좌표 없이 bounded resolution count만 남긴다.
+
+같은 실제 인수에서 terminal 작업을 오래된 준비 중으로 표시한 #742도 연결했다.
+4초보다 느린 상태 조회를 매 tick supersede하는 race를 실제 ReportReview와6.5초
+지연 응답으로 RED→GREEN 재현했다. ordinary poll만 동일 loadSequence의 진행 중
+read와 합치며 focus/session/storage·명시적 signout의 기존 owner fence와4초/60tick
+한도는 유지한다. 실제 실패/새 리포트 표시와 입력 잠금 해제는 최종 preview에서 재검증한다.
+
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·
 전역 shell/token·이 문서/PRD/ADR를 단독 소유하고01~06은 명시 파일을 소유한다. 사용자가 만든 여섯 채팅과
