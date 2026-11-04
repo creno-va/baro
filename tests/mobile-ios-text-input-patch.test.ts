@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { internalIosEnvironment } from "../scripts/mobile-internal-ios-build";
 import {
   nativeTextInputCompileSchema,
@@ -10,30 +10,14 @@ import {
   verifyNativeTextInputCompilation,
   verifyNativeTextInputPatch,
 } from "../scripts/mobile-ios-text-input-patch";
-import { bytesHash, packageTreeHash, patchFilePaths } from "../scripts/toolchain-patches";
+import {
+  bytesHash,
+  packageTreeFiles,
+  packageTreeHash,
+  patchFilePaths,
+} from "../scripts/toolchain-patches";
 
-async function copyRegularPackage(source: string, target: string) {
-  const pending = [{ source, target }];
-  while (pending.length) {
-    const directory = pending.pop();
-    if (!directory) break;
-    await mkdir(directory.target, { recursive: true });
-    const entries = await readdir(directory.source, { withFileTypes: true });
-    for (let offset = 0; offset < entries.length; offset += 8) {
-      await Promise.all(
-        entries.slice(offset, offset + 8).map(async (entry) => {
-          const from = resolve(directory.source, entry.name),
-            to = resolve(directory.target, entry.name);
-          if (entry.isDirectory()) pending.push({ source: from, target: to });
-          else if (entry.isFile()) await copyFile(from, to);
-          else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
-        }),
-      );
-    }
-  }
-}
-
-test("native patch preserves the exact registry version/license and reconstructs the unmodified release tree", async () => {
+test("native patch preserves the exact registry version/license and reconstructs the complete unmodified release digest", async () => {
   const manifest = await verifyNativeTextInputPatch(process.cwd(), {
     bytesHash,
     packageTreeHash,
@@ -44,7 +28,15 @@ test("native patch preserves the exact registry version/license and reconstructs
   const owned = await mkdtemp(resolve(tmpdir(), "baro-native-input-before-"));
   try {
     const before = resolve(owned, "react-native");
-    await copyRegularPackage("node_modules/react-native", before);
+    const files = await packageTreeFiles("node_modules/react-native");
+    // Every installed file is still read and hashed. Only the three changed
+    // files need writable copies for git's actual reverse patch; copying and
+    // deleting thousands of unchanged bytes adds no preimage proof.
+    for (const file of manifest.changes) {
+      const target = resolve(before, file.path);
+      await mkdir(dirname(target), { recursive: true });
+      await copyFile(resolve("node_modules/react-native", file.path), target);
+    }
     const reverse = Bun.spawn(
       [
         "git",
@@ -63,10 +55,21 @@ test("native patch preserves the exact registry version/license and reconstructs
       },
     );
     expect(await reverse.exited).toBe(0);
-    expect(await packageTreeHash(before)).toBe(manifest.beforeTreeSha256);
-    expect(bytesHash(await readFile(resolve(before, "LICENSE")))).toBe(manifest.licenseSha256);
-    for (const file of manifest.changes)
-      expect(bytesHash(await readFile(resolve(before, file.path)))).toBe(file.beforeSha256);
+    const preimages = new Map<string, string>();
+    for (const file of manifest.changes) {
+      const hash = bytesHash(await readFile(resolve(before, file.path)));
+      expect(hash).toBe(file.beforeSha256);
+      preimages.set(file.path, hash);
+    }
+    expect(files.find((file) => file.path === "LICENSE")?.sha256).toBe(manifest.licenseSha256);
+    expect(bytesHash(files.map((file) => `${file.path}\0${file.sha256}\n`).join(""))).toBe(
+      manifest.afterTreeSha256,
+    );
+    expect(
+      bytesHash(
+        files.map((file) => `${file.path}\0${preimages.get(file.path) ?? file.sha256}\n`).join(""),
+      ),
+    ).toBe(manifest.beforeTreeSha256);
   } finally {
     await rm(owned, { recursive: true, force: true });
   }

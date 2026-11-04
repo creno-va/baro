@@ -778,7 +778,10 @@ test("the public create API still requires a genuine verification step; business
       env,
     );
   // Use a current test session for this isolated HTTP boundary test.
-  f.db.sqlite.query("UPDATE session SET expires_at=?").run(Date.now() + 3600000);
+  const sessionNow = Date.now();
+  f.db.sqlite
+    .query("UPDATE session SET created_at=?,updated_at=?,expires_at=? WHERE user_id=?")
+    .run(sessionNow, sessionNow, sessionNow + 3600000, f.owner.userId);
   expect((await send(body)).status).toBe(400);
   expect((await send({ ...body, turnstileToken: "rejected-local-test-token" })).status).toBe(403);
   expect(checks).toBe(1);

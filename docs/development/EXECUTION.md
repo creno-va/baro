@@ -7,6 +7,13 @@
 정상 PR 병합 후 같은 SHA preview에서 검증한다. production 배포와 새 채팅·하위 에이전트·
 자동화·Goal 생성은 하지 않는다. 과거 generic POLICY_REJECTED를 공급자 거절로 단정하지 않는다.
 
+잔여 인수는 최신 main79b1a614에서 `codex/723-remaining-acceptance`로 이어간다.
+모델이 조사 계획4개를 모두 사용해 공식 절차 안내가 빠지는 경계를 수정한다.
+기존4계획·12요청·120초 안에서 주 절차 안내1개를 예약하고 admission/execution의
+동일 입력을 유지한다. 날짜가 경과한 합성 HTTP 세션 fixture도 제품29일 보존 검사를
+유지한 채 새 합성 세션 시각으로 준비한다. 실제 preview 프로필·직접 연락 링크는
+합성임을 명시한 프로필로 확인했으며 최종 SHA에서 다시 검증한다.
+
 #724의 [항목별 보안 수리 기록](../quality/TOOLCHAIN-SECURITY-REPAIR-2026-11-04.md)은
 공식 도구 의존성 수정과 deepmerge vendor 완화를 구분한다. raw audit low1은 남아 있으며
 allowlist·검사 생략 없이 보존한다. 과거 #339 결정과 vendor patch 증거도 변경하지 않는다.

@@ -1,6 +1,6 @@
 import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { modelBounds } from "../scripts/provision-ai-budget";
-import type { V2Fact } from "../src/contracts/v2";
+import type { V2CaseContext, V2Fact } from "../src/contracts/v2";
 import { createV2Core } from "../src/server/db/v2-core";
 import { createV2ReworkRepository } from "../src/server/db/v2-rework";
 import { createReportsService } from "../src/server/modules/reports/service";
@@ -25,6 +25,7 @@ afterEach(() => {
 async function fixture(
   purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim",
   beforeReport?: () => Promise<void>,
+  procedure?: V2CaseContext["procedure"],
 ) {
   const f = await reportFixture();
   fixtures.push(f);
@@ -59,13 +60,15 @@ async function fixture(
       expectedRevision: f.rev(),
       casePurpose: purpose,
       subjectContext: "individual",
-      procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+      procedure: procedure ?? { kind: "unconfirmed", stage: "unconfirmed", description: null },
     },
   );
   const calls: string[] = [],
+    planningBudgets: unknown[] = [],
     continuations: string[] = [],
     pending: Promise<void>[] = [];
   let outage = false,
+    retrievalCalls = 0,
     revoke = false;
   const env = {
     APP_ENV: "preview",
@@ -73,6 +76,7 @@ async function fixture(
     APPLICATION_COST_LIMITS_ENABLED: "false",
     MONTHLY_BUDGET_CAP_ENABLED: "false",
     AI_GATEWAY_ID: "synthetic-rework",
+    ...(procedure ? { LAW_API_OC: "synthetic-only" } : {}),
     AI_MODEL_TOKEN_BOUNDS_JSON: JSON.stringify(
       modelBounds(
         { ...observation, checkedAt: f.actor.now, validUntil: "2026-10-07T00:00:00.000Z" },
@@ -89,6 +93,7 @@ async function fixture(
       run: async (_model: string, raw: Record<string, unknown>) => {
         const { phase, data } = syntheticGatewayInput(raw);
         calls.push(phase);
+        planningBudgets.push((data as { sourcePlanBudget?: unknown }).sourcePlanBudget);
         expect(phase).toBe("workspace_legal_plan");
         expect((data as { context: { casePurpose: string } }).context.casePurpose).toBe(purpose);
         if (outage) throw new Error("Synthetic unavailable provider");
@@ -142,6 +147,14 @@ async function fixture(
   });
   const service = createLegalAnalysisJobs(core, env, {
     clock: () => f.actor.now,
+    ...(procedure
+      ? {
+          transport: async () => {
+            retrievalCalls++;
+            return new Response("", { status: 400 });
+          },
+        }
+      : {}),
     waitUntil: (p) => pending.push(p),
     prepareReport: async (owner, caseId, requestId, expectedRevision) => {
       continuations.push(requestId);
@@ -171,6 +184,8 @@ async function fixture(
     env,
     service,
     calls,
+    planningBudgets,
+    retrievalCalls: () => retrievalCalls,
     continuations,
     reports,
     reportContinuation,
@@ -183,6 +198,36 @@ async function fixture(
     },
   };
 }
+test("durable procedure reservation has identical native admission and dispatch within four plans", async () => {
+  const f = await fixture("prepare_claim", undefined, {
+    kind: "civil",
+    stage: "before_filing",
+    description: null,
+  });
+  const admitted = await f.service.admit(f.actor.ownerId, f.workspaceId, {
+    requestId: crypto.randomUUID(),
+    expectedRevision: f.rev(),
+    continueWithReport: true,
+  });
+  expect(f.calls).toHaveLength(0);
+  expect((await f.execute(admitted.operationId))?.status).toBe("completed");
+  expect(f.calls).toEqual(["workspace_legal_plan"]);
+  expect(f.planningBudgets).toEqual([
+    {
+      maximumPublicPlans: 4,
+      maximumModelRequests: 3,
+      reservedProcedurePlans: 1,
+    },
+  ]);
+  expect(f.retrievalCalls()).toBe(4);
+  const snapshot = await readPreparedAnalysis(f.core, f.actor, f.workspaceId);
+  expect(snapshot?.status).toBe("unavailable");
+  expect(snapshot?.availability.filter((s) => s.kind === "official_guide")).toHaveLength(2);
+  expect(snapshot?.sourceClaims).toEqual([]);
+  expect(
+    f.db.sqlite.query("SELECT responses_used,responses_reserved FROM v2_daily_usage").get(),
+  ).toEqual({ responses_used: 1, responses_reserved: 0 });
+});
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   test(`actual paid native plan for ${purpose} stores honest unavailable sources and resumes the report once`, async () => {
     const f = await fixture(purpose),
