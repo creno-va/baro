@@ -15,6 +15,7 @@ import { analysisPrecedentDiscovery } from "../src/server/modules/legal-retrieva
 import {
   createAutomaticLegalAnalysis,
   type LegalAnalysisModelInput,
+  type LegalPlanningInput,
 } from "../src/server/modules/legal-retrieval/analysis/service";
 import type { RetrievalPlan } from "../src/server/modules/legal-retrieval/v2/contracts";
 import { GUIDE_HOSTS } from "../src/server/modules/legal-retrieval/v2/registry";
@@ -25,6 +26,9 @@ import {
   legalAnalysisOutputSchema,
   legalAnalysisPlanSchema,
 } from "../src/server/modules/llm-gateway/analysis-schema";
+import { selectReviewedProcedurePlans } from "../src/server/modules/resolution/procedure-sources";
+import { workspaceModelInput } from "../src/server/modules/workspace/pipeline";
+import { legalPlanningInput } from "../src/server/runtime/rework-analysis";
 import sample from "./fixtures/legal/analysis/scenarios.json";
 import { legalAnalysisFixture } from "./helpers/legal-analysis-fixture";
 import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
@@ -176,7 +180,7 @@ async function setup(
     draft?: (draft: V2LegalAnalysisDraft, input: LegalAnalysisModelInput) => void;
     audit?: (input: { draft: unknown }) => unknown;
     noBinding?: boolean;
-    plan?: () => unknown;
+    plan?: (input: LegalPlanningInput) => unknown;
     additionalPlans?: readonly RetrievalPlan[];
     capturePlans?: (plans: RetrievalPlan[]) => void;
   } = {},
@@ -237,9 +241,9 @@ async function setup(
   const controller = new AbortController();
   const service = createAutomaticLegalAnalysis({
     model: {
-      plan: async () => {
+      plan: async (input) => {
         counts.plan++;
-        return (options.plan ?? plan)();
+        return (options.plan ?? plan)(input);
       },
       analyze: async (context) => {
         counts.analyze++;
@@ -892,70 +896,138 @@ test("reviewed guides share the original round, normalize/deduplicate and retain
   }
 });
 
-test.each([3, 4])(
-  "%i existing case plans keep the four-plan bound and explicitly report skipped procedure guides",
-  async (count) => {
-    let received: RetrievalPlan[] = [];
-    const guide = workspaceGuidePlans.legal_consultation;
-    const f = await setup("prepare_claim", {
-      additionalPlans: [guide, { ...guide, ccfNo: "4" }],
-      capturePlans: (plans) => {
-        received = plans;
+test("three case plans reserve the primary procedure guide and explicitly omit the secondary guide", async () => {
+  let received: RetrievalPlan[] = [];
+  const guide = workspaceGuidePlans.legal_consultation;
+  const f = await setup("prepare_claim", {
+    additionalPlans: [guide, { ...guide, ccfNo: "4" }],
+    capturePlans: (plans) => {
+      received = plans;
+    },
+    plan: () => {
+      const value = plan();
+      const issue = value.issues[0];
+      if (!issue) throw new Error("Missing synthetic issue");
+      return {
+        issues: [
+          {
+            ...issue,
+            requests: [...issue.requests, { kind: "precedent", concept: "계약" }],
+          },
+        ],
+      };
+    },
+    transport: (base) => async (url, init) =>
+      new URL(url).hostname === "www.easylaw.go.kr"
+        ? new Response(syntheticGeneralGuide, { headers: { "content-type": "text/html" } })
+        : base.transport(url, init),
+  });
+  try {
+    const result = await f.service.prepare(f.input);
+    expect(received).toHaveLength(4);
+    expect(received.filter((p) => p.kind === "official_guide")).toHaveLength(1);
+    expect(
+      result.sourceRetrieval.outcomes.filter((o) => o.availability === "not_requested"),
+    ).toEqual([
+      {
+        kind: "official_guide",
+        availability: "not_requested",
+        reason: "budget_exhausted",
+        chunks: [],
       },
-      plan: () => {
-        const value = plan();
-        const issue = value.issues[0];
-        if (!issue) throw new Error("Missing synthetic issue");
-        return {
-          issues: [
-            {
-              ...issue,
-              requests: [
-                ...issue.requests,
-                { kind: "precedent", concept: "계약" },
-                ...(count === 4
-                  ? [{ kind: "official_guide", guideKey: "legal_consultation" }]
-                  : []),
-              ],
-            },
-          ],
-        };
-      },
-      transport: (base) => async (url, init) =>
-        new URL(url).hostname === "www.easylaw.go.kr"
-          ? new Response(syntheticGeneralGuide, { headers: { "content-type": "text/html" } })
-          : base.transport(url, init),
-    });
-    try {
-      const result = await f.service.prepare(f.input);
-      expect(received).toHaveLength(4);
-      expect(received.filter((p) => p.kind === "official_guide")).toHaveLength(1);
-      expect(
-        result.sourceRetrieval.outcomes.filter((o) => o.availability === "not_requested"),
-      ).toEqual([
-        {
-          kind: "official_guide",
-          availability: "not_requested",
-          reason: "budget_exhausted",
-          chunks: [],
-        },
-      ]);
-      expect(result.snapshot.limitations.some((s) => s.includes("기술적 조사 한도"))).toBe(true);
-      expect(result.snapshot.limitations.some((s) => s.includes("안내 1개는 조회하지"))).toBe(true);
-      expect(
-        result.snapshot.availability.some(
-          (o) => o.reason === "budget_exhausted" && o.status === "unavailable",
-        ),
-      ).toBe(true);
-      expect(result.snapshot.status).toBe("partial");
-      expect(f.counts.attempts).toBeLessThanOrEqual(12);
-    } finally {
-      f.db.close();
-    }
-  },
-);
+    ]);
+    expect(result.snapshot.limitations.some((s) => s.includes("기술적 조사 한도"))).toBe(true);
+    expect(result.snapshot.limitations.some((s) => s.includes("안내 1개는 조회하지"))).toBe(true);
+    expect(
+      result.snapshot.availability.some(
+        (o) => o.reason === "budget_exhausted" && o.status === "unavailable",
+      ),
+    ).toBe(true);
+    expect(result.snapshot.status).toBe("partial");
+    expect(f.counts.attempts).toBeLessThanOrEqual(12);
+  } finally {
+    f.db.close();
+  }
+});
 
-test("two skipped reviewed guides do not expand the twelve-attempt technical ceiling", async () => {
+test("procedure planning reserves one of four slots and freezes the same admission wire", async () => {
+  let received: RetrievalPlan[] = [];
+  let planning: LegalPlanningInput | undefined;
+  const guides = selectReviewedProcedurePlans({
+    casePurpose: "prepare_claim",
+    subjectContext: "individual",
+    procedure: { kind: "civil", stage: "before_filing", description: null },
+  });
+  const f = await setup("prepare_claim", {
+    additionalPlans: guides,
+    capturePlans: (plans) => {
+      received = plans;
+    },
+    transport: (base) => async (url, init) =>
+      new URL(url).hostname.endsWith("easylaw.go.kr")
+        ? new Response("", { status: 503 })
+        : base.transport(url, init),
+    plan: (input) => {
+      planning = input;
+      const value = plan();
+      const issue = value.issues[0];
+      if (!issue) throw new Error("Missing synthetic issue");
+      issue.requests.push({
+        kind: "statute",
+        lawTitle: "민법",
+        articles: [{ number: "387", branch: "0" }],
+      });
+      return value;
+    },
+  });
+  try {
+    await f.service.prepare(f.input);
+    expect(planning).toHaveProperty("sourcePlanBudget", {
+      maximumPublicPlans: 4,
+      maximumModelRequests: 3,
+      reservedProcedurePlans: 1,
+    });
+    expect(JSON.stringify(workspaceModelInput(planning))).toBe(
+      JSON.stringify(workspaceModelInput(legalPlanningInput(f.input, "2026-10-06"))),
+    );
+    expect(received).toHaveLength(4);
+    expect(received[3]).toEqual(guides[0]);
+    expect(received.filter((p) => p.kind === "official_guide")).toHaveLength(1);
+    expect(f.counts.attempts).toBeLessThanOrEqual(12);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("overbooking the reserved procedure slot rejects before any legal request", async () => {
+  let retrievals = 0;
+  const f = await setup("prepare_claim", {
+    additionalPlans: [{ ...workspaceGuidePlans.legal_consultation, ccfNo: "4", cciNo: "1" }],
+    capturePlans: () => {
+      retrievals++;
+    },
+    plan: (input) => {
+      Object.assign(input.sourcePlanBudget ?? {}, { maximumModelRequests: 4 });
+      const value = plan();
+      const issue = value.issues[0];
+      if (!issue) throw new Error("Missing synthetic issue");
+      issue.requests.push(
+        { kind: "precedent", concept: "계약" },
+        { kind: "precedent", concept: "손해배상" },
+      );
+      return value;
+    },
+  });
+  try {
+    await expect(f.service.prepare(f.input)).rejects.toMatchObject({ code: "INVALID_PLAN" });
+    expect(retrievals).toBe(0);
+    expect(f.counts).toEqual({ plan: 1, analyze: 0, audit: 0, attempts: 0 });
+  } finally {
+    f.db.close();
+  }
+});
+
+test("a reserved procedure guide does not expand the twelve-attempt technical ceiling", async () => {
   let received: RetrievalPlan[] = [];
   const guide = workspaceGuidePlans.legal_consultation;
   const f = await setup("prepare_claim", {
@@ -969,7 +1041,7 @@ test("two skipped reviewed guides do not expand the twelve-attempt technical cei
           id: "bounded_issue",
           title: "합성 기술 한도 검증",
           factIds: ["loan_promise"],
-          requests: ["민법", "형법", "근로기준법", "상법"].map((lawTitle) => ({
+          requests: ["민법", "형법", "근로기준법"].map((lawTitle) => ({
             kind: "statute",
             lawTitle,
             articles: [{ number: "1", branch: "0" }],
@@ -982,14 +1054,15 @@ test("two skipped reviewed guides do not expand the twelve-attempt technical cei
   try {
     const result = await f.service.prepare(f.input);
     expect(received).toHaveLength(4);
-    expect(received.every((p) => p.kind === "statute")).toBe(true);
+    expect(received.filter((p) => p.kind === "statute")).toHaveLength(3);
+    expect(received[3]).toEqual(guide);
     expect(result.sourceRetrieval.outcomes.filter((o) => o.kind === "official_guide")).toHaveLength(
       2,
     );
     expect(
       result.sourceRetrieval.outcomes.filter((o) => o.reason === "budget_exhausted"),
-    ).toHaveLength(2);
-    expect(result.snapshot.limitations.some((s) => s.includes("안내 2개는 조회하지"))).toBe(true);
+    ).toHaveLength(1);
+    expect(result.snapshot.limitations.some((s) => s.includes("안내 1개는 조회하지"))).toBe(true);
     expect(result.snapshot.status).toBe("unavailable");
     expect(f.counts).toEqual({ plan: 1, analyze: 0, audit: 0, attempts: 12 });
   } finally {

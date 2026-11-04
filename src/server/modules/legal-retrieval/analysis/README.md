@@ -25,7 +25,12 @@ distinct. Coverage participates in the digest; changing it invalidates old analy
 
 The trusted caller injects three `model.plan/analyze/audit` callbacks routed through
 the existing llm-gateway and paid attempt ledger. Planning selects up to three issues
-and four reviewed public requests. Retrieval uses the existing official parser/cache/
+and four reviewed public requests. A current server-reviewed procedure guide reserves
+one of those four slots; the model receives a three-request maximum in the shared
+admission/execution planning projection. A model that exceeds its remaining allocation
+fails before retrieval. A second reviewed guide may use an otherwise unused slot;
+omitted guides retain explicit limited coverage. No case request is silently dropped.
+The four-plan, twelve-attempt and time bounds remain unchanged. Retrieval uses the existing official parser/cache/
 binding service, at most twelve actual attempts including retries and a 120-second
 retrieval signal. Arbitrary private searches, URLs and research readTokens are not
 inputs. The service never calls a model/provider directly or introduces a fallback.

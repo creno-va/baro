@@ -33,7 +33,34 @@ import {
 import type { LegalAnalysisFailure } from "./diagnostics";
 import { analysisDraftGrounded } from "./grounding";
 
-export type LegalPlanningInput = LegalAnalysisInput & { asOfDate: string };
+export type LegalPlanningInput = LegalAnalysisInput & {
+  asOfDate: string;
+  sourcePlanBudget?: {
+    maximumPublicPlans: 4;
+    maximumModelRequests: 3;
+    reservedProcedurePlans: 1;
+  };
+};
+
+/** Admission and execution share the exact same server-derived projection.
+ * Reserve a single primary procedure guide within the existing four plans.
+ * Remaining reviewed guides may use slots the model does not need. */
+export function legalAnalysisPlanningInput(
+  input: LegalAnalysisInput,
+  asOfDate: string,
+  additionalPlans: readonly RetrievalPlan[] = [],
+): LegalPlanningInput {
+  const value: LegalPlanningInput = { ...input, facts: analysisCaseFacts(input), asOfDate };
+  // Old official/AI facts stay stored, but are not case-side evidence.
+  value.confirmedSummary = { ...input.confirmedSummary, facts: value.facts };
+  if (additionalPlans.length)
+    value.sourcePlanBudget = {
+      maximumPublicPlans: 4,
+      maximumModelRequests: 3,
+      reservedProcedurePlans: 1,
+    };
+  return value;
+}
 export type LegalAnalysisModelInput = LegalPlanningInput & {
   plan: LegalAnalysisPlan;
   citations: Awaited<ReturnType<typeof projectWorkspaceSources>>["citations"];
@@ -144,9 +171,7 @@ export function createAutomaticLegalAnalysis(deps: {
     const basis = await analysisBasis(input);
     const now = clock(),
       asOfDate = new Date(Date.parse(now) + 9 * 3600000).toISOString().slice(0, 10);
-    const planning: LegalPlanningInput = { ...input, facts: analysisCaseFacts(input), asOfDate };
-    // Old official/AI facts remain in storage, but cannot establish case-side evidence.
-    planning.confirmedSummary = { ...input.confirmedSummary, facts: planning.facts };
+    const planning = legalAnalysisPlanningInput(input, asOfDate, additionalPlans);
     await authorize();
     deps.onStage?.("planning");
     const planParsed = legalAnalysisPlanSchema.safeParse(
@@ -165,6 +190,9 @@ export function createAutomaticLegalAnalysis(deps: {
         plan.issues.flatMap((i) => i.requests).map((r) => [canonicalAnalysisJson(r), r]),
       ).values(),
     ];
+    // Validate against trusted construction data, not a mutable model input.
+    if (requests.length > (additionalPlans.length ? 3 : 4))
+      throw new LegalAnalysisError("INVALID_PLAN");
     const plans = requests.flatMap((r) => workspaceRetrievalPlans([r]));
     const identities = new Set(plans.map(canonicalAnalysisJson));
     let omittedGuides = 0;
@@ -172,8 +200,8 @@ export function createAutomaticLegalAnalysis(deps: {
       const key = canonicalAnalysisJson(guide);
       if (identities.has(key)) continue;
       identities.add(key);
-      // Preserve the existing four distinct public requests, even though the
-      // lower-level retrieval schema can accept six. Never displace case issues.
+      // The model's bounded plan leaves at least the first guide a slot.
+      // Never increase four plans or silently discard an issue request.
       if (plans.length >= 4) omittedGuides++;
       else plans.push(structuredClone(guide));
     }
@@ -265,7 +293,7 @@ export function createAutomaticLegalAnalysis(deps: {
       ...new Set([
         ...(omittedGuides
           ? [
-              `기술적 조사 한도인 최대 4개 계획에서 사건 법률 쟁점을 우선하여 공식 절차 안내 ${omittedGuides}개는 조회하지 않았어요. 제출처와 절차는 공식 기관에서 확인해 주세요.`,
+              `기술적 조사 한도인 최대 4개 계획 안에 현재 단계의 첫 절차 안내 조회를 포함했으며, 추가 공식 절차 안내 ${omittedGuides}개는 조회하지 않았어요. 제출처와 절차는 공식 기관에서 확인해 주세요.`,
             ]
           : []),
         ...retrieval.outcomes.flatMap((o) =>

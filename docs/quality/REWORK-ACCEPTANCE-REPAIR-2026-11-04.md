@@ -118,3 +118,32 @@ POLICY_REJECTED의 성공 변환으로 해석하지 않는다.
 실제 자료 반영 재검증은 코드 조건 변경·정확 head CI·병합·동일 SHA preview 뒤로
 보류했고 같은 외부 실패를 그대로 다시 호출하지 않았다. eb1 full5358 PASS/8 SKIP/
 0 FAIL·native SUCCESS와 raw audit deepmerge low1은 이 후속 수리 전의 중간 증거다.
+
+## 잔여 인수: 절차 안내 계획 예약과 달력 경과 fixture
+
+새 시작 기준은 main79b1a614이며 열린 PR0, `work:next`56 tasks/no cycles다.
+이 기준의 과거 full41699886829는 unit5369 PASS/8 SKIP/0 FAIL, browser798 PASS/
+1 SKIP/0 FAIL, native SUCCESS지만 raw audit low1 때문에 최종 FAILURE였다.
+preview41700845193과 양 입장의 실제 새 분석·사진 PDF·검토용 초안 성공은 이 기준의
+증거이며 이번 변경 후의 성공으로 재사용하지 않는다.
+
+절차 안내가 budget_exhausted로 빠진 원인을 계획 조합에서 재현했다. 모델이4개를
+모두 요청하면 서버가 뒤에 추가하는 검토된 절차 안내에는 자리가 없었다. 이 flag만으로
+실제 HTTP 요청12회를 모두 사용했다고 단정하지 않는다. 모델 입력에 주 절차 안내1개
+예약을 명시하고 모델 요청을3개로 제한한다. 같은 법의 조항2개 묶기는 기존 계약이다.
+추가 안내는 남은 자리만 사용하고 미조회는 명시한다. 과다 계획은 조회 전에 거절하며
+사실·판례 요청을 몰래 버리지 않는다. admission과 실행은 같은 builder를 사용한다.
+4계획/12실제 시도/120초, 출처의 개정 안내·최신성·인용 검증은 유지한다.
+
+수정 전 신규 회귀2개 RED, 수정 후 집중4파일97 PASS/705 assertions다. native admission의
+동일 wire와 실제 암호화 SQL 작업 실행을 포함하며 외부 모델·법률 API는 합성 대역이다.
+전체 quick에서 모바일8건이 재현됐고 원인은 별도 fixture의29일 세션 보존 경과였다.
+고정2026-10-06 세션의 expires_at만 연장하던 HTTP fixture를 새 합성 session created_at/
+updated_at/expiry로 준비한다. 제품 보존/권한 fence는 변경하지 않는다. 해당12검사와
+동의·소유자 거절, lost ACK/원래 revision·멱등 key 보존 검사가 모두 통과했다.
+
+기존 로그인 계정의 정상 OAuth 역할 선택과 프로필 편집 UI로 preview 전용 합성 프로필을
+저장하고 공개 목록→상세→직접 연락 dialog를 확인했다. 실제 변호사가 아님을 이름·소개·
+사무실에 명시했고 예약 example.com 이메일/홈페이지를 사용했다. 링크와 새 창 보호,
+사건·자료 자동 전송 없음 안내를 확인했으며 실제 연락·전송은 수행하지 않았다.
+최종 SHA의 새 분석·초안·PDF와 후속 경로 재검증은 별도 실제 인수 기록으로 남긴다.

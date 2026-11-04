@@ -26,9 +26,10 @@ test("self profile pages all 51 assets without hiding the oldest upload", async 
     .query("SELECT count(*) AS n FROM v2_assets WHERE owner_id=?")
     .get(f.actor.ownerId) as { n: number };
   expect(count.n).toBe(51);
+  const sessionNow = Date.now();
   f.db.sqlite
-    .query("UPDATE session SET expires_at=? WHERE user_id=?")
-    .run(Date.now() + 3600000, f.actor.ownerId);
+    .query("UPDATE session SET created_at=?,updated_at=?,expires_at=? WHERE user_id=?")
+    .run(sessionNow, sessionNow, sessionNow + 3600000, f.actor.ownerId);
   const token = (
     f.db.sqlite.query("SELECT token FROM session WHERE user_id=?").get(f.actor.ownerId) as {
       token: string;

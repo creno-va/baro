@@ -18,9 +18,13 @@ export async function reportHttpFixture() {
     CASE_DATA_KEY_V1: btoa("k".repeat(32)).replace(/=+$/, ""),
     APP_ENV: "preview",
   };
+  // HTTP auth uses wall time; domain snapshots keep their deterministic clock.
+  // Refresh the synthetic session's creation time too: extending expires_at
+  // alone cannot extend the real 29-day retention boundary.
+  const sessionNow = Date.now();
   f.db.sqlite
-    .query("UPDATE session SET expires_at=? WHERE user_id=?")
-    .run(Date.now() + 3600000, f.actor.ownerId);
+    .query("UPDATE session SET created_at=?,updated_at=?,expires_at=? WHERE user_id=?")
+    .run(sessionNow, sessionNow, sessionNow + 3600000, f.actor.ownerId);
   f.db.sqlite
     .query("INSERT INTO app_metadata(key,value,updated_at) VALUES(?,?,?)")
     .run(`account-type:${f.actor.ownerId}`, "customer", f.actor.now);

@@ -31,9 +31,11 @@ async function until(ready: () => boolean) {
 async function fixture() {
   const f = await selfAssetFixture();
   await saveAccountType(f.db.binding, f.actor.ownerId, "lawyer");
+  // The HTTP session clock is independent of the fixed asset fixture clock.
+  const sessionNow = Date.now();
   f.db.sqlite
-    .query("UPDATE session SET expires_at=? WHERE user_id=?")
-    .run(Date.now() + 3600000, f.actor.ownerId);
+    .query("UPDATE session SET created_at=?,updated_at=?,expires_at=? WHERE user_id=?")
+    .run(sessionNow, sessionNow, sessionNow + 3600000, f.actor.ownerId);
   const token = (
     f.db.sqlite.query("SELECT token FROM session WHERE user_id=?").get(f.actor.ownerId) as {
       token: string;

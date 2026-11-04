@@ -8,7 +8,6 @@ import { completeLeaseStatements } from "../db/v2-workspace";
 import { configuredBounds } from "../modules/budget/model-configuration";
 import {
   analysisBasis,
-  analysisCaseFacts,
   canonicalAnalysisJson,
   type LegalAnalysisInput,
 } from "../modules/legal-retrieval/analysis/context";
@@ -17,6 +16,7 @@ import {
   safeLegalAnalysisFailure,
 } from "../modules/legal-retrieval/analysis/diagnostics";
 import { createLegalAnalysisRuntimeAdapter } from "../modules/legal-retrieval/analysis/runtime-adapter";
+import { legalAnalysisPlanningInput } from "../modules/legal-retrieval/analysis/service";
 import { textHash } from "../modules/legal-retrieval/service";
 import { capturePublicationSourceAuthority } from "../modules/legal-retrieval/v2/publication-authority";
 import { GUIDE_HOSTS } from "../modules/legal-retrieval/v2/registry";
@@ -45,11 +45,9 @@ import {
 } from "./gateway";
 import { readProcessingProofs } from "./processing-proofs";
 
-// Keep the same key insertion order as createAutomaticLegalAnalysis.plan().
+// Shared with execution so paid admission retains the exact immutable wire.
 export function legalPlanningInput(input: LegalAnalysisInput, asOfDate: string) {
-  const value = { ...input, facts: analysisCaseFacts(input), asOfDate };
-  value.confirmedSummary = { ...input.confirmedSummary, facts: value.facts };
-  return value;
+  return legalAnalysisPlanningInput(input, asOfDate, selectReviewedProcedurePlans(input.context));
 }
 export function createLegalAnalysisJobs(
   core: V2Core,
