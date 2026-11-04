@@ -115,7 +115,7 @@ const preparedReport = () => ({
     "리포트 준비 상태\n보완 필요 · 검증한 항목과 미확인을 구분합니다.\n\n사건 개요\n전화 010-1234-5678 · 제거할 파생 설명\n\n법적 쟁점과 법 조항\n자료와 대조한 합성 요건\n\n판례별 공통점과 차이점\n미확인 비교는 완료로 표시하지 않습니다.",
   excludedFileIds: [] as string[],
   maskIdentifiers: false,
-  includedPhotoIds: [],
+  includedPhotoIds: [] as string[],
   analysisReview: {
     analysisId: "synthetic-analysis",
     status: "partial" as "partial" | "review_required",
