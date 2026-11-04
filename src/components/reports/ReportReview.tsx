@@ -23,6 +23,18 @@ type ReportView = BaseReportView & {
   analysisReview?: ReworkReportView["analysisReview"];
 };
 
+function reportReviewContent(value: ReportView) {
+  return value.maskIdentifiers
+    ? value.content
+    : withInlineReportPhotos(
+        value.content,
+        (value.includedPhotoIds ?? []).map((id) => ({
+          id,
+          name: value.photoCandidates?.find((photo) => photo.id === id)?.name ?? "사건 사진",
+        })),
+      );
+}
+
 function preparationFailureText(code: string) {
   const messages: Record<string, string> = {
     MODEL_UNAVAILABLE: "분석 서비스를 지금 이용할 수 없어요. 저장된 사건은 보존돼요.",
@@ -119,15 +131,7 @@ export function ReportReview({
   );
   const accept = useCallback((value: ReportView) => {
     acceptedBody.current = { id: value.id, revision: value.revision };
-    const positioned = value.maskIdentifiers
-      ? value.content
-      : withInlineReportPhotos(
-          value.content,
-          (value.includedPhotoIds ?? []).map((id) => ({
-            id,
-            name: value.photoCandidates?.find((photo) => photo.id === id)?.name ?? "사건 사진",
-          })),
-        );
+    const positioned = reportReviewContent(value);
     setReport({ ...value, content: positioned });
     setNewReportAvailable(false);
     setEditing(false);
@@ -343,7 +347,9 @@ export function ReportReview({
             setNewReportAvailable(true);
             return { ...existing, stale: true };
           }
-          return value;
+          // Match initial acceptance without replacing the retained editor.
+          // Raw server text lacks automatically positioned photo tokens.
+          return { ...value, content: reportReviewContent(value) };
         });
         setFiles(materials);
         setIncludedPhotos((ids) =>

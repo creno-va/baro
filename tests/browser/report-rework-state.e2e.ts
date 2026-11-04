@@ -124,6 +124,108 @@ const preparedReport = () => ({
   },
 });
 
+for (const refresh of ["focus", "status"] as const)
+  test(`photo report metadata ${refresh} keeps a clean baseline and preserves actual edits`, async ({
+    page,
+  }) => {
+    let owner = "synthetic-report-owner",
+      reads = 0,
+      mutations = 0;
+    const report = {
+      ...preparedReport(),
+      content: "사건 개요\n합성 사건 원문입니다.\n\n증거 자료\n사진의 기재는 진정성과 구분합니다.",
+      includedPhotoIds: ["synthetic-bound-photo"],
+      photoCandidates: [{ id: "synthetic-bound-photo", name: "합성 사진.png", revision: 1 }],
+    };
+    const state = conversationState();
+    state.snapshot = partialSnapshot(state.caseContext);
+    state.analysis = {
+      status: "partial",
+      basis,
+      currentJobId: null,
+      missingItems: [],
+      failure: null,
+    };
+    state.report = {
+      status: "ready",
+      id: report.id,
+      revision: report.revision,
+      basis,
+      currentJobId: null,
+      failure: null,
+    };
+    await page.route("**/api/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (route.request().method() !== "GET") mutations++;
+      if (path === "/api/me/session")
+        return route.fulfill({
+          json: { user: { id: owner, name: "합성", accountType: "customer" }, needsConsent: false },
+        });
+      if (path.endsWith("/rework/report")) {
+        reads++;
+        return route.fulfill({ json: report });
+      }
+      if (path.endsWith("/rework/conversation")) return route.fulfill({ json: state });
+      if (path.endsWith("/rework/resolution"))
+        return route.fulfill({ json: resolutionState(report) });
+      if (path.endsWith("/files"))
+        return route.fulfill({
+          json: [
+            {
+              id: "synthetic-bound-photo",
+              revision: 1,
+              name: "합성 사진.png",
+              mimeType: "image/png",
+              sizeBytes: 100,
+              status: "ready",
+              coverage: "합성",
+              extractedText: "합성 사진",
+            },
+          ],
+        });
+      if (path.includes("/photos/"))
+        return route.fulfill({
+          contentType: "image/png",
+          body: readFileSync(new URL("../fixtures/media/image-markers.png", import.meta.url)),
+        });
+      return route.fulfill({ status: 404, json: {} });
+    });
+    await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+    await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+    await expect(page.getByRole("img", { name: "합성 사진.png", exact: true })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
+    const refreshMetadata = async () => {
+      const before = reads;
+      if (refresh === "focus") await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      else await page.getByRole("button", { name: "상태 확인", exact: true }).click();
+      await expect.poll(() => reads).toBeGreaterThan(before);
+      await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+    };
+    await refreshMetadata();
+    await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
+    await expect(page.getByText("저장하지 않은 수정이 있습니다.", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "수정하기", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "사건 개요 수정", exact: true })
+      .fill("실제 편집은 지우면 안 됩니다.");
+    await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "true");
+    await refreshMetadata();
+    await expect(page.getByRole("textbox", { name: "사건 개요 수정", exact: true })).toHaveValue(
+      "실제 편집은 지우면 안 됩니다.",
+    );
+    await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "true");
+    await expect(page.getByRole("textbox", { name: "증거 자료 수정", exact: true })).toHaveValue(
+      /baro-photo:synthetic-bound-photo/,
+    );
+    expect(mutations).toBe(0);
+    owner = "synthetic-another-owner";
+    await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
+    await expect(page.locator(".report-reading")).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "사건 개요 수정", exact: true })).toHaveCount(0);
+    await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
+  });
+
 test("slow status reads finish once and release terminal report controls without overlapping polls", async ({
   page,
 }) => {
