@@ -13,23 +13,21 @@ import {
 import { bytesHash, packageTreeHash, patchFilePaths } from "../scripts/toolchain-patches";
 
 async function copyRegularPackage(source: string, target: string) {
-  const pending = [{ source, target }];
+  const pending = [{ source, target, directory: true }];
   while (pending.length) {
-    const directory = pending.pop();
-    if (!directory) break;
-    await mkdir(directory.target, { recursive: true });
-    const entries = await readdir(directory.source, { withFileTypes: true });
-    for (let offset = 0; offset < entries.length; offset += 8) {
-      await Promise.all(
-        entries.slice(offset, offset + 8).map(async (entry) => {
-          const from = resolve(directory.source, entry.name),
-            to = resolve(directory.target, entry.name);
-          if (entry.isDirectory()) pending.push({ source: from, target: to });
-          else if (entry.isFile()) await copyFile(from, to);
+    await Promise.all(
+      pending.splice(-8).map(async (item) => {
+        if (!item.directory) return copyFile(item.source, item.target);
+        await mkdir(item.target, { recursive: true });
+        for (const entry of await readdir(item.source, { withFileTypes: true })) {
+          const from = resolve(item.source, entry.name),
+            to = resolve(item.target, entry.name);
+          if (entry.isDirectory()) pending.push({ source: from, target: to, directory: true });
+          else if (entry.isFile()) pending.push({ source: from, target: to, directory: false });
           else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
-        }),
-      );
-    }
+        }
+      }),
+    );
   }
 }
 

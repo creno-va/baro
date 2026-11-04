@@ -51,33 +51,37 @@ export const bytesHash = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
 export async function packageTreeHash(directory: string) {
   const files: { path: string; sha256: string }[] = [];
-  const directories = [{ path: directory, relative: "" }];
+  const pending = [{ path: directory, relative: "", directory: true }];
   // Keep the exact tree/digest contract while bounding filesystem concurrency.
   // Serial stat/read for thousands of files exceeded the existing Windows check timeout.
-  while (directories.length) {
-    const current = directories.pop();
-    if (!current) break;
-    const names = (await readdir(current.path)).sort();
-    for (let offset = 0; offset < names.length; offset += 8) {
-      await Promise.all(
-        names.slice(offset, offset + 8).map(async (name) => {
-          const local = current.relative ? `${current.relative}/${name}` : name;
-          const full = resolve(current.path, name);
-          const metadata = await lstat(full);
-          if (
-            !current.relative &&
-            /^\.bun-tag-[a-f0-9]{16}$/.test(name) &&
-            metadata.isFile() &&
-            metadata.size === 0
-          )
-            return;
-          if (metadata.isDirectory()) directories.push({ path: full, relative: local });
-          else if (metadata.isFile())
-            files.push({ path: local, sha256: bytesHash(await readFile(full)) });
-          else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
-        }),
-      );
-    }
+  while (pending.length) {
+    await Promise.all(
+      pending.splice(-8).map(async (current) => {
+        if (current.directory) {
+          for (const name of (await readdir(current.path)).sort())
+            pending.push({
+              path: resolve(current.path, name),
+              relative: current.relative ? `${current.relative}/${name}` : name,
+              directory: false,
+            });
+          return;
+        }
+        const local = current.relative,
+          full = current.path;
+        const metadata = await lstat(full);
+        if (
+          !local.includes("/") &&
+          /^\.bun-tag-[a-f0-9]{16}$/.test(local) &&
+          metadata.isFile() &&
+          metadata.size === 0
+        )
+          return;
+        if (metadata.isDirectory()) pending.push({ path: full, relative: local, directory: true });
+        else if (metadata.isFile())
+          files.push({ path: local, sha256: bytesHash(await readFile(full)) });
+        else throw new Error("PATCH_PACKAGE_NONREGULAR_ENTRY");
+      }),
+    );
   }
   return bytesHash(
     files
