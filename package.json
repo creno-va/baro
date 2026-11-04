@@ -61,7 +61,7 @@
     "mobile:assets:check": "bun scripts/check-mobile-assets.ts",
     "mobile:assets:brand": "bun scripts/build-mobile-brand.ts",
     "mobile:runtime": "bun scripts/mobile-runtime.ts",
-    "security:patches": "bun scripts/check-toolchain-patches.ts && bun test tests/toolchain-patches.test.ts tests/cli-zod-patch.test.ts tests/forge-browser-patch.test.ts tests/toolchain-upstream-consumers.test.ts"
+    "security:patches": "bun scripts/check-toolchain-patches.ts && bun test tests/toolchain-patches.test.ts tests/cli-zod-patch.test.ts tests/forge-browser-patch.test.ts tests/toolchain-upstream-consumers.test.ts tests/jest-config-vendor.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.3.3",
@@ -99,7 +99,8 @@
     "wrangler": "4.147.0",
     "@baro/api-client": "workspace:*",
     "@baro/client-core": "workspace:*",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "jest-config": "file:vendor/jest-config"
   },
   "overrides": {
     "esbuild": "0.28.2",
@@ -115,11 +116,11 @@
     "glob@13": "14.0.3",
     "minimatch@9": "11.0.4",
     "minimatch@10": "11.0.4",
-    "test-exclude": "8.0.0"
+    "test-exclude": "8.0.0",
+    "jest-config": "file:vendor/jest-config"
   },
   "patchedDependencies": {
     "braces@3.0.3": "patches/braces@3.0.3.patch",
-    "react-native@0.88.0": "patches/react-native@0.88.0.patch",
-    "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
+    "react-native@0.88.0": "patches/react-native@0.88.0.patch"
   }
 }

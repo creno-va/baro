@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "rawAuditRequired": true,
+  "upstreamVersion": "30.5.2",
+  "forkVersion": "30.5.2-baro.1",
+  "registryIntegrity": "sha512-U6221OZekabePvGcGPf4raIBKMvYQWFHvhobDJRojOYaFMj2HaGytAdknjDhYc6JTz2fdHW9+6k0wWUDaNeOFQ==",
+  "beforeTreeSha256": "d6cf3ffc9e9a805c77bc533c457bdf513fdd2962ba9ca8de32d65d9555c40246",
+  "afterTreeSha256": "a11cbfd41759857f143c32aae143494b67a7891ed84a47d9f4193d88534b3266",
+  "licenseSha256": "9d5211db733ccdd26f9170bec24cdca84093f60415da6b769ee9cdf23d04e19f",
+  "patch": "patches/jest-config-30.5.2-baro.1.patch",
+  "patchSha256": "886bb5f23ce07000db602db17404e46401da60eed514b5fb481a51584f98f901",
+  "historicalManifestSha256": "5d5ddb6371856b47d9fb6e0b32b9995f34dacd5b8670976f67db4f104474bb1c",
+  "files": [
+    {
+      "path": "LICENSE",
+      "beforeSha256": "9d5211db733ccdd26f9170bec24cdca84093f60415da6b769ee9cdf23d04e19f",
+      "afterSha256": "9d5211db733ccdd26f9170bec24cdca84093f60415da6b769ee9cdf23d04e19f"
+    },
+    {
+      "path": "package.json",
+      "beforeSha256": "0edb6d776b52ea5aeabe2af945c9010457a7180cae27de41ba28c639ed871a9c",
+      "afterSha256": "9c102da3efb54952f83ce750c6fa043fe3463c2c02dbeebfd1ce52b42d1b7348"
+    },
+    {
+      "path": "build/index.js",
+      "beforeSha256": "52b8c1f3b79c8be6d9e2b535ce5b0e57debbf6b9134d8e612849be296b11fbc3",
+      "afterSha256": "cb214cc2ed547aa08010fd151059604128e7032e69fd73bbdc6e063d509a5f48"
+    },
+    {
+      "path": "build/index.mjs",
+      "beforeSha256": "bb4d55b6e07f43598fed6e2a844c96885925c0b7f8e78da95c4f2a642959ac31",
+      "afterSha256": "bb4d55b6e07f43598fed6e2a844c96885925c0b7f8e78da95c4f2a642959ac31"
+    },
+    {
+      "path": "build/index.d.ts",
+      "beforeSha256": "563099758287cb3426ab3a1e884df390fa70f34f79551b3c909e223db7f67c24",
+      "afterSha256": "563099758287cb3426ab3a1e884df390fa70f34f79551b3c909e223db7f67c24"
+    }
+  ],
+  "replacement": {
+    "name": "@fastify/deepmerge",
+    "version": "3.2.4",
+    "registryIntegrity": "sha512-kc8GQq5gX9RRhw0rov3DMrN8wS8yRlxJRdDzsYwwdBV/wazuVgc/1K7CKL90tlvu3RlHan6Y0R0aE3nJtBz2eQ==",
+    "treeSha256": "91a5da606c43321d5d17e76a1b95beff105316f5874417ec53fb68f924546116",
+    "licenseSha256": "e2d09f74a77005e85e9f9bd501e3b7599ccae19d918538461196dde42f7f1b97"
+  },
+  "historicalNativeManifestSha256": "bd0f12c88b8c76fd54a20ddb99b563789dba68f7d30114cd3acfdea9262bc4fd",
+  "nativeLayout": {
+    "registryIntegrity": "sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==",
+    "treeSha256": "7e730869fa7969d8b7f889568df908a636b031ffad8c05eab119cfa8be8ba274",
+    "files": [
+      {
+        "path": "node_modules/pretty-format/node_modules/ansi-styles/index.d.ts",
+        "sha256": "019122b0a5a867bc45643b2eab26fa20e3a6e9c79777b3995f0468feb3c9dba7"
+      },
+      {
+        "path": "node_modules/pretty-format/node_modules/ansi-styles/index.js",
+        "sha256": "c70399f5f872fefec57b56264e9ebb46905bd558e15c53632644afd0da0cede3"
+      },
+      {
+        "path": "node_modules/pretty-format/node_modules/ansi-styles/license",
+        "sha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
+      },
+      {
+        "path": "node_modules/pretty-format/node_modules/ansi-styles/package.json",
+        "sha256": "c4b717d4808738c3a8270e8485df6cdbf0cd4f7abb523784dca883b94c212e79"
+      },
+      {
+        "path": "node_modules/pretty-format/node_modules/ansi-styles/readme.md",
+        "sha256": "cd1c67dad9aa17c4769ceb5588fc243936d27900fba15602f12ef77cdda4cc78"
+      }
+    ],
+    "beforeTreeSha256": "e4ad0550a314ab738d79b65d2979f28ea0885bb74dd0d87a31a2f1b5f542892d",
+    "afterTreeSha256": "6dcb2f00917ba79ca5f68157b3def8776b8ee47491790cf984a20c134f55af67"
+  }
+}

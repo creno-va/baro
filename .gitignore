@@ -2,6 +2,9 @@
 node_modules/
 .astro/
 dist/
+!tests/fixtures/toolchain-security/retired-deepmerge/dist/
+!tests/fixtures/toolchain-security/retired-deepmerge/dist/cjs.js
+!tests/fixtures/toolchain-security/retired-deepmerge/dist/umd.js
 coverage/
 
 # Cloudflare local state and local secrets

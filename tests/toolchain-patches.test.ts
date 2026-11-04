@@ -7,6 +7,7 @@ import {
   bytesHash,
   packageTreeHash,
   patchFilePaths,
+  toolchainPatchDirectory,
   verifyToolchainPatches,
 } from "../scripts/toolchain-patches";
 import { validationCommands } from "../scripts/validate";
@@ -55,16 +56,16 @@ async function probe(mode: "braces" | "deepmerge", directory: string): Promise<P
 test("frozen package versions, patch/lock/complete installed tree and original licenses match attested bytes", async () => {
   const manifest = await verifyToolchainPatches(root);
   expect(manifest.rawAuditRequired).toBe(true);
-  expect(manifest.packages.map((item) => `${item.name}@${item.version}`)).toEqual([
-    "braces@3.0.3",
+  expect(manifest.packages.map((item) => `${item.name}@${item.version}`)).toEqual(["braces@3.0.3"]);
+  expect(manifest.retiredPackages.map((item) => `${item.name}@${item.version}`)).toEqual([
     "deepmerge@4.3.1",
   ]);
   expect(validationCommands("security")[0]).toEqual(["bun", "audit"]);
 });
 test("registry baseline reconstruction demonstrates original failures and strict patched behavior without changing normal operations", async () => {
   const manifest = await verifyToolchainPatches(root);
-  for (const item of manifest.packages) {
-    const installed = resolve(root, "node_modules", item.name),
+  for (const item of [...manifest.packages, ...manifest.retiredPackages]) {
+    const installed = toolchainPatchDirectory(root, item.name),
       before = resolve(temporary, item.name);
     await cp(installed, before, { recursive: true });
     // npm tarball bytes are canonical; a Windows Git installation may otherwise

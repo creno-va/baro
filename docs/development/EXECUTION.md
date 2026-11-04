@@ -15,8 +15,12 @@
 합성임을 명시한 프로필로 확인했으며 최종 SHA에서 다시 검증한다.
 
 #724의 [항목별 보안 수리 기록](../quality/TOOLCHAIN-SECURITY-REPAIR-2026-11-04.md)은
-공식 도구 의존성 수정과 deepmerge vendor 완화를 구분한다. raw audit low1은 남아 있으며
-allowlist·검사 생략 없이 보존한다. 과거 #339 결정과 vendor patch 증거도 변경하지 않는다.
+공식 도구 의존성 수정과 중간 deepmerge vendor 완화를 구분한다. 과거 raw audit low1은
+보존한다. PR736 병합 main22be55af에서 `codex/724-jest-merge-consumer`로 실제 Jest
+병합 소비자만 공식 @fastify/deepmerge3.2.4로 교체한다. local fork tag·원본/설치 바이트·
+실제 CLI/core 소비자·과거 공격 증명을 검사하며 새 frozen install의 raw audit0을 확인했다.
+quick/build/mobile·정확 head CI와 최종 main full/preview는 별도 완료해야 한다.
+과거 #339 결정과 vendor patch·실패 증거는 변경하지 않는다. production 배포는 없다.
 
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·

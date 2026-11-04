@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "rawAuditRequired": true,
   "packages": [
     {
@@ -54,7 +54,9 @@
           "entryPoint": "index.js"
         }
       ]
-    },
+    }
+  ],
+  "retiredPackages": [
     {
       "name": "deepmerge",
       "version": "4.3.1",
