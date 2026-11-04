@@ -24,7 +24,7 @@ import { syntheticLegalDraft, syntheticLegalPlan } from "./helpers/legal-analysi
 import { syntheticGeneralGuide } from "./helpers/synthetic-legal-guide";
 
 const NOW = "2026-10-06T00:00:00.000Z";
-const phases: LegalAnalysisGatewayPhase[] = [
+const phases: [LegalAnalysisGatewayPhase, LegalAnalysisGatewayPhase, LegalAnalysisGatewayPhase] = [
   "workspace_legal_plan",
   "workspace_legal_analysis",
   "workspace_legal_audit",
