@@ -303,22 +303,21 @@ test("admitted analysis refreshes a five-minute original through the real retrie
   const f = await fixture({ defaultReader: true });
   try {
     const oldNow = new Date(Date.parse(NOW) - 86400000 + 300000).toISOString();
-    const old = await f
-      .service()
-      .retrieve(
-        {
-          now: oldNow,
-          asOfDate: oldNow.slice(0, 10),
-          plans: [
-            {
-              kind: "statute",
-              lawTitle: sample.law.title,
-              articles: [{ number: sample.law.article, branch: "0" }],
-            },
-          ],
-        },
-        f.access,
-      );
+    const seedRetrieval = f.service();
+    const old = await seedRetrieval.retrieve(
+      {
+        now: oldNow,
+        asOfDate: oldNow.slice(0, 10),
+        plans: [
+          {
+            kind: "statute",
+            lawTitle: sample.law.title,
+            articles: [{ number: sample.law.article, branch: "0" }],
+          },
+        ],
+      },
+      f.access,
+    );
     expect(old.chunks[0]?.citation.verifiedAt).toBe(oldNow);
     const result = await f.adapter.prepare(f.input);
     expect(result.snapshot.status).toBe("ready");
