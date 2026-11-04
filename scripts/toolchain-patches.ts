@@ -49,7 +49,7 @@ export const toolchainPatchManifestSchema = z.strictObject({
 });
 export const bytesHash = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
-export async function packageTreeHash(directory: string) {
+export async function packageTreeFiles(directory: string) {
   const files: { path: string; sha256: string }[] = [];
   const pending = [{ path: directory, relative: "", directory: true }];
   // Keep the exact tree/digest contract while bounding filesystem concurrency.
@@ -83,11 +83,11 @@ export async function packageTreeHash(directory: string) {
       }),
     );
   }
+  return files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+export async function packageTreeHash(directory: string) {
   return bytesHash(
-    files
-      .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-      .map((file) => `${file.path}\0${file.sha256}\n`)
-      .join(""),
+    (await packageTreeFiles(directory)).map((file) => `${file.path}\0${file.sha256}\n`).join(""),
   );
 }
 /** Resolve from the real CLI consumer, so a nested unpatched copy cannot bypass root attestation. */

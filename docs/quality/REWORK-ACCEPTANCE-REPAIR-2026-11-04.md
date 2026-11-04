@@ -154,3 +154,11 @@ updated_at/expiry로 준비한다. 제품 보존/권한 fence는 변경하지 �
 복사/해시 순회를 전역 최대8작업 큐로 바꾸고 모든 파일·원본/수정 hash·license·
 reverse patch·비정규 파일 거절을 유지했다.20초 제한은 그대로이며 복원14393ms,
 기존 변조/중첩 소비자 검사까지9 PASS/72 assertions다. 실패 로그는 성공으로 바꾸지 않는다.
+
+이 큐 변경의 단독 성공과 달리 마지막773개 묶음은 동일 native 복원이 다시20초를
+초과했다(770 PASS/2 SKIP/1 FAIL). 최종 fixture는 설치된 모든 파일을 읽어 전체 수정
+트리 digest를 확인하고, 변경3개 파일만 쓰기 가능한 임시 복사본에서 실제 git reverse
+patch를 수행한다. 복원한 실제 바이트의 hash로3개 항목만 치환해 원본 전체 digest를
+재구성한다. 고정 before/after digest·모든 파일·원본 license·세 경로의 preimage와
+20초 제한을 유지한다. 변경 없는4713개 파일의 복사/삭제만 없어졌으며, 전체 원본
+digest 검증803ms·관련9 PASS/73 assertions다. exact head CI는 새 커밋에서 다시 확인한다.
