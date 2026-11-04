@@ -1,5 +1,13 @@
 # 에이전트 실행 기준
 
+#748은 최신 main/preview f6ad710f에서 `codex/748-report-save-deadline`으로 수리한다.
+실제 방어 사진 편집 저장의 연결 오류와 편집 보존/재접속, 안전한 receipt를 구분했다.
+동기 저장 PATCH가 metadata30초로 분류되던 회귀는 가상48초에서 RED였고, POST와 같은
+기존 동기 리포트300초 분류로 GREEN이다. metadata/admission30초, 최대300초 종료와
+명시 취소는 유지하며 서버 job/기술 물량·권한·원장/hold에는 변경이 없다. 과거 실제 실패
+전부를 PATCH timeout으로 소급 단정하지 않는다. 정확 CI/정상 PR 병합 뒤 새 최종 SHA의
+full/같은 SHA preview에서 보존된 편집 저장·최신 초안/PDF/후속 인수를 확인한다.
+
 #746은 `codex/746-photo-status-baseline`에서 최신 main8c4574c9를 기준으로 수리한다.
 실제 사진 리포트의 본문을 편집하지 않았는데 상태 조회 뒤 dirty가 생겼고, 실제 React
 브라우저의 focus/status 두 경로에서도 동일 RED를 확인했다. 초기 accept와 metadata

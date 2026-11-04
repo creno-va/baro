@@ -42,6 +42,14 @@ test("a slow synchronous report survives metadata expiry while admission, cancel
       method: "POST",
       body: "{}",
     });
+    const saved = apiFetch("/api/v2/cases/synthetic/reports?review=current", {
+      method: "patch",
+      body: JSON.stringify({ content: "사진을 포함한 합성 검토 본문" }),
+    }).catch((error: unknown) => error);
+    const boundedSave = apiFetch("/api/v2/cases/synthetic/reports", {
+      method: "PATCH",
+      body: "{}",
+    }).catch((error: unknown) => error);
     let finished = false;
     void generated.then(() => {
       finished = true;
@@ -56,17 +64,29 @@ test("a slow synchronous report survives metadata expiry while admission, cancel
     expect(finished).toBe(false);
     calls[2]?.finish(Response.json({ accepted: true }));
     expect(JSON.stringify(await (await generated).json())).toBe('{"accepted":true}');
+    calls[3]?.finish(Response.json({ saved: true }));
+    const savedResponse = await saved;
+    expect(savedResponse).toBeInstanceOf(Response);
+    expect(await (savedResponse as Response).json()).toEqual({ saved: true });
 
     const cancel = new AbortController();
     const cancelled = apiFetch("/api/v2/cases/synthetic/reports", {
-      method: "POST",
+      method: "PATCH",
       signal: cancel.signal,
     }).catch((error: unknown) => error);
     cancel.abort();
     expect(await cancelled).toMatchObject({ name: "AbortError" });
+    const cancelGeneration = new AbortController();
+    const cancelledGeneration = apiFetch("/api/v2/cases/synthetic/reports", {
+      method: "POST",
+      signal: cancelGeneration.signal,
+    }).catch((error: unknown) => error);
+    cancelGeneration.abort();
+    expect(await cancelledGeneration).toMatchObject({ name: "AbortError" });
     advance(252_000);
+    expect(await boundedSave).toMatchObject({ name: "TimeoutError" });
     expect(await transfer).toMatchObject({ name: "TimeoutError" });
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(8);
   } finally {
     globalThis.fetch = originalFetch;
     AbortSignal.timeout = originalTimeout;
