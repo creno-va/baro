@@ -1,5 +1,13 @@
 # 에이전트 실행 기준
 
+#746은 `codex/746-photo-status-baseline`에서 최신 main8c4574c9를 기준으로 수리한다.
+실제 사진 리포트의 본문을 편집하지 않았는데 상태 조회 뒤 dirty가 생겼고, 실제 React
+브라우저의 focus/status 두 경로에서도 동일 RED를 확인했다. 초기 accept와 metadata
+baseline에 같은 사진 배치를 적용하며 retained editor·사용자 편집·owner fence는 유지한다.
+읽기만으로 저장하거나 userEdited를 바꾸지 않는다. 실제 자료 반영은 같은8c4574c9에서
+생성/audit/publication까지 완료(진단41844144099, receipt26→28)했고, 증거 변경 뒤
+요약 재확인은 정상 선행 조건으로 구분한다. 최종 full/같은 SHA preview 인수는 별도다.
+
 최신 main/preview4e66c8c3의 새 청구 분석과 요약3 기준 방어 분석은 독립 audit·최종
 인용 검증 뒤 완료됐다. 방어 새 PDF10쪽 전부를 렌더/시각 검토하고 웹/HTML/PDF13절
 일치를 확인했다. 다만 이후 선택 자료의 대화 반영은 critical question_repetition
