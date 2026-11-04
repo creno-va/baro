@@ -67,7 +67,7 @@ test("a slow synchronous report survives metadata expiry while admission, cancel
     calls[3]?.finish(Response.json({ saved: true }));
     const savedResponse = await saved;
     expect(savedResponse).toBeInstanceOf(Response);
-    expect(await (savedResponse as Response).json()).toEqual({ saved: true });
+    expect(JSON.stringify(await (savedResponse as Response).json())).toBe('{"saved":true}');
 
     const cancel = new AbortController();
     const cancelled = apiFetch("/api/v2/cases/synthetic/reports", {
