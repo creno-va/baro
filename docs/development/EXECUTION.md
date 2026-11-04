@@ -22,6 +22,22 @@
 quick/build/mobile·정확 head CI와 최종 main full/preview는 별도 완료해야 한다.
 과거 #339 결정과 vendor patch·실패 증거는 변경하지 않는다. production 배포는 없다.
 
+PR736/737은 정상 병합되었고 main/preview `f6d707cac897f357458a2e1348e70b5fe50afb88`의
+수동 [full41787065742](https://github.com/creno-va/baro/actions/runs/41787065742)는
+core/browser/native 모두 SUCCESS, unit5376 PASS/8 SKIP/0 FAIL 및 unfiltered raw audit0이다.
+같은 SHA [preview41787582328](https://github.com/creno-va/baro/actions/runs/41787582328)의
+readiness release를 확인했으며 #724는 해당 보안 범위의 증거로 종료했다.
+
+새 합성 청구 사건의 실제 질문2×3·요약 재조율·입장/민사/신청 전 명시 저장·새 법률/판례
+분석 뒤 report2가 즉시 stale, 후속 해결이 not_ready로 남았다. #738을 #620/#621/#723에
+연결하고 `codex/738-report-currentness`에서 수리한다. 모델 receipt14개 final/response와
+분석 작업 완료는 리포트·후속 해결 성공을 뜻하지 않는다. 현재 사건·증거·범위와 내부 저장
+revision의 경계를 좁히기 위해 기존 main-only 진단에 최대96개 숫자 revision/게시 증명과
+출처 header의 시각·경합 적격 수만 추가한다. 전체 원문 hash·citation 검증 성공을 header
+개수로 주장하지 않는다. 복호화·private payload·prompt·모델 출력·SQL/stack 로그·공급자
+재호출은 없다. 로컬 CLI 연결 계정의 읽기 권한이 없어 기존 승인 workflow 경로를 사용한다.
+실제 preview 성공 전 #738/#723 및 관련 리포트/후속 인수는 OPEN으로 유지한다.
+
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·
 전역 shell/token·이 문서/PRD/ADR를 단독 소유하고01~06은 명시 파일을 소유한다. 사용자가 만든 여섯 채팅과

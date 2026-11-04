@@ -4,6 +4,73 @@ import {
   inspectProductionWorkspace,
 } from "../scripts/inspect-production-workspace";
 import { createTestDatabase } from "./helpers/d1";
+import { reportFixture } from "./helpers/report-fixture";
+
+test("report revision diagnostics prove the real publication chain without exposing private fields", async () => {
+  const f = await reportFixture();
+  try {
+    const report = await f.reports.generate(
+      f.actor.ownerId,
+      f.workspaceId,
+      crypto.randomUUID(),
+      {},
+    );
+    const inspect = () =>
+      inspectProductionWorkspace(
+        {
+          token: "private-token",
+          sha: "a".repeat(40),
+          environment: "preview",
+          workspaceId: f.workspaceId,
+        },
+        async (url, init) => {
+          if (url.endsWith("/api/health/ready"))
+            return Response.json({
+              release: "a".repeat(40),
+              environment: "preview",
+              status: "ready",
+            });
+          const query = JSON.parse(String(init?.body));
+          if (!query.sql) return Response.json({ success: true, result: {} });
+          expect(query.sql).toStartWith("SELECT ");
+          expect(query.sql).not.toMatch(/encrypted_payload|lease_token|UPDATE|INSERT|DELETE/);
+          const rows = f.db.sqlite.query(query.sql).all(...query.params);
+          return Response.json({
+            success: true,
+            result: [
+              {
+                success: true,
+                results: rows.map((row) => ({
+                  ...(row as object),
+                  prompt: "private-prompt",
+                  stack: "private-stack",
+                })),
+              },
+            ],
+          });
+        },
+        undefined,
+        { revisionBoundary: true },
+      );
+    const before = await inspect();
+    expect(before.revisionBoundary?.find((row) => row.kind === "workspace")).toMatchObject({
+      revision: f.rev(),
+      proof: 1,
+    });
+    expect(before.revisionBoundary?.find((row) => row.kind === "report")).toMatchObject({
+      revision: report.revision,
+      proof: 1,
+    });
+    expect(JSON.stringify(before)).not.toContain("private");
+    f.db.sqlite
+      .query("UPDATE v2_jobs SET target_revision=target_revision+1 WHERE target_id=?")
+      .run(report.id);
+    const after = await inspect();
+    expect(after.revisionBoundary?.find((row) => row.kind === "report")?.proof).toBe(0);
+  } finally {
+    f.db.close();
+  }
+});
 
 test.each(["intake_questions", "intake_summary", "chat_response", "file_processing"])(
   "completed %s receipts and all-history finite totals remain read-only and preserve ambiguity",
