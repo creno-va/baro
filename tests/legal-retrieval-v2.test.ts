@@ -316,6 +316,74 @@ test("actual SQL discovery cache needs no caller source keys and preserves fresh
   expect(await f.repo.find(key, "2026-10-07T00:00:00.000Z")).toBeNull();
 });
 
+test.each(["statute", "precedent"] as const)(
+  "new analysis refreshes a nearly expired %s original and preserves the old binding",
+  async (kind) => {
+    const f = await fixture();
+    const list = precedents.find((v) => v.id === "precedent_list_candidate");
+    const detail = precedents.find((v) => v.id === "precedent_verified");
+    if (!list || !detail) throw new Error("Missing synthetic precedent");
+    const plans =
+      kind === "statute" ? [statutePlan] : [{ kind: "precedent", query: "합성 개념", limit: 3 }];
+    const calls: string[] = [];
+    let failDetail = false;
+    const transport = async (address: string) => {
+      const u = new URL(address);
+      calls.push(u.pathname);
+      if (failDetail && u.pathname.endsWith("lawService.do")) return response({}, 503);
+      return response(
+        kind === "statute"
+          ? u.pathname.endsWith("lawSearch.do")
+            ? syntheticCompleteList
+            : officialDetail
+          : u.pathname.endsWith("lawSearch.do")
+            ? JSON.parse(list.response.body)
+            : syntheticPrecedentDetail(detail.response.body),
+      );
+    };
+    const oldNow = new Date(Date.parse(NOW) - 86400000 + 300000).toISOString();
+    const old = await f
+      .service({ transport })
+      .retrieve({ ...input(plans), now: oldNow, asOfDate: oldNow.slice(0, 10) }, f.access);
+    expect(old.chunks).toHaveLength(1);
+    const oldChunk = old.chunks[0];
+    if (!oldChunk) throw new Error("Missing cached original");
+    const oldBinding = f.db.sqlite
+      .query("SELECT citation_json FROM v2_citation_bindings WHERE id=?")
+      .get(oldChunk.citation.id);
+    calls.length = 0;
+    await f.service({ transport }).retrieve(input(plans), f.access);
+    expect(calls).toHaveLength(1); // Legacy retrieval still uses a valid short-lived original.
+    calls.length = 0;
+    failDetail = true;
+    const failed = await f
+      .service({ transport, minimumCachedLifetimeMs: 1800000, sleep: async () => {} })
+      .retrieve(input(plans), f.access);
+    expect(calls.length).toBeGreaterThan(1);
+    expect(failed.chunks).toHaveLength(0); // No fallback to the short-lived cache on an upstream failure.
+    calls.length = 0;
+    failDetail = false;
+    const renewed = await f
+      .service({ transport, minimumCachedLifetimeMs: 1800000 })
+      .retrieve(input(plans), f.access);
+    expect(calls).toHaveLength(2);
+    expect(renewed.chunks[0]?.source.verifiedAt).toBe(NOW);
+    expect(renewed.chunks[0]?.source.expiresAt).toBe("2026-10-07T00:00:00.000Z");
+    expect(renewed.chunks[0]?.source.contentHash).toBe(old.chunks[0]?.source.contentHash);
+    expect(
+      f.db.sqlite
+        .query("SELECT citation_json FROM v2_citation_bindings WHERE id=?")
+        .get(oldChunk.citation.id),
+    ).toEqual(oldBinding);
+    calls.length = 0;
+    const reused = await f
+      .service({ transport, minimumCachedLifetimeMs: 1800000 })
+      .retrieve(input(plans), f.access);
+    expect(calls).toHaveLength(1);
+    expect(reused.chunks[0]?.source).toEqual(renewed.chunks[0]?.source);
+  },
+);
+
 test("discovery chooses newer fetched content over an older body with later verification", async () => {
   const f = await fixture();
   const candidate = parseStatuteCandidate(officialList.LawSearch.law[0]);

@@ -166,6 +166,10 @@ export function createLegalAnalysisRuntimeAdapter(deps: LegalAnalysisRuntimeDepe
       if (!input.success) throw new LegalAnalysisError("INVALID_INPUT");
       if (!service) {
         const retrieval = createV2LegalRetrieval(deps.env, sources, {
+          // A five-minute cache remainder expired during real report review.
+          // Leave a thirty-minute acquisition runway; all 24h read/publication
+          // TTL checks, actual request/time budgets and failure behavior remain.
+          minimumCachedLifetimeMs: 30 * 60_000,
           ...(deps.transport ? { transport: deps.transport } : {}),
           precedentDiscovery: analysisPrecedentDiscovery(input.data),
           bindCitation: async (citation) =>

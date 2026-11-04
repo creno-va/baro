@@ -74,6 +74,13 @@ AI200 reservation, admission, outbox and retry limits remain the existing durabl
 job/operation/lease/attempt responsibility. Reads, page entry, polling and HTML/PDF
 export must read the stored snapshot; they must never call `prepare`.
 
+New admitted analysis requires more than thirty minutes of remaining cached-original
+lifetime. A shorter original is still identity/hash checked, then treated as a cache
+miss so legal-retrieval fetches and verifies the real official detail within the same
+request/time budget. A failed refresh never falls back to that short-lived original.
+No read/export refresh, fabricated verification time, longer 24-hour TTL or relaxed
+publication/source check is introduced. Legacy retrieval keeps its existing default.
+
 Tests use synthetic official response shapes and a fake model/auditor with real SQLite,
 AES repositories, source parsers and citation bindings. They demonstrate local integrity,
 revision and failure behavior only, not actual legal API/model quality or legal approval.

@@ -37,6 +37,9 @@ export function createV2LegalRetrieval(
   options: {
     transport?: Transport;
     timeoutMs?: number;
+    /** Trusted acquisition policy only. Reads/exports retain the original TTL;
+     * a short-lived cache requires a real upstream fetch, never a timestamp bump. */
+    minimumCachedLifetimeMs?: number;
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
     bindCitation: (citation: V2OfficialCitation) => Promise<boolean>;
     observeUpstreamRejection?: (observation: UpstreamRejectionObservation) => void | Promise<void>;
@@ -51,6 +54,13 @@ export function createV2LegalRetrieval(
     };
   },
 ) {
+  const minimumCachedLifetimeMs = options.minimumCachedLifetimeMs ?? 0;
+  if (
+    !Number.isSafeInteger(minimumCachedLifetimeMs) ||
+    minimumCachedLifetimeMs < 0 ||
+    minimumCachedLifetimeMs >= 86400000
+  )
+    throw new RetrievalFailure("schema_mismatch");
   const request = createBoundedTransport(options.transport, {
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     ...(options.sleep === undefined ? {} : { sleep: options.sleep }),
@@ -149,6 +159,10 @@ export function createV2LegalRetrieval(
         chunk.citation.contentHash !== source.contentHash
       )
         throw new RetrievalFailure("cache_invalid");
+      // Verify identity/hash first, including a short-lived cached original.
+      // New analysis needs time for model/audit/publication and report review.
+      // Returning a miss uses the existing bounded official detail request.
+      if (Date.parse(source.expiresAt) - Date.parse(now) <= minimumCachedLifetimeMs) return null;
       return { ...chunk, source };
     } catch {
       throw new RetrievalFailure("cache_invalid");
