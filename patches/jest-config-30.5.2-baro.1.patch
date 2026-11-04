@@ -1,0 +1,77 @@
+diff --git a/build/index.js b/build/index.js
+--- a/build/index.js
++++ b/build/index.js
+@@ -887,7 +887,7 @@
+   return data;
+ }
+ function _deepmerge() {
+-  const data = _interopRequireDefault(require("deepmerge"));
++  const data = _interopRequireDefault(require("@fastify/deepmerge")({symbols: true}));
+   _deepmerge = function () {
+     return data;
+   };
+@@ -940,7 +940,7 @@
+   if (typeof defaults === 'function' || typeof overrides === 'function') {
+     throw new TypeError('Cannot merge config in form of callback');
+   }
+-  return _deepmerge().default.all([defaults, overrides]);
++  return _deepmerge().default(defaults, overrides);
+ }
+ async function readConfig(argv, packageRootOrConfig,
+ // Whether it needs to look into `--config` arg passed to CLI.
+@@ -1317,7 +1317,7 @@
+   return data;
+ }
+ function _deepmerge() {
+-  const data = _interopRequireDefault(require("deepmerge"));
++  const data = _interopRequireDefault(require("@fastify/deepmerge")({symbols: true}));
+   _deepmerge = function () {
+     return data;
+   };
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "jest-config",
+-  "version": "30.5.2",
++  "version": "30.5.2-baro.1",
+   "repository": {
+     "type": "git",
+     "url": "https://github.com/jestjs/jest.git",
+@@ -43,7 +43,6 @@
+     "babel-jest": "30.5.2",
+     "chalk": "^4.1.2",
+     "ci-info": "^4.2.0",
+-    "deepmerge": "^4.3.1",
+     "glob": "^13.0.6",
+     "graceful-fs": "^4.2.11",
+     "jest-circus": "30.5.2",
+@@ -57,17 +56,8 @@
+     "parse-json": "^5.2.0",
+     "pretty-format": "30.5.1",
+     "slash": "^3.0.0",
+-    "strip-json-comments": "^3.1.1"
+-  },
+-  "devDependencies": {
+-    "@jest/test-utils": "30.5.2",
+-    "@types/graceful-fs": "^4.1.9",
+-    "@types/parse-json": "^4.0.2",
+-    "esbuild": "^0.28.0",
+-    "esbuild-register": "^3.6.0",
+-    "semver": "^7.7.2",
+-    "ts-node": "^10.5.0",
+-    "typescript": "^5.8.3"
++    "strip-json-comments": "^3.1.1",
++    "@fastify/deepmerge": "3.2.4"
+   },
+   "engines": {
+     "node": "^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0"
+@@ -75,5 +65,6 @@
+   "publishConfig": {
+     "access": "public"
+   },
+-  "gitHead": "202dd8a14777c270607c2416bd5034c3c0abc984"
++  "gitHead": "202dd8a14777c270607c2416bd5034c3c0abc984",
++  "private": true
+ }

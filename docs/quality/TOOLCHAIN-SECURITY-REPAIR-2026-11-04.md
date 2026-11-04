@@ -13,7 +13,7 @@ consumed Zod3. Product contracts continue to use Zod4.6.6. No Workers product im
 
 | Advisory | Package | Treatment |
 | --- | --- | --- |
-| [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) | deepmerge | No official fixed release. Narrow 4.3.1 vendor patch writes own data properties in source/CJS/UMD; baseline prototype poisoning reproduces, patched probes reject it. Raw audit remains low1. |
+| [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) | deepmerge | Intermediate4.3.1 mitigation/raw low1 remain historical evidence. Actual Jest-config merge consumers now use official @fastify/deepmerge3.2.4 through explicit private local fork30.5.2-baro.1. Frozen product raw audit0; final CI/full acceptance remains pending. |
 | [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4) | glob | Official 14.0.3, fixed from14.0.2. Pre-aborted traversal and actual consumers checked. |
 | [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) | minimatch | Official11.0.4, fixed from11.0.1. Upgrade coverage test-exclude to8 rather than forcing its old callable minimatch API. |
 | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) | node-forge | Official1.4.2 is outside advisory vulnerable range <=1.4.0; retained malicious RSA probes checked in CJS and both UMD bundles. |
@@ -42,7 +42,7 @@ router-server peers; Expo58.0.17 and RN0.88.0 remain fixed. The private iOS CLI 
 exact CLI version. Actual coverage include/exclude, sync/async discovery and Babel instrumentation
 are regression tested to cover the major glob/minimatch API changes.
 
-## Validation and remaining condition
+## Intermediate validation and historical remaining condition
 
 - Initial in-place frozen `bun ci`: 1298 installs/1258 packages, no lock changes. A real UI
   regression exposed stale nested installed copies: app/linking resolved constants58.0.13 while
@@ -63,3 +63,50 @@ are regression tested to cover the major glob/minimatch API changes.
   an official compatible fix or separately approved technical replacement, with raw evidence preserved.
 - Complete quick/build/mobile bundle and exact PR CI results are recorded in the PR before merge.
   No physical native launch, production deployment or paid CI provider call is claimed here.
+
+## Actual Jest consumer replacement
+
+Starting main22be55af (PR736), branch `codex/724-jest-merge-consumer`, continues #724/#723/#620/#621.
+Jest30.5.2, Expo58.0.17, RN0.88.0 and product/provider/payment choices are unchanged. This limited
+repair replaces two existing merge consumers and preserves test functionality.
+
+Official Jest-config30.5.2 tarball SHA512 and its MIT license were verified. The private local package
+is explicitly30.5.2-baro.1: two requires construct the official Fastify merger with symbols enabled,
+and the two-object `.all` call becomes a two-argument merge. Declarations, ESM shim and license are
+identical upstream bytes. Metadata names replacement3.2.4 and removes upstream-monorepo-only dev
+dependencies. No official fixed Jest/deepmerge version is claimed. `vendor/README.md`, the exact
+reversible patch and `patches/jest-config-vendor.json` attest all five source files, full installed
+copy, replacement registry SRI/tree/license and both actual consumers.
+
+Bun1.4.0's transitive file override alone produced empty records and omitted Jest dependencies. That
+incomplete graph was rejected. An explicit root dev dependency anchors the local package; the override
+selects it for CLI/core. Recalculation from the old lock retains every other unique package/version:
+only deepmerge4.3.1/Jest-config30.5.2 become Fastify3.2.4/the local fork. Nested lock path differences
+reflect hoisting, with actual resolution checked separately.
+
+The old deepmerge patch, entire historical manifest and patched package are preserved byte for byte.
+The same tests still reverse its patch, reproduce original returned-prototype poisoning and check
+CJS/UMD mitigation. It is an explicitly retired fixture, never a product dependency. Immutable
+third-party fixture bytes are excluded from formatting and checked by complete digest/patch/license
+attestation instead. Raw audit remains unchanged and unfiltered. #339 is untouched.
+
+The native package's previous full digest included installed dependencies. New hoisting adds exactly
+five unchanged official ansi-styles5.2.0 files beneath pretty-format. Its original tarball SRI and all
+five bytes were independently checked. The old native manifest is archived unchanged; current full
+before/after digests include the new files and a real reverse patch proves all three original native
+preimages. Native version, patch bytes, license and all source postimages are unchanged. The new
+layout, SRI/tree/files and old manifest are additionally attested. No file is ignored by the native
+full-tree check and no security/advisory allowlist is introduced.
+
+- Clean pinned frozen `bun ci`:1078 packages installed; old installations preserved in backup.
+- Product unfiltered `bun audit --json`: `{}`, exit0. Distinct from isolated probe audit0 and historical
+  raw audit16/low1 failures.
+- Security/consumer/provenance/retained attack regressions:18 PASS/0 FAIL/103 assertions. Actual Node
+  Jest CLI/core, seven normal merge shapes, preset globals, nested poisoning and registry/local legacy
+  consumer rejection are included.
+- Full quick/build, mobile108/both exports, exact-head CI/review/merge and final main full/same-SHA
+  preview remain required. No paid CI call or production deploy.
+
+When compatible official Jest-config replaces this consumer, retire the local fork only after repeating
+provenance, exact consumers, native layout and native UI/bundle checks. Retain historical mitigations
+and failure evidence.

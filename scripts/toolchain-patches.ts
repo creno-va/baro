@@ -3,6 +3,7 @@ import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { verifyJestConfigVendor } from "./jest-config-vendor";
 import { verifyNativeTextInputPatch } from "./mobile-ios-text-input-patch";
 import { verifyUpstreamToolchain } from "./upstream-toolchain";
 
@@ -43,9 +44,10 @@ const patchSchema = z.strictObject({
     .min(1),
 });
 export const toolchainPatchManifestSchema = z.strictObject({
-  version: z.literal(1),
+  version: z.literal(2),
   rawAuditRequired: z.literal(true),
-  packages: z.array(patchSchema).length(2),
+  packages: z.array(patchSchema).length(1),
+  retiredPackages: z.array(patchSchema).length(1),
 });
 export const bytesHash = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
@@ -127,6 +129,7 @@ export function patchFilePaths(source: string) {
   return paths.sort();
 }
 export async function verifyToolchainPatches(root = process.cwd()) {
+  await verifyJestConfigVendor(root, { bytesHash, patchFilePaths });
   await verifyNativeTextInputPatch(root, { bytesHash, packageTreeHash, patchFilePaths });
   await verifyUpstreamToolchain(root, {
     bytesHash,
@@ -144,30 +147,46 @@ export async function verifyToolchainPatches(root = process.cwd()) {
     patchedDependencies?: Record<string, string>;
   };
   if (
-    new Set(manifest.packages.map((item) => item.name)).size !== 2 ||
     JSON.stringify(manifest.packages.map((item) => item.name).sort()) !==
-      JSON.stringify(["braces", "deepmerge"]) ||
+      JSON.stringify(["braces"]) ||
+    JSON.stringify(manifest.retiredPackages.map((item) => item.name)) !==
+      JSON.stringify(["deepmerge"]) ||
     JSON.stringify(Object.keys(project.patchedDependencies ?? {}).sort()) !==
-      JSON.stringify(["braces@3.0.3", "deepmerge@4.3.1", "react-native@0.88.0"]) ||
+      JSON.stringify(["braces@3.0.3", "react-native@0.88.0"]) ||
     JSON.stringify(Object.keys(lock.patchedDependencies ?? {}).sort()) !==
-      JSON.stringify(["braces@3.0.3", "deepmerge@4.3.1", "react-native@0.88.0"])
+      JSON.stringify(["braces@3.0.3", "react-native@0.88.0"])
   )
     throw new Error("PATCH_PACKAGE_SET_CHANGED");
-  for (const item of manifest.packages) {
+  const archived = JSON.parse(
+    await readFile(resolve(root, "patches/archive/manifest-before-jest-replacement.json"), "utf8"),
+  );
+  if (
+    JSON.stringify(z.array(patchSchema).length(2).parse(archived.packages)) !==
+    JSON.stringify([...manifest.packages, ...manifest.retiredPackages])
+  )
+    throw new Error("PATCH_HISTORICAL_MANIFEST_CHANGED");
+  for (const item of [...manifest.packages, ...manifest.retiredPackages]) {
+    const active = item.name === "braces";
     const key = `${item.name}@${item.version}`,
       expectedVersion = item.name === "braces" ? "3.0.3" : "4.3.1";
     if (
       item.version !== expectedVersion ||
       item.patch !== `patches/${key}.patch` ||
-      project.patchedDependencies?.[key] !== item.patch ||
-      lock.patchedDependencies?.[key] !== item.patch ||
-      lock.packages[item.name]?.[0] !== key ||
-      lock.packages[item.name]?.[3] !== item.registryIntegrity
+      (active
+        ? project.patchedDependencies?.[key] !== item.patch ||
+          lock.patchedDependencies?.[key] !== item.patch ||
+          lock.packages[item.name]?.[0] !== key ||
+          lock.packages[item.name]?.[3] !== item.registryIntegrity
+        : project.patchedDependencies?.[key] !== undefined ||
+          lock.patchedDependencies?.[key] !== undefined ||
+          Object.values(lock.packages).some(
+            (record) => typeof record[0] === "string" && record[0].startsWith("deepmerge@"),
+          ))
     )
       throw new Error("PATCH_LOCK_OR_VERSION_CHANGED");
     const directConsumers = Object.entries(lock.packages)
       .filter(([, record]) => {
-        const metadata = record[2] as
+        const metadata = (typeof record[1] === "object" ? record[1] : record[2]) as
           | { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
           | undefined;
         return Boolean(
@@ -178,14 +197,14 @@ export async function verifyToolchainPatches(root = process.cwd()) {
       .sort();
     if (
       JSON.stringify(directConsumers) !==
-      JSON.stringify(item.consumers.map((consumer) => consumer.name).sort())
+      JSON.stringify(active ? item.consumers.map((consumer) => consumer.name).sort() : [])
     )
       throw new Error("PATCH_CONSUMER_SET_CHANGED");
-    const pkgRoot = resolve(root, "node_modules", item.name),
+    const pkgRoot = toolchainPatchDirectory(root, item.name),
       pkg = JSON.parse(await readFile(resolve(pkgRoot, "package.json"), "utf8"));
     if (pkg.name !== item.name || pkg.version !== item.version || pkg.main !== item.entryPoint)
       throw new Error("PATCH_ENTRYPOINT_CHANGED");
-    for (const consumer of item.consumers) {
+    for (const consumer of active ? item.consumers : []) {
       const consumerRoot = resolve(root, "node_modules", consumer.name);
       const consumerPackage = JSON.parse(
         await readFile(resolve(consumerRoot, "package.json"), "utf8"),
@@ -229,4 +248,10 @@ export async function verifyToolchainPatches(root = process.cwd()) {
         throw new Error("PATCH_BROWSER_RESIDUAL_CHANGED");
   }
   return manifest;
+}
+
+export function toolchainPatchDirectory(root: string, name: string) {
+  return name === "deepmerge"
+    ? resolve(root, "tests/fixtures/toolchain-security/retired-deepmerge")
+    : resolve(root, "node_modules", name);
 }

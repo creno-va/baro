@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "files": {
-    "includes": ["**", "!!dist", "!!.astro", "!!.wrangler", "!!node_modules"]
+    "includes": [
+      "**",
+      "!!dist",
+      "!!.astro",
+      "!!.wrangler",
+      "!!node_modules",
+      "!!tests/fixtures/toolchain-security/retired-deepmerge"
+    ]
   },
   "formatter": {
     "enabled": true,

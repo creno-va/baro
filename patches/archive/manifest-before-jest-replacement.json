@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "rawAuditRequired": true,
+  "packages": [
+    {
+      "name": "braces",
+      "version": "3.0.3",
+      "registryIntegrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
+      "patch": "patches/braces@3.0.3.patch",
+      "patchSha256": "7af713af51d9136ba4e9254bda9720a7acb0faae10f3993d9682f84ce938a366",
+      "beforeTreeSha256": "31bc598bd435c483e9bce3da8a2b7ccd97784584aa3646f611186d9e0a00ac73",
+      "afterTreeSha256": "a1329e7a0b496db890745bbe8f5001c7b24009bde3a586164ae399a4b2949c27",
+      "entryPoint": "index.js",
+      "licenseSha256": "35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2",
+      "coverage": "bounded-commonjs-traversal",
+      "changes": [
+        {
+          "path": "lib/compile.js",
+          "beforeSha256": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+          "afterSha256": "2de4c7465459366989e4726fb70e54c6980c5b941c0615660ca0d520858adeac"
+        },
+        {
+          "path": "lib/constants.js",
+          "beforeSha256": "c18ac5adb57308f1ce42a28552da3a31f5d83709743ebd9a636336813a744d4b",
+          "afterSha256": "fc3db282b8a5b8b8a55cda2e85ba05f0c49da138edc76227454d3f3cbc76d5fb"
+        },
+        {
+          "path": "lib/expand.js",
+          "beforeSha256": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+          "afterSha256": "e7ba50105a206523f36d07bec1e52de0b6e154c0b92fc164933397f5f943e7ad"
+        },
+        {
+          "path": "lib/parse.js",
+          "beforeSha256": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+          "afterSha256": "4b78b42b8cc0cdef26149512064a4e39c2e08393b7cce1cdca67ae532c792408"
+        },
+        {
+          "path": "lib/stringify.js",
+          "beforeSha256": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+          "afterSha256": "96dac196755cf3d8843211afc513912d183304b1d282853434ecd33216f25ac1"
+        },
+        {
+          "path": "lib/utils.js",
+          "beforeSha256": "b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7",
+          "afterSha256": "842a352ae809da6d5e819d66c6ce64eb498a037e067ba69bd5c68f4bce21dddd"
+        }
+      ],
+      "unmodifiedBrowserDistributions": [],
+      "source": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+      "consumers": [
+        {
+          "name": "micromatch",
+          "version": "4.0.8",
+          "entryPoint": "index.js"
+        }
+      ]
+    },
+    {
+      "name": "deepmerge",
+      "version": "4.3.1",
+      "registryIntegrity": "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==",
+      "patch": "patches/deepmerge@4.3.1.patch",
+      "patchSha256": "377225c453bedc89f0796ca03fa476c7c981ffc85db5bb4ebb89c7cbe1b77dc9",
+      "beforeTreeSha256": "e055dbe60fd190fb2111d7477c17b5b38476110bd2b750617deaa3a7e3ebf7bf",
+      "afterTreeSha256": "46fac8e6fb08ab38c4721edbf8b1ee459229fb2e11b1e9cfa06909351ed0bcbb",
+      "entryPoint": "dist/cjs.js",
+      "licenseFile": "license.txt",
+      "licenseSha256": "6cfc4687cb2f2d86f4a77e6b526290d3878e5e512f3fec2f4cb36a9cb36f798b",
+      "coverage": "safe-own-data-properties-commonjs-and-browser",
+      "changes": [
+        {
+          "path": "dist/cjs.js",
+          "beforeSha256": "2e5160f84a1141bd927264afe4d15766f1e6cf07daef182b37ff53fea121de7d",
+          "afterSha256": "c97f78cdfcf948cc98ed7ae0feb3c84fdea87bfb4a3c933fe198c8e3c3daae0d"
+        },
+        {
+          "path": "dist/umd.js",
+          "beforeSha256": "f33e6596482d1fb5c7c427f8ef92f2aa849eea9223acd974176b2fb27ddbf73a",
+          "afterSha256": "393606d2bbd54bcec0d564d357ffa270265e500ec21324256b8c5f8f3cb7c511"
+        },
+        {
+          "path": "index.js",
+          "beforeSha256": "12440c84957c1990ea2d5e33dc0091722dc1dc1585c6d20e0c780e568ffa9d30",
+          "afterSha256": "a202f2d86e1637265e0741cb664f9f56995a9439e71043a8c448e280aad7bbec"
+        }
+      ],
+      "unmodifiedBrowserDistributions": [],
+      "source": "https://github.com/advisories/GHSA-gcqx-w48m-w2h4",
+      "consumers": [
+        {
+          "name": "jest-config",
+          "version": "30.5.2",
+          "entryPoint": "build/index.js"
+        }
+      ]
+    }
+  ]
+}
