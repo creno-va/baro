@@ -299,6 +299,36 @@ async function fixture(
   };
 }
 
+test("admitted analysis refreshes a five-minute original through the real retrieval adapter", async () => {
+  const f = await fixture({ defaultReader: true });
+  try {
+    const oldNow = new Date(Date.parse(NOW) - 86400000 + 300000).toISOString();
+    const seedRetrieval = f.service();
+    const old = await seedRetrieval.retrieve(
+      {
+        now: oldNow,
+        asOfDate: oldNow.slice(0, 10),
+        plans: [
+          {
+            kind: "statute",
+            lawTitle: sample.law.title,
+            articles: [{ number: sample.law.article, branch: "0" }],
+          },
+        ],
+      },
+      f.access,
+    );
+    expect(old.chunks[0]?.citation.verifiedAt).toBe(oldNow);
+    const result = await f.adapter.prepare(f.input);
+    expect(result.snapshot.status).toBe("ready");
+    expect(result.snapshot.citations.find((c) => c.kind === "statute")?.verifiedAt).toBe(NOW);
+    expect(f.calls.map((c) => c.phase)).toEqual(phases);
+    expect(f.counts().providerDispatches).toBe(3);
+  } finally {
+    f.db.close();
+  }
+});
+
 test("native gateway callbacks, real official retrieval/binding and a stable same-job replay connect without publication", async () => {
   const f = await fixture({ correction: true, defaultReader: true });
   try {

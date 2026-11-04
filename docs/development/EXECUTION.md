@@ -38,6 +38,23 @@ revision의 경계를 좁히기 위해 기존 main-only 진단에 최대96개 �
 재호출은 없다. 로컬 CLI 연결 계정의 읽기 권한이 없어 기존 승인 workflow 경로를 사용한다.
 실제 preview 성공 전 #738/#723 및 관련 리포트/후속 인수는 OPEN으로 유지한다.
 
+진단 PR739 정상 병합 mainbbc3e08d / exact CI41819378270·로컬 quick EXIT0 뒤
+[읽기 진단41820397352](https://github.com/creno-va/baro/actions/runs/41820397352)을 수행했다.
+W23/S2, report2(W22/S2)·report1(W18/S2)의 게시 증명은 정상이고 source header7개 중
+현재 적격5개였다. 실제 report2의 판례 검증 시각은 전날07:22:26Z이며 원문24h TTL이
+생성(당일07:17:29Z) 약5분 뒤 끝난다. 현재 stale은 이 만료로 설명된다. ‘생성 즉시
+revision 불일치’라는 앞선 가설은 정정하며 원래 대기 경고 시점 전체를 소급 확정하지 않는다.
+
+`codex/738-source-lifetime`은 새 분석의 검증된 캐시 잔여 수명이30분 이하이면 기존
+legal-retrieval의 실제 공식 원문 요청을 사용한다. identity/hash를 먼저 검사하며 실제
+재조회·검증 없이 확인 시각/expiry를 연장하지 않는다. legacy 조회 기본값·24h TTL·
+읽기/PDF의 출처 검사·4계획/12요청/120초·기존 모델 attempt/deadline을 유지한다.
+재조회 실패 시 짧은 캐시로 fallback하지 않는다. 법령/판례 실제 SQL 회귀2개는 기존 동작
+RED→수리 GREEN, root runtime adapter의 새 분석 연결도 확인했다. prompt1.0.3은
+관할/부서/기한/서식/절차 순서 등 법적 주장을 모든 필드에서 검증 근거와 연결하도록
+generation과 독립 audit 양쪽을 명시하며, 없는 절차 원문을 기억으로 채우지 않는다.
+최종 PR/CI·full/같은 SHA preview의 새 분석·후속·PDF 인수는 아직 남아 있다.
+
 2026-11-01 BARO 대규모 개편은 [단일 통합 기록](./CONVERSATION-REPORT-REWORK.md), 상위#620·담당#621~#627,
 [ADR-0018](../adr/0018-conversation-report-rework.md)을 따른다.00이 공통 계약/DB/중앙 client·gateway·router·
 전역 shell/token·이 문서/PRD/ADR를 단독 소유하고01~06은 명시 파일을 소유한다. 사용자가 만든 여섯 채팅과
