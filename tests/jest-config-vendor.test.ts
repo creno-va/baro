@@ -100,7 +100,9 @@ test.each(["registry", "local"] as const)(
         "patches/jest-config-vendor.json",
       ])
         await cp(resolve(root, path), resolve(owned, path));
-      const lock = Bun.JSONC.parse(await readFile("bun.lock", "utf8"));
+      const lock = Bun.JSONC.parse(await readFile("bun.lock", "utf8")) as {
+        packages: Record<string, unknown[]>;
+      };
       lock.packages["synthetic/leftover"] =
         kind === "registry"
           ? ["deepmerge@4.3.1", "", {}]
