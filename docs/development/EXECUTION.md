@@ -1,5 +1,16 @@
 # 에이전트 실행 기준
 
+최신 main/preview4e66c8c3의 새 청구 분석과 요약3 기준 방어 분석은 독립 audit·최종
+인용 검증 뒤 완료됐다. 방어 새 PDF10쪽 전부를 렌더/시각 검토하고 웹/HTML/PDF13절
+일치를 확인했다. 다만 이후 선택 자료의 대화 반영은 critical question_repetition
+(response_text/intake_answer)와 coverage(unknown/user_message)로 거절됐다.
+[진단41839130754](https://github.com/creno-va/baro/actions/runs/41839130754)을 보존하고
+#744를 #620/#621/#723에 연결해 `codex/744-material-question-audit`에서 수리한다.
+같은 실제 실패는 조건 변경 전 반복하지 않는다. 기존 실제 답변·선택 자료가 있고 해당
+유한 findings만 있는 경우에 기존 공유1회 교정으로 새 초안을 생성한다. 새로운 lookup,
+질문 라운드, audit 면제는 없다. 재실패·혼합 unsafe findings·누락 참조·admission 거절은
+계속 차단한다. 원래 모델 출력은 기록하지 않으며 최종 같은 SHA 실제 인수는 별도다.
+
 2026-11-04 개편 실제 인수 후속은 현재 `BARO 개편 최종 오류 수정·실제 인수` 채팅이
 #723(분석·진단·preview 인수), #724(새 보안 수리)로 수행한다. 시작 main65f2f867의
 기존 실패와 #620/#621 및 담당 이슈의 미완료 상태를 보존한다.

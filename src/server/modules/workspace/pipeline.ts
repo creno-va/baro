@@ -1067,6 +1067,40 @@ export function createWorkspacePipeline(
         const metadataFailure =
           error.reason === "unsupported_fact" &&
           error.claimFailure === "unsupported_instrument_number";
+        // Coverage alone is not repair authority: require the independently
+        // identified repetition, its supplied answer and an actually selected material.
+        const materialQuestionFailure =
+          error.reason === "audit_rejected" &&
+          context.materials.some((material) =>
+            context.latestMessage?.selectedFileIds.includes(material.reference.fileId),
+          ) &&
+          context.intake.batches.some((batch) =>
+            batch.answers.some(
+              (answer) =>
+                answer.status === "answered" &&
+                context.references.answeredQuestionIds.includes(answer.questionId) &&
+                batch.questions.some((question) => question.id === answer.questionId),
+            ),
+          ) &&
+          auditFailure?.legalClaimsSupported === true &&
+          auditFailure.strategyDetected === false &&
+          auditFailure.unsupportedFactCount === 0 &&
+          auditFailure.findings.some(
+            (finding) =>
+              finding.code === "question_repetition" &&
+              finding.target === "response_text" &&
+              finding.basis === "intake_answer",
+          ) &&
+          auditFailure.findings.every(
+            (finding) =>
+              finding.severity === "critical" &&
+              ((finding.code === "question_repetition" &&
+                finding.target === "response_text" &&
+                finding.basis === "intake_answer") ||
+                (finding.code === "coverage" &&
+                  finding.target === "unknown" &&
+                  finding.basis === "user_message")),
+          );
         const materialFactFailure =
           error.reason === "unsupported_fact" &&
           error.factFailure?.category === "source_text_mismatch" &&
@@ -1081,6 +1115,7 @@ export function createWorkspacePipeline(
           !bodyFailure &&
           !timelineFailure &&
           !materialTimelineFailure &&
+          !materialQuestionFailure &&
           !metadataFailure &&
           !materialFactFailure &&
           !materialIdentifierFailure
@@ -1093,52 +1128,64 @@ export function createWorkspacePipeline(
             "workspace_chat",
             {
               ...context,
-              draftCorrection: materialFactFailure
+              draftCorrection: materialQuestionFailure
                 ? {
-                    reason: "unsupported_fact",
-                    factFailure: {
-                      category: "source_text_mismatch",
-                      referenceKind: "user_material",
+                    reason: "audit_rejected",
+                    auditFailure: {
+                      code: "question_repetition",
+                      findings: auditFailure.findings.map(({ code, target, basis }) => ({
+                        code,
+                        target,
+                        basis,
+                      })),
                     },
                   }
-                : materialIdentifierFailure
+                : materialFactFailure
                   ? {
-                      reason: "prohibited_content",
-                      contentFailure: {
-                        field: error.contentFailure?.field ?? "chat_text",
-                        category: "private_identifier",
+                      reason: "unsupported_fact",
+                      factFailure: {
+                        category: "source_text_mismatch",
+                        referenceKind: "user_material",
                       },
                     }
-                  : bodyFailure
+                  : materialIdentifierFailure
                     ? {
                         reason: "prohibited_content",
-                        contentFailure: { field: "chat_text", category: "strategy" },
+                        contentFailure: {
+                          field: error.contentFailure?.field ?? "chat_text",
+                          category: "private_identifier",
+                        },
                       }
-                    : materialTimelineFailure
+                    : bodyFailure
                       ? {
-                          reason: "audit_rejected",
-                          auditFailure: {
-                            code: "unsupported_fact",
-                            findings: auditFailure.findings.map(({ code, target, basis }) => ({
-                              code,
-                              target,
-                              basis,
-                            })),
-                          },
+                          reason: "prohibited_content",
+                          contentFailure: { field: "chat_text", category: "strategy" },
                         }
-                      : metadataFailure
+                      : materialTimelineFailure
                         ? {
-                            reason: "unsupported_fact",
-                            claimFailure: "unsupported_instrument_number",
-                          }
-                        : {
                             reason: "audit_rejected",
                             auditFailure: {
                               code: "unsupported_fact",
-                              target: "timeline",
-                              basis: "intake_narrative",
+                              findings: auditFailure.findings.map(({ code, target, basis }) => ({
+                                code,
+                                target,
+                                basis,
+                              })),
                             },
-                          },
+                          }
+                        : metadataFailure
+                          ? {
+                              reason: "unsupported_fact",
+                              claimFailure: "unsupported_instrument_number",
+                            }
+                          : {
+                              reason: "audit_rejected",
+                              auditFailure: {
+                                code: "unsupported_fact",
+                                target: "timeline",
+                                basis: "intake_narrative",
+                              },
+                            },
             },
             requestId,
           ),
