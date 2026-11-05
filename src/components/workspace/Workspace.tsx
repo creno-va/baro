@@ -1320,7 +1320,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           (ready ? view?.case.title : null) ??
           (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
         }
-        subjectContext={ready ? view?.case.subjectContext : undefined}
         active={tab}
         fileCount={ready ? view?.files.length : undefined}
       />
@@ -2320,11 +2319,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       </section>
                       <section>
                         <h2>준비 현황</h2>
-                        <p>
-                          {view.case.subjectContext === "company"
-                            ? "회사와 상대방의 계약 관계, 담당자의 역할, 업무 지시·승인 기록과 정산 자료를 확인해 보세요. 회사 내부 자료는 전달 범위를 먼저 확인해 주세요."
-                            : "상대방과 주고받은 약속, 날짜별 대화와 입금·피해 자료를 확인해 보세요. 개인 식별정보는 필요한 범위만 남겨 주세요."}
-                        </p>
+                        <p>대화와 자료를 바탕으로 사건의 흐름과 준비할 일을 정리해요.</p>
                         <ul
                           className="workspace-preparation-badges"
                           aria-label="준비 현황 바로가기"

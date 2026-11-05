@@ -72,9 +72,9 @@ async function challenge(page: Page) {
     };
   });
 }
-for (const [purposeLabel, casePurpose, subjectLabel, subjectContext] of [
-  ["고소·청구를 준비하고 싶어요", "prepare_claim", "개인", "individual"],
-  ["상대방 주장에 대응하고 싶어요", "respond_to_claim", "기업", "company"],
+for (const [purposeLabel, casePurpose, subjectContext] of [
+  ["고소 준비", "prepare_claim", "individual"],
+  ["주장 대응", "respond_to_claim", "individual"],
 ] as const) {
   test(`${casePurpose}: intake validates code points, blocks duplicates, preserves replay key and focus after errors`, async ({
     page,
@@ -192,7 +192,7 @@ for (const [purposeLabel, casePurpose, subjectLabel, subjectContext] of [
     );
     await page.goto("/cases/new");
     await page.getByRole("radio", { name: purposeLabel, exact: true }).check();
-    await page.getByRole("radio", { name: subjectLabel, exact: true }).check();
+    await expect(page.getByRole("radio")).toHaveCount(2);
     const input = page.getByRole("textbox");
     const submit = page.getByRole("button", { name: "저장하고 계속" });
     // Five supplementary characters are ten UTF-16 code units but only five code points.
@@ -239,8 +239,8 @@ for (const [purposeLabel, casePurpose, subjectLabel, subjectContext] of [
       inputs[0],
     ]);
     await expect(page.getByText(purposeLabel, { exact: true })).toBeVisible();
-    await expect(page.getByText(`${subjectLabel} 사건`, { exact: true })).toBeVisible();
-    await expect(page.getByText("절차 단계 미확인", { exact: true })).toBeVisible();
+    await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
+    await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => localStorage.length)).toBe(0);
     expect(page.url()).not.toContain("합성");
   });

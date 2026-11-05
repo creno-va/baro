@@ -26,13 +26,13 @@
 }
 .consent-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
   gap: clamp(40px, 6vw, 80px);
   width: 100%;
   align-items: start;
 }
 .consent-intro h1 {
-  font-size: clamp(28px, 3vw, 40px);
+  font-size: clamp(28px, 3vw, 36px);
   line-height: 1.4;
 }
 .consent-intro > p:last-child {
@@ -42,11 +42,15 @@
 }
 .consent-form {
   min-width: 0;
-  gap: 12px;
+  gap: 16px;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 20px;
 }
 .consent-form label {
-  padding: 20px;
-  border-radius: 14px;
+  padding: 18px;
+  border-radius: 12px;
   cursor: pointer;
 }
 .consent-form label:has(input:checked) {
@@ -75,7 +79,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
@@ -127,5 +131,26 @@
   }
   .consent-policy-links {
     gap: 0 12px;
+  }
+}
+
+.consent-form .primary-action {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+.consent-form input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+@media (max-width: 480px) {
+  .consent-form {
+    padding: 20px;
+  }
+  .consent-policy-links {
+    gap: 0 12px;
+    font-size: 12px;
   }
 }

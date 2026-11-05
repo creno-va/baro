@@ -790,6 +790,11 @@ test("mobile workspace dialogs return focus to their own opener", async ({ page 
     await opener.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+    const sheet = await dialog.boundingBox();
+    expect(sheet).not.toBeNull();
+    expect(sheet?.x).toBe(0);
+    expect(sheet?.width).toBe(390);
+    expect(Math.abs((sheet?.y ?? 0) + (sheet?.height ?? 0) - 844)).toBeLessThan(2);
     await dialog.getByLabel("닫기", { exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect.soft(opener, label).toBeFocused();
@@ -911,24 +916,24 @@ test("product navigation and reading surfaces support keyboard access and enlarg
   }
 });
 
-test("individual and company input differ and the saved company context appears in case detail", async ({
-  page,
-}) => {
+test("purpose choices change examples and persist without owner-category UI", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
-  await expect(page.getByText("개인 사건은 나와 상대방의 관계", { exact: false })).toBeVisible();
-  await page.getByRole("radio", { name: "기업", exact: true }).check();
-  await expect(page.getByRole("button", { name: "거래처 대금을 못 받았어요" })).toBeVisible();
+  await expect(page.getByRole("radio")).toHaveCount(2);
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await expect(page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" })).toBeVisible();
   await expect(page.getByRole("button", { name: "빌려준 돈을 못 받았어요" })).toHaveCount(0);
-  await page.getByRole("button", { name: "거래처 대금을 못 받았어요" }).click();
+  await page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" }).click();
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   await expect(page).toHaveURL(/\/intake$/);
   const caseId = page.url().split("/")[4];
   await page.goto(`/cases/${caseId}`);
-  await expect(page.locator(".case-subject-context")).toContainText("기업 사건");
+  await expect(page.locator(".case-subject-context")).toHaveCount(0);
   await page.locator(".workspace-context > summary").click();
-  await expect(page.getByText("회사와 상대방의 계약 관계", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("대화와 자료를 바탕으로 사건의 흐름", { exact: false }),
+  ).toBeVisible();
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "보관한 사건" })).toHaveCount(0);
   await page.getByRole("button", { name: "메뉴 열기" }).click();

@@ -1,8 +1,8 @@
 import type { V2CaseContext } from "../../contracts/v2";
 
 export const casePurposeLabels = {
-  prepare_claim: "고소·청구를 준비하고 싶어요",
-  respond_to_claim: "상대방 주장에 대응하고 싶어요",
+  prepare_claim: "고소 준비",
+  respond_to_claim: "주장 대응",
   unconfirmed: "미확인 입장",
 } as const;
 const kinds = {
@@ -28,9 +28,8 @@ export function CaseContextNote({ context }: { context: V2CaseContext }) {
   return (
     <aside className="intake-case-context" aria-label="사건 입장과 맥락">
       <span>{casePurposeLabels[context.casePurpose]}</span>
-      <span>{context.subjectContext === "company" ? "기업 사건" : "개인 사건"}</span>
-      <span>{kinds[context.procedure.kind]}</span>
-      <span>{stages[context.procedure.stage]}</span>
+      {context.procedure.kind !== "unconfirmed" && <span>{kinds[context.procedure.kind]}</span>}
+      {context.procedure.stage !== "unconfirmed" && <span>{stages[context.procedure.stage]}</span>}
       {context.procedure.description && <p>{context.procedure.description}</p>}
     </aside>
   );
