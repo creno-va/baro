@@ -410,61 +410,84 @@ test.describe("native case tools before hydration", () => {
   }
 });
 
-test("the first native target and open state survive delayed hydration", async ({ page }) => {
-  let resume = () => {};
-  const released = new Promise<void>((resolve) => {
-    resume = () => resolve();
-  });
-  let held = false;
-  await page.route(/\/src\/components\/workspace\/Workspace\.tsx(?:\?|$)/, async (route) => {
-    held = true;
-    await released;
-    await route.continue();
-  });
-  try {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/cases/${caseId}`, { waitUntil: "domcontentloaded" });
-    // Hold the real client module, rather than waiting for readiness before opening.
-    await expect.poll(() => held).toBe(true);
-    const trigger = page.locator(".case-tools > summary");
-    const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
-    expect(
-      await page.locator(".case-tools").evaluate((node) => (node as HTMLDetailsElement).open),
-    ).toBe(false);
-    await trigger.click();
-    const link = tools.getByRole("link", { name: "유사 판례", exact: true });
-    const point = await link.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
-      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+for (const width of [390, 1440]) {
+  test(`the first native target and open state survive delayed hydration at ${width}px`, async ({
+    page,
+  }) => {
+    let resume = () => {};
+    const released = new Promise<void>((resolve) => {
+      resume = () => resolve();
     });
-    const before = await link.evaluate(inspectCaseTool, point);
-    await test.info().attach("before-hydration", {
-      body: JSON.stringify(before),
-      contentType: "application/json",
+    let held = false;
+    await page.route(/\/src\/components\/workspace\/Workspace\.tsx(?:\?|$)/, async (route) => {
+      held = true;
+      await released;
+      await route.continue();
     });
-    expect(before.open).toBe(true);
-    expect(before.ssr).toBe(true);
-    expect(before.hit, JSON.stringify(before)).toBe(true);
-    resume();
-    await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-    await expect
-      .poll(() => tools.evaluate((node) => node.style.getPropertyValue("--case-tools-left")))
-      .not.toBe("");
-    const after = await link.evaluate(inspectCaseTool, point);
-    await test
-      .info()
-      .attach("after-hydration", { body: JSON.stringify(after), contentType: "application/json" });
-    expect(after.open).toBe(true);
-    expect(after.ssr).toBe(false);
-    // Keep the original point: a fresh point would hide an initial target moving away.
-    expect(after.hit, JSON.stringify(after)).toBe(true);
-    await expectCaseToolLinks(tools);
-    await link.click();
-    await expect(page).toHaveURL(new RegExp(`/cases/${caseId}/precedents$`));
-  } finally {
-    resume();
-  }
-});
+    try {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/cases/${caseId}`, { waitUntil: "domcontentloaded" });
+      // Hold the real client module, rather than waiting for readiness before opening.
+      await expect.poll(() => held).toBe(true);
+      const trigger = page.locator(".case-tools > summary");
+      const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
+      expect(
+        await page.locator(".case-tools").evaluate((node) => (node as HTMLDetailsElement).open),
+      ).toBe(false);
+      await trigger.click();
+      const link = tools.getByRole("link", { name: "유사 판례", exact: true });
+      const point = await link.evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      });
+      const before = await link.evaluate(inspectCaseTool, point);
+      await test.info().attach("before-hydration", {
+        body: JSON.stringify(before),
+        contentType: "application/json",
+      });
+      expect(before.open).toBe(true);
+      expect(before.ssr).toBe(true);
+      expect(before.hit, JSON.stringify(before)).toBe(true);
+      resume();
+      await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+      await expect
+        .poll(() => tools.evaluate((node) => node.style.getPropertyValue("--case-tools-left")))
+        .not.toBe("");
+      await expect(
+        page.getByRole("heading", {
+          name: "돌려받지 못한 보증금과 반환 약속을 함께 정리하는 긴 사건 제목",
+          exact: true,
+        }),
+      ).toBeVisible();
+      // Observe a real header layout delivery after the async title changes. The
+      // component observer predates this one; keep the original point after it runs.
+      await page.locator(".case-workspace__header").evaluate(
+        (node) =>
+          new Promise<void>((resolve) => {
+            const observer = new ResizeObserver(() => {
+              observer.disconnect();
+              resolve();
+            });
+            observer.observe(node);
+          }),
+      );
+      const after = await link.evaluate(inspectCaseTool, point);
+      await test.info().attach("after-hydration", {
+        body: JSON.stringify(after),
+        contentType: "application/json",
+      });
+      expect(after.open).toBe(true);
+      expect(after.ssr).toBe(false);
+      // Keep the original point: a fresh point would hide an initial target moving away.
+      expect(after.hit, JSON.stringify(after)).toBe(true);
+      await expectCaseToolLinks(tools);
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`/cases/${caseId}/precedents$`));
+    } finally {
+      resume();
+    }
+  });
+}
 
 for (const width of [390, 1440]) {
   test(`captures exact-base app before images at ${width}px`, async ({ page }) => {

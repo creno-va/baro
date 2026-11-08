@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, FolderClosed } from "lucide-react";
-import { type MouseEvent, type ReactNode, useEffect, useRef } from "react";
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef } from "react";
 
 export type CaseTask = "chat" | "files" | "reports" | "drafts";
 const tasks: readonly { id: CaseTask; label: string; path: string }[] = [
@@ -107,6 +107,23 @@ export function CaseNavigation({
   const base = `/cases/${encodeURIComponent(caseId)}`;
   const disclosure = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement>(null);
+  // Keep only the current prop for revision detection; never render an older title.
+  const titleRevision = useRef({ value: title, revision: 0 });
+  if (titleRevision.current.value !== title)
+    titleRevision.current = { value: title, revision: titleRevision.current.revision + 1 };
+  const placedRevision = useRef(-1);
+  const knownOpen = useRef(false);
+  const position = useCallback(() => {
+    if (!disclosure.current?.open) return;
+    positionTools(disclosure.current, trigger.current);
+    placedRevision.current = titleRevision.current.revision;
+  }, []);
+  const syncOpen = useCallback(() => {
+    const open = disclosure.current?.open ?? false;
+    if (knownOpen.current === open) return;
+    knownOpen.current = open;
+    if (open) position();
+  }, [position]);
   const currentTask = activeTask ?? tasks.find((task) => task.id === active)?.id;
   function navigate(event: MouseEvent<HTMLAnchorElement>, task: CaseTask) {
     // Keep copy-link, open-in-new-tab and direct URL behavior available.
@@ -124,23 +141,30 @@ export function CaseNavigation({
     onNavigate(task);
   }
   useEffect(() => {
-    const position = () => positionTools(disclosure.current, trigger.current);
     const positionOnScroll = (event: Event) => {
-      // Scrolling links inside the menu does not move its anchor. Measuring an
-      // expanded menu here would clamp the scroll position back toward its start.
-      if (event.target instanceof Element && event.target.closest(".case-tools__menu")) return;
+      // Only ancestor scrolling moves the anchor. Menu/message/sidebar scrolling
+      // must not move a target that the user has already chosen.
+      if (event.target instanceof Element && !event.target.contains(trigger.current)) return;
       position();
     };
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !disclosure.current?.contains(event.target))
+      if (event.target instanceof Node && !disclosure.current?.contains(event.target)) {
         disclosure.current?.removeAttribute("open");
+        syncOpen();
+      }
     };
     document.addEventListener("pointerdown", closeOutside);
     window.addEventListener("resize", position);
     window.visualViewport?.addEventListener("resize", position);
     window.visualViewport?.addEventListener("scroll", position);
     document.addEventListener("scroll", positionOnScroll, true);
-    const resize = new ResizeObserver(position);
+    const resize = new ResizeObserver(() => {
+      // Show the latest title immediately, but keep an open menu's targets fixed
+      // across background title reflow. Explicit geometry events still reanchor it.
+      if (disclosure.current?.open && placedRevision.current !== titleRevision.current.revision)
+        return;
+      position();
+    });
     if (trigger.current) resize.observe(trigger.current);
     const heading =
       disclosure.current?.closest(".case-workspace__header") ??
@@ -151,6 +175,9 @@ export function CaseNavigation({
       attributes: true,
       attributeFilter: ["style", "class"],
     });
+    // A native disclosure may already be open when its island hydrates. Lock its
+    // initial target before the parent's async case read replaces the loading title.
+    syncOpen();
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
       window.removeEventListener("resize", position);
@@ -160,7 +187,7 @@ export function CaseNavigation({
       resize.disconnect();
       style.disconnect();
     };
-  }, []);
+  }, [position, syncOpen]);
   return (
     <header className="case-navigation case-header">
       <div className="case-header__identity">
@@ -183,20 +210,21 @@ export function CaseNavigation({
         <details
           ref={disclosure}
           className="case-tools"
-          onToggle={() => positionTools(disclosure.current, trigger.current)}
+          onToggle={syncOpen}
           onClick={(event) => {
             if (!(event.target instanceof Node) || !trigger.current?.contains(event.target)) return;
             // Native toggle events are queued. Commit the same details state
             // and its initial position in this activation, before links can be hit.
             event.preventDefault();
             event.currentTarget.open = !event.currentTarget.open;
-            positionTools(event.currentTarget, trigger.current);
+            syncOpen();
           }}
           onKeyDown={(event) => {
             if (event.key !== "Escape" || !event.currentTarget.open) return;
             event.preventDefault();
             event.stopPropagation();
             event.currentTarget.open = false;
+            syncOpen();
             trigger.current?.focus();
           }}
         >
