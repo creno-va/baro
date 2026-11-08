@@ -1026,6 +1026,8 @@ test("task navigation keeps a local review check without claiming a reviewed sav
   const before = await (await request.get("/fixture/counts")).json();
   await page.getByRole("button", { name: "대화·리포트 보기 전환" }).click();
   await expect(review).toBeChecked();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(review).toBeChecked();
   await expect(page.getByText("검토 완료 · 저장 전", { exact: true })).toBeVisible();
   expect(await (await request.get("/fixture/counts")).json()).toEqual(before);
   const state = await (
