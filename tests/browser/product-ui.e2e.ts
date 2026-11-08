@@ -603,9 +603,10 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         await expect(
           page.getByRole("heading", {
             name: route.endsWith("/reports")
-              ? "사건 정리"
+              ? "내 사건 이해와 해결 준비"
               : "돌려받지 못한 보증금, 함께 정리한 이야기",
             exact: true,
+            level: 1,
           }),
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
@@ -825,6 +826,13 @@ test("reports start in reading mode and retain editing through a focus check", a
   await seed(page);
   await page.goto(`${base}/reports`);
   await prepareReport(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "돌려받지 못한 보증금, 함께 정리한 이야기",
+      level: 1,
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
   const heading = page.locator(".report-heading");
   await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
@@ -832,9 +840,8 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page
-      .locator(".report-canvas")
-      .screenshot({ path: `.wrangler/report-reading-${width}.png` });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: `.wrangler/report-reading-${width}.png`, fullPage: true });
   }
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await openReportEditor(page);
