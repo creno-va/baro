@@ -5,9 +5,6 @@
 .case-shell h1 {
   overflow-wrap: anywhere;
 }
-.case-shell h2 {
-  font-size: 1.3rem;
-}
 .case-panel {
   background: var(--card);
   border: 1px solid var(--border);
@@ -37,7 +34,7 @@
   color: var(--primary-foreground);
   border-color: var(--primary);
 }
-.case-shell textarea {
+.case-shell textarea:not(.ui-input) {
   display: block;
   width: 100%;
   min-height: 220px;
@@ -48,7 +45,7 @@
   line-height: 1.7;
   resize: vertical;
 }
-.case-shell label {
+.case-shell label:not(.ui-label):not(.ui-check) {
   display: block;
   line-height: 1.6;
   margin: 12px 0;
@@ -176,7 +173,7 @@
 .evidence-choice small {
   display: block;
 }
-.case-shell button + button {
+.case-shell button:not(.ui-button) + button:not(.ui-button) {
   margin-left: 8px;
 }
 .case-actions button + button,
