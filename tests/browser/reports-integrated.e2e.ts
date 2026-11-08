@@ -5,6 +5,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 import { openReportEditor } from "../helpers/report-controls";
+import { confirmWorkspaceUpload } from "../helpers/workspace-navigation";
 
 // Uses the actual product pages and shared facade, with no component/API alias or injected seed.
 test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared mock configuration.");
@@ -28,14 +29,19 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   await page.locator('astro-island[component-export="AuthButtons"]:not([ssr])').waitFor();
-  await page.getByRole("radio", { name: /^고객/ }).check();
+  await expect(page.getByRole("radio", { name: /^(고객|변호사)/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
+  const policyLink = page
+    .getByRole("navigation", { name: "정책 원문", exact: true })
+    .getByRole("link", { name: /^AI 이용 고지/ });
+  await expect(policyLink).toHaveAttribute("target", "_blank");
   const policyOpened = context.waitForEvent("page");
-  await page.getByRole("link", { name: /^AI 이용 고지/ }).click();
+  await policyLink.click();
   const policy = await policyOpened;
   await expect(policy.getByRole("heading", { name: "AI 이용 고지", exact: true })).toBeVisible();
   await policy.close();
+  await expect(page).toHaveURL(/\/consent$/);
   await page
     .getByRole("checkbox", {
       name: "이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.",
@@ -45,6 +51,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,
   );
+  expect(
+    await page.evaluate(
+      () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
+    ),
+  ).toBe("customer");
   await expect(page).toHaveURL(/\/app$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
@@ -64,7 +75,11 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     const confirmation = page.getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true });
     await expect(confirmation).toBeVisible();
     await confirmation.getByRole("button", { name: "확인하고 계속", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
+    await expect(page).toHaveURL(/\/cases\/[^/]+$/);
+    await expect(
+      page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByRole("navigation", { name: "사건 작업", exact: true })).toBeVisible();
     return new URL(page.url()).pathname;
   }
   const casePath = await completeIntake(
@@ -78,9 +93,14 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     await page
       .getByLabel("업로드할 파일 선택", { exact: true })
       .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(originalText) });
+    await confirmWorkspaceUpload(page);
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   }
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
+  await expect(
+    page
+      .getByRole("region", { name: "사건 자료", exact: true })
+      .getByText("내용 확인 후 반영 가능", { exact: true }),
+  ).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
   await page
     .getByRole("region", { name: "리포트 준비 상태", exact: true })
@@ -179,8 +199,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     );
   expect(await originalCount()).toBe(0);
   await page.goto(`${casePath}/reports`);
-  await expect(page.locator(".report-error")).toHaveAttribute("role", "alert");
-  await expect(page.locator(".report-error")).toContainText("요청한 내용을 찾지 못했어요.");
+  await expect(page.locator(".workspace-error")).toHaveAttribute("role", "alert");
+  await expect(page.locator(".workspace-error")).toContainText("요청한 내용을 찾지 못했어요.");
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
   await page.goto("/cases");
@@ -197,7 +217,12 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     mimeType: "text/plain",
     buffer: Buffer.from(originalText),
   });
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await confirmWorkspaceUpload(page);
+  await expect(
+    page
+      .getByRole("region", { name: "사건 자료", exact: true })
+      .getByText("내용 확인 후 반영 가능", { exact: true }),
+  ).toBeVisible();
   expect(await originalCount()).toBeGreaterThan(0);
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
@@ -222,7 +247,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
   await expect(
-    peer.locator(".report-error").getByRole("link", { name: "로그인", exact: true }),
+    peer.locator(".workspace-error").getByRole("link", { name: "로그인", exact: true }),
   ).toBeVisible();
   await page.reload();
   expect(
@@ -318,7 +343,7 @@ test("oversized mock source shows first-report recovery and preserves the full o
   );
   await expect(
     page
-      .getByRole("region", { name: "리포트 이후 해결 방법", exact: true })
+      .getByRole("region", { name: "이해한 내용을 다음 준비로 이어가요", exact: true })
       .getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
   ).toBeVisible();
   await page.reload();
