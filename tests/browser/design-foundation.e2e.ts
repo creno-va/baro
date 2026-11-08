@@ -1,9 +1,5 @@
-import { readFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { Button } from "../../src/components/ui/button";
 
 async function openFoundation(page: Page) {
   await page.route("**/api/me/session", (route) =>
@@ -25,39 +21,35 @@ test("primary and destructive buttons retain readable contrast while availabilit
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const css = (await readFile(new URL("../../src/styles/global.css", import.meta.url), "utf8"))
-    .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "");
-  for (const variant of ["default", "destructive"] as const) {
-    await page.setContent(
-      renderToStaticMarkup(createElement(Button, { variant, disabled: true }, "합성 실행")),
-    );
-    await page.addStyleTag({ content: css });
-    const contrast = await page.getByRole("button").evaluate(async (button: HTMLButtonElement) => {
-      const luminance = (color: string) => {
-        const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((value) => {
-          const channel = Number(value) / 255;
-          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-        });
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      };
-      getComputedStyle(button).backgroundColor;
-      const frames: number[] = [];
-      for (const disabled of [false, true]) {
-        button.disabled = disabled;
-        for (let frame = 0; frame < 17; frame++) {
-          const style = getComputedStyle(button);
-          const foreground = luminance(style.color);
-          const background = luminance(style.backgroundColor);
-          frames.push(
-            (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
-          );
-          await new Promise(requestAnimationFrame);
+  await openFoundation(page);
+  for (const name of ["조건 확인 후 사용", "삭제 조건 확인 후 사용"]) {
+    const contrast = await page
+      .getByRole("button", { name, exact: true })
+      .evaluate(async (button: HTMLButtonElement) => {
+        const luminance = (color: string) => {
+          const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((value) => {
+            const channel = Number(value) / 255;
+            return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        getComputedStyle(button).backgroundColor;
+        const frames: number[] = [];
+        for (const disabled of [false, true]) {
+          button.disabled = disabled;
+          for (let frame = 0; frame < 17; frame++) {
+            const style = getComputedStyle(button);
+            const foreground = luminance(style.color);
+            const background = luminance(style.backgroundColor);
+            frames.push(
+              (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
+            );
+            await new Promise(requestAnimationFrame);
+          }
         }
-      }
-      return Math.min(...frames);
-    });
-    expect(contrast, `${variant} availability transition`).toBeGreaterThanOrEqual(4.5);
+        return Math.min(...frames);
+      });
+    expect(contrast, `${name} availability transition`).toBeGreaterThanOrEqual(4.5);
   }
 });
 

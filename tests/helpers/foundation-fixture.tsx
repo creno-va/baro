@@ -203,6 +203,9 @@ export function FoundationFixture() {
           <ActionGroup>
             <Button loading>저장 중 예시</Button>
             <Button disabled>조건 확인 후 사용</Button>
+            <Button variant="destructive" disabled>
+              삭제 조건 확인 후 사용
+            </Button>
           </ActionGroup>
         </Section>
       </div>
