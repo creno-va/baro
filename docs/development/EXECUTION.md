@@ -1,5 +1,16 @@
 # 에이전트 실행 기준
 
+## 2026-11-08 preview 배포 다운로드 복구
+
+사용자 승인으로 UI PR #772를 CI/PDF 렌더링 성공 후 main `b02357ff`에 병합했다.
+preview 배포42471285927과 별도 full42470962928에서 GitHub release 자산 다운로드가
+HTTP504로 중단됐다. 제품 검사 실패와 구분하며, 배포 이미지의 고정 소스 및 full의
+secret scanner를 동일한 공식 release asset ID의 API로 내려받는다. 최대4회 재시도와
+연결/전송 시간 제한을 추가하고 버전·SHA256 검사는 유지한다. 기존 주소의 GET은
+반복504였으나 공식 API의 동일 libde265 파일 다운로드와 고정 SHA256 일치를 확인했다.
+후속 PR의 CI 통과 후 최종 main을 preview에만
+배포하며 production과 기존 DB 데이터는 유지한다.
+
 ## 2026-11-08 공통 UI 후속 정리 — 로컬 누적
 
 사용자의 전체 UI 개선 요청을 최신 main `7236c14f` 기반 `codex/product-ui-polish`에서 진행한다.
