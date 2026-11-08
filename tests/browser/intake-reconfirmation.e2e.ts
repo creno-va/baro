@@ -786,36 +786,42 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   ).toBeVisible();
 });
 
-test("320px case input keeps both purpose choices at 44px without owner-category controls or overflow", async ({
+test("320px case input keeps all six mapped choices and keyboard access at 44px without owner-category controls", async ({
   page,
 }) => {
   await seed(page);
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/app");
-  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).check();
+  const select = page.getByRole("combobox", { name: "준비하는 방향" });
+  await select.selectOption("unknown-response");
   await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
     "placeholder",
     /상대방의 주장/,
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.getByRole("radio")).toHaveCount(2);
+  await expect(select.locator("option")).toHaveCount(6);
   for (const name of ["개인", "기업"])
     await expect(page.getByRole("radio", { name, exact: true })).toHaveCount(0);
-  for (const name of ["요구·고소 준비", "받은 주장에 대응"]) {
-    const radio = page.getByRole("radio", { name, exact: true });
-    const target = radio.locator("..");
-    const box = await target.boundingBox();
-    expect(box?.width).toBeGreaterThanOrEqual(44);
-    expect(box?.height).toBeGreaterThanOrEqual(44);
-    await target.click();
-    await expect(radio).toBeChecked();
+  const box = await select.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  for (const choice of [
+    "civil-prepare",
+    "civil-response",
+    "criminal-prepare",
+    "criminal-response",
+    "unknown-prepare",
+    "unknown-response",
+  ]) {
+    await select.selectOption(choice);
+    await expect(select).toHaveValue(choice);
   }
-  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(page.getByRole("radio", { name: "요구·고소 준비", exact: true })).toBeChecked();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("radio", { name: "받은 주장에 대응", exact: true })).toBeFocused();
-  await expect(page.getByRole("radio", { name: "받은 주장에 대응", exact: true })).toBeChecked();
+  await select.focus();
+  await page.keyboard.press("Home");
+  await expect(select).toHaveValue("civil-prepare");
+  await page.keyboard.press("ArrowDown");
+  await expect(select).toBeFocused();
+  await expect(select).toHaveValue("civil-response");
   await page.screenshot({
     path: ".wrangler/ui622/case-input-respond-mobile-320.png",
     fullPage: true,
