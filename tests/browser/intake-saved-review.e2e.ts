@@ -411,7 +411,7 @@ test("case entry choice keeps visible keyboard focus and its six existing-contra
     await select.focus();
     await expect(select).toBeFocused();
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "keyboard");
-    await expect(select).toHaveCSS("outline-style", "solid");
+    await expect(select).toHaveCSS("box-shadow", "rgb(82, 97, 120) 0px 0px 0px 2px inset");
   }
   expect(await calls(page)).toEqual({ advance: 0, save: 0 });
 });
