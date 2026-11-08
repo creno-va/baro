@@ -309,7 +309,7 @@ export function CaseInput({
         ) : (
           <Section
             title="설명으로 시작해요"
-            description="기억나는 일부터 짧게 적어주세요. 자료는 사건을 만든 뒤 추가할 수 있어요."
+            description="기억나는 일부터 적어주세요. 질문과 요약을 확인한 뒤 자료를 추가할 수 있어요."
           >
             <form
               className="case-entry__form ui-stack"
@@ -379,8 +379,8 @@ export function CaseInput({
                 )}
               </div>
               <FieldDescription id="entry-support">
-                문서만으로 시작하는 기능은 아직 제공하지 않아요. 설명을 저장한 뒤 자료를 추가해
-                주세요.
+                문서만으로 시작하는 기능은 아직 제공하지 않아요. 먼저 설명과 질문 답변으로 사건을
+                정리해 주세요.
               </FieldDescription>
             </form>
             {!narrative && !session?.needsConsent ? (
