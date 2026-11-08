@@ -6,6 +6,35 @@ import {
 } from "../src/components/reports/review-sections";
 import { reportMarkdownHtml, reportPhotoIds, reportPhotoToken } from "../src/utils/report-markdown";
 
+test("bounded tables share escaped cells across renderers and keep photo, URL and official quotation text literal", () => {
+  const table =
+    "| 확인할 사실 | 자료 |\n| --- | --- |\n| 계약 \\| 조건 | **원본** |\n| <script>bad()</script> | ![사진](baro-photo:unselected) |\n| 공식 원문 · https://law.go.kr/LSW/lsInfoP.do?lsiSeq=284415 | [외부](javascript:bad) |";
+  const html = reportMarkdownHtml(table, [], true);
+  expect(html).toContain('<th scope="col">확인할 사실</th>');
+  expect(html).toContain("<td>계약 | 조건</td>");
+  expect(html).toContain("<strong>원본</strong>");
+  expect(html).toContain("&lt;script&gt;bad()&lt;/script&gt;");
+  expect(html).not.toContain("<script");
+  expect(html).not.toContain("<img");
+  expect(html).not.toContain("<a");
+  expect(reportPhotoIds(table)).toEqual([]);
+  expect(reportMarkdownHtml(`> [원문] ${table.replaceAll("\n", "\n> [원문] ")}`)).not.toContain(
+    "<table",
+  );
+  expect(reportMarkdownHtml(`\`\`\`\n${table}\n\`\`\``)).not.toContain("<table");
+  for (const invalid of [
+    "| 가 | 나 |\n| --- | --- |\n| 셋 | 넷 | 다섯 |",
+    `| 항목 |\n| --- |\n${Array.from({ length: 201 }, (_, i) => `| 행 ${i} |`).join("\n")}`,
+  ]) {
+    const rendered = reportMarkdownHtml(invalid);
+    expect(rendered).not.toContain("<table");
+    expect(rendered).toContain(invalid.includes("다섯") ? "다섯" : "행 200");
+  }
+  const separators = Array(205).fill("| --- |").join("\n");
+  expect(reportMarkdownHtml(separators)).not.toContain("<table");
+  expect(reportMarkdownHtml(separators).match(/<p>/gu)).toHaveLength(205);
+});
+
 test("Markdown renders lists and emphasis after editing while raw markup and remote images stay inert", () => {
   const html = reportMarkdownHtml(
     "- **송금** 확인\n- `*원본*` 보관\n\n1. 첫 확인\n2. 두 번째 확인\n<script>alert(1)</script>\n![외부](https://invalid.test/a.jpg)\n![공격](javascript:alert(1))\n<img src=x onerror=alert(1)>",
@@ -17,6 +46,17 @@ test("Markdown renders lists and emphasis after editing while raw markup and rem
   expect(html).not.toContain("<script");
   expect(html).not.toContain("<img");
   expect(html).toContain("&lt;script&gt;");
+});
+
+test("legacy span metadata has the same readable source label without altering saved or literal quotation text", () => {
+  const line = "검증 시각 · 2026-11-01T00:00:00.000Z · 원문 범위 UTF-16 10–35 중 일부 발췌";
+  const content = `출처와 분석 기준\n- ${line}\n> [원문] ${line}`;
+  const html = reportMarkdownHtml(`- ${line}`, [], true);
+  expect(html).not.toContain("UTF-16");
+  expect(html).toContain("원문 확인 시각 · 2026-11-01T00:00:00.000Z · 해당 근거 중 일부 발췌");
+  expect(reportMarkdownHtml(`> [원문] ${line}`, [], true)).toContain(line);
+  expect(reportMarkdownHtml(line)).toContain(line);
+  expect(reportReviewSections(content)[0]?.text).toContain(line);
 });
 
 test("only approved internal photo IDs become images, with escaped captions and exact body placement", () => {

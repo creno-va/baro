@@ -24,7 +24,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const) {
     });
     const report = await reports.get(f.actor.ownerId, f.workspaceId);
     const sections = reportSections(report.content).map((s) => s.title);
-    expect(report.title).toBe("내 사건 이해와 해결 준비");
+    expect(report.title).toBe("사건 경위와 확인할 내용");
     expect(sections.slice(0, 6)).toEqual([
       "리포트 준비 상태",
       "내 사건 한눈에",
@@ -81,7 +81,7 @@ test("absent materials and analysis preserve unknown position and procedure with
   );
   expect(content).toContain("처리 완료된 증거 자료가 없습니다");
   expect(content).toContain("입장과 절차 단계는 검증된 분석에서 아직 확인하지 못했습니다");
-  expect(content).toContain("청구 준비와 상대 주장 대응 중 어느 입장인지 아직 확정하지 않았습니다");
+  expect(content).toContain("검증된 분석에서 입장 정보를 아직 확인하지 못했습니다");
   expect(content).toContain("구체적인 행동과 준비물이 아직 연결되지 않았습니다");
   expect(content).not.toContain(f.statute.source.body);
   expect(content).not.toContain("신고·제소 전");

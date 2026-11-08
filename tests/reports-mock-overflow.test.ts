@@ -66,7 +66,7 @@ test("oversized first mock report fails without truncating or saving and recover
   const recovered = await f.client.generate("demo", ["synthetic-file"]);
   expect(recovered.revision).toBe(1);
   expect(recovered.excludedFileIds).toEqual(["synthetic-file"]);
-  expect(recovered.content).toContain("연락과 전달");
+  expect(recovered.content).toContain("선택지와 확인 조건");
   expect(recovered.content.isWellFormed()).toBe(true);
 });
 test("exactly 30000 UTF-16 units retain the full Unicode text; one extra unit fails", async () => {
@@ -78,7 +78,7 @@ test("exactly 30000 UTF-16 units retain the full Unicode text; one extra unit fa
   expect(report.content.length).toBe(30000);
   expect(report.content).toContain(text);
   expect(report.content.isWellFormed()).toBe(true);
-  expect(report.content).toContain("연락과 전달");
+  expect(report.content).toContain("선택지와 확인 조건");
   const over = fixture(`${text}b`);
   await expect(over.client.get("demo")).rejects.toMatchObject({ code: "EXPORT_LIMIT_EXCEEDED" });
   expect(over.read().reports).toEqual({});

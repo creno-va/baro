@@ -389,70 +389,6 @@
   font-size: 18px;
   font-weight: 700;
 }
-/* Reports read as one document, with restrained controls outside the paper. */
-.app-frame[data-product-ui="refresh"] .report-workspace .report-heading {
-  margin: 0 0 24px;
-  padding: 0;
-  border: 0;
-  gap: 16px;
-}
-.app-frame[data-product-ui="refresh"] .report-heading-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-left: auto;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-reading {
-  width: 100%;
-  padding: clamp(22px, 4vw, 48px);
-  gap: 32px;
-  border: 1px solid var(--app-line);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: none;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section {
-  padding-top: 28px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section > header {
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section h3 {
-  font-size: 19px;
-  line-height: 1.5;
-  font-weight: 700;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section > header > span {
-  min-width: 32px;
-  min-height: 32px;
-  background: #edf3ff;
-  border-radius: 9px;
-  font-size: 16px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section :is(p, li) {
-  font-size: 15px;
-  line-height: 1.9;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-reading-section textarea {
-  border: 1px solid var(--app-line);
-  background: var(--muted);
-  border-radius: 12px;
-  padding: 16px;
-  font-size: 16px;
-  line-height: 1.8;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-export {
-  padding: 0;
-  margin-top: 24px;
-  border: 0;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-export .report-actions > button {
-  width: 100%;
-  min-height: 56px;
-  border-radius: 14px;
-  font-size: 16px;
-}
 /* Directory and profile forms use the same surfaces as case work. */
 .app-frame[data-product-ui="refresh"].app-frame--product .directory-search {
   border: 1px solid var(--app-line);
@@ -795,22 +731,7 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   padding-block: 8px;
   gap: 8px 16px;
 }
-.app-frame[data-product-ui="refresh"] :is(.report-preparation, .report-scope, .resolution) {
-  padding: 24px;
-  border: 1px solid var(--app-line);
-  border-radius: 18px;
-  background: #fff;
-}
-.app-frame[data-product-ui="refresh"] .report-preparation h3 {
-  font-size: 19px;
-  font-weight: 700;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-canvas {
-  width: 100%;
-  max-width: none;
-}
-.app-frame[data-product-ui="refresh"] .report-evidence-entry {
-  margin-top: 24px;
+.app-frame[data-product-ui="refresh"] .resolution {
   padding: 24px;
   border: 1px solid var(--app-line);
   border-radius: 18px;
@@ -1033,30 +954,6 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   }
   .app-frame[data-product-ui="refresh"] .precedent-result-heading time {
     font-size: 11px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-heading-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .app-frame[data-product-ui="refresh"] .report-workspace .report-reading {
-    padding: 20px;
-    gap: 26px;
-    border-radius: 16px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section {
-    padding-top: 24px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section h3 {
-    font-size: 17px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section > header > span {
-    min-width: 28px;
-    min-height: 28px;
-    font-size: 14px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section :is(p, li) {
-    font-size: 14px;
-    line-height: 1.9;
   }
   .app-frame[data-product-ui="refresh"].app-frame--product .directory-search .ui-card__content {
     padding: 16px;

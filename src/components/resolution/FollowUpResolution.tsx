@@ -70,13 +70,13 @@ const paths = [
   {
     id: "self",
     label: "직접 해결",
-    description: "준비할 절차와 자료를 확인하고 초안을 검토해요.",
+    description: "확인된 준비 항목과 절차의 조건을 살펴보고 초안을 검토해요.",
     Icon: FilePenLine,
   },
   {
     id: "lawyer",
     label: "변호사와 해결",
-    description: "상담 준비사항과 전달할 범위를 확인해요.",
+    description: "전문가에게 확인할 쟁점과 필요한 공유 범위를 정해요.",
     Icon: Scale,
   },
   {
@@ -577,8 +577,11 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       aria-label="리포트 이후 해결 방법"
     >
       <div className="resolution-heading">
-        <h2>다음으로 어떻게 진행할까요?</h2>
-        <p>필요한 방법을 선택하고 언제든 바꿀 수 있어요.</p>
+        <h2>이해한 내용을 다음 준비로 이어가요</h2>
+        <p>
+          직접 준비할 범위, 전문가 도움이 필요한 부분, 보관 중에서 선택할 수 있어요. 절차와 서식의
+          미확인 사항은 선택 뒤에도 구분해 보여드려요.
+        </p>
       </div>
       <div className="resolution-paths">
         {paths.map(({ id, label, description, Icon }) => (
