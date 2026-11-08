@@ -189,6 +189,15 @@ host의 overlay scrollbar는 실제 gutter 검증과, 로컬 Docker 부재는 na
 수리 PR의 CI 성공 후 전부 통합한 마지막 main을 확정하며 중간 main에서 배포하지 않는다.
 실패·부분 성공과 합의한 외부 미확인은 보존하고 production은 이번 승인에 포함하지 않는다.
 
+이후 03의 실제 과업에서 자료 확인 창을 Enter로 열고 Escape로 닫으면 `/files`의
+원래 버튼으로 초점이 돌아오지 않는 문제를 Chromium·WebKit에서 확인했다.
+02에 `src/components/workspace/Workspace.tsx`의 별도 native 자료 모달을 명시 배정한다.
+권한 확인·private content의 inert·owner 상실 시 폐기·원본·작성 상태는 유지하며,
+같은 owner의 연결되고 활성인 opener에만 스크롤을 바꾸지 않고 복귀하도록 수리한다.
+공통 Dialog는 01 소유이며 이 경로의 제품 수정 범위에 포함하지 않는다.
+03은 해당 초점 단정을 유지하고 수리 후 실제 두 브라우저 과업으로 인수한다.
+최신 main 기반 통합 PR에서 나머지 검증 수리와 함께 필수 CI를 다시 실행한다.
+
 지정 세션: 01 `01a1baa9-2cbb-7cb0-a815-35ba474d3797`, 02 `01a1baa9-800a-7542-b8bc-400f84c15709`,
 03 `01a1baa9-cb75-7fc1-8384-c68949dbbdd7`, 04 `01a1baaa-0588-7c01-8563-e59d95e93d52`,
 05 `01a1baaa-4abb-7261-8bb4-e1dd5910615e`。사용자가 개설한 이 세션만 메시지로 조율한다.
