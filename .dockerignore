@@ -9,3 +9,7 @@
 !services/file-processor/build-hwp.py
 !services/file-processor/heif.py
 !services/file-processor/heif-native.c
+!services/file-processor/report.py
+!services/file-processor/vendor/
+!services/file-processor/vendor/*.tar.gz
+!services/file-processor/vendor/*.oxt
