@@ -47,9 +47,9 @@ OS reduced-motion, browser zoom, CSS zoom, 키보드 입력/포커스 표시도 
 아이콘은 기존 Lucide, dialog는 native backend, React19/Tailwind4/CVA를 재사용한다.
 새 라이브러리와 폰트 도입은 없다.
 
-## 공통 API 설계안
+## 공통 API
 
-총괄 계약 후 확정하며 기존 API의 기본값을 호환 유지한다.
+총괄의 사건 작업대 계약을 적용한다. 기존 API의 기본값은 호환 유지한다.
 
 | API | 의미/소비 규칙 |
 | --- | --- |
@@ -60,6 +60,81 @@ OS reduced-motion, browser zoom, CSS zoom, 키보드 입력/포커스 표시도 
 | PageHeader / Section | 페이지·본문 절의 제목/설명/관련 행동. 제목은 잘라 숨기지 않고 좁은 화면에서 자연 줄바꿈 |
 | StatePanel / InlineNotice | loading/empty/error/limit/permission/pending와 partial/success. partial은 완료한 결과와 다음 복구를 함께 표시 |
 | ReadingContent / SourceReference / TableScroll | 긴 본문·출처·표의 읽기 규칙. 의미/출처를 숨기지 않고 표 영역만 가로 스크롤 |
+
+`CaseNavigation`은 `CaseTask = 'chat' | 'files' | 'reports' | 'drafts'`와
+선택적 `activeTask`, `onNavigate(task)`를 제공한다. callback이 있으면 수정키 없는 클릭만
+같은 React owner의 작업 전환으로 전달한다. href는 기존 사건/자료/리포트와
+`reports#document-drafts`를 유지해 새 탭·주소 복사·직접 URL을 보존한다.
+기존 `active`, `caseId`, `title`, `fileCount`, `actions`도 유지한다.
+hidden/inert·owner fence·작성/선택/스크롤 보존과 작업의 실제 실행은 도메인 owner 책임이다.
+
+```tsx
+import { ReadingContent, TableScroll } from '../../components/ui/reading-content';
+import { Section, ActionGroup } from '../../components/ui/section';
+import { InlineNotice } from '../../components/ui/inline-notice';
+
+<ReadingContent>
+  <Section title="사건 준비 리포트" description="저장한 버전과 아직 반영되지 않은 내용을 확인해요.">
+    <InlineNotice tone="warning" title="추가 자료가 아직 반영되지 않았어요">
+      완료한 결과는 유지됩니다. 자료 검토 후 갱신을 실행하세요.
+    </InlineNotice>
+  </Section>
+  <Section title="확인한 내용">{validatedBody}</Section>
+</ReadingContent>
+```
+
+`ReadingContent`는 `width='reading'|'wide'|'full'`, `Section`은
+`title/description/action/headingLevel(2|3)`와 section 속성을 받는다.
+`TableScroll label` 안에는 native table을 둔다. 영역은 키보드로 가로 이동할 수 있다.
+`InlineNotice`의 tone은 neutral/success/warning/danger이며 동적 결과만 `announce`로 알린다.
+`StatePanel`의 partial은 완료한 결과와 실패한 항목의 재시도를 함께 표시한다.
+단일 확인 모달은 `Dialog showCloseButton={false}`와 명시 확인 버튼을 사용한다.
+`onOpenChange`가 busy 거절을 판단하며 실제 저장/삭제 완료를 UI가 추정하지 않는다.
+
+PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·공개 헤더·정책 footer를 소유한다.
+페이지에 두 번째 main을 추가하지 않는다. 인증은 `.ui-auth`, provider 그룹은
+`.ui-auth-providers`, native checkbox/radio와 문장은 `.ui-check`로 구성한다.
+공통 배치는 `.ui-stack`(24px), `.ui-cluster`/ActionGroup(12px,wrap), `.ui-grid`(2→1열),
+`.ui-muted`, `.ui-meta`, `.ui-page--reading`을 사용한다.
+
+## 시각·읽기 규칙
+
+- canonical `global.css`: 의미 토큰, font/reset, 공통 UI/상태/본문/공개 레이아웃.
+- canonical `product.css`: 앱 탐색·사건 작업·근거 패널·반응형. AppLayout은 이 파일만 가져온다.
+- 표면은 흰색/연한 중립색, 본문은 #191f28, 보조 정보는 #526176, 실행 강조는 #2364e8.
+  성공/주의/실패는 문구와 아이콘을 함께 사용한다. 선 하나를 조작 경계의 유일한 단서로 사용하지 않는다.
+- 본문16px/1.8, UI14~15px/1.5, 제목24~28px/1.4. 본문은48rem 가운데, 비교는76rem까지 허용한다.
+  한국어는 keep-all+overflow-wrap:anywhere로 긴 제목·파일명·URL을 완전히 노출한다.
+- 간격4/8/12/16/24/32/48px. 컨트롤8px·구역12px·overlay16px 곡률. 기존 portable card20은
+  native 호환값으로 보존하며 웹의 내용 구분은 주로 Section/구분선을 사용한다.
+- 버튼/탐색·선택 제어44px 이상. 입력16px을 유지한다. sidebar232px, 접으면64px.
+  768~1199px rail,767px 이하는56px 상단과 sheet. 네 작업은 모바일2×2로 모두 읽을 수 있다.
+- 메뉴/overlay만 그림자를 사용하고 본문 카드에 장식 그림자를 늘리지 않는다.
+  sticky10/navigation20/menu40, modal은 native top layer다. 모션120/160ms, reduced-motion은 정지한다.
+- 장문 인용은 출처 위치와 가까이, 표는 영역 내부만 스크롤, 첨부는 파일명·처리 범위·오류/재시도를 함께 둔다.
+  출처/미확인/서로 다른 주장을 카드 접기나 줄 수 제한으로 숨기지 않는다.
+
+## 금지 패턴과 교체 방법
+
+`global → shell → product → experience → refresh → workspace` 형태의 덮어쓰기를 되살리지 않는다.
+구 도메인 CSS에서 `.ui-button`, `.ui-input`, `.ui-label` 등 공통을 재정의하지 않는다.
+native 버튼에 클래스만 추가해 primary/disabled/loading을 별도 구현하지 않고 Button을 사용한다.
+페이지 이동에 ARIA tab을 쓰거나, 단순 읽기에 생성/갱신/저장을 연결하지 않는다.
+긴 설명이 필요한 실패를 자동 사라지는 toast로 표시하지 않는다. 일부 성공을 전체 성공/전체 실패로 바꾸지 않는다.
+
+1. 기존 페이지의 제목을 PageHeader, 본문 절을 Section, 장문을 ReadingContent로 교체한다.
+2. 동작은 Button, 이동은 ButtonLink/TextLink로 교체하고 실제 pending/권한/저장 상태를 그대로 전달한다.
+3. 해당 페이지의 구 CSS import를 제거한다. 자체 배치가 필요하면 공통 담당에게 파일/class/과업 증거를 전달한다.
+4. 직접 CSS를 읽는 격리 fixture도 global+product로 전환한다. 구 변호사 제품 경로의 회귀는 test-only
+   historical snapshot을 사용하며 활성 제품 경로/production bundle에 포함하지 않는다.
+5. 새 저장/초안/문서 단독 admission이나 지원하지 않는 출력 기능을 추가하지 않는다.
+
+합성 대표 프리뷰: `BARO_UI_TEST_FIXTURE=true bun run dev`의 `/__design-foundation`.
+일반 build에는 이 경로가 없다. 기존 `/__design-system`도 유지한다.
+검증: `bunx playwright test --config tests/helpers/foundation.playwright.config.ts`,
+`bun run design:check`, `bun run validate:quick`, `bun run validate:build`.
+로컬 도구 PATH는 pinned Bun1.4.0과 번들 Node를 포함하며 macOS 임시 경로는 `TMPDIR=/private/tmp`를 쓴다.
+Astro dev와 build는 같은 worktree의 Vite cache를 공유하므로 순차 실행한다.
 
 ## 검증·마이그레이션 계획
 
