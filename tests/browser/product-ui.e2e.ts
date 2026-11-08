@@ -840,7 +840,12 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator(".report-canvas").scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollTo(0, 0));
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
     await page.screenshot({ path: `.wrangler/report-reading-${width}.png`, fullPage: true });
   }
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
