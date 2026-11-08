@@ -159,7 +159,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
   else await page.mouse.click(5, 85);
   return page.evaluate(() => {
-    const scope = document.querySelector(".app-frame, .login-page, .consent-page");
+    const scope = document.querySelector(".app-frame, .public-layout");
     if (!scope) throw new Error("Focus audit scope missing");
     const failures: string[] = [];
     let count = 0;
@@ -199,7 +199,9 @@ async function focusAudit(page: Page, keyboard: boolean) {
   });
 }
 
-test("focus feedback covers login roles and consent without pointer outlines", async ({ page }) => {
+test("focus feedback covers common login and consent without pointer outlines", async ({
+  page,
+}) => {
   await seed(page);
   await page.goto(base);
   await hydrated(page);
@@ -211,14 +213,16 @@ test("focus feedback covers login roles and consent without pointer outlines", a
   );
   await page.goto("/login");
   await hydrated(page);
-  const customer = page.getByRole("radio", { name: "고객", exact: true });
-  await expect(customer).toBeEnabled();
+  const provider = page.getByRole("button", { name: "Google로 계속하기", exact: true });
+  await expect(provider).toBeEnabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   for (const keyboard of [false, true]) {
     expect((await focusAudit(page, keyboard)).failures).toEqual([]);
   }
   await page.keyboard.press("Tab");
-  await customer.focus();
-  await expect(customer.locator("..")).toHaveCSS("box-shadow", /inset/);
+  await provider.focus();
+  await expect(provider).toBeFocused();
+  await expect(provider).toHaveCSS("box-shadow", /inset/);
   await page.evaluate(() =>
     localStorage.setItem(
       "baro-api-mock-v1:session",
@@ -448,11 +452,13 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await seed(page);
   await page.goto("/settings");
   await expect(page.getByRole("navigation", { name: "설정 바로가기" })).toHaveCount(0);
-  await expect(page.locator("#settings-usage-title")).toBeVisible();
-  await expect(page.locator("#settings-help-title")).toBeVisible();
-  await expect(page.locator("#settings-danger-title")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "사용량과 한도", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "도움말과 정책", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "계정 삭제", exact: true })).toBeVisible();
   await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
-  const disclosure = page.locator(".settings-usage-guide");
+  const disclosure = page
+    .getByRole("region", { name: "사용량과 한도", exact: true })
+    .locator("details");
   const summary = disclosure.locator("summary");
   const content = disclosure.locator("p");
   const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });

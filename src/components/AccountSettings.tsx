@@ -284,7 +284,6 @@ export function AccountSettings() {
   return (
     <ReadingContent className="account-settings ui-stack" aria-busy={Boolean(busy) || checking}>
       <PageHeader
-        eyebrow="내 계정"
         title="설정과 사용량"
         description="이용 현황과 계정 정보를 확인해요."
         action={
@@ -399,7 +398,6 @@ export function AccountSettings() {
             AI 이용 고지
           </a>
         </nav>
-        <p>서비스 이용 조건과 정보 처리 방식, AI의 한계를 확인할 수 있어요.</p>
       </Section>
       <Section
         title="계정 삭제"
