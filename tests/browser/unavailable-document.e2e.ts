@@ -56,13 +56,25 @@ for (const betaClosed of [false, true]) {
         path: `.wrangler/unavailable-${betaClosed ? "beta" : "session"}-${width}.png`,
         fullPage: true,
       });
-      await retry.focus();
-      expect(await retry.evaluate((link) => getComputedStyle(link).outlineStyle)).not.toBe("none");
+      await page.keyboard.press("Tab");
+      await expect(
+        page.getByRole("link", { name: "본문으로 건너뛰기", exact: true }),
+      ).toBeFocused();
       await page.keyboard.press("Enter");
-      expect(paths).toEqual(["/app", "/app"]);
+      await expect(page.getByRole("main")).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(retry).toBeFocused();
+      expect(await retry.evaluate((link) => getComputedStyle(link).outlineStyle)).not.toBe("none");
+      await Promise.all([
+        page.waitForResponse(
+          (result) => new URL(result.url()).pathname === "/app" && result.status() === 503,
+        ),
+        page.keyboard.press("Enter"),
+      ]);
+      await expect.poll(() => paths).toEqual(["/app", "/app"]);
       await home.click();
       await expect(page.getByRole("heading", { name: "합성 서비스 소개" })).toBeVisible();
-      expect(paths).toEqual(["/app", "/app", "/"]);
+      await expect.poll(() => paths).toEqual(["/app", "/app", "/"]);
     });
   }
 }
