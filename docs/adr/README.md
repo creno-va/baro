@@ -47,7 +47,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0016](./0016-gemini-flash-thinking-pipeline.md) | Gemini Flash thinking pipeline | Accepted; 사용자 지시에 따른 모델·질문 하네스 전환 |
 | [0015](./0015-maintenance-and-operating-policy.md) | MVP 운영 기준과 정비 인수 경계 | Accepted; 질문·비용·승인·검색 부분 대체 |
 | [0017](./0017-expo-mobile-and-shared-client-boundaries.md) | Expo 모바일 앱과 공통 클라이언트 경계 | Accepted target; 구조·실행 계획 작성, 앱 구현·실기기 인수 미착수 |
-| [0018](./0018-conversation-report-rework.md) | 대화 중심 법률 분석·리포트·후속 해결 | Accepted; 변호사와 해결 분기는0019로 제외, 검증/안전/저장 경계 유지 |
+| [0018](./0018-conversation-report-rework.md) | 대화 중심 법률 분석·리포트·후속 해결 | Accepted; 실제 변호사 연결은0019로 제외, 세 액션/미지원 모달·검증/안전/저장 경계 유지 |
 | [0019](./0019-case-preparation-without-lawyer-platform.md) | 사건 준비 중심 서비스와 변호사 사용자 단 제외 | Accepted product boundary; 문서/기획 단계, 구현·전환·배포 미실행 |
 
 ## v2 부분 대체 관계

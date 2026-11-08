@@ -2,7 +2,7 @@
 
 > 2026-11-08 [ADR-0019](../adr/0019-case-preparation-without-lawyer-platform.md)로 초기 변호사 연결·전용 사용자 단을 제외한다.
 > 기존 변호사 계정의 일반 사건 이용은 유지한다. 아래 과거 기능/인수 증거는 보존하며 새 목표의 구현 완료로 세지 않는다.
-> [#764](https://github.com/creno-va/baro/issues/764)는 문서·기획 단계이며 새 범위의 후속 인수는 [CP-01~07](../product/UI-DEMONSTRATION.md)에 별도로 기록한다.
+> [#764](https://github.com/creno-va/baro/issues/764)는 문서·기획 단계이며 새 범위의 후속 인수는 [CP-01~08](../product/UI-DEMONSTRATION.md)에 별도로 기록한다.
 
 - Reviewed: 2026-10-14 KST. GitHub 이슈/PR/run이 진행 상태 정본이다.
 - 총괄: hyunhomon / 현재 정비 채팅. 기술 모듈 소유권은 [v2 실행 계획](./V2-EXECUTION.md)을 유지한다.

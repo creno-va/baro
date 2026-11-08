@@ -26,7 +26,7 @@ flowchart LR
 ```
 
 화살표는 개념적 데이터/사용 흐름이다. 화면 열기나 왕복 이동이 새 모델 실행을 뜻하지 않는다.
-새 provider·서비스·로펌 조직/계약 테이블·공유 권한을 추가하는 결정은 없다.
+새 provider·서비스·공유 권한을 추가하는 결정은 없다.
 
 ## 계정 권한과 사건 맥락
 
@@ -44,7 +44,7 @@ flowchart LR
 | --- | --- |
 | 웹 로그인·탐색 | src/pages/login.astro, components/auth 및 app-navigation·역할별 return path의 변호사 선택/진입 |
 | 웹 공개/자기 프로필 | src/pages/lawyers/index.astro, lawyers/[id].astro, lawyer/index.astro 및 프로필/포트폴리오 UI |
-| 대화·리포트·후속 선택 | Workspace·CaseNavigation·ReportReview·FollowUpResolution의 변호사 탐색/해결/연락 진입. 공통 사건·내보내기 유지 |
+| 대화·리포트·후속 선택 | Workspace·CaseNavigation·ReportReview·FollowUpResolution의 실제 변호사 탐색/연락 진입 종료. 리포트 세 액션은 유지하고 변호사 액션은 mutation 없는 미지원 모달만 표시 |
 | 공개 문구 | 랜딩·help·정책 화면/초안·동의 설명·SEO의 디렉터리/연결 약속. 실제 정책 내용/버전/재동의 변경은 별도 검토 |
 | 공통 계약·client | src/contracts, packages/api-client, client-core와 real/mock adapter의 role/profile/directory 계약. 구형 소비자와 종료 응답 검토 |
 | native | apps/mobile의 로그인 유형·공개 목록/상세·자기 프로필·연락 진입. 설치 client의 직접 요청도 종료 목표에 포함 |
@@ -61,6 +61,10 @@ flowchart LR
 4. 공개 목록/상세·자기 프로필 신규 작성/게시·연락·구형 직접 URL/API/공개 자산 접근을 일관되게 종료한다.
 5. 이후 보관·반출·삭제 방안이 확정된 데이터만 별도 전환한다. 비공개 자산으로의 이동도 실제 경로/캐시 검증을 요구한다.
 6. 같은 후보 SHA의 웹/native·실제 서버/DB·자산 회귀와 필요한 preview를 수행한다. 배포는 당시 명시 권한/기존 release 규칙을 따른다.
+
+리포트의 변호사 액션 유지가 서버 연결 기능 유지의 근거는 아니다. 클릭은 UI 모달로만 처리하며
+새 `updateResolution`/연결·공유 요청을 보내지 않는다. 현재 선택/편집과 과거 저장 이력은
+보존한다. 구형 client가 직접 호출하는 종료 기능의 응답은 별도 후속 계약으로 다룬다.
 
 404/410 등 종료 응답, 구형 client 안내, 공개 캐시 정리 방법, 프로필 원본 소유자 다운로드와
 삭제 방식은 아직 미결이다. 과거 데이터를 계속 공개하는 것과 소유자에게 보관하는 것을 구분한다.
