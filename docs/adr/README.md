@@ -1,5 +1,9 @@
 # Architecture Decision Records
 
+2026-11-08 [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)은 초기 변호사 연결·전용 사용자 단을 제외하고
+기존 계정의 공통 사건 이용을 유지한다. 문서·기획 단계이며 실제 기능 종료/데이터 전환/배포는 미실행이다.
+민사/형사와 입장별 세부 흐름·지속 리포트는 [검토용 기획](../product/CASE-PREPARATION-SCOPE.md)에서 구분한다.
+
 2026-11-01 [ADR-0018](./0018-conversation-report-rework.md)은 사용자 요청한 대화·법률 분석·리포트·후속 해결 범위에서
 ADR-0006의 사실 준비 전용/제출문서 일괄 금지와 ADR-0015의 신규 확장 중단을 부분 대체한다. 방향 승인과 독립 법률 인수는 구분한다.
 
@@ -32,17 +36,19 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0004](./0004-ai-provider-and-legal-retrieval.md) | AI 공급자와 법률정보 검색 | Accepted; 모델·thinking은 0016, 금액 차단은 0015로 대체; Gateway 유지 |
 | [0005](./0005-durable-execution-and-release-gates.md) | durable 실행·개인정보 경계와 출시 게이트 | Accepted; CAS/삭제/공개 gate 유지 |
 | [0006](./0006-continuous-case-workspace-and-navigation.md) | 지속적 사건 작업 공간과 준비 내비게이션 | Accepted v2 target |
-| [0007](./0007-lawyer-directory-verification-and-moderation.md) | 변호사 디렉터리·자격 확인·공개 심사 | Accepted v2 target |
+| [0007](./0007-lawyer-directory-verification-and-moderation.md) | 변호사 디렉터리·자격 확인·공개 심사 | Accepted history; 초기 제공 범위는0019로 제외, 보존/권한/삭제 의무 유지 |
 | [0008](./0008-private-files-and-report-handoff.md) | 비공개 자료와 리포트 전달의 저장·삭제 경계 | Accepted v2 target |
 | [0009](./0009-isolated-container-file-processing.md) | 격리된 Containers 자료 처리 | Accepted v2 target |
 | [0010](./0010-multimodal-ai-and-transcription.md) | 멀티모달 분석과 음성 전사의 모델 경계 | Accepted v2 target |
 | [0011](./0011-verified-official-source-expansion.md) | 검증된 공식 법률 출처의 확대 | Accepted v2 target |
 | [0012](./0012-shared-ui-system-and-brand-assets.md) | 공통 UI 시스템·한글 폰트·브랜드 자산 | Accepted v2 target |
 | [0013](./0013-resource-admission-and-budget.md) | 자료·AI 사용량과 기술 예산 admission | Accepted; 비용 금액·관측/만료/승인 차단은 0015로 폐지, 사용량·물리 용량·원장 유지 |
-| [0014](./0014-mvp-two-roles-and-api-mock-first.md) | 고객·변호사 MVP와 API mock 우선 병렬 개발 | Accepted; 0007 MVP 심사 범위 부분 대체 |
+| [0014](./0014-mvp-two-roles-and-api-mock-first.md) | 고객·변호사 MVP와 API mock 우선 병렬 개발 | Accepted; 이중 사용자 단은0019로 대체, 과거 구현/검증 보존 |
 | [0016](./0016-gemini-flash-thinking-pipeline.md) | Gemini Flash thinking pipeline | Accepted; 사용자 지시에 따른 모델·질문 하네스 전환 |
 | [0015](./0015-maintenance-and-operating-policy.md) | MVP 운영 기준과 정비 인수 경계 | Accepted; 질문·비용·승인·검색 부분 대체 |
 | [0017](./0017-expo-mobile-and-shared-client-boundaries.md) | Expo 모바일 앱과 공통 클라이언트 경계 | Accepted target; 구조·실행 계획 작성, 앱 구현·실기기 인수 미착수 |
+| [0018](./0018-conversation-report-rework.md) | 대화 중심 법률 분석·리포트·후속 해결 | Accepted; 변호사와 해결 분기는0019로 제외, 검증/안전/저장 경계 유지 |
+| [0019](./0019-case-preparation-without-lawyer-platform.md) | 사건 준비 중심 서비스와 변호사 사용자 단 제외 | Accepted product boundary; 문서/기획 단계, 구현·전환·배포 미실행 |
 
 ## v2 부분 대체 관계
 
@@ -57,6 +63,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | 0005 | 0006,0008,0013 | workspace·객체 삭제·다차원 사용량/예산 확장 / guardedwrite·outbox·비중복 userquota·실제 retry 비용·공개 gate 유지 |
 | 0013 | 0015 | 비용 금액·관측 누락/만료·월할당·refresh·비용 IO 차단 폐지 / 비용 기록·사용량·물리 용량·권한 유지 |
 | 0002,0012,0015 | 0017 | 직접 요청한 RN/Expo 클라이언트 추가·공통 토큰/플랫폼별 UI / 기존 웹 경로·Workers API·모듈 소유권·비용 관측 정책 유지 |
+| 0006,0007,0008,0014,0018 | 0019 | 초기 변호사 전용 사용자 단·디렉터리·연락/연결 분기 제외 / 기존 계정 일반 이용·데이터·동의/삭제·원장·검증 이력 보존, 세부 전환 미실행 |
 
 v1 데이터·계약·읽기/삭제는 그대로 유지하고 v2 추가 schema/contract는 선행 PR을 통합한다.
 신규 ADR의 Accepted는 사용자가 승인한 방향이며 P0.3 또는 v2 마일스톤 완료의 증거가 아니다.

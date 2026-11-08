@@ -1,5 +1,8 @@
 # ADR-0014: 고객·변호사 MVP와 API mock 우선 병렬 개발
 
+> 2026-11-08 부분 대체: [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)가 고객/변호사 이중 사용자 단과 전용 프로필 제공을 초기 범위에서 제외한다.
+> 기존 변호사 계정은 공통 사건 사용자로 이용한다. 아래 당시 mock/실제 구현·검증과 데이터 보존 경계는 유지한다.
+
 - Status: Accepted
 - Authority: 2026-10-06 사용자 명시 지시
 - Date: 2026-10-06

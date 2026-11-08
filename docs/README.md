@@ -1,9 +1,14 @@
 # BARO 문서 지도
 
+2026-11-08 후속 제품 결정은 [ADR-0019](./adr/0019-case-preparation-without-lawyer-platform.md),
+[확정 범위·민사/형사 기획 제안](./product/CASE-PREPARATION-SCOPE.md), [전환 설계](./architecture/CASE-PREPARATION-TRANSITION.md)를 먼저 읽는다.
+초기 변호사 연결·전용 사용자 단을 제외하며 기존 계정은 일반 사건 이용을 유지한다.
+현재는 문서/기획만 변경하고 코드·원격 데이터·공개 기능·정책 버전·배포는 변경하지 않는다.
+
 2026-11-08 로그인 이후 앱 개편의 단일 설계·소유권·인수 기록은
 [앱 작업공간·고객용 리포트](./development/APP-WORKSPACE-REWORK.md)와 #751을 따른다.
 
-[PRD](./PRD.md)는 현재 고객/변호사 MVP 범위다. 통합된 v2 구현, 보존된 v1 계약과
+[PRD](./PRD.md)는 공통 사건 사용자 중심의 새 목표다. 통합된 기존 두 역할 v2 구현, 보존된 v1 계약과
 실제 외부 인수를 구분한다. 현재 공개 서비스를 유지하며 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)의
 비용·릴리스·검색·문서 정비를 우선한다. 정책 초안 인수와 법률 승인은 별개다.
 
@@ -16,12 +21,12 @@
 
 현재는 [실행 기준](./development/EXECUTION.md), [인수표](./development/MVP-REQUIREMENTS-EVIDENCE.md),
 ADR-0015를 먼저 읽는다. 동일 client/API mock과 5세션 sprint는 M6 완료 이력이며 실제
-기능 인수와 구분한다. 고객/변호사 두 역할·승인 어드민 제외와 기존 backend/증거는 보존한다.
+기능 인수와 구분한다. 두 역할의 이전 구현/인수는 이력이며 변호사 전용 기능은 새 목표에서 제외한다.
 
 1. [PRD](./PRD.md): 핵심가치·대상·제품경계·한도·완료기준
 2. [MVP](./product/MVP-SPEC.md), [UX](./product/UX-SPEC.md), [로드맵](./product/ROADMAP.md)
 3. [실제 UI 시연 행렬](./product/UI-DEMONSTRATION.md): 기능/실패/역할별필수증거
-4. [ADR](./adr/README.md): 기존 유지경계와 v2, 0014 두 역할 MVP, 0015 운영 정비·부분 대체
+4. [ADR](./adr/README.md): 기존 유지경계와 v2, 0019 초기 연결/전용 역할 제외, 0015 운영 정비·부분 대체
 5. [시스템](./architecture/SYSTEM.md), [데이터](./architecture/DATA-MODEL.md), [API](./architecture/HTTP-API.md)
 6. [실행계약](./architecture/DOMAIN-LIFECYCLE.md), [AI](./architecture/AI-PIPELINE.md), [공식자료](./architecture/LEGAL-RETRIEVAL.md)
 7. [보안](./security/SECURITY-PRIVACY.md), [인증수명](./security/AUTH-LIFECYCLE.md), [테스트](./quality/TEST-STRATEGY.md), [AI 사전 검사 감사](./quality/AI-PREFLIGHT-AUDIT.md)

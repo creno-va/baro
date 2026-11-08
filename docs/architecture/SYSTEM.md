@@ -1,5 +1,10 @@
 # 시스템 설계
 
+> 2026-11-08 새 목표는 [ADR-0019](../adr/0019-case-preparation-without-lawyer-platform.md)와
+> [사건 준비 전환 경계](./CASE-PREPARATION-TRANSITION.md)를 우선한다. 초기 변호사 연결·전용 사용자 단을 제외하고
+> 기존 변호사 계정의 일반 사건 이용을 유지한다. 아래 두 역할/디렉터리 구조는 현재 구현과 전환 조사용 기준이다.
+> 문서 단계로서 제품/API/DB/role/공개 자산·배포는 아직 변경하지 않았다. 민사/형사 상세는 [검토용 제안](../product/CASE-PREPARATION-SCOPE.md)이다.
+
 - Status: v1 preserved; v2 implementation integrated; operational maintenance and live acceptance in progress
 - Related decisions: [ADR-0001](../adr/0001-mvp-system-boundaries-and-ai-pipeline.md), [ADR-0002](../adr/0002-web-stack-and-cloudflare-runtime.md)
 

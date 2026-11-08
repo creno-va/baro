@@ -1,5 +1,9 @@
 # ADR-0018: 대화 중심 법률 분석·리포트·후속 해결
 
+> 2026-11-08 부분 대체: [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)가 초기 변호사 연결·전용 사용자 단과 변호사와 해결 분기를 제외한다.
+> 사건 리포트 반복 확인·문서 우선 시작·민사/형사 세부 흐름은 [검토용 기획](../product/CASE-PREPARATION-SCOPE.md)에서 구분한다.
+> 기존 근거 검증·사용자 확인·snapshot·권한/CAS·보존/삭제는 유지한다. 새 제품 구현/배포는 아직 시작하지 않았다.
+
 - Status: Accepted
 - Decision scope: 사용자 요청 방향 승인, 구현·실제 외부 인수·독립 법률 승인 별도
 - Date: 2026-11-01

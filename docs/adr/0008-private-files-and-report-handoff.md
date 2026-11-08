@@ -1,5 +1,8 @@
 # ADR-0008: 비공개 자료와 리포트 전달의 저장·삭제 경계
 
+> 2026-11-08 부분 대체: [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)가 신규 공개 프로필 제공 범위를 제외한다.
+> R2 private 원본/파생물/리포트·암호화·owner·기존 public 자산의 접근/삭제 의무는 유지하며 객체 삭제/전환은 미실행이다.
+
 - Status: Accepted
 - Date: 2026-10-06
 - Owners: Product, Engineering

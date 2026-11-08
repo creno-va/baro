@@ -1,5 +1,8 @@
 # ADR-0006: 지속적 사건 작업 공간과 준비 내비게이션
 
+> 2026-11-08 부분 대체: [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)가 초기 변호사 직접 연락 연결을 제외한다.
+> 지속 workspace·본인 데이터·검증/저장/삭제 경계는 유지하며 아래 당시 결정을 이력으로 보존한다.
+
 - Status: Accepted
 - Date: 2026-10-06
 - Owners: Product, Engineering

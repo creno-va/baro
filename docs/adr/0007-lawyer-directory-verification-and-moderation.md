@@ -1,5 +1,8 @@
 # ADR-0007: 변호사 디렉터리·자격 확인·공개 심사
 
+> 2026-11-08 부분 대체: [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)가 초기 변호사 전용 사용자 단·디렉터리/연락 제공 범위를 제외한다.
+> 아래는 당시 결정이다. 기존 계정·자산의 보존/권한/삭제 의무와 과거 증거는 유지한다. 실제 기능 종료는 아직 수행하지 않았다.
+
 - Status: Accepted
 - Date: 2026-10-06
 - Owners: Product, Engineering
