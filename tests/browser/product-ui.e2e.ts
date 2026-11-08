@@ -2,10 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
 import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
   page,
