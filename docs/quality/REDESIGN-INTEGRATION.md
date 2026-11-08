@@ -188,3 +188,30 @@ EXIT0으로 확인했다. 별도 build 두 요청은 자동 검토 시간 만료
 못해 원인을 확정하지 않았다. 새 합성 사건에서는 source hash/binding 일치·명시 편집 저장 뒤
 PDF bytes를 확인했으나 이를 이전 관찰의 원인 규명으로 표현하지 않는다. 실제 외부 공급자 인수,
 문서 단독 시작과 기존 native PDF P3 표현 차이는 앞의 보류 범위를 유지한다.
+
+## 실제 Chrome 확대 후속 — 메뉴 재열기
+
+PR787 병합 main `01af2d1f133c128a6b9b4a9aa4ec16fad96d3d73`은 push CI/native 출력 검사를
+통과했지만05의 실제 Chrome200%에서 새 P2가 재현됐다. CSS viewport600×350/root CSS zoom1,
+40자 합성 제목에서 머리글 End→도구 열기→첫 링크 Tab→Escape→재열기 뒤 첫 요약 링크의
+중심점이 sticky 상단 바에 가렸다. 메뉴16~202px/트리거104~148px/첫 링크21~65px와 상단
+바0~56px를 기록했고 총괄도 원본 화면을 직접 확인했다. 이 SHA를 preview에 배포하지 않는다.
+
+공통 담당01이 메뉴의 실제 가용 영역·작은 높이와 정확한 재열기 순서를 수리하고05가 실제
+Chrome에서 재검수한다. root CSS 확대와 실제 브라우저 확대를 구분하며 기존 폭·기하·44px·
+키보드·초점/작성 보존 단정을 유지한다. 현재 수동 full42505489653은 추가 회귀 수집을 위해
+계속 실행하되 성공해도 이 독립 UX 결함의 인수를 대신하지 못한다. 후속 검증 PR의 새 main과
+동일 SHA full/preview/smoke가 필요하며 결과는 #751 receipt에 기록한다.
+
+후속 source `95b4ba9d2cab02f274febb6a563722b6b96c9fe4`는 고정 탐색을 뺀 실제 가용
+사각형에서 메뉴 아래·위 공간을 비교한다. 작은 높이에서는 메뉴만 스크롤하며 전체 높이를
+측정하려고 임시로 확대해 scrollTop을 초기화하지 않는다. 메뉴 내부 스크롤은 재배치와
+구분하고 현재 링크는 메뉴 안에서 완전히 보이게 한다. visualViewport scroll도 관찰하며
+기존 details/이름/href·Escape/초점 복귀·도메인/API 계약은 유지한다.
+
+추가 actual-Astro 회귀는 같은40자/600×350·DPR4/root CSS zoom1과 물리 포인터 순서를
+검증한다. 250·200px 높이, 네 링크44px 전체 노출·중심점 hit·Tab·마지막 링크 초점을 둔
+resize/root 배율/머리글 스크롤·작성 보존과 pageerror0도 검사한다. 기존65 기대는 유지한다.
+후보의 실제 native Chrome 재현과 기존 회귀·quick/build, 새 통합/main SHA 결과는 구분한다.
+원본01af의 동일한 빠른 CSS 배율/머리글 순서에서도 ResizeObserver undelivered 경고1회가
+재현돼 원본/후보 비교 로그에 남겼다. 이를 새 수리의 회귀로 단정하거나 검증에서 숨기지 않는다.

@@ -217,6 +217,10 @@ checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는
 우선 사용하고, 기존 override가 없으면 ignored 임시 config의 host/port/baseURL만 조정한다.
 원본 fixture·환경 flag·expect는 유지하며 최종 Linux full은 저장소의 표준 config로 다시 실행한다.
 같은 worktree의 Astro dev와 quick/build는 캐시 충돌을 막기 위해 순차 실행한다.
+실제 Chrome200%의600×350px에서 발견한 도구 재열기 가림은01의 공통 배치/회귀 소유다.
+40자 합성 제목·머리글 End→열기→Tab→Escape→재열기와 모든 링크의 실제 조작성,
+상단 탐색을 제외한 가용 영역·작은 높이의 스크롤·초점/작성 보존을 검증한다.
+05의 실제 브라우저 확대와 로컬 CSS 확대 결과를 구분하며 새 main 정확 SHA에서 재검수한다.
 총괄은 기존 journeys 아카이브의 경로 구조를 유지하며 독립 검수 JSON·합성 screenshot만
 별도 artifact로 보존해 실제 checkout SHA와 테스트 본문 hash를 대조한다.
 같은 고정 action·권한·14일 보존·판정을 유지하고 hidden 허용은 명시한 QA 경로에만 적용한다.
