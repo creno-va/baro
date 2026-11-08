@@ -11,7 +11,7 @@ import {
 // explicitly has no legal provider: these tests must never assert verified law.
 test.skip(process.env.BARO_REWORK_SHARED_MOCK !== "true", "Shared rework mock main gate required");
 
-for (const purpose of ["고소 준비", "주장 대응"] as const)
+for (const purpose of ["unknown-prepare", "unknown-response"] as const)
   test(`shared mock ${purpose}: actual intake, material panel and primary limited report preserve unavailable law`, async ({
     page,
   }) => {
@@ -25,7 +25,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await page.getByRole("button", { name: "동의하고 계속하기", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);
     await page.goto("/cases/new");
-    await page.getByRole("radio", { name: purpose, exact: true }).check();
+    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(purpose);
     await page
       .getByLabel("지금까지 있었던 일", { exact: true })
       .fill(

@@ -429,6 +429,12 @@ export function ConversationAgent({
   }, []);
   const execute = useCallback(
     async (action: V2ConversationIntent, requestId?: string) => {
+      // Retained legacy/model intents do not restore the removed contact feature.
+      // The report's three choices own their mutation-free unsupported dialog.
+      if (action === "open_lawyers") {
+        setError("현재 변호사 연결 기능은 제공하지 않습니다.");
+        return;
+      }
       if (disabled || !stateIsCurrent || locked.current || paneLocked.current) return;
       if (
         dirty.current &&
@@ -742,7 +748,7 @@ export function ConversationAgent({
               >
                 <legend className="workspace-sr-only">다른 사건 작업</legend>
                 {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
-                  .filter((action) => action !== next)
+                  .filter((action) => action !== next && action !== "open_lawyers")
                   .map((action) =>
                     reportHref &&
                     (["save_report", "resolve_followup", "open_lawyers"].includes(action) ||

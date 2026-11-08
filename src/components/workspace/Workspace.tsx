@@ -176,6 +176,7 @@ function WorkspaceContent({
   const activeTaskRef = useRef(activeTask);
   activeTaskRef.current = activeTask;
   const root = useRef<HTMLDivElement>(null);
+  const linkedReview = useRef<(fileId: string, origin: HTMLElement) => void>(() => {});
   const navigateTask = useCallback(
     (next: CaseTask, history: "push" | "none" = "push") => {
       const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
@@ -620,6 +621,12 @@ function WorkspaceContent({
       if (!["https:", "http:"].includes(url.protocol)) return;
       const base = `/cases/${encodeURIComponent(caseId)}`;
       if (url.origin === window.location.origin) {
+        const fileId = url.pathname === `${base}/files` ? url.searchParams.get("file") : null;
+        if (fileId) {
+          event.preventDefault();
+          linkedReview.current(fileId, link);
+          return;
+        }
         const task =
           url.pathname === base
             ? "chat"
@@ -1081,6 +1088,7 @@ function WorkspaceContent({
       setOriginal(null);
     });
   }
+  linkedReview.current = openConversationFile;
   async function send(event: SyntheticEvent) {
     event.preventDefault();
     if (
@@ -1562,7 +1570,12 @@ function WorkspaceContent({
                     </a>
                   </li>
                 </ul>
-                <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
+                <CaseMaterials
+                  caseId={caseId}
+                  files={view.files}
+                  facts={view.facts}
+                  onReviewFile={openConversationFile}
+                />
               </section>
               {!!view.notices?.length && (
                 <div className="workspace-context-notices">
@@ -2516,6 +2529,9 @@ function WorkspaceContent({
                                 files={view.files}
                                 facts={view.facts}
                                 base={base}
+                                onReviewFile={(id, reference) =>
+                                  openConversationFile(id, undefined, reference)
+                                }
                               />
                             </div>
                             <Button
