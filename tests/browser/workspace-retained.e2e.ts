@@ -294,7 +294,7 @@ test("a changed owner clears retained report work and explains the boundary befo
   });
   await expect(page.locator(".report-review")).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
-  await expect(input(page)).toHaveValue("");
+  await expect(page.locator("#workspace-message")).toHaveValue("");
   await page.getByRole("button", { name: "현재 계정으로 다시 열기", exact: true }).click();
   await expect(page.locator(".report-review")).toBeVisible();
   await expect(
