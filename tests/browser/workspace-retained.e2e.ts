@@ -143,6 +143,38 @@ test("asking about a material prepares selection without overwriting or sending 
   ).toBe(0);
 });
 
+test("explicit material reflection sends once and returns without discarding unsent text or a local File", async ({
+  page,
+}) => {
+  await seedMaterialsScenario(page);
+  await page.goto(materialsCasePath);
+  await input(page).fill("자료 반영과 별개로 계속 작성할 미전송 설명");
+  await input(page).evaluate((node) => node.setAttribute("data-retained", "before-reflection"));
+  await page.locator("#workspace-upload").setInputFiles({
+    name: "not-uploaded-during-reflection.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("반영 버튼으로 업로드하면 안 되는 합성 기기 원본"),
+  });
+  await task(page, /^자료/);
+  await page.getByRole("button", { name: "자료 확인", exact: true }).first().click();
+  await countMaterialsRequests(page);
+  await page.getByRole("button", { name: "자료 내용 반영하기", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${materialsCasePath}$`));
+  await expect(input(page)).toHaveValue("자료 반영과 별개로 계속 작성할 미전송 설명");
+  await expect(input(page)).toHaveAttribute("data-retained", "before-reflection");
+  await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
+    "not-uploaded-during-reflection.txt",
+  );
+  expect(
+    await page.evaluate(() => {
+      const counts = (
+        window as unknown as { materialsRequestCounts: { send: number; action: number } }
+      ).materialsRequestCounts;
+      return { send: counts.send, action: counts.action };
+    }),
+  ).toEqual({ send: 1, action: 0 });
+});
+
 for (const changed of [false, true]) {
   test(`source review ${changed ? "reports a changed revision" : "targets the exact extracted position"} and returns to the same unsent conversation`, async ({
     page,
