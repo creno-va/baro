@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
 import type { CaseView, WorkspaceView } from "../../src/client/api/types";
+import { goToCaseTool, openCaseTools } from "../helpers/case-navigation";
 import { settleIntakeSave } from "../helpers/intake-autosave";
 
 type IntakePostflightRegression = {
@@ -336,7 +337,10 @@ test("pending workspace files keep polling after a transient failure and stop on
   page,
 }) => {
   await recoveryWorkspace(page);
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  const tools = await openCaseTools(page);
+  await expect(tools.getByRole("link", { name: "자료 0", exact: true })).toBeVisible();
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(/\/files$/);
   await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const modulePath = "/src/client/api/index.ts";

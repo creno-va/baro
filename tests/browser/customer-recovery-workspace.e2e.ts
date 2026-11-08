@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { goToCaseTool } from "../helpers/case-navigation";
 
 test("action check, preparation refresh and a second check wait for AI publication without a conflict", async ({
   page,
 }) => {
   await page.goto("/cases/synthetic-case?tab=actions");
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await goToCaseTool(page, "actions");
+  await expect(page).toHaveURL("/cases/synthetic-case/actions");
   const checkbox = page.getByRole("checkbox").first();
   await checkbox.check();
   await expect(checkbox).toBeEnabled();
@@ -77,7 +79,8 @@ test("action check, preparation refresh and a second check wait for AI publicati
 for (const failSession of [false, true]) {
   test(`action optimistic UI with session preflight failure=${failSession}`, async ({ page }) => {
     await page.goto("/cases/synthetic-case?tab=actions");
-    await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+    await goToCaseTool(page, "actions");
+    await expect(page).toHaveURL("/cases/synthetic-case/actions");
     const checkbox = page.getByRole("checkbox").first();
     await expect(checkbox).not.toBeChecked();
     await expect(checkbox).toBeEnabled();
@@ -146,7 +149,8 @@ for (const closeBeforeRecovery of [false, true])
     page,
   }) => {
     await page.goto("/cases/synthetic-case");
-    await page.getByRole("link", { name: "타임라인", exact: true }).click();
+    await goToCaseTool(page, "timeline");
+    await expect(page).toHaveURL("/cases/synthetic-case/timeline");
     await page.getByRole("button", { name: "일정 추가", exact: true }).click();
     await page.getByLabel("어떤 일이 있었나요?").fill("세션 확인 실패 후 중복되는 합성 일정");
     await page.evaluate(async () => {

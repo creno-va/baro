@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { goToCaseTool } from "../helpers/case-navigation";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
@@ -69,7 +70,7 @@ test("long service content fits narrow screens and the menu stays closable after
     for (const [key, value] of Object.entries(values))
       localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
   });
-  for (const width of [320, 901, 1024]) {
+  for (const width of [320, 901, 1024, 1440]) {
     await page.setViewportSize({ width, height: 760 });
     for (const path of [
       "/cases",
@@ -90,6 +91,33 @@ test("long service content fits narrow screens and the menu stays closable after
             .getByText(/SYNTHETIC-LONG-CONTENT-/)
             .first(),
         ).toBeVisible();
+      if (path === "/cases/responsive-long-case") {
+        const messages = page.locator(".workspace-messages");
+        const header = page.locator(".case-workspace__header");
+        const composer = page.locator(".workspace-composer");
+        await expect(messages).toBeVisible();
+        await expect
+          .poll(() => messages.evaluate((node) => node.scrollHeight - node.clientHeight))
+          .toBeGreaterThan(0);
+        const fixed = {
+          header: await header.boundingBox(),
+          composer: await composer.boundingBox(),
+        };
+        expect(fixed.header).not.toBeNull();
+        expect(fixed.composer).not.toBeNull();
+        await messages.hover();
+        await page.mouse.wheel(0, -100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBe(0);
+        await page.mouse.wheel(0, 100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+        await expect
+          .poll(async () => ({
+            header: await header.boundingBox(),
+            composer: await composer.boundingBox(),
+          }))
+          .toEqual(fixed);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      }
       if (path === "/cases")
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
@@ -202,10 +230,8 @@ test("customer completes intake workspace original PDF report and cascading dele
     .fill("합성 추가 사실입니다. 반환 약속 메시지를 자료로 보관했습니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: /^자료/ })
-    .click();
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(`${casePath}/files`);
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
@@ -214,13 +240,25 @@ test("customer completes intake workspace original PDF report and cascading dele
   });
   await expect(page.getByRole("heading", { name: "합성증거.txt" })).toBeVisible();
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await goToCaseTool(page, "timeline");
+  await expect(page).toHaveURL(`${casePath}/timeline`);
   await page.getByRole("button", { name: "일정 추가" }).click();
   for (const viewport of [
     { width: 320, height: 760 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    // Resizing into the mobile breakpoint starts the bottom-sheet entrance.
+    // Verify its settled geometry without disabling the customer's animation.
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -263,6 +301,15 @@ test("customer completes intake workspace original PDF report and cascading dele
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -329,10 +376,16 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
       ).toBe(true);
     }
     await page.goto("/help#limits");
-    if (viewport.width <= 900) {
-      const target = await page.locator("#limits").boundingBox();
-      const header = await page.locator(".app-header").boundingBox();
+    const target = await page.locator("#limits").boundingBox();
+    const header = await page.locator(".app-header").boundingBox();
+    expect(target).not.toBeNull();
+    expect(header).not.toBeNull();
+    if (viewport.width < 768) {
       expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
+    } else {
+      // Tablet and desktop navigation occupies the left edge rather than the top.
+      expect(target?.x).toBeGreaterThanOrEqual((header?.x ?? 0) + (header?.width ?? 0));
+      expect(target?.y).toBeGreaterThanOrEqual(0);
     }
   }
 });
@@ -468,7 +521,10 @@ async function prepareReport(page: Page) {
   await expect
     .poll(async () => (await reading.isVisible()) || (await preparation.isVisible()))
     .toBe(true);
-  if (await preparation.isVisible())
-    await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  if (await preparation.isVisible()) {
+    const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
+    if (!(await prepare.isVisible())) await preparation.locator("details > summary").click();
+    await prepare.click();
+  }
   await expect(reading).toBeVisible();
 }

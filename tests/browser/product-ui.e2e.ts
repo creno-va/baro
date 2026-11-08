@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
+import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
 import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
@@ -602,9 +603,10 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         await expect(
           page.getByRole("heading", {
             name: route.endsWith("/reports")
-              ? "사건 정리"
+              ? "내 사건 이해와 해결 준비"
               : "돌려받지 못한 보증금, 함께 정리한 이야기",
             exact: true,
+            level: 1,
           }),
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
@@ -620,12 +622,20 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       }
       if (route === base) {
-        const positions = await page
-          .locator(".workspace-tabs a")
-          .evaluateAll((links) => links.map((e) => Math.round(e.getBoundingClientRect().top)));
-        expect(new Set(positions).size).toBe(1);
-        const destinations = page.locator(".workspace-tabs a");
+        const menu = await openCaseTools(page);
+        const destinations = menu.getByRole("link");
         await expect(destinations).toHaveCount(6);
+        expect(
+          await destinations.evaluateAll((links) => links.map((link) => link.getAttribute("href"))),
+        ).toEqual(
+          ["summary", "timeline", "actions", "precedents", "files", "reports"].map(
+            (path) => `${base}/${path}`,
+          ),
+        );
+        const columns = await destinations.evaluateAll((links) =>
+          links.map((link) => Math.round(link.getBoundingClientRect().left)),
+        );
+        expect(new Set(columns).size).toBe(1);
         for (const destination of await destinations.all()) {
           await destination.scrollIntoViewIfNeeded();
           await expect(destination).toBeInViewport({ ratio: 0.99 });
@@ -652,16 +662,27 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   const box = await send.boundingBox();
   expect(box).not.toBeNull();
   expect((box?.y ?? 10000) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
-  const menu = page.getByRole("navigation", { name: "사건 메뉴", exact: true });
-  await menu.getByRole("link", { name: "리포트 보기" }).click();
+  await goToCaseTool(page, "reports");
   await expect(page).toHaveURL(`${base}/reports`);
+  const menu = await openCaseTools(page);
   const selected = menu.getByRole("link", { name: "리포트 보기" });
+  await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(selected).toBeInViewport({ ratio: 1 });
-  await menu.getByRole("link", { name: "대화", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(menu.getByRole("link").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await returnToCaseConversation(page);
   await expect(page).toHaveURL(base);
   await expect(page.locator(".case-options")).toHaveCount(0);
   await page.goto("/cases");
@@ -679,7 +700,9 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(remove).toBeFocused();
 });
 
-test("chat height stays fixed when preparation expands and the page scrolls", async ({ page }) => {
+test("chat frame keeps its header and composer fixed when preparation expands and scrolls", async ({
+  page,
+}) => {
   await seed(page, true);
   for (const viewport of [
     { width: 390, height: 844 },
@@ -688,25 +711,40 @@ test("chat height stays fixed when preparation expands and the page scrolls", as
     await page.setViewportSize(viewport);
     await page.goto(base);
     await hydrated(page);
-    const panel = page.locator(".workspace-main");
+    const frame = page.locator(".case-workspace--conversation");
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    await expect(panel).toHaveAttribute("style", /--chat-panel-height/);
+    await expect(frame).toBeVisible();
+    const geometry = () =>
+      frame.evaluate((element) => {
+        const chat = element.querySelector(".workspace-main");
+        const header = element.querySelector(".case-workspace__header");
+        const composer = element.querySelector(".workspace-composer");
+        if (!chat || !header || !composer) throw new Error("Synthetic conversation frame missing");
+        return {
+          frameHeight: element.clientHeight,
+          chatHeight: chat.clientHeight,
+          headerTop: header.getBoundingClientRect().top,
+          composerTop: composer.getBoundingClientRect().top,
+          composerBottom: composer.getBoundingClientRect().bottom,
+        };
+      });
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(send).toBeInViewport({ ratio: 1 });
-    const initialHeight = await panel.evaluate((element) => element.clientHeight);
+    const initial = await geometry();
+    expect(initial.composerBottom).toBeLessThanOrEqual(viewport.height);
+    const messages = page.locator(".workspace-messages");
     const context = page.locator(".workspace-context");
+    await expect(messages.locator(".workspace-context")).toHaveCount(1);
     await context.locator("summary").click();
     await expect(context).toHaveAttribute("open", "");
     await context.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
-    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(geometry).toEqual(initial);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect(send).toBeInViewport({ ratio: 1 });
-    await context.locator("summary").evaluate((element) => {
-      if (element instanceof HTMLElement) element.click();
-    });
+    await context.locator("summary").click();
     await expect(context).not.toHaveAttribute("open");
-    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await expect.poll(geometry).toEqual(initial);
     await expect(send).toBeInViewport({ ratio: 1 });
   }
 });
@@ -805,6 +843,13 @@ test("reports start in reading mode and retain editing through a focus check", a
   await seed(page);
   await page.goto(`${base}/reports`);
   await prepareReport(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "돌려받지 못한 보증금, 함께 정리한 이야기",
+      level: 1,
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
   const heading = page.locator(".report-heading");
   await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
@@ -812,9 +857,13 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page
-      .locator(".report-canvas")
-      .screenshot({ path: `.wrangler/report-reading-${width}.png` });
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator(".report-canvas").scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    await page.screenshot({ path: `.wrangler/report-reading-${width}.png`, fullPage: true });
   }
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await openReportEditor(page);
