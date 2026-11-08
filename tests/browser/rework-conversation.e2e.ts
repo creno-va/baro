@@ -676,7 +676,10 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await returnToWorkspace(page);
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
     const attachment = await addMaterial(page, f, true);
-    await attachment.click();
+    const materialsUrl = page.url();
+    expect(new URL(materialsUrl).pathname).toBe(`/cases/${f.info.caseId}/files`);
+    await attachment.focus();
+    await attachment.press("Enter");
     const dialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
     await expect(dialog.getByRole("status")).toContainText(
       "자료 처리를 완료하지 못했어요. 원본은 보관돼요.",
@@ -691,6 +694,10 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await artifact.delete();
     expect((await counters(f)).native?.failed).toBeGreaterThan(0);
     await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(attachment).toBeFocused();
+    expect(page.url()).toBe(materialsUrl);
+    await returnToWorkspace(page);
     expect(new URL(page.url()).pathname).toBe(`/cases/${f.info.caseId}`);
   } finally {
     await f.close();
