@@ -47,12 +47,13 @@
 각 작업자의 새 소유 변경과 구분해 검토했다. 중복 cleanup Draft777은 닫고774+778에 통합했다.
 전체 통합 전 main e5871a4(PR772/773/776)를 보존했으며 기존 worktree·secret·실패 증거를 건드리지 않았다.
 
-## 최종 제품 동결 검증
+## D44 당시 통합 기능 검증 (후속 preview 인수와 구분)
 
 실제로 검사한 제품 SHA는 **`d44a09a50d55132f9d035fead54b61a2c305a4cd`**다.
 root는 frozen install부터 quick/build·guard 검사·live 작업 그래프 완료까지 같은 HEAD와
 clean 상태를 유지했다. Bun1.4.0 / Node24.22.1 / canonical TMPDIR를 사용했다.
-후속 커밋의 테스트·증거·문서는 제품 변경과 구분하며, src/packages/scripts/config의 동일성을 확인한다.
+D44→요약head16c0264까지는 테스트·증거·문서만 변경했다. 이후 preview 인수 감사에서 발견한
+리포트 읽기 폭 결함은 공통 CSS 후속으로 수정했으므로 현재 제품을 D44와 동일하다고 표시하지 않는다.
 
 | 검사 | 실행 SHA / 결과 | 증거 |
 | --- | --- | --- |
@@ -116,7 +117,8 @@ clean 상태를 유지했다. Bun1.4.0 / Node24.22.1 / canonical TMPDIR를 사�
 
 승인된 원본 head63c3092는 [PR781](https://github.com/creno-va/baro/pull/781)로 게시됐다.
 총괄은 최종 artifact19개와 실행한 테스트 소스의 SHA256 일치를 다시 확인하고 원본을 통합했다.
-제품 소스는 여전히 검사 SHA d44a09a와 동일하다. 과거 거부/실패 기록과 로컬 원본은 보존한다.
+원본 증거 게시 당시 제품은 D44와 동일했다. 이후 읽기 폭 수정은 아래 후속 감사로 구분한다.
+과거 거부/실패 기록과 로컬 원본은 보존한다.
 이 승인은 제품/main 병합·배포, 실제 공급자 호출이나 새로운 데이터 게시로 확대하지 않는다.
 
 전체 독립 검수 정본은 [QA 보고서](./redesign-acceptance/README.md)와
@@ -124,3 +126,27 @@ clean 상태를 유지했다. Bun1.4.0 / Node24.22.1 / canonical TMPDIR를 사�
 `codex/764-independent-final-acceptance` / `63c3092e32d37249a0975f82b9afe8ed3e10a301`에
 그대로 남아 있다. 총괄의 별도 전체 로그/503 캡처는 계속 로컬
 `codex/764-redesign-local-evidence`와 `/private/tmp/baro-redesign-00-d44-*.log`에 보존한다.
+
+## preview 전 전체 회귀 감사 후속
+
+사용자 추가 지시의 최종 main full·동일 SHA preview 전에 이전 full 실패와 현재 테스트를 대조했다.
+02의 test-only c9a2171은 제거된 변호사 링크 양성 기대를 현재 네 작업/명시 실행·연락0으로 고치고
+응답 실패/재시도·체크·타임라인·원본 bytes·취소·삭제 전체 과업을 유지했다. 해당2개 PASS,
+판례 비교 전체 과업은 기존740 제품 그대로1 PASS/axe[]로 현재 색 대비 결함이 재현되지 않았다.
+
+03의 PDF footer 조사에서는 고정170px/desktop compact가 확정 공통 계약이 아님을 확인했다.
+단 desktop 리포트 일반 문단1056px·읽기1120px가 확정48rem을 넘는 실제 결함을 발견했다.
+01 원본4bcc0f6(총괄716a891)은 reports.css의 읽기/본문/내보내기 영역을 기존 --reading-width로
+제한하고 같은 폭으로 정렬한다.1440px에서 읽기/본문/footer/button768px·일반 문단704px로
+복원했고390/320의 모바일 배치·54px 조작·focus·가로넘침0은 보존했다. 새 API·저장·native PDF 변경은 없다.
+
+03 전체 리포트 회귀의 설정 axe는 비활성 회색에서 활성 destructive 배경으로 전환하는 동안
+글자색만 즉시 흰색이 되는 실제 대비 위반도 검출했다.01의 원본3f7823f(총괄bb4c939)은 공통
+Button의 background 보간만 제거하고 border 전환·색 토큰·disabled 의미를 유지한다.
+실제17프레임의 최소 대비는1.0955에서6.5743으로 개선됐다. 공통19/19는제품3f7823f에서,
+리포트10/10·긴본문layout2/2는제품322c088에서실행해통과했다. 기존axe기대는변경하지않았다.
+기다림 추가·axe 제외·기준 완화는 없다.
+
+최종 제품 검증은 이 두 공통 스타일 수정 뒤 고정한 **main의 실제 SHA**에서 수동 full(core/browser/native/join),
+같은 SHA preview와 제한 smoke를 통과해야 한다. 결과 정본은 [#751](https://github.com/creno-va/baro/issues/751)의
+후속 receipt이며 D44의 과거 통과 수를 새 main에서 실행했다고 재사용하지 않는다.

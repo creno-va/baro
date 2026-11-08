@@ -77,7 +77,7 @@
   "limits": [
     "synthetic data only",
     "no deployment or real provider calls",
-    "script/style changes after this SHA are absent; later commits are test/docs/evidence only"
+    "After summary head16c0264 a real report reading-width CSS correction was added. D44 results are historical, not execution proof for the later main SHA."
   ],
   "publication": {
     "rawEvidencePublished": true,
@@ -154,5 +154,23 @@
     "physical/saved-report.png": "8a24a11cf1d341fca249cd7a85d21571bcada6271acca549dfa622d4e06fdbe8",
     "reports/receipt.json": "755d244683b486ae10a356cb6771882315b9f90850f9217fe6f0a1f25e38c00b",
     "reports/results.json.gz": "49ed48662c4458559c4b19df4137b1fda7541851cfed22e757ce3558f5523c06"
+  },
+  "scope": "Historical D44 functional acceptance; subsequent report reading-width correction requires new final-main full and same-SHA preview verification.",
+  "subsequentProductCorrection": {
+    "sourceCommit": "4bcc0f6e537d5bdd78e669c41a1c6549d7ac8b76",
+    "coordinatorCommit": "716a89125069df066e24d16717c83a1d9f3c7edc",
+    "file": "src/styles/reports.css",
+    "reason": "Restore the accepted 48rem reading width; desktop paragraph1056 ->704px, region/footer1120 ->768px; mobile geometry unchanged.",
+    "finalVerification": "Exact final-main full(core/browser/native/join) and same-SHA preview; issue751 receipt authoritative."
+  },
+  "subsequentAvailabilityContrastCorrection": {
+    "sourceCommit": "3f7823f4046b7efd4d1e6bcacf75229bdd0c980d",
+    "coordinatorCommit": "bb4c939",
+    "file": "src/styles/global.css",
+    "reason": "Disabled-to-enabled background interpolation applied white text before the dark fill. Make semantic foreground/background changes atomic; preserve border transition, tokens and disabled meaning.",
+    "actualFrames": 17,
+    "minimumContrastBefore": 1.0955,
+    "minimumContrastAfter": 6.5743,
+    "finalVerification": "Re-run full on the frozen main SHA, preserving axe thresholds and all state assertions."
   }
 }

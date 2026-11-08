@@ -5,7 +5,7 @@
 - 조사 중 최신 main 변경: PR772가 2026-11-08 19:19 KST 병합되어 `b02357ffde3bc6af94218086cca1c0706c938d36`가 됐다. 최종 통합은 이 변경을 포함해 다시 검증한다. 이후 main e5871a4(PR773/776)의 고정 빌드 입력 복구도 보존했다.
 - 총괄: `redesign-00` / `codex/764-redesign-integration`.
 - 추적: [#764](https://github.com/creno-va/baro/issues/764), [미병합 기획 PR765](https://github.com/creno-va/baro/pull/765).
-- 상태: 조사·설계·전체 웹 마이그레이션·최종 합성 검수를 완료했다. 배포와 실제 외부 인수는 별도다. 경로별 결과·검사 SHA·잔여는 [통합 인수](../quality/REDESIGN-INTEGRATION.md)와 연결 receipt가 정본이다.
+- 상태: 조사·설계·전체 웹 마이그레이션·1차 합성 검수를 완료했다. 추가 preview 승인 뒤 읽기 폭 수리와 최종 main full/동일 SHA preview·GitHub 정리를 진행한다. 실제 외부 인수는 별도다. 경로별 결과·검사 SHA·잔여는 [통합 인수](../quality/REDESIGN-INTEGRATION.md)와 연결 receipt가 정본이다.
 - 세션별 최신 커밋과 도구 지연 시 인계는 [REDESIGN-HANDOFF](./REDESIGN-HANDOFF.md)를 함께 확인한다.
 
 ## 결정의 우선순위와 구현 경계
