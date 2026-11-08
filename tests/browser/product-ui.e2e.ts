@@ -658,7 +658,15 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
           }),
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
-      if (route === "/settings") await expect(page.locator(".usage-item")).toHaveCount(4);
+      if (route === "/settings") {
+        const usage = page.getByRole("region", { name: "사용량과 한도", exact: true });
+        await expect(usage.getByRole("progressbar")).toHaveCount(4);
+        for (const name of ["오늘 새 사건", "오늘 AI 응답", "오늘 음성·영상", "계정 저장 공간"])
+          await expect(usage.getByRole("progressbar", { name, exact: true })).toBeVisible();
+        await expect(
+          usage.getByRole("progressbar", { name: "오늘 AI 응답", exact: true }),
+        ).toHaveAttribute("max", "200");
+      }
       await expect(page.locator(".app-frame")).toBeVisible();
       const dimensions = await page.evaluate(() => ({
         available: document.documentElement.clientWidth,
@@ -735,7 +743,7 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   expect((box?.y ?? 10000) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
   const tasks = await expectCaseTasks(page, "대화");
   await tasks.getByRole("link", { name: "리포트", exact: true }).click();
-  await expect(page).toHaveURL(`${base}/reports`);
+  await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
   await expectCaseTasks(page, "리포트");
   const selected = tasks.getByRole("link", { name: "리포트", exact: true });
   await expect(selected).toHaveAttribute("aria-current", "page");
