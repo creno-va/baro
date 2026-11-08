@@ -1,6 +1,13 @@
 import { expect, type Page } from "@playwright/test";
 
 export async function openReportEditor(page: Page) {
+  if (
+    await page
+      .getByRole("textbox", { name: / 수정$/ })
+      .first()
+      .isVisible()
+  )
+    return;
   const toggle = page.locator(".report-edit-toggle");
   await expect(toggle).toBeVisible();
   await expect(toggle).toBeEnabled();

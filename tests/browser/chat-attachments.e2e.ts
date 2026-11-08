@@ -570,7 +570,7 @@ test("new validated replies reveal whole Korean/emoji graphemes, can finish imme
   await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
   const text = "한글 👩🏽‍💻 가\u0301 🇰🇷 함께 확인해요.\n".repeat(40);
   await publishSyntheticReply(page, text);
-  const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
+  const reply = page.locator(".workspace-message--assistant [data-reply-revealing]");
   await expect(reply).toBeVisible();
   const visible = await reply.innerText();
   expect(visible.length).toBeGreaterThan(0);
@@ -586,9 +586,13 @@ test("new validated replies reveal whole Korean/emoji graphemes, can finish imme
   await page.screenshot({ path: ".wrangler/chat-progressive-390.png", fullPage: true });
   await page.getByRole("button", { name: "답변 전체 바로 보기" }).click();
   await expect(reply).toHaveCount(0);
-  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
+    text,
+  );
   await page.reload();
-  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
+    text,
+  );
   await expect(page.locator("[data-reply-revealing]")).toHaveCount(0);
   expect(await messages(page)).toHaveLength(2);
 });
@@ -600,7 +604,9 @@ test("reduced motion shows the published answer immediately", async ({ page }) =
   await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
   const text = "기억나는 대로 편하게 말씀해 주세요. 합성 검증용 답변입니다.";
   await publishSyntheticReply(page, text);
-  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
+    text,
+  );
   await expect(page.getByRole("button", { name: "답변 전체 바로 보기" })).toHaveCount(0);
 });
 
@@ -643,7 +649,7 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   const documentScroll = await page.evaluate(() => scrollY);
   const text = "한 문장씩 편하게 읽으실 수 있어요. 합성 검증입니다.\n".repeat(60);
   await publishSyntheticReply(page, text);
-  const reply = page.locator(".workspace-message--assistant p[data-reply-revealing]");
+  const reply = page.locator(".workspace-message--assistant [data-reply-revealing]");
   await expect(reply).toHaveCount(1);
   const start = (await reply.textContent())?.length ?? 0;
   await expect
@@ -655,7 +661,9 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   ).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reply).toHaveCount(0);
-  await expect(page.locator(".workspace-message--assistant > p")).toHaveText(text);
+  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
+    text,
+  );
   expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),

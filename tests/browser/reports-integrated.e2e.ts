@@ -93,7 +93,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await openReportEditor(page);

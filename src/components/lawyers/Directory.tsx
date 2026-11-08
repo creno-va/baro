@@ -134,7 +134,6 @@ export function Directory() {
     <div className="lawyer-directory">
       <div className="directory-intro">
         <PageHeader
-          eyebrow="내 기준으로 선택하는 전문가"
           title="변호사 찾기"
           description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
         />
@@ -226,10 +225,8 @@ export function Directory() {
         </CardContent>
       </Card>
       <div className="directory-results-heading">
-        <h2>공개 프로필</h2>
-        {!busy && !error && items.length > 0 && (
-          <p role="status">공개 프로필 {items.length}개를 불러왔어요.</p>
-        )}
+        <h2>변호사 목록</h2>
+        {!busy && !error && items.length > 0 && <p role="status">{items.length}명</p>}
       </div>
       {error && (
         <StatePanel

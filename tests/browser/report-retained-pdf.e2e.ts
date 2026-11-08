@@ -85,7 +85,7 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await page.unroute(reportPath);
     await page.reload();
     await openReportEditor(page);
-    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
     const firstEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const first = await firstEvent,
