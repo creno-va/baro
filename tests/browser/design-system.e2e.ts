@@ -49,7 +49,9 @@ test("application, login and case screens share local brand and remain usable at
     route.fulfill({ json: { needsConsent: false } }),
   );
   await page.goto("/app");
-  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "내 사건, 무엇부터 준비할까요?", exact: true }),
+  ).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await expect(page.locator(".app-frame--product")).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
@@ -77,7 +79,7 @@ test("application, login and case screens share local brand and remain usable at
     "rgb(35, 100, 232)",
   );
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
   await page.screenshot({ path: ".wrangler/case-list-320.png", fullPage: true });
 });
 
