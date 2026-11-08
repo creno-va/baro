@@ -1,0 +1,240 @@
+/* Business layout is scoped to Workspace; the shared frame owns viewport size. */
+.app-frame[data-app-workspace] .workspace:has(.case-workspace--conversation) {
+  padding: 0;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .case-workspace__content {
+  display: flex;
+  flex-direction: column;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-grid {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  gap: 0;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  background: var(--app-surface, #fff);
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-messages {
+  min-height: 0;
+  width: 100%;
+  padding: 20px max(16px, calc((100% - var(--app-reading-width, 800px)) / 2));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+}
+.app-frame[data-app-workspace]
+  .workspace--chat
+  .case-workspace
+  .workspace-messages::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+  height: auto;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message {
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  margin-block: 20px;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message--assistant {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message--user {
+  width: fit-content;
+  max-width: 88%;
+  margin-left: auto;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--app-subtle, #f5f7fa);
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer {
+  position: static;
+  width: 100%;
+  max-width: var(--app-reading-width, 800px);
+  max-height: min(45dvh, 380px);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 8px 16px 12px;
+  overflow-y: auto;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer-surface {
+  border-radius: 16px;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-sidebar {
+  max-width: none;
+  margin: 0 0 20px;
+  font-size: 13px;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-context {
+  border: 0;
+  border-bottom: 1px solid var(--app-line, #e2e8f0);
+  border-radius: 0;
+  background: transparent;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-context-footer {
+  display: none;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-feedback:not(:empty),
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-error,
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-upload {
+  flex: 0 0 auto;
+  margin: 8px 16px;
+  padding: 10px 12px;
+  max-height: 30dvh;
+  overflow: auto;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-chat-heading {
+  display: none;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  color: var(--foreground);
+}
+.app-frame[data-app-workspace] .workspace .materials-panel__body {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  padding: 12px 16px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-material-upload {
+  margin: 0 0 16px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-upload-target {
+  padding: 16px;
+  min-height: 88px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-upload-title {
+  font-size: 14px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-upload-limit {
+  font-size: 12px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .evidence-picker-actions {
+  flex-wrap: wrap;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-file-list {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-file-list > li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--app-line, #e2e8f0);
+  border-radius: 0;
+  background: transparent;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-file-title {
+  gap: 10px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-file-title > svg {
+  flex-shrink: 0;
+  width: 18px;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-file-title h3 {
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel :is(p, label) {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel .workspace-buttons {
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel__selection {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel__selection input {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel__report {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--app-line, #e2e8f0);
+  background: #fff;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel__report p {
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.app-frame[data-app-workspace] .workspace .materials-panel--page {
+  height: auto;
+  display: block;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel--page .materials-panel__body {
+  overflow: visible;
+  padding-inline: 0;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel--page .materials-panel__report {
+  margin-top: 20px;
+}
+.app-frame[data-app-workspace] .workspace--files .case-workspace .workspace-grid {
+  max-width: 800px;
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .case-workspace__panel-content {
+  padding: 0;
+}
+@media (max-width: 767px) {
+  .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message--user {
+    max-width: 94%;
+  }
+  .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-messages {
+    padding: 12px;
+    scrollbar-gutter: auto;
+  }
+  .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer {
+    padding: 6px 10px max(8px, env(safe-area-inset-bottom));
+  }
+}
+.app-frame[data-app-workspace] .workspace .workspace-dialog.workspace-dialog--material {
+  padding-bottom: 0;
+}
+.app-frame[data-app-workspace] .workspace .workspace-dialog[open] {
+  max-width: var(--workspace-viewport-width, 100vw);
+  max-height: calc(var(--workspace-viewport-height, 100dvh) - max(24px, env(safe-area-inset-top)));
+}
+.app-frame[data-app-workspace]
+  .workspace
+  .workspace-dialog--material
+  .workspace-preview
+  > .workspace-buttons {
+  padding-bottom: calc(12px + var(--workspace-dialog-padding) + env(safe-area-inset-bottom));
+}

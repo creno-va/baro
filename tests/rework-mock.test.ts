@@ -5,6 +5,7 @@ import { createAccountMockHandler } from "../src/client/api/mock/account";
 import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
 import { createReworkMock } from "../src/client/api/mock/rework";
 import { ensureMockWorkspace, type WorkspaceMockState } from "../src/client/api/mock/workspace";
+import { downloadReviewedReport } from "../src/components/reports/download-reviewed";
 import { reconfirmationCase } from "./helpers/intake-reconfirmation";
 
 function fixture() {
@@ -119,7 +120,7 @@ for (const change of ["body", "mask", "exclusions", "evidence", "case_revision"]
     const edited = await f.client.peekReport(f.item.id);
     expect(edited?.id).not.toBe(prior.id);
     expect(edited?.revision).toBe(prior.revision + 1);
-    expect(edited?.stale).toBe(change !== "body");
+    expect(edited?.stale).toBe(["evidence", "case_revision"].includes(change));
     expect(edited?.analysisReview?.status).toBe("review_required");
     expect(edited?.analysisReview?.userEdited).toBe(true);
     expect(edited?.analysisReview?.analysisId).toBe(change === "body" ? analysisId : null);
@@ -140,6 +141,105 @@ for (const change of ["body", "mask", "exclusions", "evidence", "case_revision"]
       await expect(f.client.peekReport(f.item.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
   });
+for (const regeneration of ["conversation", "document"] as const)
+  test(`a refreshed mock ${regeneration} report retains its current source after saving a photo while edited analysis stays unverified`, async () => {
+    const f = fixture();
+    const context = await f.client.getContext(f.item.id);
+    const next = await f.client.updateContext(f.item.id, {
+      expectedRevision: context.workspaceRevision,
+      casePurpose: "prepare_claim",
+      subjectContext: "individual",
+      procedure: context.context.procedure,
+    });
+    await f.client.executeAction(f.item.id, {
+      action: "prepare_report",
+      requestId: crypto.randomUUID(),
+      expectedRevision: next.workspaceRevision,
+    });
+    const initial = await f.client.peekReport(f.item.id);
+    if (!initial) throw new Error("Synthetic report missing");
+    const photo = {
+      id: "synthetic-report-photo",
+      name: "합성 사진.png",
+      revision: 1,
+      mimeType: "image/png",
+      sizeBytes: 100,
+      status: "ready" as const,
+      coverage: "합성 관찰",
+      extractedText: "합성 사진 관찰",
+    };
+    f.change((state) => {
+      state.files[f.item.id] = [photo];
+      state.cases[f.item.id]!.revision++;
+      state.reports[f.item.id]!.stale = true;
+    });
+    const changed = await f.client.getConversation(f.item.id);
+    expect(changed.report.status).toBe("stale");
+    const reports = createReportsMockHandler({
+      read: f.runtime.read,
+      update: (fn) =>
+        f.runtime.update((state) => fn(state as WorkspaceMockState & ReportMockState)),
+      original: async () => new Blob(["synthetic-photo"]),
+    });
+    if (regeneration === "conversation")
+      await f.client.executeAction(f.item.id, {
+        action: "prepare_report",
+        requestId: crypto.randomUUID(),
+        expectedRevision: changed.workspaceRevision,
+      });
+    else
+      await reports(`/api/v2/cases/${f.item.id}/reports`, {
+        method: "POST",
+        body: { expectedRevision: initial.revision },
+      });
+    const refreshed = await f.client.peekReport(f.item.id);
+    if (!refreshed) throw new Error("Synthetic refreshed report missing");
+    expect(refreshed.stale).toBe(false);
+    await reports(`/api/v2/cases/${f.item.id}/reports`, {
+      method: "PATCH",
+      body: {
+        expectedRevision: refreshed.revision,
+        content: `${refreshed.content}\n\n![합성 사진](baro-photo:${photo.id})`,
+        excludedFileIds: refreshed.excludedFileIds,
+        includedPhotoIds: [photo.id],
+        maskIdentifiers: refreshed.maskIdentifiers,
+      },
+    });
+    const saved = await f.client.peekReport(f.item.id);
+    expect(saved?.stale).toBe(false);
+    expect(saved?.analysisReview?.userEdited).toBe(true);
+    expect(saved?.analysisReview?.status).toBe("review_required");
+    expect(saved?.analysisReview?.analysisId).toBe(refreshed.analysisReview?.analysisId);
+    if (!saved) throw new Error("Synthetic edited report missing");
+    let pdfReads = 0;
+    await downloadReviewedReport(
+      {
+        caseId: f.item.id,
+        reportId: saved.id,
+        reportRevision: saved.revision,
+        expectedOwner: "mock-owner",
+      },
+      {
+        session: async () => f.read().session,
+        peekReport: (id) => f.client.peekReport(id),
+        // Verify only the metadata admission; browser/native suites own PDF bytes.
+        pdf: async () => {
+          pdfReads++;
+          return new Blob(["synthetic transport payload"]);
+        },
+        download: () => {},
+      },
+    );
+    expect(pdfReads).toBe(1);
+    expect(f.read().reportHistory?.[initial.id]?.content).toBe(initial.content);
+    f.reload();
+    expect((await f.client.peekReport(f.item.id))?.stale).toBe(false);
+    f.change((state) => {
+      state.cases[f.item.id]!.revision++;
+    });
+    expect((await f.client.peekReport(f.item.id))?.stale).toBe(true);
+  });
+
 test("an actual explicit-mock report size failure survives the rework boundary without an empty report", async () => {
   const f = fixture();
   f.change((state) => {

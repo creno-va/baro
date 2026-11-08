@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
+import { closeWorkspaceMaterials, openCaseTool } from "../helpers/workspace-navigation";
 
 // This isolated C contract suite also runs before A's shared facade is available.
 // Enable with: BARO_C_TEST_API=true bunx playwright test --config tests/helpers/workspace.playwright.config.ts
@@ -87,7 +88,7 @@ test("materials, review and preparation continue inside the actual workspace rou
   await expect(actions).toBeVisible();
   await actions.getByText("다른 작업", { exact: true }).click();
   await actions.getByRole("button", { name: "자료 추가·검토", exact: true }).click();
-  const panel = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+  const panel = page.locator("#case-materials-panel");
   await expect(panel).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await panel.getByRole("button", { name: "파일 선택", exact: true }).click();
@@ -96,6 +97,7 @@ test("materials, review and preparation continue inside the actual workspace rou
     mimeType: "text/plain",
     buffer: Buffer.from("합성 계약 원금 300만원. 반환 약속 날짜 미확인."),
   });
+  await closeWorkspaceMaterials(page);
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
     "conversation-contract.txt",
   );
@@ -106,7 +108,7 @@ test("materials, review and preparation continue inside the actual workspace rou
     .getByRole("link", { name: "conversation-contract.txt" });
   await expect(attachment).toBeVisible();
   await attachment.click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.locator(".workspace-dialog");
   await expect(
     dialog.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
   ).toBeVisible();
@@ -177,9 +179,8 @@ test("materials, review and preparation continue inside the actual workspace rou
   expect(new URL(page.url()).pathname).toBe(base);
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
-  await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
-  await expect(actions.getByText("다른 작업", { exact: true })).toBeFocused();
-  await expect(actions.getByText("다른 작업", { exact: true })).toBeInViewport();
+  await expect(attachment).toBeFocused();
+  await expect(attachment).toBeInViewport();
   const preparation = actions.getByRole("button", { name: "타임라인·다음 행동 확인", exact: true });
   if (!(await preparation.isVisible()))
     await actions.getByText("다른 작업", { exact: true }).click();
@@ -250,7 +251,9 @@ for (const width of [320, 390, 768, 1440]) {
     await page.goto(base);
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
-    const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+    await closeWorkspaceMaterials(page);
+    await page.locator(".case-tools > summary").click();
+    const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const links = navigation.getByRole("link");
     await expect(links).toHaveCount(6);
     for (const link of await links.all()) {
@@ -261,6 +264,7 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
+    await page.locator(".case-tools > summary").click();
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
@@ -658,9 +662,9 @@ test("persisted format refusal remains clear after reload and account re-entry",
   await page.reload();
   await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
   await rejected.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.getByRole("dialog").getByText(/등록 거절 ·/)).toBeVisible();
+  await expect(page.locator(".workspace-dialog").getByText(/등록 거절 ·/)).toBeVisible();
   await expect(
-    page.getByRole("dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
+    page.locator(".workspace-dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
   ).toBeDisabled();
 });
 
@@ -778,7 +782,7 @@ for (const scenario of [
       expect(await opener.getAttribute("aria-label")).toBeNull();
     }
     expect(await reads()).toEqual([]);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     if (["drag", "pointer-cancel"].includes(scenario)) {
       if (scenario === "pointer-cancel") await opener.dispatchEvent("pointercancel");
       await page.mouse.move(0, 0);
@@ -793,7 +797,7 @@ for (const scenario of [
         ),
       );
     expect(await reads()).toEqual([]);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     await page.evaluate((scenario) => {
       (window as unknown as { releasePreviewCheck: (result: string) => void }).releasePreviewCheck(
         scenario,
@@ -801,7 +805,7 @@ for (const scenario of [
     }, scenario);
     const accepted = ["normal", "focus", "consent", "double"].includes(scenario);
     if (accepted) {
-      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.locator(".workspace-dialog")).toBeVisible();
       await expect(
         page
           .getByRole("dialog")
@@ -814,7 +818,7 @@ for (const scenario of [
           page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
         ).toBeVisible();
       else await expect(page.getByRole("alert").first()).toBeVisible();
-      await expect(page.getByRole("dialog")).not.toBeVisible();
+      await expect(page.locator(".workspace-dialog")).not.toBeVisible();
       expect(await reads()).toEqual([]);
     }
     if (scenario === "pointer-down-only") {
@@ -1442,8 +1446,12 @@ test("partial upload readback failure retries only the unaccepted remainder", as
     page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
+  await expect(page.locator(".workspace-dialog")).toBeVisible();
+  await page
+    .locator(".workspace-dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
   await expect(retry).toBeVisible();
@@ -1920,7 +1928,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     });
     await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.locator(".workspace-dialog")).toBeVisible();
     let session = await page.evaluate((key) => {
       const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
       saved.caseOwners = { "synthetic-case": saved.session.user.id };
@@ -1981,7 +1989,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
       { key, session },
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(2);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     if (outcome !== "lawyer")
       await expect(page.getByText("private-session-original.txt", { exact: true })).toHaveCount(0);
     await expect(
@@ -1993,7 +2001,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(afterDenial);
     if (outcome !== "lawyer") await expect(page.getByRole("alert").first()).toBeVisible();
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     expect(downloads).toEqual([]);
     expect(
       await page.evaluate(() => (window as unknown as { originalReads: number }).originalReads),
@@ -2236,14 +2244,20 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await page.getByRole("button", { name: "응답 다시 시도" }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await openCaseTool(page, "다음 행동");
   const first = page.getByRole("checkbox").first();
   await first.check();
   await expect(first).toBeChecked();
   await expect(first).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await expect(
+    page.locator(".workspace-next").getByRole("link", { name: "리포트 열기", exact: true }),
+  ).toHaveAttribute("href", `${base}/reports`);
+  await expect(
+    page.locator(".workspace-next").getByRole("link", { name: "변호사 찾기", exact: true }),
+  ).toHaveAttribute("href", "/lawyers");
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 날짜 확인");
   await page.getByLabel("상세 내용").fill("원본 메시지를 검토할 예정입니다.");
@@ -2253,14 +2267,16 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
-  await expect(page.getByRole("link", { name: "리포트 보기" }).first()).toHaveAttribute(
-    "href",
-    `${base}/reports`,
-  );
+  await page.locator(".case-tools > summary").click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "사건 도구", exact: true })
+      .getByRole("link", { name: "리포트 보기", exact: true }),
+  ).toHaveAttribute("href", `${base}/reports`);
   await expect(page.getByRole("link", { name: /변호사 탐색/ }).first()).toHaveAttribute(
     "href",
     "/lawyers",
@@ -2300,12 +2316,16 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.getByRole("dialog").locator("details p").filter({ hasText: text }),
+    page.locator(".workspace-dialog").locator("details p").filter({ hasText: text }),
   ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   expect((await download).suggestedFilename()).toBe("synthetic.txt");
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
+  await page
+    .locator(".workspace-dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
   await page.getByRole("button", { name: "삭제", exact: true }).click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(page.getByRole("heading", { name: "synthetic.txt" })).toBeVisible();
@@ -2330,16 +2350,16 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByRole("link", { name: "사용량 확인" })).toBeVisible();
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("합성 한도 요청");
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".workspace-dialog")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: "일정 추가" })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await openCaseTool(page, "자료 0");
   const bytes = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
     "base64",
@@ -2376,7 +2396,7 @@ test("changing the shared mock owner hides the previous workspace and open edito
     window.dispatchEvent(new Event("focus"));
   }, key);
   await expect(page.getByRole("alert")).toContainText("사건 또는 자료를 찾을 수 없어요.");
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).not.toBeVisible();
   await expect(page.getByLabel("어떤 일이 있었나요?")).not.toBeVisible();
 });
@@ -2386,10 +2406,13 @@ test("workspace panels keep their navigation, readable layouts and accessible co
 }) => {
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
-  const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+  await closeWorkspaceMaterials(page);
+  await page.locator(".case-tools > summary").click();
+  const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
   await expect(navigation.getByRole("link")).toHaveCount(6);
+  await expect(page.locator(".workspace-tabs")).toHaveCount(0);
   for (const [name, path] of [
-    ["대화", ""],
+    ["요약 보기 · 재확인", "/summary"],
     ["자료 0", "/files"],
     ["타임라인", "/timeline"],
     ["다음 행동", "/actions"],
@@ -2400,6 +2423,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
       "href",
       `${base}${path}`,
     );
+  await page.locator(".case-tools > summary").click();
   await captureCaseViewports(page, "chat-welcome");
   await page
     .getByLabel("추가 사실 또는 질문")
@@ -2407,7 +2431,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
   await captureCaseViewports(page, "chat");
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await openCaseTool(page, "자료 0");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ }).click();
   await (await chooser).setFiles({
@@ -2417,17 +2441,17 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   });
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await captureCaseViewports(page, "files");
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 메시지를 받음");
   await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator(".workspace-dialog")).toBeHidden();
   await expect(page.getByRole("heading", { name: "사건의 흐름" })).toBeVisible();
   await captureCaseViewports(page, "timeline");
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await openCaseTool(page, "다음 행동");
   await page.getByRole("checkbox").first().check();
   await expect(page.getByRole("progressbar", { name: "다음 행동 완료 현황" })).toHaveAttribute(
     "value",

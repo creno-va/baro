@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
+import {
+  closeWorkspaceMaterials,
+  openCaseTool,
+  openWorkspaceMaterials,
+  returnToWorkspace,
+} from "../helpers/workspace-navigation";
 
 // Read the same session-bound facade as ReportReview. Legacy provenance blocks
 // stay in the saved snapshot even when the reading/editor UI omits duplicates.
@@ -52,6 +58,7 @@ test("common login and B intake flow through C workspace and D report with origi
     .click();
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   const base = new URL(page.url()).pathname;
+  await closeWorkspaceMaterials(page);
   await page.evaluate(() =>
     localStorage.setItem(
       "baro-api-mock-v1:faults",
@@ -69,17 +76,24 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.reload();
   await page.getByRole("button", { name: "응답 다시 시도" }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  const materials = await openWorkspaceMaterials(page);
   const source = {
     name: "shared-synthetic.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("공통 저장소의 합성 원본 자료입니다."),
   };
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
-  await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles(source);
-  await page.getByRole("button", { name: "업로드 다시 시도" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await materials.getByRole("button", { name: "파일 선택", exact: true }).click();
+  await (await chooser).setFiles(source);
+  await materials
+    .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
+    .check();
+  await materials.getByRole("button", { name: "선택한 자료 업로드", exact: true }).click();
+  await materials.getByRole("button", { name: "업로드 다시 시도" }).click();
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await page.reload();
+  await openWorkspaceMaterials(page);
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
@@ -88,13 +102,18 @@ test("common login and B intake flow through C workspace and D report with origi
       .locator("details p")
       .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "자료 확인", exact: true })
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
+  await closeWorkspaceMaterials(page);
+  await openCaseTool(page, "다음 행동");
   await page.getByRole("checkbox").first().check();
   await expect(page.getByRole("checkbox").first()).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("원본 메시지 날짜 확인");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
@@ -102,9 +121,9 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.reload();
   await expect(page.getByRole("heading", { name: "원본 메시지 날짜 확인" })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-shared-desktop.png", fullPage: true });
-  await page.getByRole("link", { name: "리포트 보기" }).first().click();
+  await openCaseTool(page, "리포트 보기");
   await expect(page).toHaveURL(`${base}/reports`);
-  await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toBeVisible();
+  await expect(page.locator(".report-review")).toBeVisible();
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);
   await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
@@ -121,14 +140,8 @@ test("common login and B intake flow through C workspace and D report with origi
   expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
     savedReport,
   );
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: "대화", exact: true })
-    .click();
-  await page
-    .getByRole("link", { name: /변호사 탐색/ })
-    .first()
-    .click();
+  await returnToWorkspace(page);
+  await page.getByRole("link", { name: "변호사 찾기", exact: true }).click();
   await expect(page).toHaveURL(/\/lawyers$/);
   expect(actualProcessing).toEqual([]);
 });
