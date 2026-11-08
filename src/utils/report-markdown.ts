@@ -90,7 +90,6 @@ export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
     const separator = tableCells(lines[index + 1] ?? "");
     if (
       header &&
-      header.length <= 12 &&
       separator?.length === header.length &&
       separator.every((cell) => /^:?-{3,}:?$/u.test(cell))
     ) {
@@ -103,11 +102,17 @@ export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
       }
       // Fall back to literal lines for malformed/oversized tables; never discard
       // cells, manufacture photos or reinterpret literal official quotations.
-      if (rows.length <= 200 && rows.every((row) => row.length === header.length)) {
+      if (
+        header.length <= 12 &&
+        rows.length <= 200 &&
+        rows.every((row) => row.length === header.length)
+      ) {
         blocks.push({ kind: "table", header, rows });
-        index = end - 1;
-        continue;
-      }
+      } else
+        for (const literal of lines.slice(index, end))
+          blocks.push({ kind: "paragraph", text: literal });
+      index = end - 1;
+      continue;
     }
     if (!line.trim() || /^(?:주의|출처|작성 시각|검증 시각):/u.test(line.trim())) continue;
     const photo = /^!\[([^\]\r\n]{0,200})\]\(baro-photo:([A-Za-z0-9_-]{1,128})\)\s*$/u.exec(

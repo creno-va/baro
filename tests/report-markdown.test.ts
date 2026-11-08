@@ -30,6 +30,9 @@ test("bounded tables share escaped cells across renderers and keep photo, URL an
     expect(rendered).not.toContain("<table");
     expect(rendered).toContain(invalid.includes("다섯") ? "다섯" : "행 200");
   }
+  const separators = Array(205).fill("| --- |").join("\n");
+  expect(reportMarkdownHtml(separators)).not.toContain("<table");
+  expect(reportMarkdownHtml(separators).match(/<p>/gu)).toHaveLength(205);
 });
 
 test("Markdown renders lists and emphasis after editing while raw markup and remote images stay inert", () => {
