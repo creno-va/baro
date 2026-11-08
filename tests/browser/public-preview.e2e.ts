@@ -149,7 +149,7 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeEnabled();
-  await expect(page.getByRole("button", { name: "수정 마치기" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장" })).toHaveCount(0);
   await expect(page.getByLabel("내용·식별정보·선택한 사진을 확인했어요")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeEnabled();

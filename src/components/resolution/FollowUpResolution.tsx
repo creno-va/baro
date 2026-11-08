@@ -163,6 +163,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const dirty = contentDirty || scopeDirty;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const reviewInProgress = useRef(false);
+  reviewInProgress.current = factsConfirmed || reviewed !== (state?.draft?.reviewed ?? false);
   const reportMismatch =
     !!state?.basis &&
     ((props.reportId !== undefined && props.reportId !== state.basis.reportId) ||
@@ -368,7 +370,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         changed();
     };
     const focus = () => {
-      if (activity.current.active && !dirtyRef.current) void load();
+      if (activity.current.active && !dirtyRef.current && !reviewInProgress.current) void load();
       else void verify(sequence.current).catch(() => undefined);
     };
     window.addEventListener("baro-session-changed", changed);
@@ -387,8 +389,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   useEffect(() => {
     const changed = previousSection.current !== props.section;
     previousSection.current = props.section;
-    if (changed && props.section === "drafts" && !dirtyRef.current) void load();
-  }, [props.section, load]);
+    if (changed && props.section === "drafts" && !dirtyRef.current && !report) void load();
+  }, [props.section, load, report]);
   async function run(
     work: (options: Options, epoch: number) => Promise<V2ResolutionState | null>,
     write = true,
