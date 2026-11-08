@@ -166,6 +166,13 @@ function WorkspaceContent({
   const [reportQuestion, setReportQuestion] = useState<ReportQuestionContext | null>(null);
   const [reportDirty, setReportDirty] = useState(false);
   const taskScroll = useRef(new Map<string, number>());
+  const taskBodyScroll = useRef(new Map<string, number>());
+  const taskFocus = useRef(new Map<string, HTMLElement>());
+  const chatScroll = useRef(0);
+  const acceptedSearch = useRef<Partial<Record<CaseTask, string>>>({
+    reports: "?mode=conversation",
+    drafts: "?mode=conversation",
+  });
   const activeTaskRef = useRef(activeTask);
   activeTaskRef.current = activeTask;
   const root = useRef<HTMLDivElement>(null);
@@ -173,6 +180,19 @@ function WorkspaceContent({
     (next: CaseTask, history: "push" | "none" = "push") => {
       const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
       if (scroller) taskScroll.current.set(activeTask ?? tab, scroller.scrollTop);
+      const body = root.current?.querySelector<HTMLElement>(
+        `[data-workspace-task="${activeTask === "drafts" ? "reports" : activeTask}"]`,
+      );
+      if (body && activeTask) taskBodyScroll.current.set(activeTask, body.scrollTop);
+      if (activeTask === "chat" && chatMessages.current)
+        chatScroll.current = chatMessages.current.scrollTop;
+      const base = `/cases/${encodeURIComponent(caseId)}`;
+      const url = new URL(window.location.href);
+      if (url.pathname === `${base}/reports`) {
+        acceptedSearch.current.reports = url.search;
+        acceptedSearch.current.drafts = url.search;
+      } else if (url.pathname === `${base}/files`) acceptedSearch.current.files = url.search;
+      else if (url.pathname === base) acceptedSearch.current.chat = url.search;
       if (next === "chat") {
         setChatVisited(true);
         setContextRequested(true);
@@ -186,15 +206,12 @@ function WorkspaceContent({
       }
       setActiveTask(next);
       if (history === "push") {
-        const base = `/cases/${encodeURIComponent(caseId)}`;
-        const url = new URL(window.location.href);
-        const reportSearch = url.pathname === `${base}/reports` ? url.search : "?mode=conversation";
         const destination =
           next === "chat"
-            ? base
+            ? `${base}${acceptedSearch.current.chat ?? ""}`
             : next === "files"
-              ? `${base}/files`
-              : `${base}/reports${reportSearch}${next === "drafts" ? "#document-drafts" : ""}`;
+              ? `${base}/files${acceptedSearch.current.files ?? ""}`
+              : `${base}/reports${acceptedSearch.current[next] ?? "?mode=conversation"}${next === "drafts" ? "#document-drafts" : ""}`;
         if (`${url.pathname}${url.search}${url.hash}` !== destination)
           window.history.pushState(
             { ...window.history.state, baroCaseTask: next, baroCaseId: caseId },
@@ -208,7 +225,37 @@ function WorkspaceContent({
   useLayoutEffect(() => {
     const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
     if (scroller) scroller.scrollTop = taskScroll.current.get(activeTask ?? tab) ?? 0;
+    if (activeTask) {
+      const body = root.current?.querySelector<HTMLElement>(
+        `[data-workspace-task="${activeTask === "drafts" ? "reports" : activeTask}"]`,
+      );
+      if (body) body.scrollTop = taskBodyScroll.current.get(activeTask) ?? 0;
+      if (activeTask === "chat" && chatMessages.current)
+        chatMessages.current.scrollTop = chatScroll.current;
+      const focus = taskFocus.current.get(activeTask);
+      if (
+        focus?.isConnected &&
+        focus.getClientRects().length &&
+        !focus.closest("[inert], [aria-hidden='true']") &&
+        !focus.matches(":disabled")
+      )
+        focus.focus({ preventScroll: true });
+    }
   }, [activeTask, tab]);
+  useEffect(() => {
+    const remember = (event: FocusEvent) => {
+      if (
+        !(event.target instanceof HTMLElement) ||
+        !root.current?.contains(event.target) ||
+        !activeTask
+      )
+        return;
+      if (event.target.closest("[data-workspace-task]"))
+        taskFocus.current.set(activeTask, event.target);
+    };
+    document.addEventListener("focusin", remember);
+    return () => document.removeEventListener("focusin", remember);
+  }, [activeTask]);
   const locationInitialized = useRef(false);
   useEffect(() => {
     if (!locationInitialized.current) {
@@ -345,6 +392,10 @@ function WorkspaceContent({
     setReportVisited(false);
     setReportDirty(false);
     setReportQuestion(null);
+    taskScroll.current.clear();
+    taskBodyScroll.current.clear();
+    taskFocus.current.clear();
+    chatScroll.current = 0;
     setLeaveTarget(null);
     leaveApproved.current = false;
     setView(null);
@@ -458,12 +509,10 @@ function WorkspaceContent({
     });
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
+  const filesOnly = !contextRequested && (initialTab === "files" || initialTask === "files");
   const readView = useCallback(
-    () =>
-      tab === "files" && !contextRequested
-        ? api.workspace.getFiles(caseId)
-        : api.workspace.get(caseId),
-    [caseId, tab, contextRequested],
+    () => (filesOnly ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
+    [caseId, filesOnly],
   );
   const load = useCallback(async () => {
     const serial = ++latest.current;
@@ -475,7 +524,7 @@ function WorkspaceContent({
       if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
-        if (tab !== "files" || contextRequested) setContextLoaded(true);
+        if (!filesOnly) setContextLoaded(true);
         setUploadReadbackPending(false);
         // A fresh read resolves its own error, not an earlier failed mutation.
         // If a failed mutation's 404 check was interrupted, this read now
@@ -494,7 +543,7 @@ function WorkspaceContent({
       if (alive(epoch) && serial === latest.current) showError(cause);
     }
     return false;
-  }, [readView, apply, verify, ticket, current, alive, showError, tab, contextRequested]);
+  }, [readView, apply, verify, ticket, current, alive, showError, filesOnly]);
   useEffect(() => {
     mounted.current = true;
     if (version && !lock.current) void load();
@@ -1642,9 +1691,20 @@ function WorkspaceContent({
       acceptedFileRetries={acceptedFileRetries}
       report={conversationState?.report ?? null}
       standalone
-      {...(tab === "chat"
-        ? { onReportRefresh: () => setConversationRefresh((value) => value + 1) }
-        : {})}
+      onReportRefresh={() =>
+        void run("refresh", async (epoch) => {
+          try {
+            const progress = await api.rework.getConversationProgress(caseId, {
+              expectedOwner: access.ownerId() ?? "",
+            });
+            if (!(await verify()) || !current(epoch)) return;
+            setConversationState(progress.state);
+          } catch (cause) {
+            if (current(epoch)) setConversationState(null);
+            throw cause;
+          }
+        })
+      }
     >
       {conversationState?.snapshot &&
         !["stale", "pending", "running"].includes(conversationState.analysis.status) && (
@@ -1795,7 +1855,7 @@ function WorkspaceContent({
               (ready ? view?.case.title : null) ??
               (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
             }
-            active={tab}
+            active={activeTask ?? tab}
             {...(activeTask ? { activeTask } : {})}
             onNavigate={navigateTask}
             fileCount={ready ? view?.files.length : undefined}
