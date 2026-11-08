@@ -722,6 +722,7 @@ html:has(dialog:modal) {
   align-items: center;
   gap: 6px;
   min-height: 44px;
+  min-width: 44px;
   color: var(--secondary-foreground);
   text-decoration: underline;
 }

@@ -74,7 +74,7 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(37, 99, 235)",
+    "rgb(35, 100, 232)",
   );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
@@ -88,12 +88,12 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
   await openInteractiveFixture(page, () => accountType);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveAttribute("href", "/lawyers");
+  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveCount(0);
   accountType = "lawyer";
   await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toHaveCount(0);
   await expect(page.locator(".sidebar-desktop .sidebar-profile")).toHaveAttribute(
     "href",
     "/settings",
