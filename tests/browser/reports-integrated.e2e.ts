@@ -313,13 +313,13 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "사건 개요 수정", exact: true })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "내 사건 한눈에 수정", exact: true })).toHaveValue(
     /자료를 제외한 리포트입니다/,
   );
   await expect(
     page
       .getByRole("region", { name: "리포트 이후 해결 방법", exact: true })
-      .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+      .getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
   ).toBeVisible();
   await page.reload();
   await openReportEditor(page);
