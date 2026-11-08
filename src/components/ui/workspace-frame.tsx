@@ -10,7 +10,7 @@ export interface CaseWorkspaceFrameProps {
   onPanelOpenChange?: (open: boolean) => void;
   panelLabel?: string;
   panelId?: string;
-  kind?: "conversation" | "document";
+  kind?: "conversation" | "document" | "compare";
 }
 
 /** A single mounted panel becomes a native modal below 1200px; no API or shared island state. */
