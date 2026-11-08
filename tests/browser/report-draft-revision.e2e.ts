@@ -190,12 +190,14 @@ test("report generation shows the actual elapsed request inside its confirmation
 }) => {
   const generation = gate();
   let generations = 0;
+  let reportUpdates = 0;
   await page.clock.install();
   await progressFixture(page, {
     async pdf(route) {
       await route.fulfill({ status: 400, json: {} });
     },
     async report(route) {
+      if (["PUT", "PATCH", "DELETE"].includes(route.request().method())) reportUpdates++;
       if (route.request().method() === "POST") {
         generations++;
         await generation.promise;
@@ -208,6 +210,14 @@ test("report generation shows the actual elapsed request inside its confirmation
   // A fresh report exposes regeneration while reading, after the clean editor closes.
   await page.getByRole("button", { name: "편집 취소", exact: true }).click();
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveCount(0);
+  await expect(
+    page.locator(".report-reading").getByText(progressReport.content, { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "리포트 생성 기준", exact: true })).toContainText(
+    "버전 1 · 저장됨",
+  );
+  expect(generations).toBe(0);
+  expect(reportUpdates).toBe(0);
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect.poll(() => generations).toBe(1);
@@ -221,6 +231,7 @@ test("report generation shows the actual elapsed request inside its confirmation
   await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".report-progress")).toHaveCount(0);
   expect(generations).toBe(1);
+  expect(reportUpdates).toBe(0);
 });
 
 test("focus refresh preserves unsaved text and generation refreshes material choices", async ({
