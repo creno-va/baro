@@ -104,6 +104,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     caseId: string,
     excluded: readonly string[],
     mask = false,
+    includeTitle = false,
   ) => {
     const options = hasPreparedReader
       ? {
@@ -111,7 +112,15 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
           scope: { excludedFileIds: excluded, maskIdentifiers: mask },
         }
       : undefined;
-    const source = await buildReportSource(core, a, caseId, excluded, deps.guideHosts, options);
+    const source = await buildReportSource(
+      core,
+      a,
+      caseId,
+      excluded,
+      deps.guideHosts,
+      options,
+      includeTitle,
+    );
     if (!hasPreparedReader) return { ...source, analysis: undefined, analysisIdentity: undefined };
     const scope = { excludedFileIds: excluded, maskIdentifiers: mask };
     const snapshot = deps.readPreparedAnalysisForScope
@@ -267,7 +276,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       id,
       caseId: data.row.workspace_id,
       revision: data.row.revision,
-      title: data.review.title,
+      title: data.review.maskIdentifiers ? maskReportText(data.review.title) : data.review.title,
       content: data.review.content,
       updatedAt: data.row.created_at,
       stale,
@@ -329,6 +338,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     body: V2ReportBody,
     review: ReportReviewData,
     version: number,
+    generationBasis?: { workspaceRevision: number },
     selectedOriginals: readonly string[] = [],
     kind: "canonical" | "originals_export" = "canonical",
     parent?: Row,
@@ -362,6 +372,8 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       return previous;
     }
     const current = await ownedWorkspace(core, a, caseId);
+    if (generationBasis && generationBasis.workspaceRevision !== current.revision)
+      throw new ReportError("STALE_REVISION");
     if (current.status !== "active" || !current.confirmed_summary_revision)
       throw new ReportError("REVIEW_REQUIRED");
     // Current ownership/S/status was read immediately above. Hash freshly read
@@ -601,10 +613,12 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const a = actor(ownerId),
         prior = await reportReadStep("latest", () => latest(a, caseId));
       if (prior) return reportReadStep("view", () => view(a, prior.id));
-      const source = await reportReadStep("source", () => preparedSource(a, caseId, []));
+      const source = await reportReadStep("source", () =>
+        preparedSource(a, caseId, [], false, true),
+      );
       const review: ReportReviewData = {
         format: "client_review_v1",
-        title: "사건 상담 준비 리포트",
+        title: source.display.title ?? "내 사건 이해와 해결 준비",
         content: sourceContent(source),
         excludedFileIds: [],
         maskIdentifiers: false,
@@ -628,6 +642,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
           source.body,
           review,
           1,
+          { workspaceRevision: source.current.revision },
         ),
       );
       return reportReadStep("view", () => view(a, id));
@@ -766,7 +781,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
       const old = prior && hasPreparedReader ? await read(a, prior.id) : null;
       const excludedFileIds = value.excludedFileIds ?? old?.review.excludedFileIds ?? [];
       const maskIdentifiers = old?.review.maskIdentifiers ?? false;
-      const source = await preparedSource(a, caseId, excludedFileIds, maskIdentifiers);
+      const source = await preparedSource(a, caseId, excludedFileIds, maskIdentifiers, true);
       const retainedPhotoIds =
         old?.review.includedPhotoIds?.filter((id) => {
           const previous = old.body.selectedFiles.find((file) => file.id === id);
@@ -782,7 +797,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         }) ?? [];
       const review: ReportReviewData = {
         format: "client_review_v1",
-        title: "사건 상담 준비 리포트",
+        title: source.display.title ?? "내 사건 이해와 해결 준비",
         content: sourceContent(source),
         excludedFileIds,
         maskIdentifiers,
@@ -806,6 +821,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         source.body,
         review,
         (prior?.revision ?? 0) + 1,
+        { workspaceRevision: source.current.revision },
       );
       return view(a, id);
     },
@@ -915,6 +931,7 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
         data.body,
         { ...data.review, parentReportId: id },
         data.row.revision,
+        undefined,
         selectedFileIds,
         "originals_export",
         data.row,
