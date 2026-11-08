@@ -149,8 +149,8 @@ test.describe("short viewport at the native 200% layout size", () => {
     const header = page.getByRole("region", { name: "사건 제목과 작업", exact: true });
     const trigger = header.locator(".case-tools > summary");
     const tools = header.getByRole("navigation", { name: "사건 도구", exact: true });
-    const names = ["요약 보기 · 재확인", "타임라인", "다음 행동", "유사 판례"];
-    const paths = ["summary", "timeline", "actions", "precedents"];
+    const names = ["요약 보기 · 재확인", "타임라인", "다음 행동", "유사 판례"] as const;
+    const paths = ["summary", "timeline", "actions", "precedents"] as const;
     const openTools = async () => {
       const bounds = await trigger.boundingBox();
       if (!bounds) throw new Error("Case tools trigger missing");
