@@ -539,7 +539,10 @@ test("successful chat hides lookup diagnostics and user statement labels while k
           if (
             [...sheet.cssRules].some(
               (rule) =>
-                rule instanceof CSSStyleRule && rule.selectorText === ".case-shell textarea",
+                rule instanceof CSSStyleRule &&
+                rule.selectorText ===
+                  ".case-shell :where(textarea:not(.ui-input):not(.ui-textarea))" &&
+                rule.style.minHeight === "220px",
             )
           ) {
             const node = sheet.ownerNode;
@@ -836,9 +839,13 @@ for (const scenario of [
       await expect(page.getByText("private synthetic preview coverage").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "삭제", exact: true }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeVisible();
-      await expect(
-        page.getByRole("complementary", { name: "사건 요약 및 준비 현황" }),
-      ).toBeVisible();
+      const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+      await expect(tasks).toBeVisible();
+      await expect(tasks.getByRole("link")).toHaveCount(4);
+      await expect(tasks.getByRole("link", { name: "자료 20개", exact: true })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
       expect(await opener.getAttribute("title")).toBeNull();
       expect(await opener.getAttribute("aria-label")).toBeNull();
     }
@@ -881,6 +888,19 @@ for (const scenario of [
       else await expect(page.getByRole("alert").first()).toBeVisible();
       await expect(page.locator(".workspace-dialog")).not.toBeVisible();
       expect(await reads()).toEqual([]);
+    }
+    if (scenario === "lawyer") {
+      // Changing role invalidates the held gesture, while the same owner keeps
+      // access to their files and can explicitly open one under the fresh role.
+      await page.getByRole("button", { name: "자료 확인", exact: true }).nth(19).click();
+      await expect(page.locator(".workspace-dialog")).toBeVisible();
+      await expect(
+        page.getByRole("dialog").getByRole("heading", {
+          name: "private-preview-19.pdf",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect.poll(reads).toEqual(["preview-19"]);
     }
     if (scenario === "pointer-down-only") {
       await opener.dispatchEvent("pointercancel");
@@ -2022,11 +2042,23 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
       const { sessionApi } = (await import(
         sessionPath
       )) as typeof import("../../src/client/api/session");
-      api.session.get = sessionApi.get;
+      const state = window as unknown as {
+        originalReads: number;
+        sessionChecksInFlight: number;
+        releaseLateOriginal: () => void;
+      };
+      state.sessionChecksInFlight = 0;
+      api.session.get = async () => {
+        state.sessionChecksInFlight++;
+        try {
+          return await sessionApi.get();
+        } finally {
+          state.sessionChecksInFlight--;
+        }
+      };
       // Establish a settled real session read before ordinary focus changes owner/role.
       await api.session.get();
       const readOriginal = api.files.original;
-      const state = window as unknown as { originalReads: number; releaseLateOriginal: () => void };
       state.originalReads = 0;
       api.files.original = async (...args: Parameters<typeof readOriginal>) => {
         const blob = await readOriginal(...args);
@@ -2067,6 +2099,20 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     await expect(
       page.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }),
     ).toHaveCount(0);
+    // A superseding workspace read can still share its in-flight HTTP session.
+    // Settle it before asserting that releasing the original starts a fresh read.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                sessionChecksInFlight: number;
+              }
+            ).sessionChecksInFlight,
+        ),
+      )
+      .toBe(0);
     const afterDenial = sessionRequests;
     await page.evaluate(() =>
       (window as unknown as { releaseLateOriginal: () => void }).releaseLateOriginal(),
@@ -2276,9 +2322,27 @@ for (const result of ["same-owner", "other-owner", "unavailable"] as const)
     }
     if (result === "unavailable") {
       await expect(page.getByRole("alert")).toContainText("합성 세션 확인 장애");
+      await expect(page.getByRole("list", { name: "업로드할 자료", exact: true })).toContainText(
+        "선택 복귀.txt",
+      );
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      await page.getByRole("button", { name: "업로드 다시 시도", exact: true }).click();
+      await expect(page.getByRole("alert")).toHaveCount(0);
     }
+    await expect(page.getByRole("list", { name: "업로드할 자료", exact: true })).toContainText(
+      "선택 복귀.txt",
+    );
+    await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("button", { name: "선택한 자료 업로드", exact: true }),
+    ).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { materialUploadCalls: number }).materialUploadCalls,
+      ),
+    ).toBe(0);
+    await confirmWorkspaceUpload(page);
     await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
     const stored = await page.evaluate(async () => {
       const path = "/tests/helpers/workspace-client-fixture.ts";
