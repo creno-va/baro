@@ -25,6 +25,16 @@
 실제 OAuth/공급자/공식 법률 API와 독립 법률 인수·실기기는 합성 기능 인수와 구분해 남기며,
 사용자 범위 정리로 CLOSED/NOT_PLANNED인 기존 #71을 이번 결과로 재개·전체 인수 처리하지 않는다.
 
+첫 최종 main96ff935의 main CI/preview·수동 full의 core/native는 성공했지만 full42453874134의
+browser는 실패해 join이 SKIPPED다. 구형 탐색/문구/색상/기하 기대와 실제44px·사진 삭제 경로를
+01/02/03에 단독 재배정해 후속 PR로 수리한다. 실패·부분 성공·artifact를 보존하며 수리/후속 문서
+병합 뒤 마지막 main SHA의 full·동일SHA preview를 새로 기록한다. 이전130 PASS로 대체하지 않는다.
+후속 공통 #768(103 PASS·목적44px/장문완전노출1px)과 리포트 #770(모바일PDF 유효폭·정확사진
+편집/이전본 보존)은 exactCI/필수검증/00 전체diff·시각 리뷰 후 순차 정상 병합했다. main31d9e10을
+소비한 대화·자료 #769도 exact3e83b081/CI42460022979·44개/ciquickbuild 확인 후 mainb0f0842로
+정상 병합했다. native32는 로컬 Docker 부재를 성공으로 세지 않고, 후속 인수 기록·화면 PR까지
+병합한 새 마지막 SHA의 전체검증과 동일SHA preview에서 인수한다. 실제 최종 결과는 #751 정본이다.
+
 2026-11-05 사용자 지시에 따라 랜딩·로그인을 제외한 웹 앱 UI를 개편한다. 최신 origin/main
 badc1624에서 codex/product-ui-renewal로 분기하고 AppLayout에만 적용하는 공통 composition을
 추가한다. 사이드바·페이지 헤더·입력·상태·카드·버튼의 위계와 간격을 맞추며 사건 대화/자료/

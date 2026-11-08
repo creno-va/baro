@@ -75,6 +75,37 @@ PR762의 legal CI42444906438이 판례15개 중13 PASS/2 FAIL로 끝나 `precede
 03에게서 임시 이전하며 기존 저장·PDF/권한 단언을 보존한다. 공개 랜딩 시연과 디자인 시스템의
 독립 tab은 제거 범위가 아니다. fixture/API/제품 파일은 이 배정에 포함하지 않는다.
 
+첫 최종 main 수동 full42453874134의 browser 실패를 확인해 추가 단독 소유를 배정했다.
+01은 `cases.e2e.ts`, `design-system.e2e.ts`, `app-experience.e2e.ts`,
+`intake-reconfirmation.e2e.ts`를 소유한다.02는 `customer-completion.e2e.ts`,03은
+`reports.e2e.ts`를 소유하며 기존 각자 제품/전용 fixture 경계는 유지한다. 기준 main은
+`96ff9355db02c361c129d0d5c7fbec4b7d053c85`이며 새 깨끗한 후속 branch를 등록한 뒤 수리한다.
+일반 dialog의 중복 선택, 옛 문구/색상/desktop 폭·모바일 중앙 기대와 실제44px 대상·사진 삭제를
+구분한다. 제품 회귀를 옛 테스트로 치부하거나 단언을 삭제하지 않으며 각 전체 config를 재실행한다.
+완전한 raw job 로그에서 후반 실패도 확인해02에 `conversation-home.e2e.ts`,
+`workspace-shared.e2e.ts`를 추가 배정했다. 기존02의 rework native WebKit 대응/save 경로도
+분석 상태/관측·실제 준비 완료를 검증한다. 일반 `gh run view --log`의 긴 사진HTML 오류 뒤
+누락과 raw job 로그를 구분하며 후반 실패를 숨기지 않는다.
+44px 실패는 실제 공통 제품 회귀다. `product-refresh.css`의
+`.app-frame[data-product-ui="refresh"] .conversation-context label`의 min-height38px를
+44px로 수리하는 **해당 한 규칙만01 단독 소유**로 다시 배정했다.02 home도 같은 원인이므로
+CSS를 중복 수정하거나 미병합 수리를 소비하지 않고01 정확CI/main 뒤 재검증한다.
+01의 기존 독립 fixture `helpers/app-workspace-entry.tsx`와 `app-workspace.e2e.ts`에는
+opt-in 장문 실제 Dialog의 내부 scroll/44px/닫기/초점 검증1개를 추가 배정했다. 기존25를
+유지한26개 전체와 위4개 suite를 검사하며 제품 DOM/공유 fixture를 조작하지 않는다.
+장문 실제Dialog의 마지막44px 버튼이390px 최대 스크롤에서도0.375px 잘리는 것을 추가 재현했다.
+모바일 content의 bottom padding0과 CSSOM 정수 반올림이 원인으로, 같은 product-refresh.css의
+`.ui-dialog:not(.ui-sheet) .ui-dialog__content` 모바일 padding 끝0→1px만01에 추가 배정했다.
+전역 Dialog/공개 스타일/높이 기준은 바꾸지 않고 strict 완전노출1·44px/휠/초점 기준을 유지한다.
+03은 모바일 PDF CTA를 `reports.css`의 유효 본문 폭100%/44px로 복구하고 desktop은 compact
+오른쪽 정렬을 검증한다. 사진 실패는 새 첫 절을 잘못 편집한 경로로 재현됐으며 실제 증거자료
+절의 inline/legacy 사진 token을 제거해 새 snapshot/HTML/PDF 사진0·이전본 사진 유지·다른
+본문/출처 동일을 검사한다. 사진 부재 단언은 유지하고 큰 dataURI HTML 진단은 제한한다.
+WebKit native는 model phase 시작 카운터와 currentW/confirmedS의 실제 게시 완료를 구분한다.
+이미 접수된 fixture task만 settle한 뒤 실제 SDK GET·case·UI 현재 상태를 대조하며 새 admission/
+DTO·SQL 조작/강제 reload·focus로 제품 회귀를 숨기지 않는다. 로컬 Docker 미실행과 최종 Linux
+native 전체 여정의 실제 완료를 구분한다.
+
 ## 실제 조립 방식과 공통 인터페이스
 
 현재 `BaseLayout`은 랜딩·로그인까지 global/shell/app-focus를 import한다. `AppLayout`만
@@ -149,8 +180,14 @@ prepare_report/save_report/analysis를 호출하지 않는다. 명시적 새 생
 | 모바일<768px | 중앙 대화 우선. sidebar/자료는 각 drawer/sheet, 동시에 열린 modal은 하나. 고정 헤더·하단 입력과 가상 키보드가 본문을 가리지 않음 |
 | 리포트 | 같은 AppLayout sidebar. 중앙 document+접이식 목차(데스크톱200px 내외), 본문 최대820px. 모바일 목차는 disclosure로 문서 위, 읽기/작업 메뉴가 본문을 계속 덮지 않음 |
 
-앱 전용 기본 토큰은 white main, slate50 sidebar, slate200 border, slate950/600 text, 기존
-blue600 primary를 참조한다. Pretendard 유지. 본문16px/1.7, 보조13–14px/1.5, 작은 사건 제목
+자료 frame의 overlay 기준은1200px다. 공통 내용 Dialog는 기존 product-refresh CSS의
+760px 이하 하단 sheet/761px 이상 중앙 배치를 유지하며 두 경계에서 containment·44px·
+장문 내부 scroll·초점 복귀를 검사한다. 앱 sidebar의768px 전환과 각 컴포넌트의 실제 기준을 구분한다.
+
+앱 전용 실제 토큰은 `--app-canvas:#fff`, `--app-sidebar:#f8fafc`, `--app-line:#e2e8f0`,
+`--app-text:#0f172a`, `--app-secondary-text:#475569`, `--primary/--product-blue:#2563eb`다.
+BARO 로고와 blue primary를 유지하며 이 재정의는 AppLayout scope에 적용한다. Pretendard 유지.
+본문16px/1.7, 보조13–14px/1.5, 작은 사건 제목
 16–18px/1.4. 여백4/8/12/16/24/32px, 표면 radius8–12px, 입력 radius16px, 그림자 최소화.
 큰 히어로·중복 안내·겹친 카드·블루 배경 면적을 줄인다. 앱 헤더 높이56px 전후, 조작 대상
 최소44px, visible focus, reduced motion, 한글 keep-all+긴 파일명 anywhere를 사용한다.
@@ -272,6 +309,35 @@ header(auto)/body(minmax(0,1fr))를 두고 중앙 메시지·자료 각각 스�
   01의 frozen ci/quick/build와 최종130 PASS/0 SKIP을00이 receipt·전체 diff로 검토했다.
   품질 CI42453081108 SUCCESS 뒤 main `080cde77bbee04259ee94e9c06e197e42f1d1698`로
   exact head를 정상 병합했다. 최종 docs/전체 검증은 [#751 실행 기록](https://github.com/creno-va/baro/issues/751)에 남긴다.
+- 인수 문서 PR767 exact `23b506832ff85055754102b429b28b668b913094`의 ci/quick/build·
+  CI42453533606 SUCCESS 뒤 main `96ff9355db02c361c129d0d5c7fbec4b7d053c85`로 정상 병합했다.
+  이 SHA의 main CI42453839910, preview42454227087은 SUCCESS다. preview live/ready도 같은
+  release와 schema0022, 익명GET9개·observation-only configuration readiness를 확인했다.
+  **수동 full42453874134는 FAILURE**다: core SUCCESS(전체5426 PASS/8 기존 opt-in/platform
+  SKIP/0 FAIL), native SUCCESS(실제SQL PDF/ZIP2와 전체 codec/보안), browser FAILURE,
+  join SKIPPED. browser의 구형 UI 기대·중복 dialog·44px/사진 삭제 경로를 담당별로 수리한다.
+  부분 성공을 최종 full로 대체하지 않고 실패/artifact13607619592를 보존한다. 앞선 존재하지
+  않는 target의 수동42453855888은00 전사 오류로 즉시 취소한 기록이며 성공으로 세지 않는다.
+- 공통 후속 PR768 exact `ebf2d71294acae940265eef803e779c3e1b9b492`: CI42458625207 SUCCESS,
+  같은 HEAD Node24.22.1/Bun1.4.0 ci/quick/build와 cases5/design8/app11/intake53/frame26=
+  103 PASS/0 SKIP/0 flaky를 receipt로 직접 확인했다.00은7파일 전체diff와 실제 CUA390px
+  장문 끝버튼 완전 노출·읽을 수 있는 한글·초점을 시각 검토해 정상 병합했다. main은
+  `7d1a250ae1988f2f32955ca0af66898252ebb493`이며02/03에 소비 gate를 해제했다. 제품 diff는
+  위44px와모바일 끝여유1px 두 선언뿐이다. 일시적 빈 paint의 자동 PNG는 최종 시각 근거로 쓰지 않는다.
+- 리포트 후속 PR770 exact `cf4232a160f16f08aa1a8d14c3a4ef99b06ba53a`: quality42459529236/
+  native42459529217 SUCCESS와 같은 HEAD ci/quick/build, reports10·SQL photos14·state16/
+  requests6 PASS를 확인했다.00은3파일 전체diff·원자적 동일프레임 기하 측정·새id/revision/
+  inline·legacy 사진 삭제와 이전본/정확 원문 보존을 리뷰했다. 실제 읽기 PNG2장을 확인하고
+  native artifact13608968311의47PNG가 앞선 검토본과47/47 byte동일임을 독립 확인해 정상
+  병합했다. main `31d9e104db16d4f1a187091cb64ff6d93489cb04`를02에 전달했다. 제품 diff는
+  모바일 PDF CTA 유효폭100%3줄뿐이며 parser/사진fallback/저장/DB/LLM은 바꾸지 않았다.
+- 대화·자료 회귀 PR769 exact `3e83b081a82d726e1f3f27dd9cf466702fbda39b`: CI42460022979
+  SUCCESS, 같은 HEAD home18/customer14/shared4/material8=44 PASS와 ci/quick/build를
+  SHA256 로그 receipt로 확인했다.00은 지정4파일 전체diff와 기존 검토본 대비diff0을 재확인해
+  main `b0f084277f026a56dd1268fdb8988808cb864e2f`로 정상 병합했다. 제품/DTO/API/SQL/workflow
+  변경0, 실제 dialog 범위·owner 초안 purge·원문/교정/제외/coverage·저장본 동일성과 모델/출처
+  횟수 불변 단언을 보존했다. WebKit native의 currentW/S·실제 게시/ready 관측은 사전PDF까지
+  로컬 검증했고 Docker PDF/ZIP까지32개 전체는 후속 최종 main manual full로 남긴다.
 
 00은 별도4300의 실제 Astro 화면에서 합성 대응 사건2×3 질문·요약·긴 제목, TXT 업로드·교정v2·
 모바일 resize·대화 반영과 기존 입력 보존을 직접 조작했다. 저장 리포트v2/사용자 메모는 자료
@@ -292,6 +358,9 @@ Mac 기본 TMPDIR의 `/var`와 `/private/var` realpath 차이로 기존 coverage
 실패하는 것을 재현했고 `TMPDIR=/private/tmp`에서 원래 assertion 그대로 통과했다.
 Bun 설치 디렉터리의 `bunx`는 같은 공식 Bun 바이너리 symlink다. lock·의존성·테스트를 바꿔
 이 환경 문제를 숨기지 않는다. workerd 로컬 listen은 sandbox 허용 환경에서 수행한다.
+첫 full 실패 수리부터는 실제 `apps/mobile/.node-version`의 Node24.22.1로 전환했다.
+02가 공식 archive와 SHASUMS256.txt를 대조한 격리 설치/verification receipt를 제공했고00/01/03은
+그 도구를 읽기 전용으로 소비한다. 이전 로컬24.11 결과와 구분하며 CI는 repository pin을 따른다.
 
 02의 추가 조사에 따라 legacy `/files` 직접 진입은 metadata-only 읽기를 보존한다.
 같은 추출 자료 UI를 주 작업으로 열고 대화 복귀 링크를 제공한다. canonical 대화 경로는
@@ -307,17 +376,17 @@ OAuth·공급자·공식 법률 API·remote storage·독립 법률 인수는 별
 | --- | --- | --- | --- |
 | A01 | 새 사건→2×3 이하 질문·요약 확인→중앙 대화 | 02/00 | PASS: 00 실제 Astro 합성 대응 사건·질문6개·요약 확인·대화, 02 양입장 sharedmock4와 실제SQL 경로, 01 customer6/intake29 |
 | A02 | 업로드→검토·교정→선택 자료 대화 반영·실패/재시도 | 02/00 | PASS: 00 TXT 원문·교정v2·대화2메시지·사진 업로드, 02 자료8/첨부18/초안24/agent42, 업로드 ACK 대기 resize 중 중복0 |
-| A03 | 자료 panel→리포트→목차/근거 이해·편집·사진/가림·저장·다운로드→대화 | 03/00 | PASS: 00 저장v2/다운로드3쪽→자료 변경 후 보존→명시v3/v4→사진v5→가림v6→대화. 03 focused31과 실제 native/export 증거 |
+| A03 | 자료 panel→리포트→목차/근거 이해·편집·사진/가림·저장·다운로드→대화 | 03/00 | PASS: 00 저장v2/다운로드3쪽→자료 변경 후 보존→명시v3/v4→사진v5→가림v6→대화. 03 focused31·후속770의 실제 증거자료 token삭제/새본 사진0·이전본 사진1·SQL14/실제 native 증거 |
 | A04 | 고객/변호사·직접 URL·새로고침·뒤로·재접속·owner/동의 변경 | 01/02/03 | PASS: 최종130에 역할/6URL/재접속/CAS/계정 변경·report3 포함. 02 기존90/실제SQL·03 기존 owner/삭제 회귀 유지. 실제 OAuth 성공과 구분 |
 | A05 | panel/resize 중 입력·선택·교정·업로드/작업·편집 유지 | 02/03 | PASS: 00 실제 모바일↔desktop dirty 교정·선택·초안 보존, 02 자료8의 ACK/중복 방지, 01 frame25의 sibling modal/조건부 unmount/초점·zoom |
 | A06 | 상태 조회 false dirty·저장 지연·늦은 응답/충돌 덮어쓰기 방지(PR743/747/749 보존) | 03 | PASS: 00 상태 조회 뒤 변경 없는 저장 disabled·v5 보존. 03 mock26/171 assertions·focused31·01 report3의 지연/복구/CAS·oversized 원문 검사. 기존 저장 deadline 회귀 유지 |
-| A07 | 320/390/768/1024/1440·keyboard/IME·긴 제목/파일명·200%·focus | 전원 | PASS: 최종130/0skip와 02 자료8/legal15의 Chromium·WebKit, 00 긴 한글 제목/파일명·실제 resize. composition 자동 검증이며 물리 한글 IME·실기기 인수와 구분 |
+| A07 | 320/390/768/1024/1440·keyboard/IME·긴 제목/파일명·200%·focus | 전원 | 중간130/0skip·자료8/legal15·00 실제 resize PASS. full에서 발견한 실제38px와 장문끝clip은768의103/0skip/0flaky로 수리·완전노출/44·최대휠·키보드·focus 확인,770의PDF 기하/위치도 유지. composition 자동 검증이며 물리 한글 IME·실기기 인수와 구분 |
 | A08 | 6개 탭 제거·전 기능 새 진입·기존 URL 보존 | 00 | PASS: 00 최종 DOM0, 01 실제 도구6링크·aria-current·Enter/Tab/Escape·복귀, 위 기능 대응표의 URL/메뉴/자료 panel/리포트 진입 보존 |
 | A09 | 랜딩/로그인 전후 시각·스타일 import 경계 | 01/00 | PASS: 원래 baseline b643069의 390/1440px 공개4화면 raw pixel 차이0. BaseLayout/global/shell 보존, app 전용 scope 및 actual Astro 검사 |
 | A10 | 청구/대응·자료 없음/상충·불완전 분석·절차 미확인·stale, 고객 내용 전후 | 03/00 | PASS: 신규 양입장 native4쪽씩·00 독립34/48 및 mock47, unknown/상반 내용·근거·직접 준비/전문가 조건 실제 구성. 기존 저장 제목/사용자 편집 자동 변경0 |
 | A11 | 같은 저장본 웹/HTML/PDF 본문·사진·출처·한글 전페이지 시각 | 03/00 | PASS: exact761 native47 PNG byte동일·실제SQL10쪽 합계57쪽 전페이지 검토, 55행표/인용/한글/2방향사진/가림/출처. 00 별도 mock PDF3쪽. 최종 full native6 여정은 #751 receipt로 별도 확정 |
 | A12 | 각 PR bun ci·quick/build·관련 회귀·정확 head CI·리뷰 | 전원/00 | 각 제품 PR PASS·정상 순차 병합, 위 exact head/run 참조. 최종 탐색/인수 docs PR의 exact CI·병합 SHA도 #751에 기록. 실패한 apt/legal/대비 관측을 보존 |
-| A13 | 최종 main SHA 수동 validate:full·동일 SHA preview 규칙 | 00 | 최종 main SHA·core/browser/native/join·preview 실행의 실제 결과 정본은 #751 최종 receipt. production 배포 없음. 문서 커밋 후 최종 SHA를 고정해 실행 |
+| A13 | 최종 main SHA 수동 validate:full·동일 SHA preview 규칙 | 00 | 첫96ff935의 full42453874134 FAILURE(browser)/join SKIPPED, preview42454227087 SUCCESS 보존. 후속768/770/769 수리·CI/선택회귀 정상 병합. 이 인수 문서까지 병합한 마지막 SHA를 다시 고정해 full/core-browser-native/join·동일SHA preview를 수행하며 #751에 actual checkout/SHA/run/receipt·성공 또는 실패 기록. production 배포 없음 |
 
 전후 화면과 새 고객용 본문은 [합성 검증 자료](../quality/app-workspace-rework/README.md)에 모았다.
 실제 고객 사건/공급자·공식 법률 API의 새로운 외부 호출, 독립 법률가의 내용 인수, 물리 기기의

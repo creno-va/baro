@@ -1,0 +1,59 @@
+{
+  "sourceSha": "cf4232a160f16f08aa1a8d14c3a4ef99b06ba53a",
+  "stats": {
+    "startTime": "2026-11-08T07:36:25.860Z",
+    "duration": 6527.017,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "traces": [
+    {
+      "placement": "inline",
+      "editedField": "증거 자료 수정",
+      "firstField": "리포트 준비 상태 수정",
+      "firstFieldPhotoTokens": 0,
+      "removedTokens": 1,
+      "beforeId": "report-1ee053b4-72c0-4a3a-a2c8-bb0fcdf43459",
+      "afterId": "report-72a49dc8-8bfb-4f10-a7b4-f3889173ff78",
+      "beforeRevision": 2,
+      "afterRevision": 3,
+      "oldRawTokens": 1,
+      "newRawTokens": 0,
+      "includedPhotos": 0,
+      "exportedFilename": "BARO-report-72a49dc8-8bfb-4f10-a7b4-f3889173ff78.pdf",
+      "oldHtmlHasPhoto": true,
+      "newHtmlHasPhoto": false
+    },
+    {
+      "placement": "legacy",
+      "editedField": "증거 자료 수정",
+      "firstField": "리포트 준비 상태 수정",
+      "firstFieldPhotoTokens": 0,
+      "removedTokens": 1,
+      "beforeId": "report-8730d711-8927-41c8-a22c-18c1669e8d8c",
+      "afterId": "report-caae1ce6-dab3-41d4-b40e-4f67c0be7ceb",
+      "beforeRevision": 2,
+      "afterRevision": 3,
+      "oldRawTokens": 0,
+      "newRawTokens": 0,
+      "includedPhotos": 0,
+      "exportedFilename": "BARO-report-caae1ce6-dab3-41d4-b40e-4f67c0be7ceb.pdf",
+      "oldHtmlHasPhoto": true,
+      "newHtmlHasPhoto": false
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "report-export-after-desktop.png",
+      "viewportWidth": 1440,
+      "sha256": "b1e4ee5fe8bc969cc7fcbcd3540759aadaa5e4ea1b11dcd24d525ecb76ca22cf"
+    },
+    {
+      "file": "report-export-after-mobile.png",
+      "viewportWidth": 390,
+      "sha256": "d1d46d3babfc65527de8213fffc935282219016dbfa40530a961b2a5b6415a92"
+    }
+  ]
+}

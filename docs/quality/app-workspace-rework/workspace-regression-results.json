@@ -1,0 +1,81 @@
+{
+  "head": "3e83b081a82d726e1f3f27dd9cf466702fbda39b",
+  "baseline_main": "31d9e104db16d4f1a187091cb64ff6d93489cb04",
+  "pr": "https://github.com/creno-va/baro/pull/769",
+  "quality_ci": {
+    "url": "https://github.com/creno-va/baro/actions/runs/42460022979",
+    "conclusion": "SUCCESS",
+    "head": "3e83b081a82d726e1f3f27dd9cf466702fbda39b"
+  },
+  "browser_total": 44,
+  "commands_exit_0": [
+    "bun ci",
+    "bun run validate:build",
+    "bun run validate:quick"
+  ],
+  "changed_files": [
+    "tests/browser/conversation-home.e2e.ts",
+    "tests/browser/customer-completion.e2e.ts",
+    "tests/browser/rework-conversation.e2e.ts",
+    "tests/browser/workspace-shared.e2e.ts"
+  ],
+  "native_entire_suite": "NOT RUN at final head; pending UI00 final main manual full; earlier local focused pre-PDF proof not a full pass",
+  "toolchain": {
+    "node": "24.22.1",
+    "bun": "1.4.0"
+  },
+  "verified_log_hashes": [
+    {
+      "file": "home-final.log",
+      "marker": "18 passed",
+      "sha256": "e760706d4f05b936026f74fffcccb64a546d96d2656e7beac3fc8c4a6baea421"
+    },
+    {
+      "file": "completion-final.log",
+      "marker": "14 passed",
+      "sha256": "55ea5a4ac169eb1ac4de1529b6185f419f87338fa209682d06e04dae25a5a3bb"
+    },
+    {
+      "file": "shared-final.log",
+      "marker": "4 passed",
+      "sha256": "5dbab912373442f5ac148e17d20e69cd704ed784fcb7abd09a7017ca423d4b44"
+    },
+    {
+      "file": "materials-final.log",
+      "marker": "8 passed",
+      "sha256": "a9fe42578918054bb30da0aa521f56bcf54dc01056307834ab72969a744c42df"
+    },
+    {
+      "file": "validate-quick-final.log",
+      "marker": "793 pass",
+      "sha256": "2a52239ee85e9ae4b56a43c89472105ae70a8255822c68108dee23c1fe205de1"
+    },
+    {
+      "file": "validate-build-final.log",
+      "marker": "Built production worker started in local workerd",
+      "sha256": "44cb9dd0ca6d2e3401f919cdd432b2a96466debfebb9ec02139f7126c55bbcb4"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "conversation-after-desktop.png",
+      "viewportWidth": 1440,
+      "sha256": "aabc8160776805c897ca0e2226017838c8de2871b357acbdeb34122a1cad4316"
+    },
+    {
+      "file": "materials-after-desktop.png",
+      "viewportWidth": 1440,
+      "sha256": "f9a9e42bd4ae03eee71e2c9cb649dc31b3c90efd4c809a5f116c2fab04f5d7e9"
+    },
+    {
+      "file": "conversation-after-mobile.png",
+      "viewportWidth": 390,
+      "sha256": "84431e34d308653c8c15e4a51bfacbfcbfaad42d25983a14e1e0531c71974aea"
+    },
+    {
+      "file": "materials-after-mobile.png",
+      "viewportWidth": 390,
+      "sha256": "83a25a691de9431036eb06a6a496732adb0f8f0401cf847bf0dd83e7bf16e168"
+    }
+  ]
+}
