@@ -183,6 +183,14 @@ export function CaseNavigation({
           ref={disclosure}
           className="case-tools"
           onToggle={() => positionTools(disclosure.current, trigger.current)}
+          onClick={(event) => {
+            if (!(event.target instanceof Node) || !trigger.current?.contains(event.target)) return;
+            // Native toggle events are queued. Commit the same details state
+            // and its initial position in this activation, before links can be hit.
+            event.preventDefault();
+            event.currentTarget.open = !event.currentTarget.open;
+            positionTools(event.currentTarget, trigger.current);
+          }}
           onKeyDown={(event) => {
             if (event.key !== "Escape" || !event.currentTarget.open) return;
             event.preventDefault();
