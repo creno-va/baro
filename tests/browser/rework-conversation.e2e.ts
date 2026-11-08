@@ -414,12 +414,15 @@ async function addMaterial(
   await afterSend?.();
   if (expectProcessingFailure) {
     await openWorkspaceMaterials(page);
-    await expect(materials.getByText("처리 실패", { exact: true })).toBeVisible();
-    await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
-    const original = materials
+    const failedFile = materials
       .locator(".workspace-file-list > li")
-      .filter({ has: page.getByRole("heading", { name, exact: true }) })
-      .getByRole("button", { name: "자료 확인", exact: true });
+      .filter({ has: page.getByRole("heading", { name, exact: true }) });
+    await expect(failedFile.locator(".workspace-status")).toHaveText("처리 실패 · 확인 필요");
+    await expect(
+      failedFile.getByRole("button", { name: "처리 다시 시도", exact: true }),
+    ).toBeEnabled();
+    await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
+    const original = failedFile.getByRole("button", { name: "자료 확인", exact: true });
     await expect(original).toBeVisible();
     return original;
   }
@@ -918,7 +921,7 @@ test("a foreign signed account cannot retain the previous conversation report or
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    const priorTitle = await page.locator(".report-heading h2").innerText();
+    const priorTitle = await page.getByRole("heading", { level: 1 }).innerText();
     const priorBody = await page.locator(".report-reading .report-markdown").first().innerText();
     await expect(page.getByText(priorTitle, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(1);
@@ -929,7 +932,10 @@ test("a foreign signed account cannot retain the previous conversation report or
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.locator(".report-reading")).toHaveCount(0);
-    await expect(page.locator(".report-heading h2")).toHaveText("내 사건 이해와 해결 준비");
+    await expect(
+      page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".report-review")).toHaveCount(0);
     await expect(page.getByText(priorTitle, { exact: true })).toHaveCount(0);
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox")).toHaveCount(0);
