@@ -88,7 +88,15 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await nestedOpener.click();
   const nested = page.getByRole("dialog", { name: "합성 자료 확인", exact: true });
   await expect(nested).toBeVisible();
+  // Native close is queued after the controlled open=false update. Wait for
+  // that event before starting another focus operation in the parent panel.
+  await nested.evaluate((node) =>
+    node.addEventListener("close", () => node.setAttribute("data-native-closed", "true"), {
+      once: true,
+    }),
+  );
   await page.keyboard.press("Escape");
+  await expect(page.locator('dialog[data-native-closed="true"]')).toHaveCount(1);
   await expect(nested).not.toBeVisible();
   await expect(panel).toBeVisible();
   await expect(nestedOpener).toBeFocused();
