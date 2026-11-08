@@ -795,6 +795,7 @@ export function ReportReview({
       <div className="report-canvas">
         <div hidden={section !== "report" && Boolean(report)}>
           <header className="report-heading">
+            {embedded && <h2 className="sr-only">리포트 검토</h2>}
             {!embedded && (
               <div className="report-heading-copy">
                 {report && displayTitle !== "내 사건 이해와 해결 준비" && (
