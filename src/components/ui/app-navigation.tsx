@@ -42,16 +42,9 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
   visitor: [
     { href: "/", label: "서비스 소개", icon: "home" },
     { href: "/login", label: "이야기 시작하기", icon: "new" },
-    { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
   ],
-  user: [
-    { href: "/app", label: "새 사건 입력", icon: "new" },
-    { href: "/lawyers", label: "변호사 찾기", icon: "lawyers" },
-  ],
-  lawyer: [
-    { href: "/app", label: "새 사건 입력", icon: "new" },
-    { href: "/lawyer", label: "변호사 프로필", icon: "profile" },
-  ],
+  user: [{ href: "/app", label: "새 사건 입력", icon: "new" }],
+  lawyer: [{ href: "/app", label: "새 사건 입력", icon: "new" }],
   moderator: [{ href: "/admin/reviews", label: "검토 대기", icon: "reviews" }],
 };
 export function availableNavigation(role: NavigationRole, availableRoutes: readonly string[]) {
