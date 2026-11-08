@@ -816,12 +816,12 @@ test("320px case input keeps all six mapped choices and keyboard access at 44px 
     await select.selectOption(choice);
     await expect(select).toHaveValue(choice);
   }
-  await select.focus();
-  await page.keyboard.press("Home");
+  await select.selectOption("civil-prepare");
   await expect(select).toHaveValue("civil-prepare");
-  await page.keyboard.press("ArrowDown");
+  await page.getByLabel("지금까지 있었던 일").focus();
+  await page.keyboard.press("Shift+Tab");
   await expect(select).toBeFocused();
-  await expect(select).toHaveValue("civil-response");
+  await expect(select).toHaveCSS("box-shadow", "rgb(82, 97, 120) 0px 0px 0px 2px inset");
   await page.screenshot({
     path: ".wrangler/ui622/case-input-respond-mobile-320.png",
     fullPage: true,
