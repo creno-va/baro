@@ -258,6 +258,71 @@ test("report source section keeps its full limitation body visible", async ({ pa
   ).toBeVisible();
 });
 
+test("failed report save preserves the correction and cancelled reload before an explicit retry", async ({
+  page,
+}) => {
+  await prepareRedesignReport(page);
+  await page.getByRole("button", { name: "수정하기", exact: true }).click();
+  const editor = page.locator(".report-reading-section textarea").first();
+  const correction = "합성 수정: 일부 반환 사실은 진술이며 원문과 대조가 필요합니다.";
+  await editor.fill(correction);
+  const storedReport = () =>
+    page.evaluate(
+      (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")[id],
+      syntheticCaseId,
+    );
+  const before = await storedReport();
+  let reloadWarnings = 0;
+  page.on("dialog", async (dialog) => {
+    if (dialog.type() === "beforeunload") reloadWarnings++;
+    await dialog.dismiss();
+  });
+  await page.reload({ timeout: 4000 }).catch((error: Error) => {
+    if (
+      !/ERR_ABORTED|Navigation.*cancel|interrupted|frame.*detached/i.test(error.message) &&
+      !(reloadWarnings === 1 && /Timeout/.test(error.message))
+    )
+      throw error;
+  });
+  expect(reloadWarnings).toBe(1);
+  await expect(editor).toHaveValue(correction);
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api");
+    const reports = api.reports;
+    let failed = false;
+    api.reports = new Proxy(reports, {
+      get(target, property) {
+        const method = Reflect.get(target, property);
+        if (property !== "save") return method;
+        return async (...args: Parameters<typeof reports.save>) => {
+          if (!failed) {
+            failed = true;
+            throw new Error("합성 검수 저장 실패: 전송 결과를 받지 못했어요.");
+          }
+          return target.save(...args);
+        };
+      },
+    });
+  });
+  const save = page.getByRole("button", { name: "수정 내용 저장", exact: true });
+  await save.click();
+  await expect(page.getByRole("alert")).toContainText("합성 검수 저장 실패");
+  await expect(editor).toHaveValue(correction);
+  expect(await storedReport()).toEqual(before);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect
+    .poll(async () => {
+      const value = await storedReport();
+      return { revision: value?.revision, includesCorrection: value?.content.includes(correction) };
+    })
+    .toEqual({ revision: before.revision + 1, includesCorrection: true });
+  await expect(page.locator(".report-reading")).toContainText(correction);
+  await page.getByRole("button", { name: "수정하기", exact: true }).click();
+  await expect(editor).toHaveValue(correction);
+});
+
 for (const width of [320, 390, 768, 1024, 1440, 1920]) {
   test(`actual pages remain operable at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });

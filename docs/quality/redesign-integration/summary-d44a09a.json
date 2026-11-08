@@ -1,0 +1,154 @@
+{
+  "inspectedProductSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+  "runtime": {
+    "bun": "1.4.0",
+    "node": "24.22.1",
+    "TMPDIR": "/private/tmp"
+  },
+  "cleanAtStartAndCompletion": true,
+  "checks": [
+    {
+      "command": "bun ci",
+      "exitCode": 0,
+      "uncompressedSha256": "0bb11adf3ea6cda8eee694ecd42bfd47a2658bc70daadaced19ddf1cb6e7a314",
+      "localLog": "/private/tmp/baro-redesign-00-d44-ci.log"
+    },
+    {
+      "command": "bun run validate:quick",
+      "exitCode": 0,
+      "uncompressedSha256": "af2561b43a4e265e3277421c5119e2c99c63b96c787630b47fa2790d873c9abf",
+      "localLog": "/private/tmp/baro-redesign-00-d44-quick.log"
+    },
+    {
+      "command": "bun run validate:build",
+      "exitCode": 0,
+      "uncompressedSha256": "e70a67a934a814d437a4ac73bed77cd8dd602b714e63a18e491235837212c8ec",
+      "localLog": "/private/tmp/baro-redesign-00-d44-build.log"
+    },
+    {
+      "command": "bun test tests/page-access.test.ts tests/common-login.test.ts tests/lawyer-archive-mock.test.ts",
+      "exitCode": 0,
+      "uncompressedSha256": "ffc6319e2be617cb16192a710fe98c5e007e0eaf5981e6e2f5d6586738d8616c",
+      "localLog": "/private/tmp/baro-redesign-00-d44-guard-unit.log"
+    },
+    {
+      "command": "bun run work:next",
+      "exitCode": 0,
+      "uncompressedSha256": "e444ecd114ce1cdd060a6a12979930bab0aa020c9afdcdc88e6b598bfcd8f0ed",
+      "localLog": "/private/tmp/baro-redesign-00-d44-work-next.log"
+    }
+  ],
+  "productBlobs": {
+    "src": "fce70a34f1887876d2095755106e1116696c2988",
+    "packages": "50b4db3f6a8e4808008c1c2cee69d0b55af5c36e",
+    "scripts": "ada3d04ec4bf2e7b7179acba13137c1e84a29070",
+    "astro.config.ts": "7f281a36b2a7dcdfe1ba3b20b0cfad3a3dd9ddf4",
+    "bun.lock": "1730c0221b65b787e03dded2938a44342cc29aa1",
+    "apps/mobile": "8ae236e41e0f0a14073459670e62c1bd67f34c30"
+  },
+  "results": {
+    "guardAuthArchive": {
+      "pass": 21,
+      "fail": 0,
+      "skip": 0
+    },
+    "quick": {
+      "exitCode": 0,
+      "security": 18,
+      "tokens": 4,
+      "mobile": 534,
+      "rework": 542,
+      "existingSkips": 4,
+      "execution": 793,
+      "fail": 0
+    },
+    "build": [
+      "production",
+      "bundle budget",
+      "Workers dry-run",
+      "actual local workerd anonymous login200",
+      "actual shared beta503/retry-after30/private-no-store-no-transform/nosniff/frame-ancestors/script0"
+    ],
+    "workGraph": {
+      "tasks": 56,
+      "cycles": 0
+    }
+  },
+  "limits": [
+    "synthetic data only",
+    "no deployment or real provider calls",
+    "script/style changes after this SHA are absent; later commits are test/docs/evidence only"
+  ],
+  "publication": {
+    "rawEvidencePublished": false,
+    "reason": "Automatic approval review rejected publishing the independent QA screenshots, PDFs and compressed raw results; only test code and content-free validation metadata are included.",
+    "localQaBranch": "codex/764-independent-final-acceptance",
+    "localQaHead": "63c3092e32d37249a0975f82b9afe8ed3e10a301",
+    "localQaReport": "redesign-05-final-acceptance/docs/quality/redesign-acceptance/README.md",
+    "localCoordinatorEvidenceBranch": "codex/764-redesign-local-evidence"
+  },
+  "independent": {
+    "testSourceSha256": "3b2294b14c897bf262466c90b115c7f0be285219218a3117cb30613403fec0fa",
+    "suites": {
+      "independentChromiumWebkit": 46,
+      "account": 15,
+      "materialsRetained": 17,
+      "actualReportRoutes": 10
+    },
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "physicalBrowser": {
+      "sourceSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+      "zoomPercent": 200,
+      "dpr": 4,
+      "innerWidth": 600,
+      "outerWidth": 1200,
+      "horizontalOverflow": false,
+      "koreanComposition": "passed; Enter did not send; retained through four tasks",
+      "restored": "ABC input source and 100% zoom"
+    }
+  },
+  "commonUnavailable": {
+    "rendererSha": "f4ff54db5e8aadf85d8e905b98da61b6d8bc7e62",
+    "testSha": "f51d737a75fc60b1a63e81ec7d6d8a218b46c6b0",
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "noJsRecovery": 6,
+    "axe": 6,
+    "cssZoom": 1,
+    "actualWorker": "executed by coordinator build at d44a09a"
+  },
+  "productCi": {
+    "quality": {
+      "run": 42475501690,
+      "conclusion": "SUCCESS"
+    },
+    "nativeHtmlPdf": {
+      "run": 42475501949,
+      "conclusion": "SUCCESS"
+    }
+  },
+  "localArtifactSha256": {
+    "account/receipt.json": "d91c8f385b2dbacb38021e8c5f6faa98631e599d5d861f8f3981301738733212",
+    "account/results.json.gz": "20f3b8ea92ef0c63ef1d1135325f8339d11ec98f83ce47e18f12595100723bc0",
+    "independent/evidence/conversation-1440.png": "fce7e3e1bee869a6c292f8f7d48eaa5a1622a7360f573a5894ad75d0257a4858",
+    "independent/evidence/conversation-390.png": "278dd2cff582229b5e59d58d33838f0d869c0299903fed7a5f37cacc89b65926",
+    "independent/evidence/lawyer-action.png": "9e3904f4e3efa6c20cd8e2f3f55415f7bbf3d36036337321d61d64073ac695ad",
+    "independent/evidence/leave-dialog-label.json": "88306be1e2dc5ab064450b41adc7c7100c22edeab314beae17d5b5da8627579b",
+    "independent/evidence/report-state-390.png": "6b1287ac7d9fc30c99d678ab2e61d94f768d13d0aff21ff529a38416988e585a",
+    "independent/evidence/selection-before-after.json": "9235abfde29d3f213f0dd5702f6aa71f74ee2ecfd41f6668148596714810b7e7",
+    "independent/receipt.json": "a75f573d5e69a4f3bf07fe929d95952ad919f69460591a2522c61c677c555272",
+    "independent/results.json.gz": "f50676b51f07071a75a0b02215ed80738cb2ad0baa73656124cd1efbf4112d93",
+    "materials/receipt.json": "ad36a0d7bd0ac8987c7c70d6a09f4fe34dab152030cccd1b79c90062e4ff94e3",
+    "materials/results.json.gz": "fa16b68e774a80d4666911db3a79a6f431aad4afa55e2baa5e87dc1295412fee",
+    "physical/dirty-modal.png": "0910f1b8c53218b0666e4ae3a8a5969bf7c29a4f79c09889c681802b03c32e35",
+    "physical/ime-composing.png": "c406144d58d5d2951ed9b1749260208f87c3f5610349b1e4f5910aad9d6ceffb",
+    "physical/ime-roundtrip.png": "31469ca478b2faf3d7120d73fb63b0949d5f8071c8e28cfc47604b11f86708b4",
+    "physical/receipt.json": "8851ea18d5809f064a248dce7f586c6a2285e3b68eb5d6834165f93ee33d7c63",
+    "physical/saved-report.png": "8a24a11cf1d341fca249cd7a85d21571bcada6271acca549dfa622d4e06fdbe8",
+    "reports/receipt.json": "755d244683b486ae10a356cb6771882315b9f90850f9217fe6f0a1f25e38c00b",
+    "reports/results.json.gz": "49ed48662c4458559c4b19df4137b1fda7541851cfed22e757ce3558f5523c06"
+  }
+}

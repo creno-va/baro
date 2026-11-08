@@ -39,12 +39,38 @@ main 병합·preview/production 배포는 이번 작업에서 수행하지 않�
 | 02 사건·자료 | [780](https://github.com/creno-va/baro/pull/780) / d73d5f9 | 생성ID/재시도·네 경로·출처/현재rev·File bytes·retained Workspace,03/01 선행 소비와 소유권 확인 |
 | 03 리포트·초안 | [775](https://github.com/creno-va/baro/pull/775) / f5236c9 | 세 액션·명시 reviewed 저장·자료/편집·owner/CAS·버전 보존, 직접 URL486/511 후속 포함 |
 | 04 공개·계정 | [779](https://github.com/creno-va/baro/pull/779) / eb09e7e | 정책 본문/버전 동일·공통 로그인·기존 자료 권리·410/404/CSP·test-only legacy 격리 |
-| 05 독립 | 최종 검수 PR 후속 기록 | 제품 코드0·baseline/중간 실패·최종 정확SHA 합성 과업과 실제 UI 증거 |
+| 05 독립 | 로컬 검수63c3092 / 안전한 요약은778 | 제품 코드0·로컬 독립 검수/원본 보존·공개에는 코드와 내용 없는 검증 요약만 포함 |
 | 총괄 | [778](https://github.com/creno-va/baro/pull/778) | 제품/ADR/실행 정합성, 공통 로그인·mock 정합성, 통합 충돌·전체검사·접근실패 HTML 연결 |
 
 01 이외의 공통 변경은01 원본 커밋의 소비다. domain PR에는 선행 소비 diff가 포함될 수 있으므로
 각 작업자의 새 소유 변경과 구분해 검토했다. 중복 cleanup Draft777은 닫고774+778에 통합했다.
 전체 통합 전 main e5871a4(PR772/773/776)를 보존했으며 기존 worktree·secret·실패 증거를 건드리지 않았다.
+
+## 최종 제품 동결 검증
+
+실제로 검사한 제품 SHA는 **`d44a09a50d55132f9d035fead54b61a2c305a4cd`**다.
+root는 frozen install부터 quick/build·guard 검사·live 작업 그래프 완료까지 같은 HEAD와
+clean 상태를 유지했다. Bun1.4.0 / Node24.22.1 / canonical TMPDIR를 사용했다.
+후속 커밋의 테스트·증거·문서는 제품 변경과 구분하며, src/packages/scripts/config의 동일성을 확인한다.
+
+| 검사 | 실행 SHA / 결과 | 증거 |
+| --- | --- | --- |
+| `bun ci`, `validate:quick` | d44: EXIT0. 보안18·토큰4·mobile534·개편542·후반793 PASS, 기존4 SKIP·실패0 | [root receipt](./redesign-integration/summary-d44a09a.json); 원본 로그는 로컬 보존 |
+| `validate:build` | d44: production/bundle·Workers dry-run·실제 local workerd 익명 login200 + 공통503/보안 헤더/script0 PASS | 같은 root receipt |
+| 인증 guard·공통 로그인·archive mock | d44:21 PASS/0 FAIL/0 SKIP,466 assertions | 같은 root receipt |
+| 원격 제품 CI | d44 Quality/native HTML·PDF SUCCESS | [Quality](https://github.com/creno-va/baro/actions/runs/42475501690), [native](https://github.com/creno-va/baro/actions/runs/42475501949) |
+| `work:next`와 최신 main | d44: 실제 GitHub56 tasks/cycle0. 최신 main e5871a4 유지 확인 | 같은 root receipt |
+| 독립 과업 Chromium/WebKit | d44:46 PASS/0 FAIL/0 SKIP·flaky0 | 로컬05 정본(아래 원격 게시 경계 참조) |
+| 계정 복구·권한/늦은 응답 | d44:15 PASS/0 FAIL/0 SKIP·flaky0 | 같은 로컬05 정본 |
+| 자료·retained Workspace | d44:17 PASS/0 FAIL/0 SKIP·flaky0. 실제 File bytes·자료 반영·owner 명시 재열기 | 같은 로컬05 정본 |
+| 실제 Astro 리포트 직접 URL | d44:10 PASS/0 FAIL/0 SKIP·flaky0. 320/390/1440·query/hash·편집/초안·자동전송0 | 같은 로컬05 정본 |
+| 실제 Chrome UI 확대/한글 입력 | d44:200%(DPR4/inner600/outer1200) 가로넘침0, 실제 한글 조합/Enter 전송0·작업 왕복 보존. dirty 모달·초점·명시 저장 확인 | 같은 로컬05 정본의 실제 UI receipt/화면. 종료 후 ABC/100% 복원 |
+| 공통503 문서의 no-JS/키보드/axe/CSS200 | renderer f4(제품 d44와 동일), test head f51:13 PASS/0 SKIP. 실제 Worker 검사는 위 d44 build와 구분 | [공통503 manifest](./redesign-integration/summary-d44a09a.json) |
+| 기존 공통 레이아웃/상태 | 제품396: shell26 PASS, test-only dcf 수리 뒤 foundation18 PASS | [공통 manifest](./redesign-integration/summary-d44a09a.json) |
+| 리포트 상태/후속 문서 | d77:19+직접URL10 PASS. resolution98은396에서 실행했으며 현재 SHA 실행으로 합산하지 않음 | [d77 receipt](./redesign-integration/reports-d77d42d/verification.json), [396 receipt](./redesign-integration/reports-396927f/verification.json) |
+
+최종 네 브라우저 묶음은 각각 실행한 결과다. 공통13·이전 공통44·리포트98의 source/renderer
+동일성은 재실행 성공과 구분한다. 원본 로그의 SHA256과 실패·성공 구분을 로컬 manifest 및 공개 요약에 보존했다.
 
 ## 실제 검사와 실패 이력
 
@@ -75,6 +101,20 @@ main 병합·preview/production 배포는 이번 작업에서 수행하지 않�
 6. 기존 native PDF의 P3 표현 차이를 남긴다. source c2ed79e의 native9쪽 중8쪽에 소제목 Markdown과
    일부 emoji fallback glyph가 그대로 보인다. HTML 인쇄10쪽의9쪽은 정상이며 텍스트/출처 손실·
    clipping/overlap은 발견되지 않았다. 출력 의존성이 d77과 동일함을 비교했으며 이전 생성물을
-   최종 SHA에서 생성했다고 표현하지 않는다. [05 검수 기록](./redesign-acceptance/README.md)에 원본 해시/쪽 수를 연결한다.
+   최종 SHA에서 생성했다고 표현하지 않는다. 로컬05 검수 기록의 pdf-c2ed79e/receipt.json에 원본 해시/쪽 수를 보존한다.
 7. 비용 관측 전용·ledger/hold·AI200/일·질문2×3·실제 기술 용량, Workers·모델/법률 호출 경계,
    인증/권한·암호화·개인정보·출처·리포트 버전/CAS를 유지했다.
+
+## 원격 게시 경계
+
+독립 QA의 합성 스크린샷·PDF·압축 실행 결과를 GitHub에 게시하는 작업은 자동 승인 검토가
+해당 원본 payload/destination의 명시 승인 부재를 이유로 거부했다. 동일 payload를 다른 세션이나
+총괄이 대신 게시하지 않았다. 현재 통합 PR의 추가 QA 변경은 테스트 코드1파일과 사건 내용을
+포함하지 않는 SHA·명령·통과 수·해시 요약이다. 이전에 게시한 증거와 새로 게시하지 않은 원본을 구분한다.
+
+전체 독립 검수 원본은 로컬 branch `codex/764-independent-final-acceptance`의
+`63c3092e32d37249a0975f82b9afe8ed3e10a301`에 보존했다. 실제 보고서는
+`<workspace>/redesign-05-final-acceptance/docs/quality/redesign-acceptance/README.md`,
+최종 원본은 같은 폴더의 `final-d44a09a`에 있다. 총괄의 전체 압축 로그/503 캡처도 로컬
+`codex/764-redesign-local-evidence`와 `/private/tmp/baro-redesign-00-d44-*.log`에 보존한다.
+별도 원본 게시 승인 전에는 full QA branch를 원격에 push하지 않는다.

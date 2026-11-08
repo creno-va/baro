@@ -5,7 +5,7 @@
 - 조사 중 최신 main 변경: PR772가 2026-11-08 19:19 KST 병합되어 `b02357ffde3bc6af94218086cca1c0706c938d36`가 됐다. 최종 통합은 이 변경을 포함해 다시 검증한다. 이후 main e5871a4(PR773/776)의 고정 빌드 입력 복구도 보존했다.
 - 총괄: `redesign-00` / `codex/764-redesign-integration`.
 - 추적: [#764](https://github.com/creno-va/baro/issues/764), [미병합 기획 PR765](https://github.com/creno-va/baro/pull/765).
-- 상태: 조사·설계·전체 웹 마이그레이션을 통합했고 최종 검수를 진행한다. 경로별 결과·검사 SHA·잔여는 [통합 인수](../quality/REDESIGN-INTEGRATION.md)와 연결 receipt가 정본이다.
+- 상태: 조사·설계·전체 웹 마이그레이션·최종 합성 검수를 완료했다. 배포와 실제 외부 인수는 별도다. 경로별 결과·검사 SHA·잔여는 [통합 인수](../quality/REDESIGN-INTEGRATION.md)와 연결 receipt가 정본이다.
 - 세션별 최신 커밋과 도구 지연 시 인계는 [REDESIGN-HANDOFF](./REDESIGN-HANDOFF.md)를 함께 확인한다.
 
 ## 결정의 우선순위와 구현 경계
@@ -189,7 +189,7 @@ docs/quality/redesign-acceptance/**만 소유한다. 기존 테스트 수정은 
 | R06 | 기존 lawyer계정 일반 이용·데이터/권리·신규로그인 role 보존 | 공통 로그인 유형 보존·기존 본인 자료 권리 UI·owner/epoch/CAS 회귀 통과 |
 | R07 | 부분 분석/출처 실패·stale/CAS/계정전환/삭제·늦은응답 | 처리 범위/출처/현재rev·owner/늦은 응답·CAS 회귀 유지. 합성/실제 외부 인수 구분 |
 | R08 | 320/390/768/1024/1440/1920·200%·keyboard·긴본문 | 여섯 폭·CSS200·키보드/긴본문 검사. 실제 Chrome200/IME는 최종 제품 SHA receipt로 구분 |
-| R09 | bun ci·quick·build·필요 회귀·정확 SHA/PR CI | d77 frozen ci/quick/build와 CI/native 성공. 마지막 공통503 후 최종 실행 SHA를 통합 인수에 기록 |
+| R09 | bun ci·quick·build·필요 회귀·정확 SHA/PR CI | 최종 제품d44 frozen ci/quick/build·실제Worker503·독립46/계정15/자료17/직접URL10 PASS. 원격CI와인수는통합증거참조 |
 | R10 | unused CSS/중복 제거·native/PDF 영향 확인 | 구 CSS26개·중복 랜딩 제거, portable token 키/값과 독립 PDF 출력 경로 보존 |
 
 실제 OAuth·모델·공식 법률 API·remote 저장·물리 IME·독립 법률 검증은 합성 인수와 구분한다.
