@@ -1,4 +1,12 @@
 ---
-// 사건 조회는 공통 사이드바에서 제공한다. 기존 링크와 북마크는 새 입력 화면으로 연결한다.
-return Astro.redirect("/app", 302);
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { CaseList } from "../../components/intake/CaseList";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
+import AppLayout from "../../layouts/AppLayout.astro";
+
+Astro.response.headers.set("Cache-Control", "no-store");
 ---
+<AppLayout title="내 사건 · BARO" description="저장한 사건의 질문·자료·리포트에서 준비를 이어가세요." role="user" availableRoutes={["/app", "/cases", "/cases/new", "/settings"]}>
+  <CaseList client:load />
+  <noscript><p>사건 목록을 확인하려면 브라우저에서 JavaScript를 켜고 <a href="/login">로그인</a>해 주세요.</p></noscript>
+</AppLayout>

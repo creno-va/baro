@@ -969,8 +969,10 @@ test("purpose choices change examples and persist without owner-category UI", as
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
-  await expect(page.getByRole("radio")).toHaveCount(2);
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await expect(page.getByRole("combobox", { name: "준비하는 방향" }).locator("option")).toHaveCount(
+    6,
+  );
+  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("unknown-response");
   await expect(page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" })).toBeVisible();
   await expect(page.getByRole("button", { name: "빌려준 돈을 못 받았어요" })).toHaveCount(0);
   await page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" }).click();

@@ -17,6 +17,37 @@ const customer: SessionView = {
   needsConsent: false,
 };
 
+test("entry presents value and a visible desktop next action using the shared reading and form primitives", async ({
+  page,
+}) => {
+  await setSession(page, customer);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/app");
+  await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
+  await expect(page.locator(".case-entry [data-slot='page-header']")).toContainText("준비할 일");
+  expect(
+    await page
+      .locator(".case-entry h1")
+      .evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
+  ).toBeLessThanOrEqual(28);
+  await expect(page.locator(".conversation-emblem, .conversation-composer")).toHaveCount(0);
+  await page.screenshot({ path: ".wrangler/flow02-entry-desktop.png", fullPage: true });
+  await expect(page.getByRole("button", { name: "저장하고 계속", exact: true })).toBeInViewport({
+    ratio: 1,
+  });
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    const next = page.getByRole("button", { name: "저장하고 계속", exact: true });
+    await next.scrollIntoViewIfNeeded();
+    await expect(next).toBeInViewport({ ratio: 1 });
+    expect((await next.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: `.wrangler/flow02-entry-${width}.png`, fullPage: true });
+  }
+});
+
 test("a customer starts directly on home and reaches adaptive questions without an intermediate list", async ({
   page,
 }) => {

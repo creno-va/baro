@@ -6,10 +6,12 @@ import type { CaseView, SessionView } from "../../client/api/types";
 import { sessionDestination } from "../../client/return-path";
 import { isExplicitSignOut } from "../../client/session-events";
 import type { V2CaseContext } from "../../contracts/v2";
-import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-import { Textarea } from "../ui/form";
+import { FieldDescription, Label, Select, Textarea } from "../ui/form";
+import { PageHeader } from "../ui/page-header";
+import { ReadingContent } from "../ui/reading-content";
+import { Section } from "../ui/section";
 import { ErrorPanel } from "./common";
 
 // A web entry requirement; saved narratives and installed clients keep their read contracts.
@@ -276,98 +278,90 @@ export function CaseInput({
 
   return (
     <>
-      <section className="conversation-home" aria-labelledby="conversation-heading">
-        <header className="conversation-greeting">
-          <span className="conversation-emblem" aria-hidden="true">
-            <BrandMark size={48} />
-          </span>
-          <h1 id="conversation-heading">내 사건, 무엇부터 준비할까요?</h1>
-          <p>
-            설명과 자료를 바탕으로 사건의 흐름과 준비할 일을 정리해요.
-            <br />
-            짧게 시작한 뒤 대화·자료·리포트에서 계속 보완할 수 있어요.
-          </p>
-        </header>
+      <ReadingContent className="case-entry ui-stack">
+        <PageHeader
+          title="내 사건, 무엇부터 준비할까요?"
+          description="사건의 흐름과 준비할 일을 정리하고, 대화·자료·리포트에서 계속 보완해요."
+        />
         {created && canCreate && !loading && !sessionError ? (
-          <div className="conversation-saved" role="status">
-            <p>
-              {contextSaved
-                ? "사건과 준비 방향을 저장했어요."
-                : "사건은 등록했어요. 선택한 준비 방향을 저장하고 있어요."}
-            </p>
-            {!contextSaved && error ? (
-              <>
-                <p>
-                  선택한 방향은 {choice.label}예요. 같은 사건에서 다시 저장하며 사건을 새로 만들지
-                  않아요.
-                </p>
-                <ErrorPanel error={error} disabled={busy} />
-                <Button disabled={busy} loading={busy} onClick={() => void create()}>
-                  준비 방향 저장 다시 시도
-                </Button>
-              </>
-            ) : contextSaved ? (
-              <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
-                질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
-              </ButtonLink>
-            ) : null}
-          </div>
+          <Section title={contextSaved ? "사건과 준비 방향을 저장했어요" : "사건은 등록했어요"}>
+            <div className="ui-stack" role="status">
+              {!contextSaved && error ? (
+                <>
+                  <p>
+                    선택한 방향은 {choice.label}예요. 같은 사건에서 다시 저장하며 사건을 새로 만들지
+                    않아요.
+                  </p>
+                  <ErrorPanel error={error} disabled={busy} />
+                  <Button disabled={busy} loading={busy} onClick={() => void create()}>
+                    준비 방향 저장 다시 시도
+                  </Button>
+                </>
+              ) : contextSaved ? (
+                <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
+                  질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
+                </ButtonLink>
+              ) : (
+                <p>선택한 준비 방향을 저장하고 있어요.</p>
+              )}
+            </div>
+          </Section>
         ) : (
-          <>
-            <form className="conversation-entry" onSubmit={(event) => void create(event)}>
-              <label className="conversation-field-label" htmlFor="narrative">
-                지금까지 있었던 일
-              </label>
-              <div className="conversation-composer" aria-busy={busy || loading}>
+          <Section
+            title="설명으로 시작해요"
+            description="기억나는 일부터 짧게 적어주세요. 자료는 사건을 만든 뒤 추가할 수 있어요."
+          >
+            <form
+              className="case-entry__form ui-stack"
+              aria-busy={busy || loading}
+              onSubmit={(event) => void create(event)}
+            >
+              <div className="case-entry__direction ui-stack">
+                <Label htmlFor="case-entry-choice">준비하는 방향</Label>
+                <Select
+                  id="case-entry-choice"
+                  value={entryChoice}
+                  onChange={(event) => setEntryChoice(event.target.value)}
+                  disabled={busy || loading || !canCreate}
+                  aria-describedby="subject-context-help"
+                >
+                  {entryChoices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </Select>
+                <FieldDescription id="subject-context-help" aria-live="polite">
+                  {casePurpose === "respond_to_claim"
+                    ? "소장이나 고소장이 없어도, 알고 있는 주장과 내 설명으로 시작할 수 있어요."
+                    : "돈·보증금 등 원하는 해결이나 피해로 겪은 일을 정리해요. 분야와 단계는 나중에 확인할 수 있어요."}
+                </FieldDescription>
+              </div>
+              <div className="case-entry__narrative ui-stack">
+                <Label htmlFor="narrative">지금까지 있었던 일</Label>
                 <Textarea
                   ref={narrativeRef}
                   id="narrative"
+                  rows={4}
                   value={loading || sessionError ? "" : narrative}
                   onChange={(event) => setNarrative(event.target.value)}
                   disabled={busy || loading || !!sessionError || !canCreate}
-                  aria-describedby="subject-context-help narrative-minimum entry-support"
+                  aria-describedby="narrative-minimum entry-support"
                   aria-invalid={count > 5000 || Boolean(lengthError)}
                   placeholder={
                     casePurpose === "respond_to_claim"
-                      ? "어떤 주장을 받았나요? 상대방의 주장과 내가 기억하는 일을 적어주세요."
+                      ? "어떤 주장을 받았나요? 상대방의 주장과 내가 기억하는 일을 구분해 적어주세요."
                       : "누구와 어떤 일이 있었나요? 기억나는 일부터 편하게 적어주세요."
                   }
                 />
-                <div className="conversation-composer-toolbar">
-                  <div className="conversation-context">
-                    <label htmlFor="case-entry-choice">준비하는 방향</label>
-                    <select
-                      id="case-entry-choice"
-                      className="ui-input"
-                      value={entryChoice}
-                      onChange={(event) => setEntryChoice(event.target.value)}
-                      disabled={busy || loading || !canCreate}
-                    >
-                      {entryChoices.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <span className="conversation-context-hint" id="narrative-minimum">
-                    {APP_NARRATIVE_MIN_LENGTH}자 이상 입력해주세요
-                  </span>
-                </div>
+                <FieldDescription id="narrative-minimum" className="conversation-context-hint">
+                  {APP_NARRATIVE_MIN_LENGTH}자 이상 입력해주세요
+                </FieldDescription>
               </div>
-              <p className="conversation-subject-help" id="subject-context-help" aria-live="polite">
-                {casePurpose === "respond_to_claim"
-                  ? "소장이나 고소장이 없어도, 알고 있는 주장과 내 설명으로 시작할 수 있어요."
-                  : "돈·보증금 등 원하는 해결이나 피해로 겪은 일을 정리해요. 분야와 단계는 나중에 확인할 수 있어요."}
-              </p>
-              <p className="conversation-subject-help" id="entry-support">
-                지금은 설명을 먼저 저장한 뒤 사건에 자료를 추가할 수 있어요. 문서만으로 시작하는
-                기능은 아직 제공하지 않아요.
-              </p>
               {error ? (
                 <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
               ) : null}
-              <div className="conversation-primary-action">
+              <div className="ui-actions">
                 {loading || sessionError ? (
                   <Button disabled>
                     {sessionError ? "로그인 상태를 확인해 주세요" : "로그인 상태 확인 중…"}
@@ -384,55 +378,50 @@ export function CaseInput({
                   </ButtonLink>
                 )}
               </div>
+              <FieldDescription id="entry-support">
+                문서만으로 시작하는 기능은 아직 제공하지 않아요. 설명을 저장한 뒤 자료를 추가해
+                주세요.
+              </FieldDescription>
             </form>
             {!narrative && !session?.needsConsent ? (
-              <div className="conversation-examples">
-                {(casePurpose === "respond_to_claim" ? responseExamples : individualExamples).map(
-                  ({ label, text, Icon }) => (
-                    <Button
-                      key={label}
-                      variant="outline"
-                      disabled={loading || !canCreate}
-                      onClick={() => {
-                        setNarrative((existing) =>
-                          existing.trim() ? `${existing}\n${text}` : text,
-                        );
-                        document.getElementById("narrative")?.focus();
-                      }}
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      {label}
-                    </Button>
-                  ),
-                )}
+              <div className="case-entry__examples ui-stack">
+                <p>어떻게 시작할지 막막하다면</p>
+                <div className="ui-actions">
+                  {(casePurpose === "respond_to_claim" ? responseExamples : individualExamples).map(
+                    ({ label, text, Icon }) => (
+                      <Button
+                        key={label}
+                        variant="ghost"
+                        disabled={loading || !canCreate}
+                        onClick={() => {
+                          setNarrative((existing) =>
+                            existing.trim() ? `${existing}\n${text}` : text,
+                          );
+                          narrativeRef.current?.focus();
+                        }}
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                        {label}
+                      </Button>
+                    ),
+                  )}
+                </div>
               </div>
             ) : null}
-            {(!canCreate || busy || loading || !!sessionError) && (
-              <p className="conversation-reassurance" role="status">
-                {busy
-                  ? "저장한 뒤 이어서 질문을 확인할 수 있어요."
-                  : loading
-                    ? "로그인 상태를 확인하고 있어요."
-                    : sessionError
-                      ? "로그인 상태를 다시 확인해 주세요."
-                      : session?.needsConsent
-                        ? "필수 동의를 확인하면 바로 시작할 수 있어요."
-                        : "로그인하면 상황을 저장하고, 언제든 이어서 정리할 수 있어요."}
-              </p>
-            )}
             {sessionError ? (
               <ErrorPanel error={sessionError} retry={() => void loadSession()} />
             ) : null}
-          </>
+          </Section>
         )}
-        <footer className="conversation-home-footer">
-          <p>
-            상황 입력 <span aria-hidden="true">→</span> 질문 최대 두 차례·차례당 최대 3개{" "}
-            <span aria-hidden="true">→</span> 요약 확인
-          </p>
-          <p>BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.</p>
+        <footer className="case-entry__footer ui-stack">
+          <FieldDescription>
+            상황 입력 → 질문 최대 두 차례·차례당 최대 3개 → 요약 확인
+          </FieldDescription>
+          <FieldDescription>
+            BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.
+          </FieldDescription>
         </footer>
-      </section>
+      </ReadingContent>
       <Dialog
         returnFocusRef={narrativeRef}
         open={Boolean(lengthError)}
