@@ -31,6 +31,140 @@ async function seed(page: Page, role: "customer" | "lawyer" = "customer", empty 
   );
 }
 
+test("long review sheets scroll internally, keep 44px controls and return focus through each close path", async ({
+  page,
+}) => {
+  await seed(page);
+  for (const [width, height] of [
+    [320, 480],
+    [390, 844],
+    [1440, 900],
+  ]) {
+    await page.setViewportSize({ width: width ?? 320, height: height ?? 480 });
+    await page.goto("/?longReview&open");
+    await page.evaluate(() => document.fonts.ready);
+    const panel = page.getByRole("dialog", { name: "자료", exact: true });
+    const opener = panel.getByRole("button", { name: "독립 자료 검토창", exact: true });
+    await opener.click();
+    const dialog = page.getByRole("dialog", { name: "독립 자료 검토", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(() =>
+        dialog.evaluate((node) =>
+          node.getAnimations().every((animation) => animation.playState === "finished"),
+        ),
+      )
+      .toBe(true);
+    const bounds = await dialog.boundingBox();
+    if (!bounds) throw new Error("Synthetic long review missing");
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
+    const verticalAnchor =
+      (width ?? 320) <= 760
+        ? bounds.y + bounds.height - (height ?? 480)
+        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    expect(Math.abs(verticalAnchor)).toBeLessThan(2);
+    expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    const close = dialog.getByRole("button", { name: "닫기", exact: true });
+    const finish = dialog.getByRole("button", { name: "검토 닫기", exact: true });
+    for (const button of [close, finish]) {
+      const target = await button.boundingBox();
+      expect(target?.width).toBeGreaterThanOrEqual(44);
+      expect(target?.height).toBeGreaterThanOrEqual(44);
+    }
+    const headerBefore = await close.boundingBox();
+    const content = dialog.locator(".ui-dialog__content");
+    expect(await content.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+    await content.hover();
+    await page.mouse.wheel(0, 900);
+    await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    await finish.scrollIntoViewIfNeeded();
+    await content.hover();
+    await page.mouse.wheel(0, 100000);
+    await expect
+      .poll(() =>
+        content.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+      )
+      .toBe(0);
+    const geometry = await finish.evaluate((node) => {
+      const target = node.getBoundingClientRect();
+      const scroller = node.closest(".ui-dialog__content");
+      if (!scroller) throw new Error("Synthetic review scrollport missing");
+      const port = scroller.getBoundingClientRect();
+      // Sample the button interior: rounded border corners are intentionally
+      // outside its hit shape, even when no other control overlaps it.
+      const hits = [0.25, 0.5, 0.75].flatMap((x) =>
+        [0.25, 0.5, 0.75].map((y) =>
+          node.contains(
+            document.elementFromPoint(
+              target.left + target.width * x,
+              target.top + target.height * y,
+            ),
+          ),
+        ),
+      );
+      return {
+        devicePixelRatio,
+        button: target.toJSON(),
+        scrollport: port.toJSON(),
+        scrollTop: scroller.scrollTop,
+        clientHeight: scroller.clientHeight,
+        scrollHeight: scroller.scrollHeight,
+        maxScroll: scroller.scrollHeight - scroller.clientHeight,
+        clipped: Math.max(
+          0,
+          port.left - target.left,
+          port.top - target.top,
+          target.right - port.right,
+          target.bottom - port.bottom,
+        ),
+        hits,
+      };
+    });
+    await test.info().attach(`long-review-geometry-${width}`, {
+      body: JSON.stringify(geometry, null, 2),
+      contentType: "application/json",
+    });
+    await page.screenshot({ path: `.wrangler/ui01-full/long-review-end-${width}.png` });
+    await expect(finish).toBeInViewport({ ratio: 1 });
+    expect(geometry.clipped).toBe(0);
+    expect(geometry.button.width).toBeGreaterThanOrEqual(44);
+    expect(geometry.button.height).toBeGreaterThanOrEqual(44);
+    expect(geometry.hits).toEqual(Array(9).fill(true));
+    expect(geometry.button.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.button.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.button.right).toBeLessThanOrEqual(width ?? 320);
+    expect(geometry.button.bottom).toBeLessThanOrEqual(height ?? 480);
+    await expect(close).toBeInViewport({ ratio: 1 });
+    expect(await close.boundingBox()).toEqual(headerBefore);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await finish.focus();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(finish).toBeFocused();
+    await page.screenshot({ path: `.wrangler/ui01-full/long-review-${width}.png` });
+    await page.keyboard.press("Enter");
+    await expect(dialog).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    for (const dismissal of ["finish", "close", "escape"]) {
+      await opener.click();
+      await expect(dialog).toBeVisible();
+      if (dismissal === "finish") await finish.click();
+      else if (dismissal === "close") await close.click();
+      else await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+      await expect(opener).toBeFocused();
+      await expect(panel).toBeVisible();
+    }
+  }
+});
+
 for (const width of [320, 390, 768, 1024, 1440]) {
   test(`frame keeps mounted drafts and independent scroll at ${width}px`, async ({ page }) => {
     await seed(page);
