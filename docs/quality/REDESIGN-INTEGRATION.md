@@ -203,11 +203,13 @@ Chrome에서 재검수한다. root CSS 확대와 실제 브라우저 확대를 �
 계속 실행하되 성공해도 이 독립 UX 결함의 인수를 대신하지 못한다. 후속 검증 PR의 새 main과
 동일 SHA full/preview/smoke가 필요하며 결과는 #751 receipt에 기록한다.
 
-후속 source `95b4ba9d2cab02f274febb6a563722b6b96c9fe4`는 고정 탐색을 뺀 실제 가용
+후속 source `5e7ee6c72fd4035d8e301eb4b5e3d1048cccde08`은 고정 탐색을 뺀 실제 가용
 사각형에서 메뉴 아래·위 공간을 비교한다. 작은 높이에서는 메뉴만 스크롤하며 전체 높이를
 측정하려고 임시로 확대해 scrollTop을 초기화하지 않는다. 메뉴 내부 스크롤은 재배치와
 구분하고 현재 링크는 메뉴 안에서 완전히 보이게 한다. visualViewport scroll도 관찰하며
 기존 details/이름/href·Escape/초점 복귀·도메인/API 계약은 유지한다.
+summary의 활성화 안에서 native open property와 첫 위치를 함께 적용해 늦은 toggle 이벤트
+전에 링크의 실제 좌표를 확정한다. 링크에서 온 클릭은 이 처리에서 제외해 기존 href를 유지한다.
 
 추가 actual-Astro 회귀는 같은40자/600×350·DPR4/root CSS zoom1과 물리 포인터 순서를
 검증한다. 250·200px 높이, 네 링크44px 전체 노출·중심점 hit·Tab·마지막 링크 초점을 둔
