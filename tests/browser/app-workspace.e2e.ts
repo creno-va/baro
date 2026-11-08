@@ -648,6 +648,9 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     await page.setViewportSize({ width, height: 900 });
     await expectToolsActionable();
   }
+  await toolsTrigger.focus();
+  await page.keyboard.press("Tab");
+  await expect(tools.getByRole("link").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(tools).not.toBeVisible();
   await expect(toolsTrigger).toBeFocused();
@@ -679,4 +682,14 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   await expect(toolsTrigger).toBeFocused();
   await expect(composer).toBeInViewport({ ratio: 1 });
   await expect(composer).toHaveValue("확대 후에도 유지할 메시지");
+  await page.goto("/?document");
+  const readingHeader = page.getByRole("region", { name: "사건 제목과 작업", exact: true });
+  await expect(readingHeader).not.toHaveAttribute("tabindex");
+  await expect(readingHeader).toHaveCSS("max-height", "none");
+  await expect(readingHeader).toHaveCSS("overflow-y", "visible");
+  const document = page.locator(".shell-fixture-document");
+  await document.locator("p").last().scrollIntoViewIfNeeded();
+  await expect(document.locator("p").last()).toBeInViewport({ ratio: 1 });
+  expect(await document.evaluate((node) => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
