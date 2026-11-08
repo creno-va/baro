@@ -1259,6 +1259,7 @@ async function retainedReadRoutes(page: Page) {
     "사건 개요\n합성 최초 설명\n\n다음 행동과 필요 자료\n원본 대화 확인\n\n추가 확인 사항\n상대방 설명 미확인";
   const state = conversationState();
   state.analysis.status = "pending";
+  state.analysis.basis = basis;
   state.analysis.currentJobId = "synthetic-pending";
   let reads = 0,
     writes = 0;
@@ -1349,5 +1350,33 @@ test("inactive retained report stops ordinary polling but still purges the old o
   await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
   await expect(page.locator(".report-reading")).toHaveCount(0);
   expect(await page.content()).not.toContain("SYNTHETIC-PRIVATE-RETAINED");
+  expect(calls.writes).toBe(0);
+});
+
+test("standalone report and draft navigation preserves query parameters and the existing history state without writes", async ({
+  page,
+}) => {
+  const calls = await retainedReadRoutes(page);
+  await page.goto(
+    "/cases/synthetic-rework-case/reports?rework=true&mode=conversation&version=older&keep=alpha",
+  );
+  await expect(page.locator(".report-reading")).toBeVisible();
+  await page.evaluate(() =>
+    history.replaceState({ syntheticMarker: "preserved" }, "", location.href),
+  );
+  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  await tasks.getByRole("link", { name: "문서 초안", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "문서 초안", exact: true })).toBeVisible();
+  expect(new URL(page.url()).search).toBe(
+    "?rework=true&mode=conversation&version=older&keep=alpha",
+  );
+  expect(new URL(page.url()).hash).toBe("#document-drafts");
+  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
+  await expect(page.locator(".report-reading")).toBeVisible();
+  expect(new URL(page.url()).search).toBe(
+    "?rework=true&mode=conversation&version=older&keep=alpha",
+  );
+  expect(new URL(page.url()).hash).toBe("");
+  expect(await page.evaluate(() => history.state)).toEqual({ syntheticMarker: "preserved" });
   expect(calls.writes).toBe(0);
 });

@@ -491,7 +491,9 @@ export function ReportReview({
     if (onNavigateTask) onNavigateTask(task);
     else if (task === "reports" || task === "drafts") {
       setSection(task === "drafts" ? "drafts" : "report");
-      history.replaceState(null, "", task === "drafts" ? "#document-drafts" : location.pathname);
+      const url = new URL(window.location.href);
+      url.hash = task === "drafts" ? "document-drafts" : "";
+      history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
     } else
       location.assign(`/cases/${encodeURIComponent(caseId)}${task === "files" ? "/files" : ""}`);
   }
