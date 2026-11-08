@@ -67,9 +67,17 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     await expect(controls).toHaveCSS("opacity", "0");
     await expect(controls).toHaveCSS("pointer-events", "none");
     const rowBounds = await row.boundingBox();
+    const linkBounds = await link.boundingBox();
     const copyBounds = await copy.boundingBox();
-    if (!rowBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
-    expect(copyBounds.width).toBeGreaterThanOrEqual(rowBounds.width - 22);
+    if (!rowBounds || !linkBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
+    const contentWidth = await link.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    });
+    expect(linkBounds.width).toBeCloseTo(rowBounds.width, 1);
+    expect(copyBounds.width).toBeCloseTo(contentWidth, 1);
+    await expect(link).toHaveAttribute("title", stories[0]?.title ?? "");
+    await expect(copy).toHaveCSS("text-overflow", "ellipsis");
     if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-rest.png" });
     await row.hover();
     await expect(controls).toHaveCSS("opacity", "1");
@@ -159,6 +167,8 @@ test("touch sidebar retains a visible centered overlay delete control", async ({
     const bounds = await row.boundingBox();
     const button = await remove.boundingBox();
     if (!bounds || !button) throw new Error("Synthetic touch sidebar missing");
+    expect(button.width).toBeGreaterThanOrEqual(44);
+    expect(button.height).toBeGreaterThanOrEqual(44);
     expect(
       Math.abs(button.y + button.height / 2 - bounds.y - bounds.height / 2),
     ).toBeLessThanOrEqual(0.5);
@@ -235,7 +245,7 @@ test("recent stories scroll independently while account controls stay visible at
   }
 });
 
-test("dialogs center, contain long content and restore focus across viewport sizes and page scroll", async ({
+test("dialogs settle inside the viewport as mobile sheets or centered dialogs and restore focus", async ({
   page,
 }) => {
   await session(page);
@@ -243,6 +253,8 @@ test("dialogs center, contain long content and restore focus across viewport siz
   for (const [width, height] of [
     [320, 480],
     [390, 844],
+    [760, 520],
+    [761, 520],
     [768, 900],
     [1024, 768],
     [1440, 900],
@@ -258,15 +270,36 @@ test("dialogs center, contain long content and restore focus across viewport siz
     await opener.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(() =>
+        dialog.evaluate((node) =>
+          node.getAnimations().every((animation) => animation.playState === "finished"),
+        ),
+      )
+      .toBe(true);
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
     const bounds = await dialog.boundingBox();
     expect(bounds).not.toBeNull();
     expect(Math.abs((bounds?.x ?? 0) + (bounds?.width ?? 0) / 2 - (width ?? 0) / 2)).toBeLessThan(
       10,
     );
-    expect(Math.abs((bounds?.y ?? 0) + (bounds?.height ?? 0) / 2 - (height ?? 0) / 2)).toBeLessThan(
-      2,
-    );
+    if (!bounds) throw new Error("Synthetic dialog bounds missing");
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
+    const verticalAnchor =
+      (width ?? 320) <= 760
+        ? bounds.y + bounds.height - (height ?? 480)
+        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    expect(Math.abs(verticalAnchor)).toBeLessThan(2);
+    for (const name of ["닫기", "취소", "사건 삭제"]) {
+      const button = dialog.getByRole("button", { name, exact: true });
+      const target = await button.boundingBox();
+      expect(target?.width).toBeGreaterThanOrEqual(44);
+      expect(target?.height).toBeGreaterThanOrEqual(44);
+    }
     await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeEnabled();
     await dialog.getByRole("button", { name: "취소", exact: true }).scrollIntoViewIfNeeded();
     await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeInViewport({
