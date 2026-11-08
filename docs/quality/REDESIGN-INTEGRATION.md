@@ -270,6 +270,19 @@ CaseInput/Dialog과 검사 본문은920/deb85/bab6에서 같았다. 이는 새 �
 두 공통 수리와 독립 회귀의 원본은 `114bbace8030ed89d295c72f5451f7fda063e0e7`이며
 이미 통합한330의 후속1커밋이다. 정상/새 초점 회귀의 Chromium·WebKit 예비 통과와 최종 통합 검증은 구분한다.
 
+추가114의 원래5폭×4회 first-hit 검사에서는15 PASS/5 FAIL(320px3·390px2)을 발견해 PR789를
+Draft로 유지했다. 통합a1a1d2c의143+메뉴9·독립모달4와 fresh PR CI3개 통과로 이 실패를 덮지 않는다.
+짧은 로딩 제목이 실제 긴 제목으로 바뀌며 ResizeObserver가 이미 열린 메뉴를24px 아래로 옮겼다.
+390px 실제 module hold에서도 최초 open/point hit→release→SSR0→실제 긴 h1 표시→header ResizeObserver
+delivery 뒤 같은 point(266,307)가 이동한 유사 판례(top313)를 놓치는 것을 재현했다.
+후속은 제목을 즉시 표시하면서 열린 메뉴의 기존 대상을 보존하며 명시적인 viewport/root 배율·
+ancestor scroll·재열기는 재배치한다. private 제목 캐시나 준비 대기로 실패를 숨기지 않는다.
+후속 소스와 새 frozen head의 관련 반복·통합·CI 결과를 확인한 뒤 병합하며 아직 preview에 배포하지 않는다.
+후속 원본 `efced2e1df2f57a1a03ee75ecbaccbabb61d4965`는114의 자식1커밋이며 제목-only
+ResizeObserver와 같은 열림의 queued toggle을 구분한다. 현재 prop만 배치 revision 감지에 쓰고
+현재 제목/tooltip을 즉시 렌더한다. 390 결정 재현과 원래20회의 수정 전후를 보존하며 예비20/20
+통과 뒤 해당 커밋의 전체 공통 회귀·quick/build와 새 통합 head/CI를 별도로 검증한다.
+
 초기 수동 기록의 message counter 두 selector는 실제 Workspace 사용자 메시지 class와 달랐다.
 그0만으로 자동 전송이 없었다고 판단하지 않는다. 원본은 보존하고 exact920에서 실제
 `.workspace-message--user`로 입력/Enter/네 작업 왕복7상태의 사용자 메시지0과 한글·줄바꿈 보존을
