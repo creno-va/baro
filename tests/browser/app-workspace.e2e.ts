@@ -592,36 +592,50 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     await expect(tools.getByRole("link")).toHaveCount(4);
     for (const link of await tools.getByRole("link").all()) {
       await expect(link).toBeInViewport({ ratio: 1 });
+      const geometry = await tools.evaluate((nav) => ({
+        viewport: {
+          width: innerWidth,
+          height: innerHeight,
+          scrollY,
+          zoom: getComputedStyle(document.documentElement).zoom,
+        },
+        menu: nav.getBoundingClientRect().toJSON(),
+        trigger: nav.closest("details")?.querySelector("summary")?.getBoundingClientRect().toJSON(),
+        header: nav.closest(".case-workspace__header")?.getBoundingClientRect().toJSON(),
+        headerScroll: nav.closest(".case-workspace__header")?.scrollTop,
+      }));
       await expect
-        .poll(() =>
-          link.evaluate((node) => {
-            const menu = node.closest("nav")?.getBoundingClientRect();
-            const trigger = node
-              .closest("details")
-              ?.querySelector("summary")
-              ?.getBoundingClientRect();
-            const bounds = node.getBoundingClientRect();
-            if (!menu || !trigger) throw new Error("Case tools geometry missing");
-            const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-            return {
-              withinViewport:
-                menu.left >= 0 &&
-                menu.top >= 0 &&
-                menu.right <= (visualViewport?.width ?? innerWidth) + 1 &&
-                menu.bottom <= (visualViewport?.height ?? innerHeight) + 1,
-              aligned:
-                menu.left <= trigger.right &&
-                menu.right >= trigger.left &&
-                ((menu.top >= trigger.bottom - 1 && menu.top - trigger.bottom <= 12 * zoom) ||
-                  (menu.bottom <= trigger.top + 1 && trigger.top - menu.bottom <= 12 * zoom)),
-              hit: node.contains(
-                document.elementFromPoint(
-                  bounds.x + bounds.width / 2,
-                  bounds.y + bounds.height / 2,
+        .poll(
+          () =>
+            link.evaluate((node) => {
+              const menu = node.closest("nav")?.getBoundingClientRect();
+              const trigger = node
+                .closest("details")
+                ?.querySelector("summary")
+                ?.getBoundingClientRect();
+              const bounds = node.getBoundingClientRect();
+              if (!menu || !trigger) throw new Error("Case tools geometry missing");
+              const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+              return {
+                withinViewport:
+                  menu.left >= 0 &&
+                  menu.top >= 0 &&
+                  menu.right <= (visualViewport?.width ?? innerWidth) + 1 &&
+                  menu.bottom <= (visualViewport?.height ?? innerHeight) + 1,
+                aligned:
+                  menu.left <= trigger.right &&
+                  menu.right >= trigger.left &&
+                  ((menu.top >= trigger.bottom - 1 && menu.top - trigger.bottom <= 12 * zoom) ||
+                    (menu.bottom <= trigger.top + 1 && trigger.top - menu.bottom <= 12 * zoom)),
+                hit: node.contains(
+                  document.elementFromPoint(
+                    bounds.x + bounds.width / 2,
+                    bounds.y + bounds.height / 2,
+                  ),
                 ),
-              ),
-            };
-          }),
+              };
+            }),
+          { message: JSON.stringify(geometry) },
         )
         .toEqual({ withinViewport: true, aligned: true, hit: true });
       await link.click({ trial: true });
