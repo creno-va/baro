@@ -65,17 +65,39 @@ export function CaseWorkspaceFrame({
     const node = dialog.current;
     if (!node) return;
     const query = window.matchMedia("(min-width: 1200px)");
+    const waiting = new Set<HTMLDialogElement>();
+    const afterReviewClose = (event: Event) => {
+      if (event.currentTarget instanceof HTMLDialogElement) waiting.delete(event.currentTarget);
+      syncPanel();
+    };
+    const clearWaiting = () => {
+      for (const modal of waiting) modal.removeEventListener("close", afterReviewClose);
+      waiting.clear();
+    };
     const syncPanel = () => {
+      if (!node.isConnected) return;
       // SSR markup stays identical. First opening uses the real viewport mode.
       const inline = query.matches;
-      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) return;
+      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) {
+        clearWaiting();
+        return;
+      }
       // A review may be a sibling of this frame, not a React descendant. Never
       // reopen the panel above another active native modal during a resize.
-      if (
-        panelOpen &&
-        [...document.querySelectorAll("dialog:modal")].some((modal) => modal !== node)
-      )
+      const otherModals = [...document.querySelectorAll<HTMLDialogElement>("dialog:modal")].filter(
+        (modal) => modal !== node,
+      );
+      if (panelOpen && otherModals.length) {
+        for (const modal of otherModals) {
+          if (waiting.has(modal)) continue;
+          waiting.add(modal);
+          // Conditional consumers close during unmount. Their queued native
+          // close still reaches this direct listener after DOM removal.
+          modal.addEventListener("close", afterReviewClose, { once: true });
+        }
         return;
+      }
+      clearWaiting();
       const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const inside = focused && node.contains(focused);
       if (node.open) node.close();
@@ -96,13 +118,9 @@ export function CaseWorkspaceFrame({
     };
     syncPanel();
     query.addEventListener("change", syncPanel);
-    const afterReviewClose = (event: Event) => {
-      if (event.target instanceof HTMLDialogElement && event.target !== node) syncPanel();
-    };
-    document.addEventListener("close", afterReviewClose, true);
     return () => {
       query.removeEventListener("change", syncPanel);
-      document.removeEventListener("close", afterReviewClose, true);
+      clearWaiting();
     };
   }, [panelOpen, panelPresent]);
   useEffect(() => {

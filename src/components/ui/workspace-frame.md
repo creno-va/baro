@@ -37,7 +37,9 @@ panel은 항상 같은 React 트리에 남는다. 닫힌 native dialog는 화면
 하위 입력·상태는 unmount하지 않는다. 1200px 이상에서는 non-modal inline, 그 아래는 같은
 DOM을 `showModal()`로 전환한다. 내부 dialog의 Escape는 외부 패널을 닫지 않는다. resize 중
 교정 필드의 값·선택·초점을 보존한다. 별도 sibling 또는 내부 descendant native modal이 열려 있으면
-panel mode 전환은 해당 modal의 native close가 끝날 때까지 보류한다. 다른 dialog를 닫거나
+panel mode 전환은 해당 modal의 native close가 끝날 때까지 보류한다. 기다리는 dialog 자체에
+일회성 close listener를 두므로 조건부 unmount로 DOM에서 제거돼도 재동기화하며, effect cleanup은
+남은 listener를 모두 해제한다. 다른 dialog를 닫거나
 재열지 않으며, 실제 현재 폭에 맞춰 한 번 동기화한다. 닫으면 opener로 복귀하고 sidebar drawer를 desktop으로
 전환해 닫는 경우에는 보이는 사이드바 버튼으로 돌아간다.
 

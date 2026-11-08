@@ -61,10 +61,12 @@ Mac realpath 차이 회귀는 `TMPDIR=/private/tmp`로 재현 환경을 맞췄�
 또 root CSS zoom2에서는 raw visualViewport.height를 그대로 사용해 composer가 화면 아래로 밀렸다.
 
 독립 fixture에 같은 sibling와 descendant modal topology를 추가했다. 양방향4개와 CSS zoom1개가
-기존 main에서 RED였다. 수리 뒤 기존16개+신규5개=21/21 PASS다.
+기존 main에서 RED였다. 00 추가 리뷰의 조건부 close+unmount4개도 document capture 방식에서
+RED였다. 수리 뒤 기존16개+신규9개=25/25 PASS다.
 
 - 다른 active native modal이 있으면 panel을 닫거나 재열지 않고 mode 전환을 보류한다.
-  다른 dialog의 native close를 capture한 뒤 현재 matchMedia mode로 동기화한다.
+  기다리는 각 dialog의 native close를 직접 일회성으로 받은 뒤 현재 matchMedia mode로 동기화한다.
+  조건부 unmount로 DOM에서 제거된 dialog도 큐의 close가 도달하며, effect cleanup에서 남은 listener를 해제한다.
 - 양방향 resize 동안 교정값·selection·focus·최상단 hit target을 보존한다. Escape는 검토창만
   닫고 panel은 열린 채 올바른 mode가 된다. 검토 opener, 이후 panel toggle로 초점이 돌아온다.
 - 높이는 visualViewport CSS px를 root computed CSS zoom으로만 환산한다. visualViewport.scale은

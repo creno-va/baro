@@ -320,69 +320,78 @@ for (const width of [390, 1440]) {
   });
 }
 
-for (const topology of ["sibling", "descendant"] as const) {
-  for (const [from, to] of [
-    [1440, 390],
-    [390, 1440],
-  ] as const) {
-    test(`${topology} review stays frontmost through ${from} to ${to} resize`, async ({ page }) => {
-      await seed(page);
-      await page.setViewportSize({ width: from, height: 900 });
-      await page.goto("/?open");
-      const panel = page.getByRole("dialog", { name: "자료", exact: true });
-      const opener = panel.getByRole("button", {
-        name: topology === "sibling" ? "독립 자료 검토창" : "자료 확인창",
-        exact: true,
+for (const lifetime of ["mounted", "conditional"] as const) {
+  for (const topology of ["sibling", "descendant"] as const) {
+    for (const [from, to] of [
+      [1440, 390],
+      [390, 1440],
+    ] as const) {
+      test(`${lifetime} ${topology} review stays frontmost through ${from} to ${to} resize`, async ({
+        page,
+      }) => {
+        await seed(page);
+        await page.setViewportSize({ width: from, height: 900 });
+        await page.goto(`/?open${lifetime === "conditional" ? "&conditional" : ""}`);
+        const panel = page.getByRole("dialog", { name: "자료", exact: true });
+        const opener = panel.getByRole("button", {
+          name: topology === "sibling" ? "독립 자료 검토창" : "자료 확인창",
+          exact: true,
+        });
+        await opener.click();
+        const review = page.getByRole("dialog", {
+          name: topology === "sibling" ? "독립 자료 검토" : "합성 자료 확인",
+          exact: true,
+        });
+        const editor = review.getByRole("textbox", {
+          name: topology === "sibling" ? "별도 교정 내용" : "안쪽 교정 내용",
+          exact: true,
+        });
+        await editor.fill("화면을 바꿔도 보존할 자료 교정 초안");
+        await editor.press("ArrowLeft");
+        const selection = await editor.evaluate((node: HTMLInputElement) => node.selectionStart);
+        await page.setViewportSize({ width: to, height: 900 });
+        await expect(review).toBeVisible();
+        expect(await review.evaluate((node) => node.matches(":modal"))).toBe(true);
+        // Keep the panel's old mode until the active review has actually closed.
+        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(from < 1200);
+        await expect(editor).toBeFocused();
+        await expect(editor).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
+        expect(await editor.evaluate((node: HTMLInputElement) => node.selectionStart)).toBe(
+          selection,
+        );
+        expect(
+          await editor.evaluate((node) => {
+            const r = node.getBoundingClientRect();
+            return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+          }),
+        ).toBe(true);
+        await page.screenshot({
+          path: `.wrangler/ui01/followup-${topology}-${from}-${to}.png`,
+          animations: "disabled",
+        });
+        await review.evaluate((node) =>
+          node.addEventListener(
+            "close",
+            () =>
+              document.querySelector(".app-frame")?.setAttribute("data-mode-review-closed", "true"),
+            { once: true },
+          ),
+        );
+        await page.keyboard.press("Escape");
+        await expect(page.locator(".app-frame")).toHaveAttribute("data-mode-review-closed", "true");
+        await expect(review).not.toBeVisible();
+        await expect(panel).toBeVisible();
+        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(to < 1200);
+        await expect(opener).toBeFocused();
+        await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+        await expect(panel).not.toBeVisible();
+        await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
+        const selector = topology === "sibling" ? "#sibling-review" : "#nested-review";
+        if (lifetime === "mounted")
+          await expect(page.locator(selector)).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
+        else await expect(page.locator(selector)).toHaveCount(0);
       });
-      await opener.click();
-      const review = page.getByRole("dialog", {
-        name: topology === "sibling" ? "독립 자료 검토" : "합성 자료 확인",
-        exact: true,
-      });
-      const editor = review.getByRole("textbox", {
-        name: topology === "sibling" ? "별도 교정 내용" : "안쪽 교정 내용",
-        exact: true,
-      });
-      await editor.fill("화면을 바꿔도 보존할 자료 교정 초안");
-      await editor.press("ArrowLeft");
-      const selection = await editor.evaluate((node: HTMLInputElement) => node.selectionStart);
-      await page.setViewportSize({ width: to, height: 900 });
-      await expect(review).toBeVisible();
-      expect(await review.evaluate((node) => node.matches(":modal"))).toBe(true);
-      // Keep the panel's old mode until the active review has actually closed.
-      expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(from < 1200);
-      await expect(editor).toBeFocused();
-      await expect(editor).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
-      expect(await editor.evaluate((node: HTMLInputElement) => node.selectionStart)).toBe(
-        selection,
-      );
-      expect(
-        await editor.evaluate((node) => {
-          const r = node.getBoundingClientRect();
-          return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
-        }),
-      ).toBe(true);
-      await page.screenshot({
-        path: `.wrangler/ui01/followup-${topology}-${from}-${to}.png`,
-        animations: "disabled",
-      });
-      await review.evaluate((node) =>
-        node.addEventListener("close", () => node.setAttribute("data-mode-review-closed", "true"), {
-          once: true,
-        }),
-      );
-      await page.keyboard.press("Escape");
-      await expect(page.locator('dialog[data-mode-review-closed="true"]')).toHaveCount(1);
-      await expect(review).not.toBeVisible();
-      await expect(panel).toBeVisible();
-      expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(to < 1200);
-      await expect(opener).toBeFocused();
-      await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
-      await expect(panel).not.toBeVisible();
-      await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
-      const selector = topology === "sibling" ? "#sibling-review" : "#nested-review";
-      await expect(page.locator(selector)).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
-    });
+    }
   }
 }
 

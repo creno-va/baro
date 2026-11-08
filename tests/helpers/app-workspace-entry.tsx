@@ -8,7 +8,13 @@ import { Dialog } from "../../src/components/ui/dialog";
 import { CaseWorkspaceFrame } from "../../src/components/ui/workspace-frame";
 import { CaseNavigation } from "../../src/components/workspace/CaseNavigation";
 
-function MaterialsFixture({ onSiblingReview }: { onSiblingReview: () => void }) {
+function MaterialsFixture({
+  onSiblingReview,
+  conditional,
+}: {
+  onSiblingReview: () => void;
+  conditional: boolean;
+}) {
   const [nested, setNested] = useState(false);
   return (
     <div className="shell-fixture-materials">
@@ -41,11 +47,13 @@ function MaterialsFixture({ onSiblingReview }: { onSiblingReview: () => void }) 
       <a href="/?document" className="ui-button ui-button--outline">
         리포트 열기
       </a>
-      <Dialog open={nested} onOpenChange={setNested} title="합성 자료 확인">
-        <p>안쪽 확인창을 닫아도 자료 패널은 유지됩니다.</p>
-        <label htmlFor="nested-review">안쪽 교정 내용</label>
-        <input id="nested-review" defaultValue="" />
-      </Dialog>
+      {(!conditional || nested) && (
+        <Dialog open={nested} onOpenChange={setNested} title="합성 자료 확인">
+          <p>안쪽 확인창을 닫아도 자료 패널은 유지됩니다.</p>
+          <label htmlFor="nested-review">안쪽 교정 내용</label>
+          <input id="nested-review" defaultValue="" />
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -54,6 +62,7 @@ function Fixture() {
   const [siblingReview, setSiblingReview] = useState(false);
   const documentMode = new URLSearchParams(location.search).has("document");
   const noPanel = new URLSearchParams(location.search).has("no-panel");
+  const conditional = new URLSearchParams(location.search).has("conditional");
   return (
     <div className="app-frame app-frame--product" data-product-ui="refresh" data-app-workspace>
       <AppNavigation
@@ -74,7 +83,10 @@ function Fixture() {
             }
             panel={
               noPanel ? undefined : (
-                <MaterialsFixture onSiblingReview={() => setSiblingReview(true)} />
+                <MaterialsFixture
+                  onSiblingReview={() => setSiblingReview(true)}
+                  conditional={conditional}
+                />
               )
             }
             panelOpen={open}
@@ -118,10 +130,12 @@ function Fixture() {
               </div>
             )}
           </CaseWorkspaceFrame>
-          <Dialog open={siblingReview} onOpenChange={setSiblingReview} title="독립 자료 검토">
-            <label htmlFor="sibling-review">별도 교정 내용</label>
-            <input id="sibling-review" defaultValue="" />
-          </Dialog>
+          {(!conditional || siblingReview) && (
+            <Dialog open={siblingReview} onOpenChange={setSiblingReview} title="독립 자료 검토">
+              <label htmlFor="sibling-review">별도 교정 내용</label>
+              <input id="sibling-review" defaultValue="" />
+            </Dialog>
+          )}
         </main>
       </div>
     </div>
