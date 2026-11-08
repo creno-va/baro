@@ -82,7 +82,7 @@ for (const viewport of [
       ["이용약관", "terms"],
       ["개인정보 처리방침", "privacy"],
       ["AI 이용 고지", "ai"],
-    ]) {
+    ] as const) {
       const link = policies.getByRole("link", { name, exact: true });
       await expect(link).toHaveAttribute("href", `/policies/${path}`);
     }
