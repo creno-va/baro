@@ -521,7 +521,10 @@ async function prepareReport(page: Page) {
   await expect
     .poll(async () => (await reading.isVisible()) || (await preparation.isVisible()))
     .toBe(true);
-  if (await preparation.isVisible())
-    await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  if (await preparation.isVisible()) {
+    const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
+    if (!(await prepare.isVisible())) await preparation.locator("details > summary").click();
+    await prepare.click();
+  }
   await expect(reading).toBeVisible();
 }
