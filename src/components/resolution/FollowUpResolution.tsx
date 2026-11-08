@@ -387,8 +387,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   useEffect(() => {
     const changed = previousSection.current !== props.section;
     previousSection.current = props.section;
-    if (changed && props.section === "drafts" && !dirtyRef.current) void load();
-  }, [props.section, load]);
+    if (changed && props.section === "drafts" && !dirtyRef.current && !report) void load();
+  }, [props.section, load, report]);
   async function run(
     work: (options: Options, epoch: number) => Promise<V2ResolutionState | null>,
     write = true,

@@ -1012,3 +1012,25 @@ for (const width of [320, 1440])
     expect(state.draft.status).toBe("draft");
     expect(state.draft.content).not.toContain("SYNTHETIC-UNREVIEWED-EDIT");
   });
+
+test("task navigation keeps a local review check without claiming a reviewed save", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/?default&retained");
+  await page.getByRole("button", { name: /^직접 해결/ }).click();
+  await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
+  await page.getByRole("button", { name: "검토용 초안 준비" }).click();
+  const review = page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요.");
+  await review.check();
+  const before = await (await request.get("/fixture/counts")).json();
+  await page.getByRole("button", { name: "대화·리포트 보기 전환" }).click();
+  await expect(review).toBeChecked();
+  await expect(page.getByText("검토 완료 · 저장 전", { exact: true })).toBeVisible();
+  expect(await (await request.get("/fixture/counts")).json()).toEqual(before);
+  const state = await (
+    await request.get("/fixture/resolution", { headers: { "x-fixture-owner": "owner" } })
+  ).json();
+  expect(state.draft.reviewed).toBe(false);
+  expect(state.draft.status).toBe("draft");
+});
