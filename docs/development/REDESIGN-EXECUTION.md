@@ -247,6 +247,14 @@ section/join·동일SHA preview/smoke가 필요하며 과거 통과를 새 실�
 
 ### 마지막 코퍼스·리포트 후속의 소유권
 
+최종 main9a859e5의 직접 합성 검수에서 대응1차 주장 질문과2차 발언 질문이 겹치는 것을
+확인했다. 구현 전 지정 세션 메시지로02에 `src/client/api/mock/cases.ts`와 신규
+`tests/mock-intake-question-dedup.test.ts`만 배정했다. 이미 물은 주제는 answered/unknown/skipped와
+무관하게 새 mock batch 후보에서 제외하며 기존 ID·답변·과거 batch·최대2×3·기존DTO를 보존한다.
+backend/prompt/audit·rework.ts·공통UI·helper/config는 수정하지 않는다. 추가 파일은 근거를 먼저 인계한다.
+실제 모델의 의미 중복0을 이 mock 수리나 합성 검증으로 보장하지 않는다. 총괄은 문서·통합 PR·
+새 main 검증·동일 SHA preview를 책임지며 이전9a full은 후속 head의 최종 인수로 재사용하지 않는다.
+
 main920ed 후속에서01은 `cases.css`의 레거시 textarea fallback만 소유한다.
 02는 conversation-home/workspace 회귀,04는 shell-integration/human-review 회귀를 소유한다.
 03은 ReportReading/ReportReview/FollowUpResolution과 mock reports/rework의 기존 분석 binding
