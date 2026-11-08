@@ -349,10 +349,16 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
       ).toBe(true);
     }
     await page.goto("/help#limits");
+    const target = await page.locator("#limits").boundingBox();
+    const header = await page.locator(".app-header").boundingBox();
+    expect(target).not.toBeNull();
+    expect(header).not.toBeNull();
     if (viewport.width < 768) {
-      const target = await page.locator("#limits").boundingBox();
-      const header = await page.locator(".app-header").boundingBox();
       expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
+    } else {
+      // Tablet and desktop navigation occupies the left edge rather than the top.
+      expect(target?.x).toBeGreaterThanOrEqual((header?.x ?? 0) + (header?.width ?? 0));
+      expect(target?.y).toBeGreaterThanOrEqual(0);
     }
   }
 });

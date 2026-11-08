@@ -674,6 +674,13 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
   await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(menu.getByRole("link").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator(".case-tools > summary")).toBeFocused();
   await returnToCaseConversation(page);
   await expect(page).toHaveURL(base);
   await expect(page.locator(".case-options")).toHaveCount(0);
