@@ -1,16 +1,26 @@
 import {
   CircleAlert,
+  CircleCheck,
   Clock3,
   FileText,
   LoaderCircle,
   LockKeyhole,
   ShieldAlert,
+  TriangleAlert,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "./utils";
 import "../../styles/feedback.css";
 
-export type StateVariant = "loading" | "empty" | "error" | "limit" | "permission" | "pending";
+export type StateVariant =
+  | "loading"
+  | "empty"
+  | "error"
+  | "limit"
+  | "permission"
+  | "pending"
+  | "partial"
+  | "success";
 const icons = {
   loading: LoaderCircle,
   empty: FileText,
@@ -18,6 +28,8 @@ const icons = {
   limit: ShieldAlert,
   permission: LockKeyhole,
   pending: Clock3,
+  partial: TriangleAlert,
+  success: CircleCheck,
 };
 
 export function StatePanel({

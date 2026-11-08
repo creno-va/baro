@@ -62,6 +62,12 @@ export default defineConfig({
                     new URL("./tests/helpers/design-system-page.astro", import.meta.url),
                   ),
                 });
+                injectRoute({
+                  pattern: "/__design-foundation",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/foundation-page.astro", import.meta.url),
+                  ),
+                });
               },
             },
           },
