@@ -78,7 +78,7 @@ test("private archive reads use the authenticated owner and retain renewal acces
 test("archive deletion keeps owner and revision CAS while allowing the existing renewal deletion right", async () => {
   const f = fixture();
   await expect(f.api.removeAsset({ assetId: "owned-asset", revision: 2 })).rejects.toMatchObject({
-    code: "STALE_REVISION",
+    code: "CONFLICT",
   });
   expect(f.writes()).toBe(0);
   await f.api.removeAsset({ assetId: "owned-asset", revision: 3 });
@@ -90,7 +90,7 @@ test("archive deletion keeps owner and revision CAS while allowing the existing 
   foreign.switchOwner();
   await expect(
     foreign.api.removeAsset({ assetId: "owned-asset", revision: 3 }),
-  ).rejects.toMatchObject({ code: "STALE_REVISION" });
+  ).rejects.toMatchObject({ code: "CONFLICT" });
   expect(foreign.writes()).toBe(0);
 });
 
