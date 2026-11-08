@@ -460,6 +460,7 @@
 }
 /* Long titles stay readable without consuming the conversation's writing space. */
 .app-frame[data-app-workspace] .case-workspace--conversation > .case-workspace__header {
+  align-items: flex-start;
   max-height: calc((var(--app-viewport-height, 100dvh) - var(--app-topbar-height)) / 2);
   overflow-y: auto;
   overscroll-behavior: contain;
