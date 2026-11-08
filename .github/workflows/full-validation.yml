@@ -134,6 +134,7 @@ jobs:
             /tmp/baro-625-journeys/**/report-visual.json
             /tmp/baro-625-journeys/**/followup.png
             /tmp/baro-625-journeys/**/followup-visual.json
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
   native:
