@@ -585,6 +585,23 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   await expect(header.getByRole("link", { name: "문서 초안", exact: true })).toBeInViewport({
     ratio: 1,
   });
+  const toolsTrigger = header.locator(".case-tools > summary");
+  await toolsTrigger.click();
+  const tools = header.getByRole("navigation", { name: "사건 도구", exact: true });
+  for (const link of await tools.getByRole("link").all()) {
+    await expect(link).toBeInViewport({ ratio: 1 });
+    expect(
+      await link.evaluate((node) => {
+        const bounds = node.getBoundingClientRect();
+        return node.contains(
+          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+        );
+      }),
+    ).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(tools).not.toBeVisible();
+  await expect(toolsTrigger).toBeFocused();
   await page.screenshot({
     path: ".wrangler/ui01/followup-css-zoom-200.png",
     animations: "disabled",
