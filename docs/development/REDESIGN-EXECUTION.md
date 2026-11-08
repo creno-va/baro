@@ -175,8 +175,8 @@ core 이력 스캔에서 실패했다. 공개 Git blob ID 세 건은 [정확한 
 | 02 | `tests/browser/{workspace-shared,workspace,customer-real}.e2e.ts` |
 | 03 | `tests/browser/rework-conversation.e2e.ts` |
 | 04 | `tests/browser/{public-preview,app-experience,mobile-scrollbar,session}.e2e.ts` |
-| 총괄 | provenance·실행 문서, PR 검토·통합·원격 보존/정리 |
-| 05 | 기존 실패 수집, 마지막 main 정확 SHA의 full·동일 SHA preview·제한 smoke와 #751 판정 |
+| 총괄 | provenance·실행 문서, PR 검토·통합·원격 보존/정리, 최종 main full·같은 SHA preview·제한 smoke와 #751 판정 |
+| 05 | 독립 UX·회귀 검수, 기존 실패·실행 증거 수집과 통과·실패·미확인 구분 |
 
 과거 여섯 도구·역할 선택/프로필·숨김 삭제 액션·하단 sheet·목록 redirect 기대를 현재
 네 상시 작업과 네 추가 도구·공통 계정 이용·44px 조작·공통 Dialog·독립 목록 계약으로 맞춘다.
