@@ -107,7 +107,7 @@ async function fixture() {
   return { ...f, questions };
 }
 
-test("lawyer-facing Markdown keeps facts, relationships and unknowns without app actions or internal reference labels", async () => {
+test("new customer Markdown connects preparation while preserving facts, relationships and unknowns without internal reference labels", async () => {
   const f = await fixture();
   const selected = await readyFile(f, "합성 리포트 표시 검증 원본");
   const source = await buildReportSource(f.core, f.actor, f.workspaceId, []);
@@ -121,7 +121,7 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
     expect(report.content).not.toContain(question.id);
   }
   for (const label of [
-    "사건 개요",
+    "내 사건 한눈에",
     "당사자와 관계",
     "주요 경위",
     "주요 사실",
@@ -129,8 +129,13 @@ test("lawyer-facing Markdown keeps facts, relationships and unknowns without app
     "추가 확인 사항",
   ])
     expect(report.content).toContain(label);
-  for (const omitted of ["준비할 행동", "자료 처리 범위", "주의:", "출처:", "합성 행동 todo"])
+  for (const omitted of ["준비할 행동", "주의:", "출처:"])
     expect(report.content).not.toContain(omitted);
+  expect(report.content).toContain("합성 행동 todo");
+  expect(report.content).toContain("저장 당시 상태 · 완료로 표시");
+  expect(report.content.indexOf("다음 행동과 필요 자료")).toBeLessThan(
+    report.content.indexOf("주요 사실"),
+  );
   expect(await sourceDigest(f.core, f.actor, f.workspaceId)).toBe(beforeDigest);
   const stored = await createV2ReportsRepository(f.core).read(f.actor, report.id);
   expect(stored?.body).toEqual(source.body);
