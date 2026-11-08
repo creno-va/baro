@@ -22,3 +22,9 @@ cb0b6c79877022f201dcb49b10fef7ac690ee93e:tests/v2-storage-capacity-repository.te
 15ea94a9f749d2e4bb26df7f3d4630b367514d0e:patches/node-forge@1.4.0.patch:generic-api-key:16
 15ea94a9f749d2e4bb26df7f3d4630b367514d0e:patches/node-forge@1.4.0.patch:generic-api-key:6
 15ea94a9f749d2e4bb26df7f3d4630b367514d0e:patches/node-forge@1.4.0.patch:generic-api-key:7
+
+# Verified Git blob object IDs in the redesign source-comparison receipt.
+# Exact immutable findings only; provenance: docs/quality/SECRET-SCAN-2026-11-09.md.
+74396a4d3754cb0a05dbd47d3335ee9612ec416e:docs/quality/redesign-integration/reports-d77d42d/resolution-source-comparison.json:generic-api-key:30
+74396a4d3754cb0a05dbd47d3335ee9612ec416e:docs/quality/redesign-integration/reports-d77d42d/resolution-source-comparison.json:generic-api-key:122
+74396a4d3754cb0a05dbd47d3335ee9612ec416e:docs/quality/redesign-integration/reports-d77d42d/resolution-source-comparison.json:generic-api-key:180
