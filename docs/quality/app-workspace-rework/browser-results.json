@@ -1,0 +1,98 @@
+{
+  "head": "974c469c65574fbe315d55c0dca3677e3af46c42",
+  "originMain": "d5bdcbc4eb77db0e482a0cd84c5a94daf2b7d75a",
+  "baseline": "b643069bf9e923e50441c06c22930e9cd646e123",
+  "expected": 130,
+  "results": [
+    {
+      "suite": "shell",
+      "exitCode": 0,
+      "expected": 9,
+      "passed": 9,
+      "skipped": 0,
+      "seconds": 33.99,
+      "valid": true
+    },
+    {
+      "suite": "product",
+      "exitCode": 0,
+      "expected": 26,
+      "passed": 26,
+      "skipped": 0,
+      "seconds": 32.62,
+      "valid": true
+    },
+    {
+      "suite": "human",
+      "exitCode": 0,
+      "expected": 6,
+      "passed": 6,
+      "skipped": 0,
+      "seconds": 14.95,
+      "valid": true
+    },
+    {
+      "suite": "public-preview",
+      "exitCode": 0,
+      "expected": 2,
+      "passed": 2,
+      "skipped": 0,
+      "seconds": 15.45,
+      "valid": true
+    },
+    {
+      "suite": "customer-real",
+      "exitCode": 0,
+      "expected": 6,
+      "passed": 6,
+      "skipped": 0,
+      "seconds": 32.03,
+      "valid": true
+    },
+    {
+      "suite": "intake",
+      "exitCode": 0,
+      "expected": 29,
+      "passed": 29,
+      "skipped": 0,
+      "seconds": 157.45,
+      "valid": true
+    },
+    {
+      "suite": "customer-recovery",
+      "exitCode": 0,
+      "expected": 13,
+      "passed": 13,
+      "skipped": 0,
+      "seconds": 22.51,
+      "valid": true
+    },
+    {
+      "suite": "reports",
+      "exitCode": 0,
+      "expected": 3,
+      "passed": 3,
+      "skipped": 0,
+      "seconds": 27.51,
+      "valid": true
+    },
+    {
+      "suite": "frame",
+      "exitCode": 0,
+      "expected": 25,
+      "passed": 25,
+      "skipped": 0,
+      "seconds": 8.28,
+      "valid": true
+    },
+    {
+      "suite": "actual-app-public-pixels",
+      "exitCode": 0,
+      "expected": 11,
+      "passed": 11,
+      "skipped": 0,
+      "seconds": 15.09,
+      "valid": true
+    }
+  ]
+}
