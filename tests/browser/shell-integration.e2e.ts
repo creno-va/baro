@@ -70,7 +70,7 @@ test("long service content fits narrow screens and the menu stays closable after
     for (const [key, value] of Object.entries(values))
       localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
   });
-  for (const width of [320, 901, 1024]) {
+  for (const width of [320, 901, 1024, 1440]) {
     await page.setViewportSize({ width, height: 760 });
     for (const path of [
       "/cases",
@@ -91,6 +91,33 @@ test("long service content fits narrow screens and the menu stays closable after
             .getByText(/SYNTHETIC-LONG-CONTENT-/)
             .first(),
         ).toBeVisible();
+      if (path === "/cases/responsive-long-case") {
+        const messages = page.locator(".workspace-messages");
+        const header = page.locator(".case-workspace__header");
+        const composer = page.locator(".workspace-composer");
+        await expect(messages).toBeVisible();
+        await expect
+          .poll(() => messages.evaluate((node) => node.scrollHeight - node.clientHeight))
+          .toBeGreaterThan(0);
+        const fixed = {
+          header: await header.boundingBox(),
+          composer: await composer.boundingBox(),
+        };
+        expect(fixed.header).not.toBeNull();
+        expect(fixed.composer).not.toBeNull();
+        await messages.hover();
+        await page.mouse.wheel(0, -100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBe(0);
+        await page.mouse.wheel(0, 100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+        await expect
+          .poll(async () => ({
+            header: await header.boundingBox(),
+            composer: await composer.boundingBox(),
+          }))
+          .toEqual(fixed);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      }
       if (path === "/cases")
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {

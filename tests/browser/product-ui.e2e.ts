@@ -700,7 +700,9 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(remove).toBeFocused();
 });
 
-test("chat height stays fixed when preparation expands and the page scrolls", async ({ page }) => {
+test("chat frame keeps its header and composer fixed when preparation expands and scrolls", async ({
+  page,
+}) => {
   await seed(page, true);
   for (const viewport of [
     { width: 390, height: 844 },
@@ -709,25 +711,40 @@ test("chat height stays fixed when preparation expands and the page scrolls", as
     await page.setViewportSize(viewport);
     await page.goto(base);
     await hydrated(page);
-    const panel = page.locator(".workspace-main");
+    const frame = page.locator(".case-workspace--conversation");
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    await expect(panel).toHaveAttribute("style", /--chat-panel-height/);
+    await expect(frame).toBeVisible();
+    const geometry = () =>
+      frame.evaluate((element) => {
+        const chat = element.querySelector(".workspace-main");
+        const header = element.querySelector(".case-workspace__header");
+        const composer = element.querySelector(".workspace-composer");
+        if (!chat || !header || !composer) throw new Error("Synthetic conversation frame missing");
+        return {
+          frameHeight: element.clientHeight,
+          chatHeight: chat.clientHeight,
+          headerTop: header.getBoundingClientRect().top,
+          composerTop: composer.getBoundingClientRect().top,
+          composerBottom: composer.getBoundingClientRect().bottom,
+        };
+      });
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(send).toBeInViewport({ ratio: 1 });
-    const initialHeight = await panel.evaluate((element) => element.clientHeight);
+    const initial = await geometry();
+    expect(initial.composerBottom).toBeLessThanOrEqual(viewport.height);
+    const messages = page.locator(".workspace-messages");
     const context = page.locator(".workspace-context");
+    await expect(messages.locator(".workspace-context")).toHaveCount(1);
     await context.locator("summary").click();
     await expect(context).toHaveAttribute("open", "");
     await context.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
-    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(geometry).toEqual(initial);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect(send).toBeInViewport({ ratio: 1 });
-    await context.locator("summary").evaluate((element) => {
-      if (element instanceof HTMLElement) element.click();
-    });
+    await context.locator("summary").click();
     await expect(context).not.toHaveAttribute("open");
-    await expect.poll(() => panel.evaluate((element) => element.clientHeight)).toBe(initialHeight);
+    await expect.poll(geometry).toEqual(initial);
     await expect(send).toBeInViewport({ ratio: 1 });
   }
 });
