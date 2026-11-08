@@ -142,3 +142,64 @@ test("asking about a material prepares selection without overwriting or sending 
     ),
   ).toBe(0);
 });
+
+for (const changed of [false, true]) {
+  test(`source review ${changed ? "reports a changed revision" : "targets the exact extracted position"} and returns to the same unsent conversation`, async ({
+    page,
+  }) => {
+    await seedMaterialsScenario(page, { messages: 20 });
+    await page.goto(materialsCasePath);
+    await expect(input(page)).toBeEnabled();
+    await page.evaluate(() => {
+      const records = JSON.parse(localStorage.getItem("baro-api-mock-v1:workspace") ?? "{}");
+      records["synthetic-case"].messages.at(-1).references = [
+        {
+          kind: "user_material",
+          fileId: "synthetic-material-1",
+          fileRevision: 1,
+          position: { kind: "document", page: 1, paragraph: null, table: null },
+        },
+      ];
+      localStorage.setItem("baro-api-mock-v1:workspace", JSON.stringify(records));
+    });
+    if (changed)
+      await page.evaluate(async () => {
+        const path = "/src/client/api/index.ts";
+        const { api } = (await import(path)) as typeof import("../../src/client/api");
+        const review = await api.files.review("synthetic-case", "synthetic-material-1");
+        const observation = review.observations[0]?.value;
+        if (!observation) throw new Error("Synthetic source observation missing");
+        await api.files.saveReview(
+          "synthetic-case",
+          "synthetic-material-1",
+          {
+            expectedRevision: review.file.revision,
+            edits: [
+              {
+                observationId: observation.id,
+                text: `${observation.text} 원문 대조 후 교정한 합성 내용입니다.`,
+                included: true,
+              },
+            ],
+          },
+          review.workspaceRevision,
+        );
+      });
+    await page.reload();
+    await input(page).fill("출처를 확인하고 돌아와 이어서 쓸 설명");
+    const source = page.locator(".workspace-message-references a").last();
+    await source.scrollIntoViewIfNeeded();
+    const log = page.getByRole("log", { name: "사건 대화" });
+    const before = await log.evaluate((node) => node.scrollTop);
+    await source.click();
+    const review = page.getByRole("dialog", { name: "자료 확인", exact: true });
+    await expect(review).toBeVisible();
+    await expect(review.getByRole("status").filter({ hasText: "인용한 위치:" })).toContainText(
+      changed ? "인용 이후 자료가 바뀌었어요" : "인용 위치의 추출 결과를 표시했어요",
+    );
+    await review.getByRole("button", { name: "닫기", exact: true }).first().click();
+    await expect(input(page)).toHaveValue("출처를 확인하고 돌아와 이어서 쓸 설명");
+    await expect(source).toBeFocused();
+    expect(Math.abs((await log.evaluate((node) => node.scrollTop)) - before)).toBeLessThan(2);
+  });
+}
