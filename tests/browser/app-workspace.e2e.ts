@@ -588,16 +588,51 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   const toolsTrigger = header.locator(".case-tools > summary");
   await toolsTrigger.click();
   const tools = header.getByRole("navigation", { name: "사건 도구", exact: true });
-  for (const link of await tools.getByRole("link").all()) {
-    await expect(link).toBeInViewport({ ratio: 1 });
-    expect(
-      await link.evaluate((node) => {
-        const bounds = node.getBoundingClientRect();
-        return node.contains(
-          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
-        );
-      }),
-    ).toBe(true);
+  const expectToolsActionable = async () => {
+    await expect(tools.getByRole("link")).toHaveCount(4);
+    for (const link of await tools.getByRole("link").all()) {
+      await expect(link).toBeInViewport({ ratio: 1 });
+      await expect
+        .poll(() =>
+          link.evaluate((node) => {
+            const menu = node.closest("nav")?.getBoundingClientRect();
+            const trigger = node
+              .closest("details")
+              ?.querySelector("summary")
+              ?.getBoundingClientRect();
+            const bounds = node.getBoundingClientRect();
+            if (!menu || !trigger) throw new Error("Case tools geometry missing");
+            const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+            return {
+              withinViewport:
+                menu.left >= 0 &&
+                menu.top >= 0 &&
+                menu.right <= (visualViewport?.width ?? innerWidth) + 1 &&
+                menu.bottom <= (visualViewport?.height ?? innerHeight) + 1,
+              aligned:
+                menu.left <= trigger.right &&
+                menu.right >= trigger.left &&
+                ((menu.top >= trigger.bottom - 1 && menu.top - trigger.bottom <= 12 * zoom) ||
+                  (menu.bottom <= trigger.top + 1 && trigger.top - menu.bottom <= 12 * zoom)),
+              hit: node.contains(
+                document.elementFromPoint(
+                  bounds.x + bounds.width / 2,
+                  bounds.y + bounds.height / 2,
+                ),
+              ),
+            };
+          }),
+        )
+        .toEqual({ withinViewport: true, aligned: true, hit: true });
+      await link.click({ trial: true });
+    }
+  };
+  await expectToolsActionable();
+  await header.press("Home");
+  await expectToolsActionable();
+  for (const width of [768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectToolsActionable();
   }
   await page.keyboard.press("Escape");
   await expect(tools).not.toBeVisible();
@@ -614,11 +649,20 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     ),
   ).toBe(true);
   await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await toolsTrigger.click();
+  await toolsTrigger.focus();
+  await page.keyboard.press("Tab");
+  await expect(tools.getByRole("link").first()).toBeFocused();
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
   });
   await expect(page.locator(".app-frame")).toHaveCSS("--app-viewport-height", "900px");
   await expect(page.locator(".app-frame")).toHaveAttribute("data-viewport-writes", "2");
+  await expect(tools.getByRole("link").first()).toBeFocused();
+  await expectToolsActionable();
+  await page.keyboard.press("Escape");
+  await expect(tools).not.toBeVisible();
+  await expect(toolsTrigger).toBeFocused();
   await expect(composer).toBeInViewport({ ratio: 1 });
   await expect(composer).toHaveValue("확대 후에도 유지할 메시지");
 });
