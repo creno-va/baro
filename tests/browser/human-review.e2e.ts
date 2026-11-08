@@ -117,24 +117,67 @@ test("active summary proposes a change, keeps materials and confirms before retu
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        [...document.querySelectorAll("body *")]
-          .filter((node) => {
-            const r = node.getBoundingClientRect();
-            return (
-              r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(node).position !== "fixed"
-            );
-          })
-          .map((node) => ({
-            tag: node.tagName,
-            class: node.className,
-            width: node.getBoundingClientRect().width,
-          })),
-      ),
-    )
-    .toEqual([]);
+  await page.evaluate(() => document.fonts.ready);
+  const measureOverflow = () =>
+    page.evaluate(() => ({
+      fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      overflow: [...document.querySelectorAll("body *")]
+        .filter((node) => {
+          const r = node.getBoundingClientRect();
+          return (
+            node.checkVisibility({ checkVisibilityCSS: true }) &&
+            r.width > 0 &&
+            r.right > innerWidth + 1 &&
+            getComputedStyle(node).position !== "fixed"
+          );
+        })
+        .map((node) => ({
+          tag: node.tagName,
+          class: node.className,
+          width: node.getBoundingClientRect().width,
+        })),
+    }));
+  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
+  const trigger = page.locator(".case-tools > summary");
+  const menu = page.locator(".case-tools__menu");
+  await expect(menu).not.toBeVisible();
+  await expect(menu.getByRole("link", { includeHidden: true })).toHaveCount(4);
+  await trigger.focus();
+  await page.keyboard.press("Tab");
+  await expect(
+    page
+      .getByRole("navigation", { name: "사건 작업", exact: true })
+      .getByRole("link", { name: "대화", exact: true }),
+  ).toBeFocused();
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("link")).toHaveCount(4);
+  for (const name of ["요약 보기 · 재확인", "타임라인", "다음 행동", "유사 판례"]) {
+    await page.keyboard.press("Tab");
+    const link = menu.getByRole("link", { name, exact: true });
+    await expect(link).toBeFocused();
+    await expect(link).toBeInViewport({ ratio: 1 });
+    const bounds = await link.boundingBox();
+    if (!bounds) throw new Error("Visible case tool bounds missing");
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    await link.click({ trial: true });
+    expect(
+      await link.evaluate((node) => {
+        const r = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return hit === node || node.contains(hit);
+      }),
+    ).toBe(true);
+  }
+  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
   await page.screenshot({ path: ".wrangler/ui-human-files-320.png", fullPage: true });
 });
 
