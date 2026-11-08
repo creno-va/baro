@@ -7,7 +7,7 @@
 - 실제 저장소: `/Users/hwang-eunchan/Desktop/baro/repository`, origin `creno-va/baro`. 사용자 기준 `D:/Project/baro`의 파일 경로는 각 worktree 루트로 치환한다.
 - 신규 조사 기준 main `b643069bf9e923e50441c06c22930e9cd646e123`(PR750), main CI41946519596 SUCCESS. 2026-11-08 시작 조회에서 열린 PR/이슈0이었다. 과거 인계 SHA를 최신으로 사용하지 않는다.
 - [ADR-0018](../adr/0018-conversation-report-rework.md), [기존 대화·리포트 계약](./CONVERSATION-REPORT-REWORK.md), [현행 비용 정책](../operations/PREBETA-COST-POLICY.md)을 유지한다. 과거 #620~627의 완료·외부 증거를 이번 화면 인수로 재사용하지 않는다.
-- 00: `ui-00`, `codex/751-app-workspace-integration`, 포트4300. 01: `ui-01-shell`, `codex/752-app-shell`, 포트4311. 02: `ui-02-chat-materials`, `codex/753-chat-materials`, 포트4322. 03: `ui-03-reports`, `codex/754-customer-reports`, 포트4333. 다른 이름을 실제 등록하면 이 표를 정정한다.
+- 00: `ui-00`, `codex/751-app-workspace-integration`, 포트4300. 01: `ui-01-shell`, `codex/752-app-shell`, 포트4311. 02: `ui-02-workspace`, `codex/753-conversation-materials`, 포트4322. 03: `ui-03-reports`, `codex/754-customer-reports`, 포트4333. 각 지정 채팅에서 실제 등록을 확인했다.
 - 각 worktree 내부 `.wrangler`·DB·출력 fixture를 격리한다. 기존 checkout/secret/미커밋 작업은 보존한다. 실제 OAuth·사건·token·SQL/stack은 공개 기록·artifact에 넣지 않는다.
 
 ## 작업 순서와 파일 계약
@@ -157,6 +157,16 @@ header(auto)/body(minmax(0,1fr))를 두고 중앙 메시지·자료 각각 스�
 추가하지 않고 필요한 프롬프트 변경은 기존 bounded gateway 실행·독립 audit 안에서 검증한다.
 
 ## 인수표와 실제 결과
+
+로컬 고정 도구는 Bun1.4.0과 Node24.11.0을 `/private/tmp`에 격리 설치해 사용한다.
+Mac 기본 TMPDIR의 `/var`와 `/private/var` realpath 차이로 기존 coverage consumer 검사가
+실패하는 것을 재현했고 `TMPDIR=/private/tmp`에서 원래 assertion 그대로 통과했다.
+Bun 설치 디렉터리의 `bunx`는 같은 공식 Bun 바이너리 symlink다. lock·의존성·테스트를 바꿔
+이 환경 문제를 숨기지 않는다. workerd 로컬 listen은 sandbox 허용 환경에서 수행한다.
+
+02의 추가 조사에 따라 legacy `/files` 직접 진입은 metadata-only 읽기를 보존한다.
+같은 추출 자료 UI를 주 작업으로 열고 대화 복귀 링크를 제공한다. canonical 대화 경로는
+중앙 채팅·오른쪽 자료이며 `/files` 열기만으로 facts/messages를 추가 조회하지 않는다.
 
 아래 표의 미검증은 실제 작업 완료 뒤 정확한 SHA/환경/결과로 바꾼다. 합성 기능 검증과 실제
 OAuth·공급자·공식 법률 API·remote storage·독립 법률 인수는 별개다. 과거 성공을 이번 결과로 복사하지 않는다.
