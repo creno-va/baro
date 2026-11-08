@@ -221,7 +221,7 @@ test("materials keep one compact upload area, coverage, summary access and retri
         return { left, right, width, height };
       };
       return {
-        header: box(".case-navigation"),
+        header: box(".case-workspace__header"),
         content: box(".workspace-grid"),
         upload: box(".workspace-upload-target"),
         overflow: document.documentElement.scrollWidth > innerWidth + 1,
