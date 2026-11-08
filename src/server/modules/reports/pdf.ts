@@ -226,7 +226,7 @@ export async function renderReportPdf(
     let y = 745,
       drawing =
         text("BARO", 14, 790, "0.13 0.35 0.78") +
-        text("사건 상담 준비 리포트", 9, 791, "0.35 0.40 0.48", 110) +
+        text("내 사건 이해와 해결 준비", 9, 791, "0.35 0.40 0.48", 110) +
         "0.13 0.35 0.78 RG 1.5 w 52 776 m 543 776 l S\n";
     while (cursor < all.length) {
       const record = all[cursor];

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { opaqueIdSchema } from "../../../contracts";
 import {
+  caseDisplayTitle,
   type V2Coverage,
   type V2ReportBody,
   type V2SourcePosition,
@@ -12,7 +13,11 @@ import { secondsLabel } from "../../../utils/time";
 import { type Actor, aliveWorkspace, readSnapshot, type V2Core } from "../../db/v2-core";
 import { createV2FileStagingRepository } from "../../db/v2-file-staging";
 import { createV2FilesRepository } from "../../db/v2-files";
-import { createV2WorkspaceRepository, referencesAuthorized } from "../../db/v2-workspace";
+import {
+  createV2WorkspaceRepository,
+  intakeContentSchema,
+  referencesAuthorized,
+} from "../../db/v2-workspace";
 import { digest } from "../files/binary";
 import { BOUND_SOURCE_BATCH_SIZE, readBoundSourceBatch } from "../legal-retrieval/v2/bound-sources";
 import { GUIDE_HOSTS } from "../legal-retrieval/v2/registry";
@@ -125,14 +130,19 @@ function coverageText(value: V2Coverage | null) {
     : "";
   return `${value.durationSeconds}초 영상 · ${value.frames.filter((f) => f.status === "processed").length}/${value.frames.length}개 표본 처리${samples} · 장면 감지 ${value.sceneDetection === "complete" ? "완료" : "실패"} · ${value.audio ? audio(value.audio) : "오디오 없음"} · 표본 사이 구간은 원본에서 확인 필요`;
 }
-export async function ownedWorkspace(core: V2Core, actor: Actor, id: string) {
+export async function ownedWorkspace(core: V2Core, actor: Actor, id: string, includeTitle = false) {
   opaqueIdSchema.parse(id);
   const row = await core
     .statement(
-      `SELECT w.revision,w.confirmed_summary_revision,w.status FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
+      `SELECT w.revision,w.confirmed_summary_revision,w.status${includeTitle ? ", (SELECT i.encrypted_payload FROM v2_intakes i WHERE i.id=w.id) AS title_payload" : ""} FROM v2_workspaces w WHERE w.id=? AND w.owner_id=? AND ${aliveWorkspace}`,
       [id, actor.ownerId],
     )
-    .first<{ revision: number; confirmed_summary_revision: number | null; status: string }>();
+    .first<{
+      revision: number;
+      confirmed_summary_revision: number | null;
+      status: string;
+      title_payload?: string | null;
+    }>();
   if (!row) throw new ReportError("NOT_FOUND");
   return row;
 }
@@ -318,8 +328,9 @@ export async function buildReportSource(
   excluded: readonly string[],
   guideHosts: readonly string[] = [],
   options?: ReportSourceOptions,
+  titleForGeneration = false,
 ) {
-  const current = await ownedWorkspace(core, actor, id);
+  const current = await ownedWorkspace(core, actor, id, titleForGeneration);
   if (current.status !== "active" || !current.confirmed_summary_revision)
     throw new ReportError("REVIEW_REQUIRED");
   const digest = await sourceDigest(core, actor, id, options);
@@ -328,6 +339,20 @@ export async function buildReportSource(
     summary = intake?.summary;
   if (!intake || !summary || summary.revision !== current.confirmed_summary_revision)
     throw new ReportError("REVIEW_REQUIRED");
+  // readIntake omits custom case names from its strict client contract. Only a
+  // new assembly reads this extra ciphertext in the existing owner-checked SQL
+  // row. Keep its title and W revision together; publication pins that revision.
+  if (titleForGeneration && !current.title_payload) throw new ReportError("REVIEW_REQUIRED");
+  const titleContent = current.title_payload
+    ? await core.decrypt(
+        "v2_intakes",
+        id,
+        actor.ownerId,
+        1,
+        current.title_payload,
+        intakeContentSchema,
+      )
+    : null;
   const fileRows = await core
     .statement(
       "SELECT id,revision,state FROM v2_files WHERE workspace_id=? AND state!='deleting' ORDER BY id LIMIT 101",
@@ -515,6 +540,9 @@ export async function buildReportSource(
   // Display-only metadata from the same authenticated intake read. Never use
   // reference/fact order as a question number or modify canonical provenance.
   const display: ReportDisplayContext = {
+    ...(titleContent
+      ? { title: caseDisplayTitle(titleContent.narrative, titleContent.caseTitle) }
+      : {}),
     intakeRevision: intake.revision,
     materials,
     materialGaps,
@@ -540,6 +568,7 @@ export const sourcePositionText = (p: V2SourcePosition) =>
         : "이미지 관찰";
 
 type ReportDisplayContext = {
+  readonly title?: string;
   readonly intakeRevision: number;
   readonly questions: readonly { id: string; round: number; number: number; prompt?: string }[];
   readonly materials?: readonly { id: string; observations: readonly string[] }[];

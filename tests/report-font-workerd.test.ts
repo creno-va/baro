@@ -89,6 +89,27 @@ export default { async fetch(request) {
     expect(raw).toContain("/ToUnicode");
     expect(raw).toContain("/CIDToGIDMap");
     expect(raw).toContain("/Count 2");
+    const extracted = Bun.spawnSync(
+      [
+        "python3",
+        "-c",
+        [
+          "import io,json,sys",
+          "from pypdf import PdfReader",
+          "headers=[page.extract_text() for page in PdfReader(io.BytesIO(sys.stdin.buffer.read())).pages]",
+          "print(json.dumps(headers,ensure_ascii=False))",
+        ].join("\n"),
+      ],
+      { stdin: bytes, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(extracted.exitCode).toBe(0);
+    const headers = JSON.parse(new TextDecoder().decode(extracted.stdout)) as string[];
+    expect(headers).toHaveLength(2);
+    for (const header of headers) {
+      expect(header.replace(/\s/g, "")).toContain("내사건이해와해결준비");
+      expect(header).not.toContain("사건 상담 준비 리포트");
+    }
+
     if (process.env.BARO_REPORT_EVIDENCE)
       await Bun.write(`${process.env.BARO_REPORT_EVIDENCE}/compressed-font-report.pdf`, bytes);
     for (const path of ["/oversize", "/compression-error"]) {
