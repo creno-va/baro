@@ -124,11 +124,7 @@ test("active summary proposes a change, keeps materials and confirms before retu
           .filter((node) => {
             const r = node.getBoundingClientRect();
             return (
-              r.width > 0 &&
-              r.right > innerWidth + 1 &&
-              getComputedStyle(node).position !== "fixed" &&
-              // Case destinations intentionally scroll inside the bounded navigation row.
-              !node.closest(".workspace-tabs")
+              r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(node).position !== "fixed"
             );
           })
           .map((node) => ({

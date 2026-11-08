@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
+import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
 import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
@@ -620,12 +621,20 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       }
       if (route === base) {
-        const positions = await page
-          .locator(".workspace-tabs a")
-          .evaluateAll((links) => links.map((e) => Math.round(e.getBoundingClientRect().top)));
-        expect(new Set(positions).size).toBe(1);
-        const destinations = page.locator(".workspace-tabs a");
+        const menu = await openCaseTools(page);
+        const destinations = menu.getByRole("link");
         await expect(destinations).toHaveCount(6);
+        expect(
+          await destinations.evaluateAll((links) => links.map((link) => link.getAttribute("href"))),
+        ).toEqual(
+          ["summary", "timeline", "actions", "precedents", "files", "reports"].map(
+            (path) => `${base}/${path}`,
+          ),
+        );
+        const columns = await destinations.evaluateAll((links) =>
+          links.map((link) => Math.round(link.getBoundingClientRect().left)),
+        );
+        expect(new Set(columns).size).toBe(1);
         for (const destination of await destinations.all()) {
           await destination.scrollIntoViewIfNeeded();
           await expect(destination).toBeInViewport({ ratio: 0.99 });
@@ -652,16 +661,20 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   const box = await send.boundingBox();
   expect(box).not.toBeNull();
   expect((box?.y ?? 10000) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
-  const menu = page.getByRole("navigation", { name: "사건 메뉴", exact: true });
-  await menu.getByRole("link", { name: "리포트 보기" }).click();
+  await goToCaseTool(page, "reports");
   await expect(page).toHaveURL(`${base}/reports`);
+  const menu = await openCaseTools(page);
   const selected = menu.getByRole("link", { name: "리포트 보기" });
+  await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(selected).toBeInViewport({ ratio: 1 });
-  await menu.getByRole("link", { name: "대화", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await returnToCaseConversation(page);
   await expect(page).toHaveURL(base);
   await expect(page.locator(".case-options")).toHaveCount(0);
   await page.goto("/cases");

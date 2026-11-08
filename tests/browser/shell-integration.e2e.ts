@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { goToCaseTool } from "../helpers/case-navigation";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
@@ -202,10 +203,8 @@ test("customer completes intake workspace original PDF report and cascading dele
     .fill("합성 추가 사실입니다. 반환 약속 메시지를 자료로 보관했습니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: /^자료/ })
-    .click();
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(`${casePath}/files`);
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
@@ -214,13 +213,25 @@ test("customer completes intake workspace original PDF report and cascading dele
   });
   await expect(page.getByRole("heading", { name: "합성증거.txt" })).toBeVisible();
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await goToCaseTool(page, "timeline");
+  await expect(page).toHaveURL(`${casePath}/timeline`);
   await page.getByRole("button", { name: "일정 추가" }).click();
   for (const viewport of [
     { width: 320, height: 760 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    // Resizing into the mobile breakpoint starts the bottom-sheet entrance.
+    // Verify its settled geometry without disabling the customer's animation.
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -263,6 +274,15 @@ test("customer completes intake workspace original PDF report and cascading dele
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -329,7 +349,7 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
       ).toBe(true);
     }
     await page.goto("/help#limits");
-    if (viewport.width <= 900) {
+    if (viewport.width < 768) {
       const target = await page.locator("#limits").boundingBox();
       const header = await page.locator(".app-header").boundingBox();
       expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));

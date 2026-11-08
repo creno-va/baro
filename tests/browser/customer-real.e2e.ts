@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { goToCaseTool, openCaseTools } from "../helpers/case-navigation";
 import { settleIntakeSave } from "../helpers/intake-autosave";
 
 // No OAuth/AI success claim: real production APIs receive signed synthetic sessions.
@@ -283,7 +284,8 @@ for (const viewport of [
       expect(confirmations[0]).toEqual(confirmations[1]);
       expect(mutations.filter((mutation) => mutation.path.endsWith("/summary"))).toHaveLength(0);
       await expect(page.getByLabel("추가 사실 또는 질문")).toBeVisible();
-      await page.getByRole("link", { name: "타임라인", exact: true }).click();
+      await goToCaseTool(page, "timeline");
+      await expect(page).toHaveURL(`/cases/${info.id}/timeline`);
       await page.getByRole("button", { name: "일정 추가" }).click();
       await page.getByLabel("어떤 일이 있었나요?").fill("자료를 확인한 날");
       await page.getByLabel("상세 내용").fill("타임라인 응답 유실 합성 회귀");
@@ -374,16 +376,17 @@ for (const viewport of [
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
       if (viewport.width === 1280) {
-        const tabs = page.getByRole("navigation", { name: "사건 메뉴", exact: true });
-        const links = tabs.getByRole("link");
-        const rows = () =>
+        const menu = await openCaseTools(page);
+        const links = menu.getByRole("link");
+        await expect(links).toHaveCount(6);
+        const columns = () =>
           links.evaluateAll(
-            (items) => new Set(items.map((item) => item.getBoundingClientRect().top)).size,
+            (items) => new Set(items.map((item) => item.getBoundingClientRect().left)).size,
           );
-        const checkTabs = async () => {
+        const checkTools = async () => {
           for (const link of await links.all()) {
-            // The case menu is a bounded horizontal scroller at narrow
-            // effective widths. Keyboard focus must reveal every destination.
+            // The disclosure must keep every destination reachable by keyboard
+            // at both normal and doubled effective text size.
             await link.focus();
             await expect(link).toBeVisible();
             await expect(link).toBeInViewport({ ratio: 1 });
@@ -402,8 +405,8 @@ for (const viewport of [
             await expect(links.nth(index)).toBeInViewport({ ratio: 1 });
           }
         };
-        await checkTabs();
-        expect(await rows()).toBe(1);
+        await checkTools();
+        expect(await columns()).toBe(1);
         await page.evaluate(() => {
           document.documentElement.style.zoom = "1";
         });
@@ -412,8 +415,8 @@ for (const viewport of [
             page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
           )
           .toBe(true);
-        await checkTabs();
-        expect(await rows()).toBe(1);
+        await checkTools();
+        expect(await columns()).toBe(1);
         await page.screenshot({
           path: testInfo.outputPath("customer-real-desktop.png"),
           fullPage: true,
