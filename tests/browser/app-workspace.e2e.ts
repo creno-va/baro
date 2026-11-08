@@ -575,6 +575,16 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   ).toBe(true);
   await expect(page.locator(".app-frame")).toHaveCSS("--app-viewport-height", "450px");
   await expect(page.locator(".app-frame")).toHaveAttribute("data-viewport-writes", "1");
+  const header = page.getByRole("region", { name: "사건 제목과 작업", exact: true });
+  expect(await header.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  await page.keyboard.press("Tab");
+  await header.focus();
+  await expect(header).toHaveCSS("box-shadow", /inset/);
+  await page.keyboard.press("End");
+  await expect.poll(() => header.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  await expect(header.getByRole("link", { name: "문서 초안", exact: true })).toBeInViewport({
+    ratio: 1,
+  });
   await page.screenshot({
     path: ".wrangler/ui01/followup-css-zoom-200.png",
     animations: "disabled",
