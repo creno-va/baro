@@ -1,5 +1,12 @@
 # BARO
 
+> 2026-11-08 사용자 직접 지시로 웹 디자인 시스템·레이아웃·UX를 전면 교체합니다.
+> 현재 목표는 사건 준비·대응의 네 경로, 대화·자료·지속 리포트·문서 초안의 작업대입니다.
+> 변호사 컨택 UI는 제외하고 기존 계정과 본인 자료 이용은 보존합니다.
+> [ADR-0021](./docs/adr/0021-case-workbench-and-web-design-system.md)과
+> [새 실행 계약](./docs/development/REDESIGN-EXECUTION.md)이 아래 과거 DS·연결 UI 설명보다 우선합니다.
+> 구현·새 저장 계약·원격 서비스 종료·배포 완료는 구분합니다.
+
 > 2026-11-01 사용자 요청으로 대화 중심 사건·법률 분석·리포트·후속 해결 개편을 진행합니다.
 > 이번 범위는 과거 신규 기능 중단·사실 준비 전용의 해당 부분을 대체합니다.
 > [ADR-0018](./docs/adr/0018-conversation-report-rework.md)과 [통합 기록](./docs/development/CONVERSATION-REPORT-REWORK.md)을 따르며 구현·실제 외부/법률 인수는 구분합니다. 이번 작업으로 production에 배포하지 않습니다.
