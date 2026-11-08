@@ -372,9 +372,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   ).toEqual([]);
   await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  expect((await new AxeBuilder({ page }).include(".report-modal").analyze()).violations).toEqual(
-    [],
-  );
+  expect((await new AxeBuilder({ page }).include("dialog[open]").analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(

@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import type { ReactNode } from "react";
+import { Dialog } from "../ui/dialog";
 import { Spinner } from "../ui/loading";
 export function ConfirmDialog({
   title,
@@ -13,31 +14,15 @@ export function ConfirmDialog({
   busyLabel?: string;
   onCancel: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const id = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog?.showModal();
-    return () => {
-      dialog?.close();
-      queueMicrotask(() => {
-        if (previous?.isConnected) previous.focus();
-      });
-    };
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className="report-modal"
-      aria-labelledby={id}
-      aria-busy={busy}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onCancel();
+    <Dialog
+      open
+      title={title}
+      showCloseButton={false}
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel();
       }}
     >
-      <h2 id={id}>{title}</h2>
       {busy && (
         <p role="status" className="ui-loading__label">
           <Spinner />
@@ -45,6 +30,6 @@ export function ConfirmDialog({
         </p>
       )}
       {children}
-    </dialog>
+    </Dialog>
   );
 }
