@@ -560,7 +560,8 @@
 .report-export .primary {
   min-width: 170px;
 }
-.report-canvas > .resolution {
+.report-canvas > .resolution,
+.report-canvas > #document-drafts {
   margin-top: 32px;
   border-top: 1px solid var(--border, #e3e8ef);
 }
