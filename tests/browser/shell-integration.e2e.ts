@@ -426,12 +426,10 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
     expect(header).not.toBeNull();
     expect(target?.x).toBeGreaterThanOrEqual(0);
     expect(headingBounds?.y).toBeGreaterThanOrEqual(0);
-    await test
-      .info()
-      .attach(`help-anchor-${viewport.width}`, {
-        body: JSON.stringify({ target, heading: headingBounds, header }),
-        contentType: "application/json",
-      });
+    await test.info().attach(`help-anchor-${viewport.width}`, {
+      body: JSON.stringify({ target, heading: headingBounds, header }),
+      contentType: "application/json",
+    });
     const position = await page
       .locator(".public-header")
       .evaluate((node) => getComputedStyle(node).position);
