@@ -16,6 +16,25 @@ const tools = [
   { id: "precedents", label: "유사 판례", path: "/precedents" },
 ] as const;
 
+function positionTools(disclosure: HTMLDetailsElement | null, trigger: HTMLElement | null) {
+  const menu = disclosure?.querySelector<HTMLElement>(".case-tools__menu");
+  if (!disclosure?.open || !trigger || !menu) return;
+  const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  const width = window.visualViewport?.width ?? window.innerWidth;
+  const height = window.visualViewport?.height ?? window.innerHeight;
+  const edge = 16 * zoom;
+  menu.style.setProperty("--case-tools-width-limit", `${Math.max(44, width / zoom - 32)}px`);
+  menu.style.setProperty("--case-tools-height-limit", `${Math.max(44, height / zoom - 32)}px`);
+  const anchor = trigger.getBoundingClientRect();
+  const bounds = menu.getBoundingClientRect();
+  const left = Math.max(edge, Math.min(anchor.right - bounds.width, width - edge - bounds.width));
+  let top = anchor.bottom + 4 * zoom;
+  if (top + bounds.height > height - edge) top = anchor.top - bounds.height - 4 * zoom;
+  top = Math.max(edge, Math.min(top, height - edge - bounds.height));
+  menu.style.setProperty("--case-tools-left", `${left / zoom}px`);
+  menu.style.setProperty("--case-tools-top", `${top / zoom}px`);
+}
+
 /** Route navigation only. Business state and the materials toggle belong to the caller. */
 export function CaseNavigation({
   caseId,
@@ -55,12 +74,30 @@ export function CaseNavigation({
     onNavigate(task);
   }
   useEffect(() => {
+    const position = () => positionTools(disclosure.current, trigger.current);
     const closeOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !disclosure.current?.contains(event.target))
         disclosure.current?.removeAttribute("open");
     };
     document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
+    window.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("resize", position);
+    document.addEventListener("scroll", position, true);
+    const resize = new ResizeObserver(position);
+    if (trigger.current) resize.observe(trigger.current);
+    const style = new MutationObserver(position);
+    style.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("resize", position);
+      document.removeEventListener("scroll", position, true);
+      resize.disconnect();
+      style.disconnect();
+    };
   }, []);
   return (
     <header className="case-navigation case-header">
@@ -84,6 +121,7 @@ export function CaseNavigation({
         <details
           ref={disclosure}
           className="case-tools"
+          onToggle={() => positionTools(disclosure.current, trigger.current)}
           onKeyDown={(event) => {
             if (event.key !== "Escape" || !event.currentTarget.open) return;
             event.preventDefault();

@@ -396,12 +396,12 @@
   background: var(--muted);
 }
 .case-tools__menu {
-  position: absolute;
-  inset: calc(100% + 4px) 0 auto auto;
+  position: fixed;
+  inset: var(--case-tools-top, 72px) auto auto var(--case-tools-left, 16px);
   z-index: var(--layer-menu);
   width: 216px;
-  max-width: calc(100vw - 32px);
-  max-height: min(420px, 65dvh);
+  max-width: min(calc(100vw - 32px), var(--case-tools-width-limit, 216px));
+  max-height: min(420px, 65dvh, var(--case-tools-height-limit, 65dvh));
   overflow: auto;
   padding: 4px;
   border: 1px solid var(--border);
