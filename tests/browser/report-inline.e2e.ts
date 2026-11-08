@@ -97,7 +97,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   expect(await field.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
     "rgb(243, 245, 248)",
   );
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(section.locator("strong")).toHaveText("송금 확인");
   await expect(section.getByRole("heading", { level: 4 })).toHaveCount(3);
   await expect(section).toContainText("12.5–19.25초");
@@ -139,7 +139,8 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
       true,
     );
     await page.screenshot({ path: `.wrangler/report-inline-editor-${width}.png`, fullPage: true });
-    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "편집 취소", exact: true }).click();
   }
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileOutline = page.getByRole("navigation", { name: "리포트 목차", exact: true });
@@ -184,7 +185,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   await openReportEditor(page);
   await expect(overview).toHaveValue(originalOverview);
   await overview.fill(`${originalOverview}\n명시 저장한 합성 설명`);
-  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(".report-reading")).toContainText("명시 저장한 합성 설명");
   expect(saveCount).toBe(2);

@@ -291,14 +291,11 @@ export function ConversationContextReview({
           if (!value) close();
         }}
         title="입장과 절차 확인"
-        description="입장과 개인·기업 맥락, 사건 분야, 진행 단계는 서로 달라요. 모르는 항목은 아직 모름으로 남겨도 괜찮아요."
+        description="사건의 입장과 진행 상황을 확인해 주세요. 모르는 항목은 그대로 두어도 괜찮아요."
       >
         {loading && <p role="status">현재 입장과 절차를 확인하고 있어요.</p>}
         {base && (
           <div className="conversation-context-form">
-            <p className="workspace-muted">
-              개인·기업 맥락: {base.context.subjectContext === "company" ? "기업" : "개인"}
-            </p>
             <fieldset className="conversation-context-fields" disabled={frozen}>
               <legend className="workspace-sr-only">사용자가 확인한 사건 맥락</legend>
               <label>
@@ -352,8 +349,7 @@ export function ConversationContextReview({
               </label>
             </fieldset>
             <p className="workspace-muted">
-              입장이나 사건 분야를 바꿔도 진행 단계를 자동으로 정하지 않아요. 선택한 내용은 사용자
-              확인값이며 공식 사건 조회 결과가 아니에요.
+              선택한 내용으로 사건을 정리해요. 공식 사건 조회 결과는 아니에요.
             </p>
             {draft.purpose === "unconfirmed" && (
               <p>아직 입장을 모르면 저장하지 않고 현재 가능한 제한된 결과로 이어가도 괜찮아요.</p>
@@ -389,6 +385,9 @@ export function ConversationContextReview({
           </Button>
         )}
         <div className="workspace-buttons">
+          <Button variant="outline" disabled={busy} onClick={close}>
+            {changed ? "나중에 확인" : "닫기"}
+          </Button>
           <Button
             disabled={
               disabled ||
@@ -404,9 +403,6 @@ export function ConversationContextReview({
             onClick={() => void save()}
           >
             {attempt.current ? "저장 결과 다시 확인" : "입장·절차 저장"}
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={close}>
-            {changed ? "나중에 확인" : "그대로 확인하고 닫기"}
           </Button>
         </div>
       </Dialog>
