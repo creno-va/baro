@@ -130,3 +130,56 @@ frozen install·docs·Biome·tools TypeScript와 canonical 임시 경로의 전�
 재실행 때 검수자가 처음 테스트 경로에 남긴 생성 JSON의 lint 실패3건도 보존했다.
 해당 생성 원본만 `/private/tmp/baro-ux05-raw`로 이동한 뒤 전체 quick EXIT0을 확인했다.
 후속 E2E 보강은 tools TypeScript/Biome로 다시 검증하며 최종 과업은 동결 SHA에서 실행한다.
+
+## 동결 후보에서 발견한 실제 실패와 재검증
+
+`396927f876fdf73f2527bd5faf3897f75fa90050`에서 독립44개는 모두 통과했으나 인수하지 않았다.
+기존 계정 복구 검사를 직접 실행해12 PASS/3 FAIL을 확인하고, 자료 반영의 추가 회귀1 FAIL도
+독립 재현했다. 각 [독립](integration-396927f/independent/receipt.json),
+[계정](integration-396927f/account/receipt.json), [자료 반영](integration-396927f/reflection/receipt.json)
+receipt와 압축 원본을 보존한다. 실제200%·물리 한국어 IME의
+[이 SHA 관측](integration-396927f/physical/receipt.json)도 최종 후보와 분리한다.
+
+| ID | 심각도 | 재현·기대 | 실제 결과와 담당 전달 |
+| --- | --- | --- | --- |
+| UX05 04 | P2 상태 설명 누락 | dirty 리포트에서 확인된 계정 변경 후 이전 편집을 지우고 이유·현재 계정으로 안전하게 다시 여는 길을 표시 | editor 제거는 통과, 이유 alert가 없어 빈 리포트 영역만 남음. 늦은 failure/signed-out 검사도 지연 응답 보존 단계는 통과하고 마지막 실제 owner 변경의 같은 설명 단계에서 실패. account422/554행,02·총괄 전달 |
+| UX05 05 | P1 미전송 입력 유실 | 미전송 설명과 로컬 File을 둔 채 이미 처리된 자료의 확인→자료 내용 반영하기. 명시한 자료만 한 번 반영하고 작성 중인 입력·첨부를 유지 | 전체 페이지 이동 후 설명이 빈 값으로 바뀜. reflection163행에서 실제 값 `""`,02·총괄 전달. File 후속 단언에 도달하지 못한 것은 별도 미검증이며 그 실행만으로 File 유실을 단정하지 않음 |
+
+제품 수정 후 `d77d42d198b9d6509f333b4880243aa267ca9d39`에서
+[독립44](integration-d77d42d/independent/receipt.json),
+[계정15](integration-d77d42d/account/receipt.json),
+[리포트·초안 직접 경로10](integration-d77d42d/reports/receipt.json)은 모두 통과했다.
+자료 관련 검사는 [16 PASS/1 FAIL](integration-d77d42d/materials/receipt.json)이다.
+자료 반영 입력·File 보존과 정확한 원문 위치/변경 revision 안내는 통과했고,
+마지막 새 owner 검사는 숨겨진 composer를 role로 찾아 빈 값을 확인하려다 실패했다.
+기존 편집 제거·설명 표시는 이미 통과했다.02가 실제 DOM의 `#workspace-message`를 확인하도록
+검사를 수정했으며 최종 SHA에서 그 검사의 재실행이 필요하다. 검수자가 기존 기대값을 변경하지 않았다.
+
+### 리포트 저장 실패 검사 보강
+
+지정된 독립 검사에 dirty 리포트의 새로고침 취소→입력 보존→합성 저장 실패1회→실패 안내와
+저장 revision 불변→명시 재시도→정확히 revision+1·저장 본문/편집 재개 문자열 일치 검사를 추가했다.
+첫 실행2 FAIL은 Chromium의 취소된 reload 완료 대기와 domain Proxy의 method 직접 대입이
+실패 주입으로 작동하지 않은 검수 도구 문제였다. 두 번째2 FAIL은 저장 성공 후 편집 패널을
+닫는 정상 동작을 마지막 단언이 무시한 문제였다. 각
+[첫 실행](integration-d77d42d/report-save/receipt.json),
+[두 번째](integration-d77d42d/report-save-rerun/receipt.json)를 보존한다.
+실패 시 입력·저장 불변 기대를 유지하고 실제 읽기/편집 재개 동작으로 검사한
+[보완 실행](integration-d77d42d/report-save-semantic/receipt.json)은2 PASS다.
+이 실행들을 하나의 전체46 PASS 실행으로 합치지 않는다.
+
+## 실제 PDF 출력 독립 검사
+
+03이 제공한 실제 로컬 signed SQL 브라우저 다운로드의 생성 SHA는
+`c2ed79eda136c7fde0ffe84800896949cad81243`이다. 검수자는 원본 SHA-256을 manifest와 대조하고
+Poppler110dpi로 native9쪽·HTML 인쇄10쪽을 모두 다시 렌더링하여 직접 보았다.
+한글, 긴 문단의 페이지 연결, 식별정보 삭제 표기, 부분 처리와 누락 구간, 분석 미확인과 출처 제한
+본문에 잘림·겹침을 발견하지 못했다. [PDF receipt](pdf-c2ed79e/receipt.json)에 원본 해시·페이지별
+추출 문자 수·출력 의존 경로 비교를 남겼다. 해당 출력 코드·폰트는 c2ed79e→d77 사이 차이0이다.
+화면용 `reports.css` 변경은 내장 `documentCss`와 다르다. 이 출력물을 최종 SHA에서 새로 생성했다고
+표기하지 않으며 실제 제공자·배포 환경 다운로드의 인수 증거로 확대하지 않는다.
+
+P3 표현 잔여도03·총괄에게 전달했다. native PDF8쪽에는 소제목의 `###`와 목록 기호가 문자로 남고
+지원하지 않는 emoji가 대체 글리프로 보인다. HTML 인쇄본은 서식과 emoji를 표시한다.
+텍스트 추출의 원래 Unicode/파일명은 유지되어 출처 오매핑으로 판정하지 않았다.
+웹 DS 개편이 유발한 변경과 구분하며 완벽한 출력 일관성으로 통과 처리하지 않는다.

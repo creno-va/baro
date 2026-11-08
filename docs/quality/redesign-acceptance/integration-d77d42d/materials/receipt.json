@@ -1,0 +1,128 @@
+{
+  "productSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d77d42d/materials/results.json",
+  "rawSha256": "b0c05eaccda77aa0f30f45d06e0b3cdf27298360d415796acc7e7fdf9061aac1",
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:15:25.696Z",
+    "duration": 27535.868000000002,
+    "expected": 16,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "the mounted materials panel preserves the composer and selection without new reads or actions",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report readiness follows authorized progress reads and never starts work when opening the panel",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "review selection is separate from conversation selection and dirty correction survives resize and Escape",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "local attachments and consent stay local across panel changes before one explicit send",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "reading earlier messages does not jump to the newest reply when panel width changes",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "Korean composition cannot send on Enter and duplicate submission admits one message",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a legacy file URL opens the same correction without loading private conversation context",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "materials and composer remain readable and accessible at phone, tablet, desktop and zoom",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "320px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "390px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "1440px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "asking about a material prepares selection without overwriting or sending the draft",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "explicit material reflection sends once and returns without discarding unsent text or a local File",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "source review targets the exact extracted position and returns to the same unsent conversation",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "source review reports a changed revision and returns to the same unsent conversation",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report queries and draft hash survive retained navigation and browser history",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a changed owner clears retained report work and explains the boundary before explicit reopening",
+      "project": "",
+      "status": "failed",
+      "errors": [
+        "Error: expect(locator).toHaveValue(expected) failed\n\nLocator: getByRole('textbox', { name: '추가 사실 또는 질문', exact: true })\nExpected: \"\"\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toHaveValue\" getByRole('textbox', { name: '추가 사실 또는 질문', exact: true }) with timeout 5000ms\n  - waiting for getByRole('textbox', { name: '추가 사실 또는 질문', exact: true })\n\n\n  295 |   await expect(page.locator(\".report-review\")).toHaveCount(0);\n  296 |   await expect(page.getByRole(\"alert\")).toContainText(\"계정 또는 접근 상태가 변경됐어요.\");\n> 297 |   await expect(input(page)).toHaveValue(\"\");\n      |                             ^\n  298 |   await page.getByRole(\"button\", { name: \"현재 계정으로 다시 열기\", exact: true }).click();\n  299 |   await expect(page.locator(\".report-review\")).toBeVisible();\n  300 |   await expect(\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-integration/tests/browser/workspace-retained.e2e.ts:297:29"
+      ]
+    }
+  ],
+  "testSources": {
+    "tests/browser/workspace-materials.e2e.ts": "09e549145bef5ddc279a55b157aa5cbd50522cc575fa203793108500ad1c7bb5",
+    "tests/browser/workspace-retained.e2e.ts": "0110e1c7bedc6abfc68c62f505632a55a5ebcb6da153994ece5c98593563f128",
+    "tests/helpers/workspace-materials-scenario.ts": "36f2af87e8f04edcbaa418d632867b8b962517af942397d14378ce4407c9c252"
+  }
+}
