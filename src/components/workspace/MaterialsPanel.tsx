@@ -1,18 +1,12 @@
 import { FileText } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FileView } from "../../client/api/types";
-import type { V2ConversationState } from "../../contracts/v2";
+import type { V2ConversationState, V2Fact } from "../../contracts/v2";
 import { Button, ButtonLink } from "../ui/button";
 import { ElapsedTime } from "./ElapsedTime";
+import { materialState, materialStateLabels } from "./evidence-state";
 import { fileFailureLabel, fileProcessingLabel } from "./processing-progress";
 
-const fileStatus: Record<FileView["status"], string> = {
-  uploading: "업로드 중",
-  processing: "처리 중",
-  ready: "결과 확인 가능",
-  failed: "처리 실패",
-  waiting: "처리 대기",
-};
 function size(bytes: number) {
   return bytes < 1024 * 1024
     ? `${Math.max(1, Math.ceil(bytes / 1024))} KB`
@@ -35,6 +29,7 @@ export function MaterialsPanel({
   readonly,
   ready,
   evidenceIds,
+  facts = [],
   selected,
   selectionDisabled = false,
   onSelect,
@@ -53,6 +48,7 @@ export function MaterialsPanel({
   readonly: boolean;
   ready: boolean;
   evidenceIds: ReadonlySet<string>;
+  facts?: V2Fact[];
   selected: string[];
   selectionDisabled?: boolean;
   onSelect?: (id: string, checked: boolean) => void;
@@ -85,12 +81,14 @@ export function MaterialsPanel({
                 <div>
                   <h3>{file.name}</h3>
                   {evidenceIds.has(file.id) && (
-                    <span className="workspace-evidence-notice">근거로 활용됨</span>
+                    <span className="workspace-evidence-notice">
+                      현재 자료가 대화 근거로 연결됨
+                    </span>
                   )}
                   <p>
                     {size(file.sizeBytes)} ·{" "}
                     <span className={`workspace-status workspace-status--${file.status}`}>
-                      {file.uploadRejection ? "등록 거절" : fileStatus[file.status]}
+                      {materialStateLabels[materialState(file, facts)]}
                     </span>
                   </p>
                 </div>
@@ -98,6 +96,12 @@ export function MaterialsPanel({
               <p className="workspace-coverage" {...privateContent}>
                 {file.coverage || "추출 범위는 처리가 끝난 뒤 확인할 수 있어요."}
               </p>
+              {file.status === "ready" && (
+                <p className="workspace-muted" {...privateContent}>
+                  추출 결과를 원문과 확인할 수 있어요. 자료 선택이나 내용 확인만으로 분석과 리포트에
+                  반영되지는 않아요.
+                </p>
+              )}
               {file.processing && ["processing", "waiting"].includes(file.status) && (
                 <div className="workspace-muted" {...privateContent}>
                   <p>{fileProcessingLabel(file.processing)}</p>

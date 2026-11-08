@@ -47,7 +47,7 @@ test("a customer starts directly on home and reaches adaptive questions without 
   await narrative.fill(
     "합성 사건입니다. 회사 거래처에서 계약한 대금을 약속한 날짜가 지나도 지급하지 않았어요.",
   );
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("civil-response");
   await submit.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/cases\/[^/]+\/intake/);
@@ -267,7 +267,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   await narrative.fill(
     "이전 고객만 입력한 합성 초안입니다. 약속한 날짜가 지나도 대금을 받지 못했어요.",
   );
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("criminal-response");
   const peer = await context.newPage();
   await peer.goto("/login");
   // addInitScript seeds each page; change the session after the peer has loaded.
@@ -284,7 +284,9 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
     page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
   ).toBeVisible();
   await expect(narrative).toHaveValue("");
-  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
+  await expect(page.getByRole("combobox", { name: "준비하는 방향" })).toHaveValue(
+    "unknown-prepare",
+  );
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

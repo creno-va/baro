@@ -37,6 +37,7 @@ import {
   V2_LIMITS,
   type V2ConversationIntent,
   type V2ConversationState,
+  type V2FactReference,
   type V2LookupRequest,
   type V2MessageRequest,
 } from "../../contracts/v2";
@@ -168,6 +169,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   const [notice, setNotice] = useState("");
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
+  const [sourceReference, setSourceReference] = useState<
+    Extract<V2FactReference, { kind: "user_material" }> | undefined
+  >();
   const [deleteFile, setDeleteFile] = useState<FileView | null>(null);
   const [entry, setEntry] = useState<(Partial<TimelineView> & { expectedRevision: number }) | null>(
     null,
@@ -247,6 +251,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setQueuedSend(false);
     queuedUpload.current = null;
     setPreview(null);
+    setSourceReference(undefined);
     setDeleteFile(null);
     setEntry(null);
     setOriginal(null);
@@ -834,7 +839,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     chooseAttachments(files);
     draftInput.current?.focus();
   }
-  function openConversationFile(fileId: string, origin?: HTMLElement) {
+  function openConversationFile(
+    fileId: string,
+    origin?: HTMLElement,
+    reference?: Extract<V2FactReference, { kind: "user_material" }>,
+  ) {
     const file = view?.files.find((file) => file.id === fileId);
     if (!file) {
       showError({ code: "NOT_FOUND", message: "자료가 삭제됐거나 현재 확인할 수 없어요." }, true);
@@ -843,6 +852,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     origin?.focus();
     void run("file-preview", async () => {
       setPreview(file);
+      setSourceReference(reference);
       setOriginal(null);
     });
   }
@@ -1175,6 +1185,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     reviewDirty.current = false;
     setTimelineRecovery(false);
     setPreview(null);
+    setSourceReference(undefined);
     setDeleteFile(null);
     setEntry(null);
     setOriginal(null);
@@ -1241,7 +1252,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       ...(view?.messages
         .filter((message) => message.role === "assistant" && message.status === "complete")
         .flatMap((message) => message.references ?? []) ?? []),
-    ].flatMap((ref) => (ref.kind === "user_material" ? [ref.fileId] : [])),
+    ].flatMap((ref) =>
+      ref.kind === "user_material" &&
+      view?.files.some(
+        (file) =>
+          file.id === ref.fileId && file.status === "ready" && file.revision === ref.fileRevision,
+      )
+        ? [ref.fileId]
+        : [],
+    ),
   );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   const contextSummary = view ? (
@@ -1427,6 +1446,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       readonly={readonly}
       ready={ready}
       evidenceIds={evidenceIds}
+      facts={view.facts ?? []}
       selected={selected}
       selectionDisabled={queuedSend || !!pendingResponse}
       {...(tab === "chat"
@@ -1441,6 +1461,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         origin.focus();
         void run("file-preview", async () => {
           setPreview(file);
+          setSourceReference(undefined);
           setOriginal(null);
         });
       }}
@@ -1849,7 +1870,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                       href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
                                       onClick={(event) => {
                                         event.preventDefault();
-                                        openConversationFile(ref.fileId, event.currentTarget);
+                                        openConversationFile(ref.fileId, event.currentTarget, ref);
                                       }}
                                     >
                                       {view.files.find((f) => f.id === ref.fileId)?.name ??
@@ -2368,6 +2389,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               onDirtyChange={fileReviewDirtyChanged}
               onBusyChange={fileReviewBusyChanged}
               refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
+              sourceReference={sourceReference}
             />
             {preview.status === "ready" && (
               <div className="workspace-material-apply">

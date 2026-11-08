@@ -1,10 +1,11 @@
-import { ArrowRight, Building2, FileText, ShieldCheck, WalletCards } from "lucide-react";
+import { ArrowRight, Building2, FileText, WalletCards } from "lucide-react";
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
-import type { SessionView } from "../../client/api/types";
+import type { CaseView, SessionView } from "../../client/api/types";
 import { sessionDestination } from "../../client/return-path";
 import { isExplicitSignOut } from "../../client/session-events";
+import type { V2CaseContext } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -13,6 +14,26 @@ import { ErrorPanel } from "./common";
 
 // A web entry requirement; saved narratives and installed clients keep their read contracts.
 const APP_NARRATIVE_MIN_LENGTH = 10;
+
+// UI choices map to the existing purpose/procedure contract. They are not new stored enums.
+const entryChoices = [
+  { id: "civil-prepare", label: "민사 준비", purpose: "prepare_claim", kind: "civil" },
+  { id: "civil-response", label: "민사 대응", purpose: "respond_to_claim", kind: "civil" },
+  { id: "criminal-prepare", label: "형사 고소 준비", purpose: "prepare_claim", kind: "criminal" },
+  { id: "criminal-response", label: "형사 대응", purpose: "respond_to_claim", kind: "criminal" },
+  {
+    id: "unknown-prepare",
+    label: "분야는 아직 모름 · 요구 준비",
+    purpose: "prepare_claim",
+    kind: "unconfirmed",
+  },
+  {
+    id: "unknown-response",
+    label: "분야는 아직 모름 · 받은 주장에 대응",
+    purpose: "respond_to_claim",
+    kind: "unconfirmed",
+  },
+] as const;
 
 const individualExamples = [
   {
@@ -60,12 +81,14 @@ export function CaseInput({
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState<unknown>(null);
   const [narrative, setNarrative] = useState("");
-  const [casePurpose, setCasePurpose] = useState<"prepare_claim" | "respond_to_claim">(
-    "prepare_claim",
-  );
+  const [entryChoice, setEntryChoice] = useState<string>("unknown-prepare");
+  const choice = entryChoices.find((item) => item.id === entryChoice) ?? entryChoices[4];
+  const casePurpose = choice.purpose;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [contextSaved, setContextSaved] = useState(false);
+  const registration = useRef<CaseView | null>(null);
   const [lengthError, setLengthError] = useState("");
   const narrativeRef = useRef<HTMLTextAreaElement>(null);
   const pending = useRef(false);
@@ -82,8 +105,10 @@ export function CaseInput({
     pending.current = false;
     setBusy(false);
     setNarrative("");
-    setCasePurpose("prepare_claim");
+    setEntryChoice("unknown-prepare");
+    registration.current = null;
     setCreated(null);
+    setContextSaved(false);
     setError(null);
     setLengthError("");
   }, []);
@@ -171,7 +196,7 @@ export function CaseInput({
 
   async function create(event?: SyntheticEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!canCreate || loading || sessionError || pending.current || created) return;
+    if (!canCreate || loading || sessionError || pending.current || contextSaved) return;
     if (!valid) {
       setLengthError(
         count < APP_NARRATIVE_MIN_LENGTH
@@ -188,19 +213,44 @@ export function CaseInput({
     try {
       const fresh = await loadSession();
       if (!current() || !fresh?.user || fresh.needsConsent) return;
-      const item = await api.rework.createCase(
-        {
-          narrative: narrative.trim(),
-          // Compatibility field for installed clients; the UI no longer classifies the owner.
-          subjectContext: "individual",
-          casePurpose,
-        },
-        { expectedOwner: fresh.user.id },
-      );
+      const item =
+        registration.current ??
+        (await api.rework.createCase(
+          {
+            narrative: narrative.trim(),
+            // Compatibility field for installed clients; the UI no longer classifies the owner.
+            subjectContext: "individual",
+            casePurpose,
+          },
+          { expectedOwner: fresh.user.id },
+        ));
+      if (!current()) return;
+      // Keep an accepted registration across a context failure. Retrying must not create another case.
+      registration.current = item;
+      setCreated(item.id);
+      const desired: V2CaseContext = {
+        casePurpose,
+        subjectContext: "individual",
+        procedure: { kind: choice.kind, stage: "unconfirmed", description: null },
+      };
+      const saved = await api.rework.getContext(item.id, { expectedOwner: fresh.user.id });
+      if (!current()) return;
+      // An ambiguous prior PUT may already have saved this exact selection.
+      if (JSON.stringify(saved.context) !== JSON.stringify(desired)) {
+        await api.rework.updateContext(
+          item.id,
+          {
+            ...desired,
+            casePurpose,
+            expectedRevision: saved.workspaceRevision,
+          },
+          { expectedOwner: fresh.user.id },
+        );
+      }
       // A completed request must not restore a prior owner's UI after an account switch.
       await loadSession();
       if (!current()) return;
-      setCreated(item.id);
+      setContextSaved(true);
       window.location.assign(`/cases/${encodeURIComponent(item.id)}/intake`);
     } catch (cause) {
       if (current()) setError(cause);
@@ -231,19 +281,36 @@ export function CaseInput({
           <span className="conversation-emblem" aria-hidden="true">
             <BrandMark size={48} />
           </span>
-          <h1 id="conversation-heading">어떤 일이 있었나요?</h1>
+          <h1 id="conversation-heading">내 사건, 무엇부터 준비할까요?</h1>
           <p>
-            생각나는 대로 적어주세요.
+            설명과 자료를 바탕으로 사건의 흐름과 준비할 일을 정리해요.
             <br />
-            필요한 내용은 BARO가 함께 정리할게요.
+            짧게 시작한 뒤 대화·자료·리포트에서 계속 보완할 수 있어요.
           </p>
         </header>
         {created && canCreate && !loading && !sessionError ? (
           <div className="conversation-saved" role="status">
-            <p>이야기를 저장했어요. 필요한 내용만 조금 더 확인할게요.</p>
-            <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
-              질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
-            </ButtonLink>
+            <p>
+              {contextSaved
+                ? "사건과 준비 방향을 저장했어요."
+                : "사건은 등록했어요. 선택한 준비 방향을 저장하고 있어요."}
+            </p>
+            {!contextSaved && error ? (
+              <>
+                <p>
+                  선택한 방향은 {choice.label}예요. 같은 사건에서 다시 저장하며 사건을 새로 만들지
+                  않아요.
+                </p>
+                <ErrorPanel error={error} disabled={busy} />
+                <Button disabled={busy} loading={busy} onClick={() => void create()}>
+                  준비 방향 저장 다시 시도
+                </Button>
+              </>
+            ) : contextSaved ? (
+              <ButtonLink href={`/cases/${encodeURIComponent(created)}/intake`}>
+                질문 이어가기 <ArrowRight size={18} aria-hidden="true" />
+              </ButtonLink>
+            ) : null}
           </div>
         ) : (
           <>
@@ -258,7 +325,7 @@ export function CaseInput({
                   value={loading || sessionError ? "" : narrative}
                   onChange={(event) => setNarrative(event.target.value)}
                   disabled={busy || loading || !!sessionError || !canCreate}
-                  aria-describedby="subject-context-help narrative-minimum"
+                  aria-describedby="subject-context-help narrative-minimum entry-support"
                   aria-invalid={count > 5000 || Boolean(lengthError)}
                   placeholder={
                     casePurpose === "respond_to_claim"
@@ -267,29 +334,22 @@ export function CaseInput({
                   }
                 />
                 <div className="conversation-composer-toolbar">
-                  <fieldset
-                    className="conversation-context"
-                    disabled={busy || loading || !canCreate}
-                  >
-                    <legend className="sr-only">사건을 정리하는 목적</legend>
-                    {(["prepare_claim", "respond_to_claim"] as const).map((purpose) => (
-                      <label key={purpose} className={casePurpose === purpose ? "selected" : ""}>
-                        <input
-                          type="radio"
-                          name="case-purpose"
-                          value={purpose}
-                          checked={!loading && !sessionError && casePurpose === purpose}
-                          onChange={() => setCasePurpose(purpose)}
-                        />
-                        {purpose === "prepare_claim" ? (
-                          <FileText size={16} aria-hidden="true" />
-                        ) : (
-                          <ShieldCheck size={16} aria-hidden="true" />
-                        )}
-                        <span>{purpose === "prepare_claim" ? "고소 준비" : "주장 대응"}</span>
-                      </label>
-                    ))}
-                  </fieldset>
+                  <div className="conversation-context">
+                    <label htmlFor="case-entry-choice">준비하는 방향</label>
+                    <select
+                      id="case-entry-choice"
+                      className="ui-input"
+                      value={entryChoice}
+                      onChange={(event) => setEntryChoice(event.target.value)}
+                      disabled={busy || loading || !canCreate}
+                    >
+                      {entryChoices.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <span className="conversation-context-hint" id="narrative-minimum">
                     {APP_NARRATIVE_MIN_LENGTH}자 이상 입력해주세요
                   </span>
@@ -297,8 +357,12 @@ export function CaseInput({
               </div>
               <p className="conversation-subject-help" id="subject-context-help" aria-live="polite">
                 {casePurpose === "respond_to_claim"
-                  ? "받은 주장과 확인한 사실을 구분해 정리해요."
-                  : "일어난 일과 가지고 있는 자료를 함께 정리해요."}
+                  ? "소장이나 고소장이 없어도, 알고 있는 주장과 내 설명으로 시작할 수 있어요."
+                  : "돈·보증금 등 원하는 해결이나 피해로 겪은 일을 정리해요. 분야와 단계는 나중에 확인할 수 있어요."}
+              </p>
+              <p className="conversation-subject-help" id="entry-support">
+                지금은 설명을 먼저 저장한 뒤 사건에 자료를 추가할 수 있어요. 문서만으로 시작하는
+                기능은 아직 제공하지 않아요.
               </p>
               {error ? (
                 <ErrorPanel error={error} retry={() => void create()} disabled={busy} />
@@ -361,7 +425,7 @@ export function CaseInput({
         )}
         <footer className="conversation-home-footer">
           <p>
-            상황 입력 <span aria-hidden="true">→</span> 질문 두 차례{" "}
+            상황 입력 <span aria-hidden="true">→</span> 질문 최대 두 차례·차례당 최대 3개{" "}
             <span aria-hidden="true">→</span> 요약 확인
           </p>
           <p>BARO의 AI 답변은 법률 자문이 아니에요. 중요한 판단은 전문가와 확인해 주세요.</p>
