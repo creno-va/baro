@@ -212,7 +212,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
       return (error as { code?: string }).code;
     }
   });
-  expect(blocked).toBe("STALE_REVISION");
+  expect(blocked).toBe("CONFLICT");
   await page.getByRole("button", { name: "포트폴리오 파일 제거", exact: true }).click();
   await page.getByRole("button", { name: "프로필 저장", exact: true }).click();
   await expect(page.getByText("프로필을 저장했어요.", { exact: true })).toBeVisible();
