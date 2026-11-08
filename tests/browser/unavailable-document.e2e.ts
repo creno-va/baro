@@ -27,8 +27,8 @@ for (const betaClosed of [false, true]) {
           });
         if (path === "/")
           return route.fulfill({
-            contentType: "text/html",
-            body: '<html lang="ko"><title>합성 소개</title><body><h1>합성 서비스 소개</h1></body></html>',
+            contentType: "text/html;charset=utf-8",
+            body: '<!doctype html><html lang="ko"><meta charset="UTF-8"><title>합성 소개</title><body><h1>합성 서비스 소개</h1></body></html>',
           });
         return route.abort();
       });
