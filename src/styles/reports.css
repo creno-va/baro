@@ -79,8 +79,8 @@
   border-color: var(--primary, #2563eb);
   color: #fff;
 }
-.report-review button:disabled,
-.report-modal button:disabled {
+.report-review button:not(.ui-button):disabled,
+.report-modal button:not(.ui-button):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
