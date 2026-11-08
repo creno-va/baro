@@ -2271,9 +2271,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await expect(
     page.locator(".workspace-next").getByRole("link", { name: "리포트 열기", exact: true }),
   ).toHaveAttribute("href", `${base}/reports`);
-  await expect(
-    page.locator(".workspace-next").getByRole("link", { name: "변호사 찾기", exact: true }),
-  ).toHaveAttribute("href", "/lawyers");
+  await expect(page.locator('a[href="/lawyers"], a[href^="/lawyers/"]')).toHaveCount(0);
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 날짜 확인");
@@ -2288,16 +2286,52 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
-  await page.locator(".case-tools > summary").click();
-  await expect(
-    page
-      .getByRole("navigation", { name: "사건 도구", exact: true })
-      .getByRole("link", { name: "리포트 보기", exact: true }),
-  ).toHaveAttribute("href", `${base}/reports`);
-  await expect(page.getByRole("link", { name: /변호사 탐색/ }).first()).toHaveAttribute(
-    "href",
-    "/lawyers",
+  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  await expect(tasks.getByRole("link")).toHaveCount(4);
+  for (const [name, path] of [
+    ["대화", ""],
+    ["자료 0개", "/files"],
+    ["리포트", "/reports"],
+    ["문서 초안", "/reports#document-drafts"],
+  ] as const)
+    await expect(tasks.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `${base}${path}`,
+    );
+  await expect(page.locator('a[href="/lawyers"], a[href^="/lawyers/"]')).toHaveCount(0);
+  await page.evaluate(async () => {
+    const path = "/tests/helpers/workspace-client-fixture.ts";
+    const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
+    const observed = window as unknown as { explicitWorkspaceActions: string[] };
+    observed.explicitWorkspaceActions = [];
+    const execute = api.rework.executeAction;
+    api.rework.executeAction = async (...args: Parameters<typeof execute>) => {
+      observed.explicitWorkspaceActions.push(args[1].action);
+      return execute.apply(api.rework, args);
+    };
+  });
+  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${base}/reports\\?mode=conversation$`));
+  await expect(tasks.getByRole("link", { name: "리포트", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
+  await tasks.getByRole("link", { name: "대화", exact: true }).click();
+  await expect(page.getByLabel("추가 사실 또는 질문")).toBeEnabled();
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { explicitWorkspaceActions: string[] }).explicitWorkspaceActions,
+    ),
+  ).toEqual([]);
+  await page.getByRole("button", { name: "법률·판례와 현재 약점 확인", exact: true }).click();
+  await expect(page.locator(".conversation-agent").getByRole("alert")).toContainText(
+    "이 격리 UI 검사는 실제 법률 조사·리포트 실행을 제공하지 않아요.",
+  );
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { explicitWorkspaceActions: string[] }).explicitWorkspaceActions,
+    ),
+  ).toEqual(["analyze_legal"]);
 });
 test("file processing failure, retry, extracted text, original bytes, cancellation and deletion persist", async ({
   page,
