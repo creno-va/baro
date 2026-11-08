@@ -178,10 +178,20 @@ export function reportMarkdownHtml(
   sourceSection = false,
 ) {
   const sourceOrInline = (value: string) => {
-    const url = sourceSection ? reportOfficialSourceUrl(value) : undefined;
+    // Older saved reports keep their original bytes and editable ranges. Only
+    // their known machine span annotation gets a customer-facing reading label;
+    // exact original excerpts, code and table cells never pass through here.
+    const display = sourceSection
+      ? value.replace(
+          /^검증 시각 · (\d{4}-\d{2}-\d{2}T[\d:.]+Z) · 원문 범위 UTF-16 \d+–\d+( 중 일부 발췌)?$/u,
+          (_line, time: string, partial: string | undefined) =>
+            `원문 확인 시각 · ${time}${partial ? " · 해당 근거 중 일부 발췌" : ""}`,
+        )
+      : value;
+    const url = sourceSection ? reportOfficialSourceUrl(display) : undefined;
     return url
       ? `공식 원문 · <a class="report-official-source" href="${escapeReportHtml(url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${escapeReportHtml(url)}</a>`
-      : inline(value);
+      : inline(display);
   };
   return reportMarkdownBlocks(text)
     .map((block) => {

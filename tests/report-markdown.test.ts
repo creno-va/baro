@@ -48,6 +48,17 @@ test("Markdown renders lists and emphasis after editing while raw markup and rem
   expect(html).toContain("&lt;script&gt;");
 });
 
+test("legacy span metadata has the same readable source label without altering saved or literal quotation text", () => {
+  const line = "검증 시각 · 2026-11-01T00:00:00.000Z · 원문 범위 UTF-16 10–35 중 일부 발췌";
+  const content = `출처와 분석 기준\n- ${line}\n> [원문] ${line}`;
+  const html = reportMarkdownHtml(`- ${line}`, [], true);
+  expect(html).not.toContain("UTF-16");
+  expect(html).toContain("원문 확인 시각 · 2026-11-01T00:00:00.000Z · 해당 근거 중 일부 발췌");
+  expect(reportMarkdownHtml(`> [원문] ${line}`, [], true)).toContain(line);
+  expect(reportMarkdownHtml(line)).toContain(line);
+  expect(reportReviewSections(content)[0]?.text).toContain(line);
+});
+
 test("only approved internal photo IDs become images, with escaped captions and exact body placement", () => {
   const token = reportPhotoToken("photo-1", '사진 <img onerror="bad">');
   const text = `사진 앞 내용\n\n${token}\n\n사진 뒤 내용`;
