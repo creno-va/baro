@@ -64,18 +64,31 @@ async function prepareSavedPdf(page: import("@playwright/test").Page) {
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
   await openReportEditor(page);
 }
-async function savedHtml(page: import("@playwright/test").Page) {
-  return page.evaluate(async () => {
+async function savedHtml(page: import("@playwright/test").Page, reportId?: string) {
+  return page.evaluate(async (id) => {
     const api = (
       window as unknown as { baroReportTestApi: typeof import("../helpers/reports-ui-api").api }
     ).baroReportTestApi;
-    const report = await api.reports.get("case-demo");
-    return (await api.reports.html(report.id)).text();
-  });
+    const idToRead = id ?? (await api.reports.get("case-demo")).id;
+    return (await api.reports.html(idToRead)).text();
+  }, reportId);
+}
+
+async function storedReport(page: import("@playwright/test").Page, reportId?: string) {
+  return page.evaluate((id) => {
+    const state = JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}");
+    const report = id ? state.reportHistory[id] : state.reports["case-demo"];
+    return {
+      id: report.id as string,
+      revision: report.revision as number,
+      content: report.content as string,
+      includedPhotoIds: report.includedPhotoIds as string[],
+    };
+  }, reportId);
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
-test("report review edits in place and saves before a full-width PDF download", async ({
+test("report review saves before a compact desktop and full-width mobile PDF download", async ({
   page,
 }) => {
   await page.goto("/cases/case-demo/reports");
@@ -111,6 +124,7 @@ test("report review edits in place and saves before a full-width PDF download", 
   const download = page.waitForEvent("download");
   await report.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/u);
+  await expect(report.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
   const stored = await page.evaluate(
     () =>
       JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}").reports["case-demo"]
@@ -120,11 +134,36 @@ test("report review edits in place and saves before a full-width PDF download", 
   expect(stored).toContain("보존할 합성 근거");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const bounds = await report.locator(".report-canvas").boundingBox(),
-      button = await report
-        .getByRole("button", { name: "PDF 다운로드", exact: true })
-        .boundingBox();
-    expect(Math.abs((bounds?.width ?? 0) - (button?.width ?? 0))).toBeLessThan(2);
+    // Resize/scroll anchoring can move the viewport between separate RPCs.
+    // Read every rectangle in one frame; retain the exact geometry assertions.
+    const { bounds, footer, body, button } = await report.evaluate((root) => {
+      const measure = (selector: string) => {
+        const element = root.querySelector(selector);
+        if (!element) return null;
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        bounds: measure(".report-canvas"),
+        footer: measure(".report-export"),
+        body: measure(".report-read-content"),
+        button: measure(".report-export .primary"),
+      };
+    });
+    if (!bounds || !footer || !body || !button) throw new Error("Missing report download controls");
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    expect(button.x).toBeGreaterThanOrEqual(bounds.x);
+    expect(button.x + button.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    expect(button.y).toBeGreaterThanOrEqual(footer.y);
+    expect(footer.y).toBeGreaterThanOrEqual(body.y + body.height);
+    expect(Math.abs(button.x + button.width - footer.x - footer.width)).toBeLessThan(2);
+    if (width < 768) {
+      expect(Math.abs(footer.width - button.width)).toBeLessThan(2);
+      expect(Math.abs(footer.x - button.x)).toBeLessThan(2);
+    } else {
+      expect(button.width).toBeGreaterThanOrEqual(170);
+      expect(button.width).toBeLessThan(footer.width);
+    }
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
       .toBe(true);
@@ -246,7 +285,7 @@ test("manual review and PDF-only download preserve exact saved content and casca
   await openReportEditor(page);
   // This legacy fixture has no verified legal analysis. The leading editor is
   // its synthetic/unverified notice; manual redaction belongs to the overview.
-  const overview = page.getByRole("textbox", { name: "사건 개요 수정", exact: true });
+  const overview = page.getByRole("textbox", { name: "내 사건 한눈에 수정", exact: true });
   await expect(overview).toHaveValue("합성 사실: 010-1234-5678, demo@example.test");
   const before = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}");
@@ -265,7 +304,7 @@ test("manual review and PDF-only download preserve exact saved content and casca
   expect(html).toContain("[전화번호 직접 삭제]");
   expect(html).not.toContain("010-1234-5678");
   expect(html).not.toContain("demo@example.test");
-  expect(html).toContain("합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다");
+  expect(html).toContain("합성 API 예시 · 실제 AI/공식 법률 조회를 실행하지 않았습니다.");
   const preserved = await page.evaluate((id) => {
     const state = JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}");
     return { summary: state.cases["case-demo"].summary, content: state.reportHistory[id]?.content };
@@ -467,28 +506,124 @@ test("account deletion preserves signed session, OAuth callback and SQL revoke g
   }
 });
 
-test("saved inline photos survive reload and deleting their token removes them from the next PDF", async ({
-  page,
-}) => {
-  await page.goto("/cases/case-demo/reports");
-  await prepareSavedPdf(page);
-  await page.reload();
-  expect(await savedHtml(page)).toContain('data-report-photo="file-demo"');
-  await openReportEditor(page);
-  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
-  await editor.fill(
-    (await editor.inputValue()).replace(/!\[[^\]]*\]\(baro-photo:file-demo\)/gu, ""),
-  );
-  const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
-  await downloading;
-  expect(await savedHtml(page)).not.toContain('data-report-photo="file-demo"');
-  expect(
-    await page.evaluate(
-      () =>
-        JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}").reports[
-          "case-demo"
-        ].includedPhotoIds,
-    ),
-  ).toEqual([]);
-});
+for (const placement of ["inline", "legacy"] as const)
+  test(`${placement} photo survives reload; deleting its evidence token excludes it from the next saved export`, async ({
+    page,
+  }, testInfo) => {
+    await page.goto("/cases/case-demo/reports");
+    if (placement === "legacy") {
+      // The installed-client selection has no raw token. The reader inserts its
+      // compatibility position without rewriting the stored historical report.
+      await prepareSavedPdf(page);
+    } else {
+      await openReportEditor(page);
+      const section = page.locator(".report-reading-section").filter({
+        has: page.getByRole("heading", { name: "증거 자료", exact: true }),
+      });
+      await section.getByRole("combobox").selectOption("file-demo");
+      await section.getByRole("button", { name: "사진 넣기", exact: true }).click();
+      await expect(section.getByRole("textbox")).toHaveValue(/baro-photo:file-demo/);
+      const positiveDownload = page.waitForEvent("download");
+      await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+      await positiveDownload;
+    }
+    await page.reload();
+    const before = await storedReport(page);
+    expect(before.includedPhotoIds).toEqual(["file-demo"]);
+    expect((before.content.match(/baro-photo:file-demo/gu) ?? []).length).toBe(
+      placement === "inline" ? 1 : 0,
+    );
+    expect((await savedHtml(page, before.id)).includes('data-report-photo="file-demo"')).toBe(true);
+    await expect(page.locator('.report-inline-photo[data-report-photo="file-demo"]')).toHaveCount(
+      1,
+    );
+    await openReportEditor(page);
+    const fields = await page.locator(".report-reading-section textarea").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        label: node.getAttribute("aria-label") ?? "",
+        text: (node as HTMLTextAreaElement).value,
+      })),
+    );
+    const editor = page.getByRole("textbox", { name: "증거 자료 수정", exact: true });
+    const evidenceText = await editor.inputValue();
+    const pattern = /!\[[^\]]*\]\(baro-photo:file-demo\)/gu;
+    const removedTokens = evidenceText.match(pattern) ?? [];
+    expect(removedTokens).toHaveLength(1);
+    const next = evidenceText.replace(pattern, "");
+    expect(next).not.toBe(evidenceText);
+    expect(next.includes("baro-photo:file-demo")).toBe(false);
+    await editor.fill(next);
+    // The existing section parser leaves trailing separators outside the
+    // editable body; removing an end-position legacy photo exposes those lines.
+    await expect(editor).toHaveValue(next.replace(/(?:\r?\n)+$/u, ""));
+    for (const field of fields.filter((field) => field.label !== "증거 자료 수정"))
+      await expect(page.getByRole("textbox", { name: field.label, exact: true })).toHaveValue(
+        field.text,
+      );
+    const downloading = page.waitForEvent("download");
+    await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
+    const pdf = await downloading;
+    const after = await storedReport(page);
+    expect(after.id).not.toBe(before.id);
+    expect(after.revision).toBe(before.revision + 1);
+    expect(after.includedPhotoIds).toEqual([]);
+    expect(after.content.includes("baro-photo:file-demo")).toBe(false);
+    if (placement === "inline") {
+      expect(after.content === before.content.replace(pattern, "")).toBe(true);
+    } else {
+      // The legacy display position adds two separator lines. Prove those are
+      // the only raw-body difference, including the evidence text and sources.
+      let boundary = 0;
+      while (
+        boundary < before.content.length &&
+        before.content[boundary] === after.content[boundary]
+      )
+        boundary++;
+      expect(after.content.slice(boundary, boundary + 2)).toBe("\n\n");
+      expect(
+        after.content.slice(0, boundary) + after.content.slice(boundary + 2) === before.content,
+      ).toBe(true);
+    }
+    expect(pdf.suggestedFilename()).toBe(`BARO-${after.id}.pdf`);
+    expect((await readFile((await pdf.path()) as string)).subarray(0, 5).toString()).toBe("%PDF-");
+    const newHtml = await savedHtml(page, after.id);
+    // Keep photo failures bounded: never print the entire data-image document.
+    expect(newHtml.includes('data-report-photo="file-demo"')).toBe(false);
+    expect(newHtml.includes("<figure")).toBe(false);
+    expect((await savedHtml(page, before.id)).includes('data-report-photo="file-demo"')).toBe(true);
+    const historical = await storedReport(page, before.id);
+    expect(historical.content === before.content).toBe(true);
+    expect(historical.includedPhotoIds).toEqual(["file-demo"]);
+    await page.reload();
+    await expect(page.locator(".report-inline-photo")).toHaveCount(0);
+    await openReportEditor(page);
+    await expect(editor).toHaveValue(next.replace(/(?:\r?\n)+$/u, ""));
+    for (const field of fields.filter((field) => field.label !== "증거 자료 수정"))
+      await expect(page.getByRole("textbox", { name: field.label, exact: true })).toHaveValue(
+        field.text,
+      );
+    await testInfo.attach("photo-removal-trace", {
+      contentType: "application/json",
+      body: JSON.stringify(
+        {
+          placement,
+          editedField: "증거 자료 수정",
+          firstField: fields[0]?.label,
+          firstFieldPhotoTokens: (fields[0]?.text.match(pattern) ?? []).length,
+          removedTokens: removedTokens.length,
+          beforeId: before.id,
+          afterId: after.id,
+          beforeRevision: before.revision,
+          afterRevision: after.revision,
+          oldRawTokens: (before.content.match(/baro-photo:file-demo/gu) ?? []).length,
+          newRawTokens: 0,
+          includedPhotos: after.includedPhotoIds.length,
+          exportedFilename: pdf.suggestedFilename(),
+          oldHtmlHasPhoto: true,
+          newHtmlHasPhoto: false,
+        },
+        null,
+        2,
+      ),
+    });
+  });
