@@ -119,6 +119,10 @@ test("failed common OAuth start clears stale selection without rewriting the exi
       writes++;
       return route.fulfill({ json: { accountType: "lawyer" } });
     }
+    if (path === "/api/me/consent")
+      return route.fulfill({
+        json: { required: { ...CURRENT_POLICY_VERSIONS }, consent: null, needsConsent: false },
+      });
     if (path.includes("sign-in/social"))
       return route.fulfill({
         status: 503,
