@@ -5,6 +5,7 @@ import type { CaseView } from "../../client/api/types";
 import type { CaseStatus } from "../../contracts";
 import { Badge } from "../ui/badge";
 import { Button, ButtonLink } from "../ui/button";
+import { List, ListLink, ListMeta, ListRow, ListTitle } from "../ui/list";
 import { LoadingContent } from "../ui/loading";
 import { PageHeader } from "../ui/page-header";
 import { ReadingContent } from "../ui/reading-content";
@@ -115,18 +116,18 @@ export function CaseList() {
           />
         ) : null}
         {ready && !error && (
-          <ul className="case-list__rows">
+          <List className="case-list__rows">
             {items.map((item) => (
-              <li key={item.id} className="case-list__row">
-                <a href={caseHref(item)} className="case-list__open">
+              <ListRow key={item.id} className="case-list__row">
+                <ListLink href={caseHref(item)} className="case-list__open">
                   <div className="case-list__identity">
                     <Badge tone={item.stage === "summary" ? "warning" : "neutral"}>
                       {item.schemaVersion === "1" ? "기존 기록" : stageLabels[item.stage]}
                     </Badge>
-                    <h2>{item.title}</h2>
+                    <ListTitle>{item.title}</ListTitle>
                     <p>{item.summary || "저장한 질문에서 이어서 정리할 수 있어요."}</p>
                   </div>
-                  <div className="case-list__next">
+                  <ListMeta className="case-list__next">
                     <time dateTime={item.updatedAt}>
                       {new Date(item.updatedAt).toLocaleDateString("ko-KR", {
                         timeZone: "Asia/Seoul",
@@ -141,8 +142,8 @@ export function CaseList() {
                           : "사건 열기"}
                       <ArrowRight size={16} aria-hidden="true" />
                     </span>
-                  </div>
-                </a>
+                  </ListMeta>
+                </ListLink>
                 <Button
                   variant="ghost"
                   aria-label={`${item.title} 사건 삭제`}
@@ -155,9 +156,9 @@ export function CaseList() {
                   <Trash2 size={16} aria-hidden="true" />
                   사건 삭제
                 </Button>
-              </li>
+              </ListRow>
             ))}
-          </ul>
+          </List>
         )}
       </Section>
       {deleting && (
