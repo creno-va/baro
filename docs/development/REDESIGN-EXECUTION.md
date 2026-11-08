@@ -174,8 +174,10 @@ docs/quality/redesign-acceptance/**만 소유한다. 기존 테스트 수정은 
 5. 01이 모든 소비 경로 grep/build 후 이전 cascade와 중복 공통 구현 제거. PDF 출력 CSS와 native 소비 보존.
 6. 총괄이 정확 통합 SHA를 고정해05 독립 과업·필수 quick/build/관련 회귀 검증, PR/잔여 기록.
 
-이번 요청에서 병합·배포 권한을 새로 확대하지 않는다. 검증된 PR을 제출하며 main/prod 완료로
-표시하지 않는다. 새로운 채팅·에이전트·Goal·자동화를 만들지 않는다.
+초기 요청은 검증 PR 제출까지였으며 당시 main/prod 완료로 표시하지 않았다. 이후 지정05 QA 채팅의
+직접 사용자 지시로 최종 검증 뒤 main 반영·동일 SHA preview 배포·GitHub 정리를 승인받았다.
+최신 실행 분담과 종료 조건은 EXECUTION의 후속 승인 조항을 따른다. production은 포함하지 않는다.
+새로운 채팅·에이전트·Goal·자동화는 만들지 않는다.
 
 ## 인수표
 
