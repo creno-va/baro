@@ -118,6 +118,8 @@ test.describe("short viewport at the native 200% layout size", () => {
   test("reopening case tools keeps every link below navigation and preserves writing", async ({
     page,
   }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
     const title = "합성 형사 대응에서 자료와 사실을 구분하며 사건 준비를 이어가는 긴 제목";
     expect(title).toHaveLength(40);
     await page.addInitScript(
@@ -324,6 +326,7 @@ test.describe("short viewport at the native 200% layout size", () => {
       path: ".wrangler/ui01/tools-reopen-short-viewport.png",
       animations: "disabled",
     });
+    expect(pageErrors).toEqual([]);
   });
 });
 
