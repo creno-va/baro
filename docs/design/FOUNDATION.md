@@ -103,6 +103,20 @@ PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·�
 
 ## 시각·읽기 규칙
 
+`CaseWorkspaceFrame kind='conversation'`의 머리글은 `사건 제목과 작업`이라는 이름의
+키보드 스크롤 영역이다. 측정한 viewport에서 상단 탐색을 뺀 높이의 최대50%를 사용하며,
+긴 제목과 네 작업의 전체 DOM을 보존한다. Tab으로 영역에 진입해 Home/End로 읽고,
+각 링크는 기존 Tab 순서로 접근한다. 키보드 위치는 공통 inset 표시를 사용한다.
+대화의 body와 앱 최소 높이는 같은 측정 viewport를 사용해 CSS 확대의 중복 높이를 피한다.
+`document`/`compare`의 머리글에는 이 높이 제한·내부 스크롤·Tab 정지를 만들지 않으며
+리포트 등 긴 본문은 기존 문서 스크롤을 유지한다.
+
+사건 도구는 같은 native details와 네 링크를 유지하되 메뉴를 viewport에 고정 배치한다.
+트리거 좌표를 CSS 배율로 정규화하고 창·visualViewport·머리글 크기·내부 스크롤·root 배율
+변화에 맞춰 재배치한다. 메뉴 안의 Tab/Escape와 트리거 복귀, 기존 href는 그대로다.
+CaseLayout의 native label fallback은 낮은 specificity로 유지해 토픽 등 도메인 레이아웃이
+공통 기본 간격·display를 명시적으로 교체할 수 있게 한다.
+
 - canonical `global.css`: 의미 토큰, font/reset, 공통 UI/상태/본문/공개 레이아웃.
 - canonical `product.css`: 앱 탐색·사건 작업·근거 패널·반응형. AppLayout은 이 파일만 가져온다.
 - 표면은 흰색/연한 중립색, 본문은 #191f28, 보조 정보는 #526176, 실행 강조는 #2364e8.
