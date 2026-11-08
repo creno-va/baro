@@ -2218,7 +2218,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                     <div className="workspace-section-heading">
                       <div>
                         <h2>다음 행동</h2>
-                        <p>하나씩 확인하면서 상담을 준비해요.</p>
+                        <p>
+                          확인한 사실과 자료, 아직 모르는 내용을 하나씩 점검하며 준비를 이어가요.
+                        </p>
                       </div>
                       <div className="workspace-section-actions">
                         <Button
@@ -2280,14 +2282,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       ))}
                     </ul>
                     <div className="workspace-next">
-                      <h3>정리한 내용을 상담으로 이어가세요</h3>
-                      <p>리포트를 검토한 뒤, 직접 선택한 변호사에게 연락할 수 있어요.</p>
+                      <h3>준비한 내용과 남은 조건을 리포트에서 확인하세요</h3>
+                      <p>
+                        리포트에서 준비한 내용과 남은 확인 조건을 검토하세요. 직접 준비를
+                        이어가거나, 전문가의 도움을 받거나, 리포트만 보관할 수 있어요.
+                      </p>
                       <div className="workspace-buttons">
-                        <ButtonLink href={`${base}/reports`} variant="outline">
-                          리포트 검토
-                        </ButtonLink>
-                        <ButtonLink href="/lawyers">
-                          변호사 탐색 <ArrowRight size={17} />
+                        <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
+                        <ButtonLink href="/lawyers" variant="outline">
+                          변호사 찾기 <ArrowRight size={17} />
                         </ButtonLink>
                       </div>
                     </div>

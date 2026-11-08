@@ -767,7 +767,7 @@ test("a foreign signed account cannot retain the previous conversation report or
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.locator(".report-reading")).toHaveCount(0);
-    await expect(page.locator(".report-heading h2")).toHaveCount(0);
+    await expect(page.locator(".report-heading h2")).toHaveText("내 사건 이해와 해결 준비");
     await expect(page.getByText(priorTitle, { exact: true })).toHaveCount(0);
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -890,7 +890,11 @@ test("the report's own prepare button recovers an actual committed response loss
     expect((await f.control("sources", { mode: "failure" })).ok()).toBe(true);
     await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
     await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}/reports`);
-    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
+    const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
+    const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
+    await expect(preparation).toBeVisible();
+    if (!(await prepare.isVisible())) await preparation.locator("summary").click();
+    await prepare.click();
     const ready = page.getByRole("heading", {
       name: "이해한 내용을 다음 준비로 이어가요",
       exact: true,
@@ -907,6 +911,10 @@ test("the report's own prepare button recovers an actual committed response loss
     // the POST, it must preserve the committed operation's entire identity.
     expect(f.actions.length).toBeGreaterThan(0);
     for (const action of f.actions) expect(action).toEqual(f.actions[0]);
+    // End report observation before releasing the fixture. Drain only work
+    // already admitted by this test; no new analysis or action is requested.
+    await page.goto("about:blank");
+    expect((await f.control("settle", {})).ok()).toBe(true);
   } finally {
     await f.close();
   }
