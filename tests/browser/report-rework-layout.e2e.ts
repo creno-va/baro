@@ -20,7 +20,18 @@ for (const side of ["claim", "response"])
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
-        await expect(page.locator(".report-inline-photo img")).toBeVisible();
+        await expect(page.locator(".report-inline-photo img")).toHaveCount(2);
+        await expect
+          .poll(() =>
+            page
+              .locator(".report-inline-photo img")
+              .evaluateAll((images) =>
+                images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+              ),
+          )
+          .toBe(true);
+        await expect(page.locator("tbody tr")).toHaveCount(55);
+        await expect(page.locator("tbody tr").last()).toContainText("비교 항목 55");
         if (format === "html") {
           const ratio = await page
             .locator(".baro-report .hero")
@@ -32,7 +43,7 @@ for (const side of ["claim", "response"])
           expect(ratio).toBeGreaterThan(0.95);
         }
         if (format === "web") {
-          await expect(page.locator(".report-inline-photo img")).toBeVisible();
+          await expect(page.locator(".report-inline-photo img")).toHaveCount(2);
           const widths = await page
             .locator(".report-reading-section")
             .evaluateAll((sections) => sections.map((node) => node.getBoundingClientRect().width));
