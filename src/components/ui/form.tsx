@@ -10,6 +10,9 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
     <textarea data-slot="textarea" className={cn("ui-input ui-textarea", className)} {...props} />
   );
 }
+export function Select({ className, ...props }: ComponentProps<"select">) {
+  return <select data-slot="select" className={cn("ui-input ui-select", className)} {...props} />;
+}
 export function Label({
   className,
   htmlFor,
