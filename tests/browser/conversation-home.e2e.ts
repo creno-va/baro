@@ -48,6 +48,78 @@ test("entry presents value and a visible desktop next action using the shared re
   }
 });
 
+test("case list has an honest empty state and a direct explanation entry", async ({ page }) => {
+  await setSession(page, customer);
+  await page.goto("/cases");
+  await expect(page).toHaveURL(/\/cases$/);
+  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
+  await expect(page.getByText("아직 정리한 사건이 없어요", { exact: true })).toBeVisible();
+  await page
+    .locator(".case-list")
+    .getByRole("link", { name: "새 사건 만들기", exact: true })
+    .click();
+  await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
+});
+
+test("an existing lawyer account can resume its cases and explicit list deletion removes only the chosen case", async ({
+  page,
+}) => {
+  await setSession(page, {
+    ...customer,
+    user: { id: "conversation-customer", name: "합성 기존 계정", accountType: "lawyer" },
+  });
+  await page.addInitScript(() => {
+    const cases = Object.fromEntries(
+      ["intake", "summary"].map((stage) => [
+        stage,
+        {
+          id: stage,
+          title: `${stage === "intake" ? "질문을 이어갈" : "요약을 확인할"} 합성 사건`,
+          summary: "목록에서 현재 단계를 확인하는 합성 사건입니다.",
+          stage,
+          subjectContext: "individual",
+          schemaVersion: "2",
+          revision: 1,
+          updatedAt: "2026-11-08T00:00:00.000Z",
+        },
+      ]),
+    );
+    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
+    localStorage.setItem(
+      "baro-api-mock-v1:caseOwners",
+      JSON.stringify({ intake: "conversation-customer", summary: "conversation-customer" }),
+    );
+  });
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto("/cases");
+  const list = page.locator(".case-list__rows");
+  await expect(list.locator("li")).toHaveCount(2);
+  await expect(list.getByRole("link", { name: /질문을 이어갈/ })).toHaveAttribute(
+    "href",
+    "/cases/intake/intake",
+  );
+  await expect(list.getByRole("link", { name: /요약을 확인할/ })).toHaveAttribute(
+    "href",
+    "/cases/summary/summary",
+  );
+  await list
+    .getByRole("button", { name: "질문을 이어갈 합성 사건 사건 삭제", exact: true })
+    .click();
+  const confirmation = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(list.locator("li")).toHaveCount(2);
+  await list
+    .getByRole("button", { name: "질문을 이어갈 합성 사건 사건 삭제", exact: true })
+    .click();
+  await confirmation.getByRole("button", { name: "사건 삭제", exact: true }).click();
+  await expect(list.locator("li")).toHaveCount(1);
+  await expect(list).toContainText("요약을 확인할 합성 사건");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true,
+  );
+});
+
 test("a customer starts directly on home and reaches adaptive questions without an intermediate list", async ({
   page,
 }) => {
