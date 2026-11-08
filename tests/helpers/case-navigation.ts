@@ -11,6 +11,7 @@ const toolNames = {
 
 /** Open the visible disclosure with the same pointer action a customer uses. */
 export async function openCaseTools(page: Page) {
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   const menu = page.getByRole("navigation", { name: "사건 도구", exact: true });
   if (!(await menu.isVisible())) await page.locator(".case-tools > summary").click();
   await expect(menu).toBeVisible();
