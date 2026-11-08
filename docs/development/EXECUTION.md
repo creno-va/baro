@@ -12,6 +12,19 @@
 에이전트/Goal/자동화는 만들지 않는다. 검증 PR만00이 순차 병합하고 최종 main 수동 full을
 기록한다. 이번 개편으로 production에 배포하지 않는다. 아래 과거 운영 기록을 새 인수로 간주하지 않는다.
 
+공통 골격 #759/#760, 고객용 신규 본문 #756와 읽기·편집·출력 #761, 대화·자료 #762,
+리포트 대비 #763을 exact head 품질/관련 native·legal CI와00의 코드·합성 화면 리뷰 후 순차 병합했다.
+최종 탐색 회귀 #766은 현재 도구 메뉴/대화 복귀·내부 스크롤을 실제 조작하는130 PASS/0 SKIP이며
+제품·API·fixture를 바꾸지 않는다.00의 실제 Astro 인수는 질문·요약→자료 교정/대화 반영→
+저장본 보존/명시 갱신→사진/가림·편집 저장→대화 복귀를 포함한다. 신규 고객용 본문과 저장본
+웹/HTML/PDF의 총57쪽 native 검토, 공개 랜딩·로그인4화면 pixel 차이0의 근거는
+[통합 계약의 인수표](./APP-WORKSPACE-REWORK.md)와
+[전후 화면](../quality/app-workspace-rework/README.md)에 기록했다.
+최종 인수 docs PR까지 정상 병합한 main의 정확한 checkout SHA·수동 full(core/browser/native/join)·
+동일 SHA preview 결과 정본은 [#751 최종 실행 receipt](https://github.com/creno-va/baro/issues/751)다.
+실제 OAuth/공급자/공식 법률 API와 독립 법률 인수·실기기는 합성 기능 인수와 구분해 남기며,
+사용자 범위 정리로 CLOSED/NOT_PLANNED인 기존 #71을 이번 결과로 재개·전체 인수 처리하지 않는다.
+
 2026-11-05 사용자 지시에 따라 랜딩·로그인을 제외한 웹 앱 UI를 개편한다. 최신 origin/main
 badc1624에서 codex/product-ui-renewal로 분기하고 AppLayout에만 적용하는 공통 composition을
 추가한다. 사이드바·페이지 헤더·입력·상태·카드·버튼의 위계와 간격을 맞추며 사건 대화/자료/

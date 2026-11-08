@@ -7,6 +7,9 @@
 - 실제 저장소: `/Users/hwang-eunchan/Desktop/baro/repository`, origin `creno-va/baro`. 사용자 기준 `D:/Project/baro`의 파일 경로는 각 worktree 루트로 치환한다.
 - 신규 조사 기준 main `b643069bf9e923e50441c06c22930e9cd646e123`(PR750), main CI41946519596 SUCCESS. 2026-11-08 시작 조회에서 열린 PR/이슈0이었다. 과거 인계 SHA를 최신으로 사용하지 않는다.
 - [ADR-0018](../adr/0018-conversation-report-rework.md), [기존 대화·리포트 계약](./CONVERSATION-REPORT-REWORK.md), [현행 비용 정책](../operations/PREBETA-COST-POLICY.md)을 유지한다. 과거 #620~627의 완료·외부 증거를 이번 화면 인수로 재사용하지 않는다.
+- 실제 조회에서 #71은 사용자 범위 종료(not planned)로 CLOSED다. 본문의 과거 OPEN·완료 대기는
+  현재 상태로 해석하지 않으며 다시 열지 않는다. 이 종료가 전체 MVP·독립 외부/법률 승인 완료를
+  뜻하지 않는다는 원래 경계를 보존한다. 새 개편의 기능/외부 검증 상태는 #751에서 별도 추적한다.
 - 00: `ui-00`, `codex/751-app-workspace-integration`, 포트4300. 01: `ui-01-shell`, `codex/752-app-shell`, 포트4311. 02: `ui-02-workspace`, `codex/753-conversation-materials`, 포트4322. 03: `ui-03-reports`, `codex/754-customer-reports`, 포트4333. 각 지정 채팅에서 실제 등록을 확인했다.
 - 각 worktree 내부 `.wrangler`·DB·출력 fixture를 격리한다. 기존 checkout/secret/미커밋 작업은 보존한다. 실제 OAuth·사건·token·SQL/stack은 공개 기록·artifact에 넣지 않는다.
 
@@ -26,10 +29,51 @@ fixture만 준비한다. 공유 파일 변경은 단일 소유자를 먼저 정�
 | 02/#753 | Workspace·ConversationAgent·ConversationPanel·CaseMaterials·자료/첨부 UI 및 추출 컴포넌트, 전용 workspace-conversation.css, case files/timeline/actions/precedents page wiring, workspace browser/helper | shell/CaseNavigation/리포트/서버 생성·공유계약 금지 |
 | 03/#754 | components/reports, reports.css, utils/report-sections·report-markdown, server/modules/reports, FollowUpResolution·resolution.css, 필요한 기존 gateway analysis/resolution prompt, reports.astro, 리포트 전용 tests/fixtures | Workspace/Conversation/자료/공통 fixture·계약/DB 변경 금지. 프롬프트는 bounded 기존 실행과 audit 유지 |
 
+추가 배정:03은 `src/client/api/mock/reports.ts`도 단독 소유한다. 새 합성 생성/명시 갱신만
+고객 구조로 맞추며 저장/편집된 fixture를 자동 재작성하지 않는다.00은 실제 CI 차단 원인
+#757의 `services/file-processor/Dockerfile`·README를 단독 소유해 LibreOffice/UNO5개 pin을
+공식 Debian-security의 현재 제공 버전 `4:25.2.3-2+deb13u9`로 수리했다. 다른 버전·격리·gate는 유지한다.
+
+03 UI 검증에서 공통 `product-refresh.css`의 옛 report-only 규칙이 새 전용 CSS를 덮는 것을
+확인했다. 이 파일은03 UI PR 통합까지 **03 단독 소유로 임시 이전**한다(위01 기본 배정보다 우선).
+report 블록만 정리하고 혼합 선택자는 분리해 비리포트 규칙을 보존한다.01의 후속 frame 수리는
+`app-workspace.css`만 사용한다.02도 공통 파일을 수정하지 않고 전용 CSS를 사용한다.
+같은 충돌을 확인한 `product.css`의 report-only 선택자도03 UI PR 병합까지03 단독 소유로
+이전했다. 혼합/비리포트 규칙은 보존하며 보고서 전용 스타일의 중복 원인을 제거한다.
+
+합성 report 편집만으로 false stale/PDF 잠금이 되는 경로를 분리하기 위해
+`src/client/api/mock/rework.ts`는02 단독 소유로 배정했다.03의 mock/reports와 계약을 조율하되
+실제 서버·API/DTO·새 fallback은 변경하지 않는다. 실제 source 변경의 stale와 보관 편집을
+구분하고 동일 저장본 사진·가림·다운로드/owner/삭제·CAS 회귀를 유지한다.
+mock/reports의 private optional `reportSourceHashes`는03이 소유하고,02의 rework는 공유 helper로
+문서 현재성을 analysis binding/검증 상태와 구분한다. 순수본문/사진 PATCH는 기존 source hash를
+상속하고 같은 revision의 자료·관찰·범위 변경은 stale로 남긴다.03은 mock/account의 사건삭제에
+해당 hash 삭제1줄도 단독 소유한다. 공개DTO/runtime/DB/실제API는 변경하지 않는다.
+
 `tests/helpers/report-*`, `reports-*`와 리포트 browser 파일은03 소유다. workspace/conversation/attachments
 테스트·fixture는02 소유다. shell 전용 신규 fixture는01 소유다. 공통 config·package·lock·contracts·
 design-tokens·migration은 현재 미배정이므로 변경 필요를00에 제안한다. 각 담당은 시작·브랜치와
 주요 단계에 정확한 SHA/PR/파일/검증/남은 조건을 이슈와00에 인계한다. 배포·타 담당 병합은00만 수행한다.
+
+실제 기존 전체 흐름 회귀의 단일 소유자는02다: `rework-conversation.e2e.ts`,
+`rework-shared-mock.e2e.ts`, `conversation-agent.e2e.ts`, `helpers/rework-*`·`conversation-agent-*`.
+기존 inline report/one conversation URL 기대를 주 reports 경로와 복귀로 바꾸되 양입장×후속3경로/
+자료·사진·정확 원문·HTTP/SQL·identity/CAS·권한·native PDF/ZIP 단언을 유지한다.
+`reports-*`·`report-*` helper/controls/브라우저와 `report-rework-layout-fixture`는03 소유를 유지한다.
+공유 `helpers/case-ui-capture.ts`와02의 `helpers/workspace-navigation.ts`도02 단독 소유로
+명확히 배정했다. 캡처에서 실제 자료 panel 닫기만 조작하며 fixture/API 우회를 추가하지 않는다.
+PR762의 legal CI42444906438이 판례15개 중13 PASS/2 FAIL로 끝나 `precedents.e2e.ts`도02
+단독 소유로 추가했다. 닫힌 도구 메뉴의 현재 링크 조회와 옛358px dialog 폭 기대를 실제 메뉴
+조작·새 모바일 sheet의 범위/스크롤/닫기·포커스 검증으로 이관한다. 법률 원문·비교·권한·중복
+실행 단언은 유지하고 backend/workflow 변경 없이 새 exact head의 모든 CI를 다시 확인한다.
+나머지 탐색 회귀 `shell-integration.e2e.ts`, `product-ui.e2e.ts`, `public-preview.e2e.ts`,
+`customer-real.e2e.ts`, `human-review.e2e.ts`는01 단독 소유다. 제거한 탭 선택자를 실제 사건 도구
+열기·대화 복귀로 이관하며 URL/역할/업무 동작 단언을 보존한다.02/03 제품 통합 뒤 최신 main에서
+검증하고 독립 PR로 통합한다.
+전수검색에서 남은 `intake103.e2e.ts`, `customer-recovery-workspace.e2e.ts`의 숨긴 탭 링크와
+`reports-integrated.e2e.ts`의 옛 후속 제목도01의 최종 탐색 PR에 단독 배정했다. 마지막 파일은
+03에게서 임시 이전하며 기존 저장·PDF/권한 단언을 보존한다. 공개 랜딩 시연과 디자인 시스템의
+독립 tab은 제거 범위가 아니다. fixture/API/제품 파일은 이 배정에 포함하지 않는다.
 
 ## 실제 조립 방식과 공통 인터페이스
 
@@ -86,8 +130,12 @@ CaseNavigation은 기존 `caseId,title,active,fileCount?`를 그대로 받고 �
 
 02의 Workspace가 panelOpen과 기존 자료 업무 state를 소유한다. chat/files 경로의 자료 JSX를
 복제하지 않고 공통 추출한다. `ConversationAgent`가 읽은 실제 progress를 최소
-`onStateChange?: (state: ConversationState) => void` callback으로 부모에 전달해 자료 하단에
+`onStateChange?: (state: V2ConversationState | null) => void` callback으로 부모에 전달해 자료 하단에
 표시할 수 있다. 공유 DTO 변경 없이 기존 state 타입을 재사용한다. 별도 무조건 polling은 금지다.
+현재 revision·owner·읽기 상태를 확인하지 못하면 null로 전달해 완료 상태를 추정하지 않는다.
+구형 files URL은 metadata-only 계약을 유지하며 전체 대화/facts/messages나 별도 progress island를
+자동으로 읽지 않는다. 이 경로의 하단은 '리포트에서 준비 상태를 확인할 수 있어요'와 열기 링크를
+표시한다. chat에서는 기존 ConversationAgent의 단일 진행 조회와 명시적 상태 재확인을 공유한다.
 리포트 링크는 `/cases/:id/reports?mode=conversation`이며03은 이 mode를 기존 conversation
 report opt-in으로 해석한다. 구형 `/reports`의 기존 snapshot 읽기도 보존한다. 링크·GET만으로
 prepare_report/save_report/analysis를 호출하지 않는다. 명시적 새 생성/갱신은 기존 액션을 사용한다.
@@ -127,7 +175,7 @@ header(auto)/body(minmax(0,1fr))를 두고 중앙 메시지·자료 각각 스�
 | 유사 판례 원문·비교·검색 | 사건 도구→기존 /precedents. 리포트의 저장된 검증 판례·공식 출처와 현재 판례 탐색을 구분 |
 | 리포트 준비 상태·읽기 | 자료 하단 '리포트 열기', 실제 not_started/pending/ready/failed/stale. report URL은 준비 전에도 상태를 보여줌 |
 | 리포트 새 생성·갱신·버전·읽기/편집/저장 | 주 리포트 화면. 새 생성/명시 갱신만 새 기준 적용. 준비/실패/미확인을 완성으로 위장하지 않음 |
-| 사진 배치·제외/가림·식별정보·PDF/HTML/기존다운로드 | 리포트 작업 메뉴와 기존 선택·저장·내보내기. 같은 저장 snapshot 기준 내용/사진/출처 일치 |
+| 사진 배치·제외/가림·식별정보·기존다운로드 | 리포트 작업 메뉴와 기존 선택·저장·PDF 내보내기. HTML은 기존 내부 미리보기/렌더링 API를 보존하고 사용자 다운로드 CTA를 새로 추가하지 않음. 같은 저장 snapshot 기준 내용/사진/출처 일치 |
 | 직접 준비·전문가 도움·리포트만 저장·후속 초안 | 리포트의 다음 준비/해결 선택, 기존 FollowUpResolution. 법률 분석·절차 근거 미준비는 그대로 표시 |
 | 최근 사건·새 사건·역할별 탐색·이름변경/삭제·설정·계정 | 앱 sidebar, 변호사 역할 프로필/기존 공개 탐색·URL 보존 |
 
@@ -158,6 +206,87 @@ header(auto)/body(minmax(0,1fr))를 두고 중앙 메시지·자료 각각 스�
 
 ## 인수표와 실제 결과
 
+### 통합 기록
+
+- 설계 PR755 exact `7df0323668afd8e6a22a32359210441053ef40f1`: pinned ci/quick/build PASS,
+  CI42438237235 SUCCESS→main `3b9c459da53c1cc1fdb2633aadfe6d786100fa7c`.
+- native 수리 PR758: 첫head ca1797e의 품질/native 성공·기존 PDF PNG31쪽 시각 검토 후,
+  최신 base 필수 gate가 병합을 거절해 우회 없이 문서 main을 통합했다. 새 exact head
+  `11c502fc0e1537de32d89d0e1e61e87e10302296`의 quality42438975887/native42438975903
+  SUCCESS→main `3a61b3619e18dbbb58970ef4c3c8821a4c6a4627`. 두head의 src/services/tests/scripts/
+  lock/package/workflow diff0을 확인했고 새head native도 실제 재실행됐다. PR756의 원래 apt실패/
+  artifact0은 보존한다. 이 단계는 새 고객 내용이 아닌 기존 조판 런타임 회귀다.
+- 이후 통합/최종 main 수동 full·같은 SHA preview의 실행 결과 정본은
+  [#751 실행 기록](https://github.com/creno-va/baro/issues/751)과 아래 인수표다. 중간 성공을 최종 인수로 확대하지 않는다.
+- 공통 shell PR759 exact `bbefd957ac7c00815c1d6df70ad72a4c930a4e3d`: CI42439939329 SUCCESS
+  →main `4a6ea5c0ed76a0ae87f2ed54eb26028622e1cc65`. 01의 ci/quick/build·독립 shell16/실제 Astro5/
+  기존 인증6/공개 pixel4 검증과00 독립 shell16/16을 확인했다.00이 실제 메뉴 겹침과 초기 열린
+  desktop panel의 잘못된 modal/focus를 찾아 각각 수정·재검증했다.이 SHA를02 제품 착수와03
+  서버 PR 재검증 기준으로 전달했다. 실제 export·적용법은
+  [공통 frame 가이드](../../src/components/ui/workspace-frame.md), 전후 화면은
+  [shell 검증 기록](../quality/app-workspace-shell/README.md)이다.
+- 고객 본문 서버 PR756 exact `8bb58a65e13c03fb00db1946bbe5b5f68f6dd2df`: quality42440378000/
+  native42440377956 SUCCESS→main `ac2cf6a6e6e9bb3a1c8b89b2b9aa9b9723eb3244`.
+  03의 ci/quick/build·reports363 PASS/2 native opt-in SKIP,00 독립 고객/HTML/snapshot/readable
+  34/34를 확인했다.00은 exact CI의 PNG33쪽을 시각 검토했고, 신규 청구4쪽·대응4쪽 모두 개요/
+  핵심 쟁점/준비/선택 조건/법·판례/출처를 포함하며 잘림·겹침이 없음을 확인했다. 이 단계의
+  구형 eyebrow/footer와 숨긴 자료 범위는03 UI 후속에서 정렬하며 전체 화면 완료로 표시하지 않는다.
+- 02의 실제 자료 교정 통합에서 sibling FileReview modal을 연 채 desktop→mobile로 resize하면
+  frame이 새 modal로 그 위에 올라오는 문제를 발견했다.01이 #752 후속 `codex/752-panel-modal-order`
+  단독 소유로 재현·수리한다.02는 common 파일을 수정하지 않고 수리 PR의 CI/main 뒤 소비한다.
+- 공통 후속 PR760 exact `d464cd23eba321350dc68e0dc053a9c62dc79c08`은 CI42441779312 SUCCESS
+  →main `b686352d1eb012275705f1d0bea7f69e9388eaa8`로 정상 병합했다.01의 ci/quick/build와
+  기존16+모달/확대5+조건부 unmount4=25/25,00 독립25/25를 확인했다.실제 기다리는 dialog의
+  once close를 수신해 detach 이후에도 새 mode로 동기화하며 타 dialog의 DOM/상태는 조작하지
+  않는다. root zoom은 한 번만 환산하고 observer 자기 피드백0을 검사했다.02에 이 SHA를 전달했다.
+- 리포트 UI PR761 리뷰 중00은 사진 가림 시 합성 PDF 제목의 식별정보 누출과 Workers 전용
+  새 조판 머리말의 옛 명칭을 발견해03에 수리를 요청했다. 기존 저장 PDF bytes/제목은 보존하고
+  새 raster/PDF 경계만 정렬한다. 중간 exact7b2782의 quality42443029783/native42443029808은
+  SUCCESS,00 독립48/48·395 assertions PASS와 native47 PNG+실제SQL PDF10쪽=57쪽 시각
+  검토를 마쳤다. 청구/대응 각4쪽 신규고객구조, 긴55행표·가로/세로사진·가림 각9쪽과 기존
+  조판3쪽을 구분했다. 마지막 제품 변경은 Workers 머리말1줄과 실제 PDF추출검사이며 이후
+  웹 fixture에 누락됐던 동일 세로사진·전체55행 단언만 보강했다. 최종 exact head
+  `2e5c65fb9b67888fe50b462d2ffbd7010fc2342b`의 quality42443726527/native42443726453
+  SUCCESS와 최종 PNG47/47 byte동일을 확인해 정상 병합했다. main은
+  `aeebe0509fad5f4efe91e8a6f184f42e42817f17`이다.03의 최종 ci/quick/build, focused browser31,
+  mock26/171 assertions, 별도 Workers2쪽 검증과 정확한 branch/파일/외부 경계 인계를 받았다.
+  그 뒤02의 helper 소비를 해제했다. 두 공통 CSS의03 임시 단독 소유권은 이 병합으로 반환한다.
+- 대화·자료 PR762는 선행 main aeebe050을 정상 소비한 뒤 마지막 exact head
+  `4b7707611ec09eedb4bb42c8053d1ea08409856b`에서 quality42446123492/legal42446123424/
+  native42446123523 SUCCESS를 확인해 main `7bdafac83dcc7f80a8f13ce57bb8398072446bab`로
+  정상 병합했다.00은 제품/19파일 diff와 단언 보존을 리뷰했고 mock47/47·344 assertions를
+  독립 재실행했다.02의 ci/quick/build, 자료8/기존90/첨부18/초안24/shared2/agent42/
+  양입장 sharedmock4/legal15를 확인했다. 실제SQL20 중 기존17 PASS 이후 잘못된 기본제목
+  기대와 접힌 준비도구 진입을 수리한 양브라우저 targeted4 PASS로 모든 실패 경로를 재검증했다.
+  최초 legal42444906438의13/15 실패는 지우지 않는다. 최종130 탐색 회귀와 Docker가 필요한
+  native6 전체 여정은 이 중간 성공과 구분해 최종 main에서 수행한다.
+- 01의 최종 실제 reports 통합 axe에서 절 번호 대비2.99:1이 발견돼03의 기존 전용 소유 범위에서
+  `reports.css`의 본문/목차 번호2색만 `#647084`로 수리했다. PR763 exact
+  `3e67a6fbebde299dde08b0d442c673213072d7af`의 quality42448285429/native42448285489
+  SUCCESS,03의 기존 실제 shared 검사 RED→GREEN과01 독립 report3/3 PASS를 확인해
+  main `d5bdcbc4eb77db0e482a0cd84c5a94daf2b7d75a`로 정상 병합했다. 본문/사진/저장/
+  API/정제/프롬프트/fixture/테스트 변경은 없고 white5.01/hover4.57의 대비를 유지한다.
+- 최종 탐색 회귀 PR766 exact `974c469c65574fbe315d55c0dca3677e3af46c42`는 위 main을
+  기준으로 제품·API·seed·fixture를 바꾸지 않고 지정9개 테스트 파일만 이전했다. 실제 사건 도구
+  펼치기·링크·대화 복귀, hydration 완료, 고정 헤더/입력창과 메시지 내부 wheel 스크롤을 검사한다.
+  01의 frozen ci/quick/build와 최종130 PASS/0 SKIP을00이 receipt·전체 diff로 검토했다.
+  품질 CI42453081108 SUCCESS 뒤 main `080cde77bbee04259ee94e9c06e197e42f1d1698`로
+  exact head를 정상 병합했다. 최종 docs/전체 검증은 [#751 실행 기록](https://github.com/creno-va/baro/issues/751)에 남긴다.
+
+00은 별도4300의 실제 Astro 화면에서 합성 대응 사건2×3 질문·요약·긴 제목, TXT 업로드·교정v2·
+모바일 resize·대화 반영과 기존 입력 보존을 직접 조작했다. 저장 리포트v2/사용자 메모는 자료
+변경 후에도 그대로였고 현재 사건과 다름을 표시했다. 명시v3만 교정 자료를 반영했다. 사진
+추가 후 명시v4→배치/저장v5의 실제 이미지 naturalWidth1000, 상태 조회 뒤 미변경 저장 disabled,
+가림 저장v6의 사진0·현재 source 기준, 대화 복귀/사이드바 양방향을 확인했다. 마지막1280×720에서
+6탭 DOM0·자료2개·입력 enabled·가로넘침0, viewport override를 원복했다.
+
+같은 합성 IAB의 PDF3쪽/947,924 bytes 파일은 실제 저장됐지만 다운로드 묶음 tool walltime854초,
+파일 선택 묶음4240초의 단회 도구 대기가 있었다.03의 기존 묶음8.811초 관측과 구분하며 폰트/
+canvas/owner 조회/도구 대기 중 원인을 현재 증거로 단정하지 않는다. 이를 실제 서버 native
+생성 시간이나 production 성능 결과로 사용하지 않는다.4240초 관측 뒤 파일 선택·다운로드
+도구를 재실행하지 않았다. 저장 PDF의3쪽도 별도 렌더링해 한글·사용자 메모·미확인/상반 내용과
+저장 당시 자료 없음 표시, 겹침·잘림 없음을 확인했다. 이후 자료를 올려도 이v2는 바뀌지 않았다.
+
 로컬 고정 도구는 Bun1.4.0과 Node24.11.0을 `/private/tmp`에 격리 설치해 사용한다.
 Mac 기본 TMPDIR의 `/var`와 `/private/var` realpath 차이로 기존 coverage consumer 검사가
 실패하는 것을 재현했고 `TMPDIR=/private/tmp`에서 원래 assertion 그대로 통과했다.
@@ -168,24 +297,33 @@ Bun 설치 디렉터리의 `bunx`는 같은 공식 Bun 바이너리 symlink다. 
 같은 추출 자료 UI를 주 작업으로 열고 대화 복귀 링크를 제공한다. canonical 대화 경로는
 중앙 채팅·오른쪽 자료이며 `/files` 열기만으로 facts/messages를 추가 조회하지 않는다.
 
-아래 표의 미검증은 실제 작업 완료 뒤 정확한 SHA/환경/결과로 바꾼다. 합성 기능 검증과 실제
-OAuth·공급자·공식 법률 API·remote storage·독립 법률 인수는 별개다. 과거 성공을 이번 결과로 복사하지 않는다.
+아래 결과는 이번 exact PR과 격리된 합성 입력의 기능 인수다. 최종 docs PR까지 병합한 main의
+실제 checkout SHA·수동 full의 core/browser/native와 join·동일 SHA preview 결과는
+[#751 최종 receipt](https://github.com/creno-va/baro/issues/751)에 기록한다. 해당 실행이 실패하면
+그 실패와 수정 PR·재실행을 보존하며 이 중간 인수로 대체하지 않는다. 합성 기능 검증과 실제
+OAuth·공급자·공식 법률 API·remote storage·독립 법률 인수는 별개다.
 
 | ID | 시나리오/검사 | 담당 | 현재 결과 |
 | --- | --- | --- | --- |
-| A01 | 새 사건→2×3 이하 질문·요약 확인→중앙 대화 | 02/00 | 미검증 |
-| A02 | 업로드→검토·교정→선택 자료 대화 반영·실패/재시도 | 02/00 | 미검증 |
-| A03 | 자료 panel→리포트→목차/근거 이해·편집·사진/가림·저장·다운로드→대화 | 03/00 | 미검증 |
-| A04 | 고객/변호사·직접 URL·새로고침·뒤로·재접속·owner/동의 변경 | 01/02/03 | 미검증 |
-| A05 | panel/resize 중 입력·선택·교정·업로드/작업·편집 유지 | 02/03 | 미검증 |
-| A06 | 상태 조회 false dirty·저장 지연·늦은 응답/충돌 덮어쓰기 방지(PR743/747/749 보존) | 03 | 미검증 |
-| A07 | 320/390/768/1024/1440·keyboard/IME·긴 제목/파일명·200%·focus | 전원 | 미검증 |
-| A08 | 6개 탭 제거·전 기능 새 진입·기존 URL 보존 | 00 | 미검증 |
-| A09 | 랜딩/로그인 전후 시각·스타일 import 경계 | 01/00 | 미검증 |
-| A10 | 청구/대응·자료 없음/상충·불완전 분석·절차 미확인·stale, 고객 내용 전후 | 03/00 | 미검증 |
-| A11 | 같은 저장본 웹/HTML/PDF 본문·사진·출처·한글 전페이지 시각 | 03/00 | 미검증 |
-| A12 | 각 PR bun ci·quick/build·관련 회귀·정확 head CI·리뷰 | 전원/00 | 미검증 |
-| A13 | 최종 main SHA 수동 validate:full·동일 SHA preview 규칙 | 00 | 미검증 |
+| A01 | 새 사건→2×3 이하 질문·요약 확인→중앙 대화 | 02/00 | PASS: 00 실제 Astro 합성 대응 사건·질문6개·요약 확인·대화, 02 양입장 sharedmock4와 실제SQL 경로, 01 customer6/intake29 |
+| A02 | 업로드→검토·교정→선택 자료 대화 반영·실패/재시도 | 02/00 | PASS: 00 TXT 원문·교정v2·대화2메시지·사진 업로드, 02 자료8/첨부18/초안24/agent42, 업로드 ACK 대기 resize 중 중복0 |
+| A03 | 자료 panel→리포트→목차/근거 이해·편집·사진/가림·저장·다운로드→대화 | 03/00 | PASS: 00 저장v2/다운로드3쪽→자료 변경 후 보존→명시v3/v4→사진v5→가림v6→대화. 03 focused31과 실제 native/export 증거 |
+| A04 | 고객/변호사·직접 URL·새로고침·뒤로·재접속·owner/동의 변경 | 01/02/03 | PASS: 최종130에 역할/6URL/재접속/CAS/계정 변경·report3 포함. 02 기존90/실제SQL·03 기존 owner/삭제 회귀 유지. 실제 OAuth 성공과 구분 |
+| A05 | panel/resize 중 입력·선택·교정·업로드/작업·편집 유지 | 02/03 | PASS: 00 실제 모바일↔desktop dirty 교정·선택·초안 보존, 02 자료8의 ACK/중복 방지, 01 frame25의 sibling modal/조건부 unmount/초점·zoom |
+| A06 | 상태 조회 false dirty·저장 지연·늦은 응답/충돌 덮어쓰기 방지(PR743/747/749 보존) | 03 | PASS: 00 상태 조회 뒤 변경 없는 저장 disabled·v5 보존. 03 mock26/171 assertions·focused31·01 report3의 지연/복구/CAS·oversized 원문 검사. 기존 저장 deadline 회귀 유지 |
+| A07 | 320/390/768/1024/1440·keyboard/IME·긴 제목/파일명·200%·focus | 전원 | PASS: 최종130/0skip와 02 자료8/legal15의 Chromium·WebKit, 00 긴 한글 제목/파일명·실제 resize. composition 자동 검증이며 물리 한글 IME·실기기 인수와 구분 |
+| A08 | 6개 탭 제거·전 기능 새 진입·기존 URL 보존 | 00 | PASS: 00 최종 DOM0, 01 실제 도구6링크·aria-current·Enter/Tab/Escape·복귀, 위 기능 대응표의 URL/메뉴/자료 panel/리포트 진입 보존 |
+| A09 | 랜딩/로그인 전후 시각·스타일 import 경계 | 01/00 | PASS: 원래 baseline b643069의 390/1440px 공개4화면 raw pixel 차이0. BaseLayout/global/shell 보존, app 전용 scope 및 actual Astro 검사 |
+| A10 | 청구/대응·자료 없음/상충·불완전 분석·절차 미확인·stale, 고객 내용 전후 | 03/00 | PASS: 신규 양입장 native4쪽씩·00 독립34/48 및 mock47, unknown/상반 내용·근거·직접 준비/전문가 조건 실제 구성. 기존 저장 제목/사용자 편집 자동 변경0 |
+| A11 | 같은 저장본 웹/HTML/PDF 본문·사진·출처·한글 전페이지 시각 | 03/00 | PASS: exact761 native47 PNG byte동일·실제SQL10쪽 합계57쪽 전페이지 검토, 55행표/인용/한글/2방향사진/가림/출처. 00 별도 mock PDF3쪽. 최종 full native6 여정은 #751 receipt로 별도 확정 |
+| A12 | 각 PR bun ci·quick/build·관련 회귀·정확 head CI·리뷰 | 전원/00 | 각 제품 PR PASS·정상 순차 병합, 위 exact head/run 참조. 최종 탐색/인수 docs PR의 exact CI·병합 SHA도 #751에 기록. 실패한 apt/legal/대비 관측을 보존 |
+| A13 | 최종 main SHA 수동 validate:full·동일 SHA preview 규칙 | 00 | 최종 main SHA·core/browser/native/join·preview 실행의 실제 결과 정본은 #751 최종 receipt. production 배포 없음. 문서 커밋 후 최종 SHA를 고정해 실행 |
+
+전후 화면과 새 고객용 본문은 [합성 검증 자료](../quality/app-workspace-rework/README.md)에 모았다.
+실제 고객 사건/공급자·공식 법률 API의 새로운 외부 호출, 독립 법률가의 내용 인수, 물리 기기의
+한글 IME·접근성 보조기기, production PDF 성능은 이 합성 인수로 완료 처리하지 않는다.
+기존 #71은 사용자 범위 정리로 CLOSED/NOT_PLANNED인 실제 상태를 보존하며 이번 성공을
+전체 MVP·외부·법률 승인으로 확대하지 않는다.
 
 00은 각 PR diff와 증거를 읽고 필요한 회귀를 수행하며 CI 성공한 정확 head만 정상 순차 병합한다.
 main 직접 push/gate 우회는 하지 않는다. 마지막 main의 수동 full은 실제 checkout SHA와 run을
