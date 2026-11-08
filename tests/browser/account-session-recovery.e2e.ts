@@ -4,6 +4,31 @@ import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
 import { openReportEditor } from "../helpers/report-controls";
 import { preparationRead } from "../helpers/report-rework-reads";
 
+async function reportWorkspaceRead(route: import("@playwright/test").Route) {
+  const path = new URL(route.request().url()).pathname;
+  const match = /^\/api\/v2\/cases\/([^/]+)\/workspace$/.exec(path);
+  if (!match) return false;
+  await route.fulfill({
+    json: {
+      case: {
+        id: decodeURIComponent(match[1] ?? ""),
+        title: "Synthetic report case",
+        subjectContext: "individual",
+        stage: "active",
+        revision: 1,
+        updatedAt: "2026-10-10T00:00:00Z",
+        summary: "Synthetic report access fixture",
+        schemaVersion: "2",
+      },
+      messages: [],
+      actions: [],
+      timeline: [],
+      files: [],
+    },
+  });
+  return true;
+}
+
 async function trackSessionReads(page: Page) {
   await page.evaluate(async () => {
     const path = "/src/client/api/session.ts";
@@ -203,7 +228,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
-    if (await preparationRead(route)) return;
+    if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
     if (path === "/api/me/session") {
       if (outage) {
         failures++;
@@ -360,7 +385,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
-    if (await preparationRead(route)) return;
+    if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
     if (path === "/api/me/session")
       return route.fulfill({
         json: {
@@ -413,7 +438,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       if (!path.startsWith("/api/")) return route.continue();
-      if (await preparationRead(route)) return;
+      if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
       if (path === "/api/me/session") {
         if (phase === "late") {
           held++;

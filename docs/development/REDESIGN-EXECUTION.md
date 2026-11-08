@@ -6,6 +6,7 @@
 - 총괄: `redesign-00` / `codex/764-redesign-integration`.
 - 추적: [#764](https://github.com/creno-va/baro/issues/764), [미병합 기획 PR765](https://github.com/creno-va/baro/pull/765).
 - 상태: 조사·설계 계약 확정, 제품 마이그레이션·통합 인수는 진행 중. 이 문서는 완료 증거가 아니다.
+- 세션별 최신 커밋과 도구 지연 시 인계는 [REDESIGN-HANDOFF](./REDESIGN-HANDOFF.md)를 함께 확인한다.
 
 ## 결정의 우선순위와 구현 경계
 
@@ -143,6 +144,7 @@ BaseLayout의 global/shell 값과 domain 스타일도 겹친다. 같은 버튼·
 | /lawyer,/lawyers,/lawyers/:id | 04 | 연락/탐색/전용UI 종료 안내·공통 사건 이용, 데이터 권리 보존 |
 | 알 수 없는 URL | 04 | 실제 Astro404 fallback, 가짜403/500 routing 없음 |
 | client/api/session.ts, return-path와 관련 인증 테스트 | 총괄 | 로그인 기존 role 보존·신규 일반 이용, 새 endpoint 없음 |
+| client/api/mock/lawyers.ts, mock/runtime.ts와 archive mock 테스트 | 총괄 | 기존 실제 자료 읽기·삭제/CAS 계약과 test adapter 일치. 실제 endpoint/DB 변경 없음 |
 | 독립 합성 acceptance·증거 | 05 | 현재 문제→통합 정확SHA 실제 과업, 제품코드 수정 없음 |
 
 02는 components/intake/**, workspace/**(CaseNavigation 제외), components/analysis/**와 해당 단위/브라우저 테스트를 소유한다.
