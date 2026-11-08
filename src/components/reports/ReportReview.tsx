@@ -782,6 +782,7 @@ export function ReportReview({
     evidenceDirty ||
     resolutionBusy ||
     resolutionDirty;
+  const hasEditsToPreserve = dirty || Boolean(report?.analysisReview?.userEdited);
   const displayTitle = report
     ? maskIdentifiers
       ? maskReportText(report.title)
@@ -868,7 +869,7 @@ export function ReportReview({
                       evidenceDirty ||
                       resolutionBusy ||
                       resolutionDirty ||
-                      Boolean(preservedEdit && dirty && report.stale)
+                      Boolean(preservedEdit && hasEditsToPreserve)
                     }
                     onClick={() => setRegenerate(true)}
                   >
@@ -1130,12 +1131,16 @@ export function ReportReview({
                 </nav>
               </details>
               {preservedEdit && (
-                <details className="report-preserved-edit">
+                <details className="report-preserved-edit" open>
                   <summary>새 버전을 만들기 전의 편집 내용 보관</summary>
                   <p>
-                    저장하지 않았던 내용을 이 화면에 보관했어요. 필요한 내용을 새 리포트에 옮겨
-                    주세요.
+                    새 버전을 만들기 전 본문을 이 화면에 보관했어요. 필요한 내용을 복사해 새
+                    리포트에 옮겨 주세요. 대화·자료·문서 초안으로 이동해도 유지되지만,
+                    새로고침하거나 사건을 나가면 사라져요.
                   </p>
+                  {hasEditsToPreserve && (
+                    <p>다른 편집을 보관하려면 먼저 아래 본문을 TXT로 다운로드해 주세요.</p>
+                  )}
                   <textarea aria-label="보관한 리포트 편집 내용" readOnly value={preservedEdit} />
                   <Button
                     variant="outline"
@@ -1148,7 +1153,7 @@ export function ReportReview({
                       setPreservedEdit("");
                     }}
                   >
-                    보관한 편집 내용 저장
+                    보관한 본문 TXT 다운로드
                   </Button>
                 </details>
               )}
@@ -1366,7 +1371,9 @@ export function ReportReview({
           >
             <p className="report-modal-description">
               최신 사건과 자료로 리포트를 다시 만들어요.
-              {dirty && report.stale ? " 저장하지 않은 수정은 새 내용으로 바뀌어요." : ""}
+              {hasEditsToPreserve
+                ? " 직접 수정한 본문은 새 버전에 자동 반영되지 않아요. 이전 본문은 이 화면에 보관하며, 새로고침하거나 사건을 나가면 보관 내용이 사라져요."
+                : ""}
             </p>
             {error && (
               <p role="alert" className="report-error">
@@ -1378,7 +1385,7 @@ export function ReportReview({
                 disabled={Boolean(busy) || needsConsent}
                 onClick={() =>
                   void run("새 버전 생성 중…", async () => {
-                    if (dirty && report.stale) setPreservedEdit(content);
+                    if (hasEditsToPreserve && !preservedEdit) setPreservedEdit(content);
                     const current = dirty && !report.stale ? await save() : report;
                     if (
                       rework &&

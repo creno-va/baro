@@ -146,12 +146,18 @@ export function ReportReading({
           {orientation.map((item) => (
             <div key={item.label}>
               <h3>{item.label}</h3>
-              <p>
-                {item.text
-                  ? `본문 발췌: ${item.text}`
-                  : "이 항목은 본문에 정리되어 있지 않아요. 필요한 내용을 대화에서 확인해 주세요."}
-                {item.truncated ? "…" : ""}
-              </p>
+              {item.text ? (
+                <>
+                  <p>본문 발췌{item.truncated ? " · 일부만 표시했어요" : ""}</p>
+                  <div
+                    className="report-markdown"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: Reuses the escaped report-body renderer without photos or source-navigation capability.
+                    dangerouslySetInnerHTML={{ __html: reportMarkdownHtml(item.text) }}
+                  />
+                </>
+              ) : (
+                <p>이 항목은 본문에 정리되어 있지 않아요. 필요한 내용을 대화에서 확인해 주세요.</p>
+              )}
               {item.index >= 0 && (
                 <a href={`#${outlineId}-section-${item.index}`}>{item.label} 본문 보기</a>
               )}
