@@ -3,6 +3,12 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { z } from "zod";
 import { v2AcceptedOperationSchema } from "../../src/contracts/v2";
 import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
+import {
+  closeWorkspaceMaterials,
+  openWorkspaceMaterials,
+  readWorkspaceReport,
+  returnToWorkspace,
+} from "../helpers/workspace-navigation";
 
 // Enabled only when the central real runtime composition has passed CI/main.
 // This suite forwards HTTP; it never fulfills a fabricated analysis/report DTO.
@@ -12,10 +18,17 @@ test.skip(
 );
 
 async function openAction(page: Page, name: string) {
+  await closeWorkspaceMaterials(page);
   const group = page.getByRole("group", { name: "대화에서 이어갈 작업", exact: true });
   const button = group.getByRole("button", { name, exact: true });
-  if (!(await button.isVisible())) await group.getByText("다른 작업", { exact: true }).click();
-  await button.click();
+  const link = group.getByRole("link", {
+    name: name === "리포트 준비·검토" ? "리포트 열기" : name,
+    exact: true,
+  });
+  if (!(await button.isVisible()) && !(await link.isVisible()))
+    await group.getByText("다른 작업", { exact: true }).click();
+  if (await button.isVisible()) await button.click();
+  else await link.click();
 }
 type Fixture = Awaited<ReturnType<typeof openReworkBrowserFixture>>;
 const materialText = "합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다.";
@@ -33,10 +46,15 @@ async function counters(f: Fixture) {
 }
 async function reportReady(page: Page) {
   await openAction(page, "리포트 준비·검토");
+  if (!new URL(page.url()).pathname.endsWith("/reports"))
+    await expect(
+      page
+        .locator(".conversation-report-entry")
+        .getByRole("link", { name: "리포트 열기", exact: true }),
+    ).toBeVisible();
+  const report = await readWorkspaceReport(page);
   await expect(
-    page
-      .getByRole("region", { name: "리포트 준비와 검토", exact: true })
-      .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+    report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
   ).toBeVisible();
 }
 async function stableForeground(locator: Locator) {
@@ -159,7 +177,7 @@ async function preserveReport(page: Page, directory: string, fixture: Fixture) {
   const responseIndex = fixture.pdfResponses.length;
   const downloaded = page.waitForEvent("download");
   const button = page
-    .getByRole("region", { name: "리포트 준비와 검토", exact: true })
+    .locator(".report-review")
     .getByRole("button", { name: "PDF 다운로드", exact: true });
   await button.click();
   const artifact = await downloaded;
@@ -197,7 +215,7 @@ async function preserveReport(page: Page, directory: string, fixture: Fixture) {
 }
 async function chooseMaterial(page: Page, camera = false) {
   const name = camera ? photoName : "synthetic-conversation-contract.txt";
-  const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+  const materials = page.locator("#case-materials-panel");
   await expect(materials).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await materials
@@ -215,6 +233,7 @@ async function chooseMaterial(page: Page, camera = false) {
       ? await readFile(new URL("../fixtures/media/image-markers.png", import.meta.url))
       : Buffer.from(materialText),
   });
+  await closeWorkspaceMaterials(page);
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(name);
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
@@ -269,12 +288,13 @@ async function addMaterial(
   expect((await fixture.control("settle", {})).ok()).toBe(true);
   await afterSend?.();
   if (expectProcessingFailure) {
-    await expect(materials.getByText("처리 실패 · 확인 필요", { exact: true })).toBeVisible();
+    await openWorkspaceMaterials(page);
+    await expect(materials.getByText("처리 실패", { exact: true })).toBeVisible();
     await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
-    const original = materials.getByRole("button", {
-      name,
-      exact: true,
-    });
+    const original = materials
+      .locator(".workspace-file-list > li")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) })
+      .getByRole("button", { name: "자료 확인", exact: true });
     await expect(original).toBeVisible();
     return original;
   }
@@ -308,7 +328,7 @@ async function addMaterial(
 }
 
 async function inspectCameraEvidence(page: Page, directory: string, fixture: Fixture) {
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
   await expect(
     dialog.getByRole("heading", { name: "사진 분석 결과 확인", exact: true }),
   ).toBeVisible();
@@ -451,7 +471,7 @@ test("official source failure stays explicit and reload does not start another s
     expect((await f.control("sources", { mode: "failure" })).ok()).toBe(true);
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+    await returnToWorkspace(page);
     await openAction(page, "법률·판례와 현재 약점 확인");
     const analysis = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
     await expect(
@@ -483,11 +503,11 @@ test("a real processing failure keeps the original and is not shown as reviewed 
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+    await returnToWorkspace(page);
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
     const attachment = await addMaterial(page, f, true);
     await attachment.click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
     await expect(dialog.getByRole("status")).toContainText(
       "자료 처리를 완료하지 못했어요. 원본은 보관돼요.",
     );
@@ -607,7 +627,7 @@ for (const change of ["technical_revision", "file_revision"] as const)
       await page.setViewportSize({ width: 320, height: 844 });
       await openPreparedWorkspace(page, f);
       await reportReady(page);
-      await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+      await returnToWorkspace(page);
       expect((await f.control("settle", {})).ok()).toBe(true);
       expect((await f.control("native", { delayMs: 250 })).ok()).toBe(true);
       if (change === "technical_revision") {
@@ -680,6 +700,7 @@ test("actual AI200 SQL admission rejects a new message without another model cal
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
+    await returnToWorkspace(page);
     const before = await counters(f);
     expect((await f.control("quota", {})).ok()).toBe(true);
     await page
@@ -688,9 +709,9 @@ test("actual AI200 SQL admission rejects a new message without another model cal
     await page.getByRole("button", { name: "보내기", exact: true }).click();
     await expect(page.getByRole("alert").first()).toBeVisible();
     expect((await counters(f)).models).toEqual(before.models);
-    await expect(
-      page.getByRole("region", { name: "리포트 준비와 검토", exact: true }),
-    ).toBeVisible();
+    await readWorkspaceReport(page);
+    await expect(page.locator(".report-review")).toBeVisible();
+    expect((await counters(f)).models).toEqual(before.models);
   } finally {
     await f.close();
   }
@@ -711,12 +732,11 @@ test("consent withdrawal preserves the stored report while disabling new work", 
     const before = await counters(f);
     expect((await f.control("withdraw-consent", {})).ok()).toBe(true);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(page.locator(".report-reading")).toBeVisible();
+    await returnToWorkspace(page);
     await expect(
       page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
     ).toBeDisabled();
-    await expect(
-      page.getByRole("region", { name: "리포트 준비와 검토", exact: true }),
-    ).toBeVisible();
     expect((await counters(f)).models).toEqual(before.models);
   } finally {
     await f.close();
@@ -738,9 +758,7 @@ test("a foreign signed account cannot retain the previous conversation report or
     await context.clearCookies();
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await expect(page.getByRole("region", { name: "리포트 준비와 검토", exact: true })).toHaveCount(
-      0,
-    );
+    await expect(page.locator(".report-reading")).not.toBeVisible();
     await expect(page.getByRole("alert").first()).toBeVisible();
   } finally {
     await f.close();
@@ -759,7 +777,7 @@ test("a real peer context edit preserves the user's draft and requires compariso
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
+    await returnToWorkspace(page);
     await openAction(page, "사건 정리 재확인");
     await page.getByRole("button", { name: "입장·절차 확인", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "입장과 절차 확인", exact: true });
@@ -878,7 +896,7 @@ test("the report's own prepare button recovers an actual committed response loss
 
 for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
   for (const followup of ["직접 해결", "변호사와 해결", "리포트만 저장"] as const)
-    test(`${purpose}: material → confirmation → automatic law/precedent → report → ${followup}, one conversation URL`, async ({
+    test(`${purpose}: material → confirmation → automatic law/precedent → report → ${followup}, primary report URL and conversation return`, async ({
       page,
       context,
     }, testInfo) => {
@@ -948,21 +966,22 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           ).toHaveCount(1);
         }
         await attachment.click();
+        const materialDialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
         await expect(
-          page.getByRole("dialog").getByRole("heading", {
+          materialDialog.getByRole("heading", {
             name: evidenceName,
             exact: true,
           }),
         ).toBeVisible();
         const photoId = camera ? await inspectCameraEvidence(page, directory, f) : null;
-        await expect(page.getByRole("dialog")).toHaveCount(1);
+        await expect(materialDialog).toHaveCount(1);
         await writeFile(
           join(directory, "materials-visual.json"),
-          JSON.stringify(await stableForeground(page.getByRole("dialog")), null, 2),
+          JSON.stringify(await stableForeground(materialDialog), null, 2),
         );
         await page.screenshot({ path: join(directory, "materials.png"), animations: "disabled" });
         await page.keyboard.press("Escape");
-        await expect(page.getByRole("dialog")).toHaveCount(0);
+        await expect(materialDialog).toHaveCount(0);
 
         await openAction(page, "사건 정리 재확인");
         const confirmation = page.getByRole("region", { name: "사건 정리 재확인", exact: true });
@@ -1053,7 +1072,12 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
 
         await composer.fill("현재 확인한 내용으로 보고서를 준비해 주세요.");
         await page.getByRole("button", { name: "보내기", exact: true }).click();
-        const report = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+        await expect(
+          page
+            .locator(".conversation-report-entry")
+            .getByRole("link", { name: "리포트 열기", exact: true }),
+        ).toBeVisible();
+        const report = await readWorkspaceReport(page);
         await expect(
           report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
         ).toBeVisible();
@@ -1146,44 +1170,46 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           JSON.stringify(await stableForeground(report), null, 2),
         );
         await page.screenshot({ path: join(directory, "followup.png"), animations: "disabled" });
-        expect(new URL(page.url()).pathname).toBe(path);
+        expect(new URL(page.url()).pathname).toBe(`${path}/reports`);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
-        await expect(composer).toBeInViewport();
+        const beforeReturn = await counters(f);
         if (purpose === "prepare_claim" && followup === "직접 해결") {
-          const focusState = () => conversationFocus(page);
-          const beforeAudit = await focusState();
+          const beforeAudit = await conversationFocus(page);
           expect(
-            (await new AxeBuilder({ page }).include(".workspace").analyze()).violations.filter(
-              (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
+            (
+              await new AxeBuilder({ page }).include(".report-workspace").analyze()
+            ).violations.filter((violation) =>
+              ["serious", "critical"].includes(violation.impact ?? ""),
             ),
           ).toEqual([]);
+          const back = page.getByRole("link", { name: "대화로 돌아가기", exact: true });
+          await back.focus();
+          await expect(back).toBeFocused();
           const keyboardFocus = {
             beforeDraftDownload,
             beforeAudit,
-            afterAudit: await focusState(),
-            closingBlocked: await report
-              .getByRole("button", { name: "대화 작업 닫기", exact: true })
-              .isDisabled(),
+            afterAudit: await conversationFocus(page),
+            returnLinkFocused: true,
           };
+          await back.press("Enter");
+          await expect(composer).toBeEnabled();
           await writeFile(
             join(directory, "keyboard-focus.json"),
-            JSON.stringify(keyboardFocus, null, 2),
+            JSON.stringify(
+              { ...keyboardFocus, afterReturn: await conversationFocus(page) },
+              null,
+              2,
+            ),
           );
-          await page.keyboard.press("Escape");
-          await expect(report).not.toBeVisible();
-          try {
-            // Unmount visibility precedes passive-effect focus restoration.
-            // Observe the actual input target without moving focus in the test.
-            await expect(composer).toBeFocused();
-          } finally {
-            await writeFile(
-              join(directory, "keyboard-focus.json"),
-              JSON.stringify({ ...keyboardFocus, afterClose: await focusState() }, null, 2),
-            );
-          }
-        }
+        } else await returnToWorkspace(page);
+        expect(new URL(page.url()).pathname).toBe(path);
+        await expect(composer).toBeInViewport();
+        // Reading and returning never authorize another model or source call.
+        const afterReturn = await counters(f);
+        expect(afterReturn.models).toEqual(beforeReturn.models);
+        expect(afterReturn.sources).toBe(beforeReturn.sources);
       } finally {
         try {
           await mkdir(directory, { recursive: true });

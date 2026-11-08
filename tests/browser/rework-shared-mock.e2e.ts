@@ -1,12 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import {
+  closeWorkspaceMaterials,
+  readWorkspaceReport,
+  returnToWorkspace,
+} from "../helpers/workspace-navigation";
 
 // Actual shared mock namespace, not an aliased component/client fixture. It
 // explicitly has no legal provider: these tests must never assert verified law.
 test.skip(process.env.BARO_REWORK_SHARED_MOCK !== "true", "Shared rework mock main gate required");
 
 for (const purpose of ["고소 준비", "주장 대응"] as const)
-  test(`shared mock ${purpose}: actual intake and inline limited report preserve unavailable law`, async ({
+  test(`shared mock ${purpose}: actual intake, material panel and primary limited report preserve unavailable law`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 844 });
@@ -47,7 +52,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await expect(actions).toBeVisible();
     await actions.getByText("다른 작업", { exact: true }).click();
     await actions.getByRole("button", { name: "자료 추가·검토", exact: true }).click();
-    const materials = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+    const materials = page.locator("#case-materials-panel");
     const chooser = page.waitForEvent("filechooser");
     await materials.getByRole("button", { name: "파일 선택", exact: true }).click();
     await (await chooser).setFiles({
@@ -55,7 +60,9 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
       mimeType: "text/plain",
       buffer: Buffer.from("공통 예시 모드 합성 원본. 반환 약속 날짜는 아직 미확인입니다."),
     });
+    await closeWorkspaceMaterials(page);
     await page
+      .locator(".workspace-composer")
       .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
       .check();
     await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -66,7 +73,9 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await expect(attachment).toBeVisible();
     await attachment.click();
     await expect(
-      page.getByRole("dialog").getByRole("heading", { name: "shared-inline.txt", exact: true }),
+      page
+        .getByRole("dialog", { name: "자료 확인", exact: true })
+        .getByRole("heading", { name: "shared-inline.txt", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(
@@ -191,13 +200,15 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     ).toBeVisible();
     await expect(analysis.getByRole("link", { name: /공식 원문/ })).toHaveCount(0);
     await actions.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
-    const report = page.getByRole("region", { name: "리포트 준비와 검토", exact: true });
+    const report = await readWorkspaceReport(page);
     await expect(
       report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
     ).toBeVisible();
     await expect(report).toContainText(/보완 필요|확인하지 못|원문 확인/);
     if (purpose.startsWith("고소"))
-      await page.screenshot({ path: "/tmp/baro-625-report-inline-320.png", fullPage: true });
+      await page.screenshot({ path: "/tmp/baro-625-report-main-320.png", fullPage: true });
+    await expect(page).toHaveURL(`${conversationUrl}/reports?mode=conversation`);
+    await returnToWorkspace(page);
     expect(new URL(page.url()).pathname).toBe(conversationUrl);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
