@@ -138,6 +138,14 @@ Astro dev와 build는 같은 worktree의 Vite cache를 공유하므로 순차 �
 
 ## 검증·마이그레이션 계획
 
+소비 통합 뒤의 정리: 이전 shell/experience/refresh/workspace CSS와 사용하지 않는
+landing16개·login/consent/policies/stories/lawyers/settings CSS를 제품 소스에서 제거했다.
+직접 CSS를 읽는 공통 shell/리포트 fixture도 canonical producer로 전환했다.
+`tests/helpers/retired-web/styles`의 원본 snapshot은 종료한 경로의 권한/자료 회수 회귀를 위한
+test-only 이력이며 제품 route나 production bundle에서 소비하지 않는다.
+현재 도메인별 CSS는 intake/cases/workspace/workspace-conversation/evidence/reports/resolution/precedents,
+공통은 global/product/app-focus/feedback이다. native producer(global/product)와 PDF 출력 CSS를 유지한다.
+
 1. 대표 합성 화면에서 한국어 긴 제목/본문·자료 비교·편집·부분 실패·출처 확인을 검증한다.
 2. canonical 토큰/UI/shell로 공통 import를 교체하고 중복된 공통 override를 제거한다.
 3. 02~04의 도메인 컴포넌트는 해당 담당자가 교체한다. 필요한 CSS 변경은01이 받아 도메인 파일에 정리한다.

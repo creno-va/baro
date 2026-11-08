@@ -19,17 +19,7 @@ const bundle = await Bun.build({
 });
 if (!bundle.success) throw new Error("Shell fixture bundle failed");
 const script = await bundle.outputs[0]?.text();
-const names = [
-  "global",
-  "shell",
-  "app-focus",
-  "cases",
-  "workspace",
-  "product",
-  "app-experience",
-  "product-refresh",
-  "app-workspace",
-];
+const names = ["global", "app-focus", "cases", "workspace", "product"];
 const css =
   (await Promise.all(names.map((name) => Bun.file(`${root}/src/styles/${name}.css`).text())))
     .join("\n")

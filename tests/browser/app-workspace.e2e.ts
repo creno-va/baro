@@ -61,10 +61,8 @@ test("long review sheets scroll internally, keep 44px controls and return focus 
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
-    const verticalAnchor =
-      (width ?? 320) <= 760
-        ? bounds.y + bounds.height - (height ?? 480)
-        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    // Dialog is centred at every width; the distinct Sheet component owns edge anchoring.
+    const verticalAnchor = bounds.y + bounds.height / 2 - (height ?? 480) / 2;
     expect(Math.abs(verticalAnchor)).toBeLessThan(2);
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     const close = dialog.getByRole("button", { name: "닫기", exact: true });
@@ -245,7 +243,7 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await expect(opener).toBeFocused();
 });
 
-test("case tools replace six tabs and retain every existing route", async ({ page }) => {
+test("four visible tasks and secondary tools retain every existing route", async ({ page }) => {
   await seed(page);
   await page.goto("/");
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
@@ -258,12 +256,22 @@ test("case tools replace six tabs and retain every existing route", async ({ pag
     ["타임라인", "timeline"],
     ["다음 행동", "actions"],
     ["유사 판례", "precedents"],
-    ["자료", "files"],
-    ["리포트 보기", "reports"],
   ] as const) {
     await expect(tools.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
       "href",
       `/cases/shell-case/${suffix}`,
+    );
+  }
+  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  for (const [label, suffix] of [
+    ["대화", ""],
+    ["자료", "/files"],
+    ["리포트", "/reports"],
+    ["문서 초안", "/reports#document-drafts"],
+  ]) {
+    await expect(tasks.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
+      "href",
+      `/cases/shell-case${suffix}`,
     );
   }
   await page.keyboard.press("Escape");
@@ -278,7 +286,8 @@ test("sidebar collapse keeps role navigation, recent management and resize focus
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   const sidebar = page.locator(".sidebar-desktop");
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "설정", exact: true })).toBeVisible();
   await expect(sidebar.locator(".sidebar-story")).toHaveAttribute("aria-current", "page");
@@ -365,8 +374,8 @@ test("200% zoom and keyboard focus keep compact navigation reachable", async ({ 
   });
   await page.locator(".case-tools > summary").press("Enter");
   const link = page
-    .getByRole("navigation", { name: "사건 도구", exact: true })
-    .getByRole("link", { name: "리포트 보기", exact: true });
+    .getByRole("navigation", { name: "사건 작업", exact: true })
+    .getByRole("link", { name: "리포트", exact: true });
   await link.focus();
   await expect(link).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(

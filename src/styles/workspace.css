@@ -991,7 +991,7 @@
   inset: 0;
   margin: auto;
   width: min(640px, calc(var(--workspace-viewport-width, 100vw) - 32px));
-  max-height: calc(var(--workspace-viewport-height, 100dvh) - 40px);
+  max-height: min(calc(var(--workspace-viewport-height, 100dvh) - 40px), calc(100% - 32px));
   border: 1px solid var(--border);
   border-radius: 22px;
   padding: 24px;

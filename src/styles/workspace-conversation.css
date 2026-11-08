@@ -390,8 +390,11 @@
   padding-bottom: 0;
 }
 .app-frame[data-app-workspace] .workspace .workspace-dialog[open] {
-  max-width: var(--workspace-viewport-width, 100vw);
-  max-height: calc(var(--workspace-viewport-height, 100dvh) - max(24px, env(safe-area-inset-top)));
+  max-width: min(var(--workspace-viewport-width, 100vw), calc(100% - 24px));
+  max-height: min(
+    calc(var(--workspace-viewport-height, 100dvh) - max(24px, env(safe-area-inset-top))),
+    calc(100% - 24px)
+  );
 }
 .app-frame[data-app-workspace]
   .workspace
