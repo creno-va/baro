@@ -345,10 +345,12 @@ test("pending workspace files keep polling after a transient failure and stop on
   await page.evaluate(async () => {
     const modulePath = "/src/client/api/index.ts";
     const { api } = await import(modulePath);
-    const original = api.workspace.getFiles.bind(api.workspace);
+    // A retained chat → files switch keeps the original workspace reader.
+    // Direct files-only reads are covered by workspace-files-snapshot.e2e.ts.
+    const original = api.workspace.get.bind(api.workspace);
     const state = { reads: 0 };
     (window as unknown as { customerPoll: typeof state }).customerPoll = state;
-    const getFiles = async (id: string) => {
+    const get = async (id: string) => {
       const owned = new Error().stack?.includes("Workspace.tsx");
       if (!owned) return original(id);
       const ordinal = ++state.reads;
@@ -375,7 +377,7 @@ test("pending workspace files keep polling after a transient failure and stop on
     };
     api.workspace = new Proxy(api.workspace, {
       get(target, key, receiver) {
-        return key === "getFiles" ? getFiles : Reflect.get(target, key, receiver);
+        return key === "get" ? get : Reflect.get(target, key, receiver);
       },
     });
     window.dispatchEvent(new Event("focus"));
