@@ -1368,7 +1368,7 @@
   cursor: pointer;
   font-family: inherit;
 }
-.workspace-attach:disabled {
+.workspace-attach:not(.ui-button):disabled {
   opacity: 0.5;
   cursor: default;
 }
