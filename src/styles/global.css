@@ -273,9 +273,8 @@ summary {
   white-space: normal;
   overflow-wrap: anywhere;
   max-width: 100%;
-  transition:
-    background var(--motion-fast) ease,
-    border-color 120ms ease;
+  /* Availability changes must update foreground and background together. */
+  transition: border-color 120ms ease;
 }
 .primary-action,
 .ui-button--primary {
