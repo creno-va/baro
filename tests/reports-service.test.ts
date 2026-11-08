@@ -328,7 +328,8 @@ test("reuse bound verified official citations without retrieval; expiry invalida
     },
   ]);
   const report = await f.reports.get(f.actor.ownerId, f.workspaceId);
-  expect(report.content).not.toContain("공식 출처");
+  expect(report.content).toContain("사실·행동에 연결된 공식 출처");
+  expect(await f.reports.html(f.actor.ownerId, report.id)).toContain(citation.url);
   expect(
     (await createV2ReportsRepository(f.core).read(f.actor, report.id))?.body.citations,
   ).toEqual([citation]);

@@ -152,8 +152,20 @@ export function createReportsService(core: V2Core, deps: ReportDependencies) {
     return { ...source, ...bound, analysisIdentity: reportAnalysisIdentity(snapshot) };
   };
   const sourceContent = (source: Awaited<ReturnType<typeof preparedSource>>) => {
-    const base = reportText(source.body, source.coverage, source.display);
-    return source.analysis ? reportAnalysisText(source.body, base, source.analysis) : base;
+    const base = [
+      reportText(source.body, source.coverage, source.display),
+      "",
+      "자료 처리 범위",
+      ...(source.display.materialScopes?.length
+        ? source.display.materialScopes.map((text) => `- ${text.replace(/\r?\n/gu, "\n  ")}`)
+        : [
+            "이 리포트에 포함된 자료가 없습니다. 자료가 없다는 것만으로 사실의 유무를 판단하지 않습니다.",
+          ]),
+      "",
+      "안내",
+      ...source.body.notices.map((text) => `- ${text.replace(/\r?\n/gu, "\n  ")}`),
+    ].join("\n");
+    return reportAnalysisText(source.body, base, source.analysis ?? missingReportAnalysis());
   };
   const checkAnalysis = async (a: Actor, caseId: string, review: ReportReviewData) => {
     if (review.analysisIdentity === undefined || !hasPreparedReader) return;

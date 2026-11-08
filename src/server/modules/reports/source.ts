@@ -368,14 +368,15 @@ export async function buildReportSource(
     coverage: string[] = [];
   const materials: { id: string; observations: string[] }[] = [];
   const materialGaps: string[] = [];
+  const materialScopes: string[] = [];
   for (const row of fileRows.results) {
     if (excluded.includes(row.id)) continue;
     const file = await reportFile(core, actor, row.id);
     if (!file || file.revision !== row.revision) throw new ReportError("STALE_REVISION");
     if (file.status !== "ready" || !file.manifest) {
-      coverage.push(
-        `${file.name}: ${file.status === "failed" ? "처리 실패" : "처리 미완료"} · 원본에서 직접 확인 필요`,
-      );
+      const scope = `${file.name}: ${file.status === "failed" ? "처리 실패" : "처리 미완료"} · 원본에서 직접 확인 필요`;
+      coverage.push(scope);
+      materialScopes.push(scope);
       materialGaps.push(`${file.name} · 내용을 읽지 못해 원본 확인 필요`);
       continue;
     }
@@ -386,9 +387,9 @@ export async function buildReportSource(
       byteLength: file.manifest.byteLength,
       contentHash: file.manifest.contentHash,
     });
-    coverage.push(
-      `${file.name}: ${coverageText(file.coverage)} · 사실 여부와 원본의 진정성은 별도 확인 필요`,
-    );
+    const scope = `${file.name}: ${coverageText(file.coverage)} · 사실 여부와 원본의 진정성은 별도 확인 필요`;
+    coverage.push(scope);
+    materialScopes.push(scope);
     if (
       !file.coverage ||
       (file.coverage.category === "audio"
@@ -545,6 +546,7 @@ export async function buildReportSource(
     intakeRevision: intake.revision,
     materials,
     materialGaps,
+    materialScopes,
     questions: intake.batches.flatMap((batch) =>
       batch.questions.map((question, index) => ({
         id: question.id,
@@ -571,6 +573,7 @@ type ReportDisplayContext = {
   readonly questions: readonly { id: string; round: number; number: number; prompt?: string }[];
   readonly materials?: readonly { id: string; observations: readonly string[] }[];
   readonly materialGaps?: readonly string[];
+  readonly materialScopes?: readonly string[];
 };
 export function reportText(
   body: V2ReportBody,

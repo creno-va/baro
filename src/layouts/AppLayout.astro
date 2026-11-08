@@ -6,6 +6,7 @@ import BaseLayout from "./BaseLayout.astro";
 import "../styles/product.css";
 import "../styles/app-experience.css";
 import "../styles/product-refresh.css";
+import "../styles/app-workspace.css";
 
 interface Props {
   title: string;
@@ -19,7 +20,7 @@ interface Props {
 const { title, description, role, availableRoutes, contentClass = "app-main" } = Astro.props;
 ---
 <BaseLayout title={title} description={description}>
-  <div data-product-ui="refresh" class:list={["app-frame", { "app-frame--product": contentClass !== "conversation-main" }]}>
+  <div data-app-workspace data-product-ui="refresh" class:list={["app-frame", { "app-frame--product": contentClass !== "conversation-main" }]}>
     <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} client:load />
     <div class="app-surface">
       <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
