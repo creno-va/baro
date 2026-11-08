@@ -264,9 +264,11 @@ committed-history scanner는 통과했지만 합성 브라우저141개 중140 PA
 submit focus→native close→Dialog restoreFocus/onClose→설명 입력창 Enter/줄바꿈의 인과를 기록했다.
 CaseInput/Dialog과 검사 본문은920/deb85/bab6에서 같았다. 이는 새 리포트 source의 회귀로 분류하지 않는다.
 진단 hook의 전역 첫 submitDisabled 값은 닫힌 제목 수정 모달을 가리켜 근거에서 제외했고 원본을 보존했다.
-01이 controlled close 직후 정상 복귀를 한 번 수행하고 queued close에서는 상태만 동기화하도록 수리한다.
+01이 controlled close 직후 정상 복귀를 한 번 수행하고 queued close에서는 상태만 동기화하도록 수리했다.
 정상 invalid-field 복귀와 새 명시적 submit 초점 보존을 독립 회귀로 검사하고 원래20회도 재검증한다.
 공통 소스·회귀는01, 원본 Home 독립 반복은02, 리포트 미지원 모달 C/W4는03, 통합·문서는 총괄 소유다.
+두 공통 수리와 독립 회귀의 원본은 `114bbace8030ed89d295c72f5451f7fda063e0e7`이며
+이미 통합한330의 후속1커밋이다. 정상/새 초점 회귀의 Chromium·WebKit 예비 통과와 최종 통합 검증은 구분한다.
 
 초기 수동 기록의 message counter 두 selector는 실제 Workspace 사용자 메시지 class와 달랐다.
 그0만으로 자동 전송이 없었다고 판단하지 않는다. 원본은 보존하고 exact920에서 실제
