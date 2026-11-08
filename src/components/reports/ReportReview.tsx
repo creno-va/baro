@@ -783,6 +783,9 @@ export function ReportReview({
     resolutionBusy ||
     resolutionDirty;
   const hasEditsToPreserve = dirty || Boolean(report?.analysisReview?.userEdited);
+  const preservationLimit = onNavigateTask
+    ? "새로고침하거나 사건을 나가면 보관 내용이 사라져요."
+    : "새로고침하거나 이 화면을 나가면 보관 내용이 사라져요.";
   const displayTitle = report
     ? maskIdentifiers
       ? maskReportText(report.title)
@@ -1135,8 +1138,9 @@ export function ReportReview({
                   <summary>새 버전을 만들기 전의 편집 내용 보관</summary>
                   <p>
                     새 버전을 만들기 전 본문을 이 화면에 보관했어요. 필요한 내용을 복사해 새
-                    리포트에 옮겨 주세요. 대화·자료·문서 초안으로 이동해도 유지되지만,
-                    새로고침하거나 사건을 나가면 사라져요.
+                    리포트에 옮겨 주세요.{" "}
+                    {onNavigateTask && "대화·자료·문서 초안으로 이동해도 유지돼요. "}
+                    {preservationLimit}
                   </p>
                   {hasEditsToPreserve && (
                     <p>다른 편집을 보관하려면 먼저 아래 본문을 TXT로 다운로드해 주세요.</p>
@@ -1372,7 +1376,7 @@ export function ReportReview({
             <p className="report-modal-description">
               최신 사건과 자료로 리포트를 다시 만들어요.
               {hasEditsToPreserve
-                ? " 직접 수정한 본문은 새 버전에 자동 반영되지 않아요. 이전 본문은 이 화면에 보관하며, 새로고침하거나 사건을 나가면 보관 내용이 사라져요."
+                ? ` 직접 수정한 본문은 새 버전에 자동 반영되지 않아요. 이전 본문은 이 화면에 보관해요. ${preservationLimit}`
                 : ""}
             </p>
             {error && (
