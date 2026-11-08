@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { goToCaseTool } from "../helpers/case-navigation";
+import { confirmWorkspaceUpload } from "../helpers/workspace-navigation";
 
 test("action check, preparation refresh and a second check wait for AI publication without a conflict", async ({
   page,
@@ -234,6 +236,14 @@ for (const retryImmediately of [true, false])
         buffer: Buffer.from("Second synthetic original"),
       },
     ]);
+    await expect(page.locator(".workspace-file-list > li")).toHaveCount(0);
+    await expect(page.getByRole("list", { name: "업로드할 자료", exact: true })).toContainText(
+      "second-failure.txt",
+    );
+    await expect(
+      page.getByRole("button", { name: "선택한 자료 업로드", exact: true }),
+    ).toBeDisabled();
+    await confirmWorkspaceUpload(page);
     const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
     await expect(retry).toBeVisible();
     if (retryImmediately) {
@@ -287,6 +297,11 @@ for (const interrupted of [false, true])
       mimeType: "text/plain",
       buffer: Buffer.from("Synthetic original for local review"),
     });
+    await expect(page.locator(".workspace-file-list > li")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "선택한 자료 업로드", exact: true }),
+    ).toBeDisabled();
+    await confirmWorkspaceUpload(page);
     if (interrupted) {
       await expect(page.getByRole("alert")).toBeVisible();
       await page.getByRole("button", { name: "새로고침 · 다시 확인", exact: true }).click();
@@ -296,8 +311,15 @@ for (const interrupted of [false, true])
     ).toBeVisible();
     await page.getByRole("button", { name: "자료 확인", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    if (!interrupted)
+    if (!interrupted) {
+      const pendingDownload = page.waitForEvent("download");
       await page.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
+      const download = await pendingDownload;
+      expect(download.suggestedFilename()).toBe("incomplete-original.txt");
+      const path = await download.path();
+      if (!path) throw new Error("Synthetic original download was not saved");
+      expect(await readFile(path)).toEqual(Buffer.from("Synthetic original for local review"));
+    }
     if (interrupted) {
       await expect(page.getByRole("dialog")).toBeVisible();
       await expect(
@@ -388,7 +410,7 @@ test("deferred upload can start processing; queued file cannot start a duplicate
   await expect(page.getByRole("button", { name: "자료 처리 시작", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "자료 처리 시작", exact: true }).click();
   await expect(page.getByRole("button", { name: "자료 처리 시작", exact: true })).toHaveCount(0);
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
 });
 test("missing original keeps an authorized workspace and its editor", async ({ page }) => {
   await page.goto("/cases/synthetic-case/files");
@@ -398,6 +420,8 @@ test("missing original keeps an authorized workspace and its editor", async ({ p
     mimeType: "text/plain",
     buffer: Buffer.from("Synthetic original"),
   });
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(0);
+  await confirmWorkspaceUpload(page);
   await page.getByRole("button", { name: "자료 확인", exact: true }).click();
   await page.evaluate(async () => {
     const path = "/tests/helpers/workspace-client-fixture.ts",

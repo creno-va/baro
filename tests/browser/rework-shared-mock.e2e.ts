@@ -98,7 +98,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
     await expect(contextDialog).toBeVisible();
     await expect(
       contextDialog.getByRole("combobox", { name: "사건 입장", exact: true }),
-    ).toHaveValue(purpose.startsWith("고소") ? "prepare_claim" : "respond_to_claim");
+    ).toHaveValue(purpose === "unknown-prepare" ? "prepare_claim" : "respond_to_claim");
     await expect(
       contextDialog.getByRole("combobox", { name: "사건 분야", exact: true }),
     ).toHaveValue("unconfirmed");
@@ -174,7 +174,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
     await expect(
       contextDialog.getByText("다른 탭에서 기록한 합성 현재값", { exact: true }),
     ).toBeVisible();
-    if (purpose.startsWith("고소")) {
+    if (purpose === "unknown-prepare") {
       expect(
         (await new AxeBuilder({ page }).include("dialog[open]").analyze()).violations.filter(
           (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
@@ -207,7 +207,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
       report.getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
     ).toBeVisible();
     await expect(report).toContainText(/보완 필요|확인하지 못|원문 확인/);
-    if (purpose.startsWith("고소")) {
+    if (purpose === "unknown-prepare") {
       // An unavailable analysis deliberately takes the explicit document POST,
       // not another analysis action. Editing that fresh document cannot make
       // its source stale or turn the unavailable audit into a verified result.
@@ -239,7 +239,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
       });
       await expect(report.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
     }
-    if (purpose.startsWith("고소"))
+    if (purpose === "unknown-prepare")
       await page.screenshot({ path: "/tmp/baro-625-report-main-320.png", fullPage: true });
     await expect(page).toHaveURL(`${conversationUrl}/reports?mode=conversation`);
     await returnToWorkspace(page);
