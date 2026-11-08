@@ -67,8 +67,9 @@ export function createMockLawyers(context: LawyerMockContext) {
     if (session.user?.accountType !== "lawyer")
       throw new LawyerApiError("UNAUTHENTICATED", "로그인 상태를 확인해 주세요.");
     const store = state();
-    const profile = store.profiles.find((p) => p.id === store.owners[session.user.id]);
-    return { store, profile, ownerId: session.user.id };
+    const ownerId = session.user.id;
+    const profile = store.profiles.find((p) => p.id === store.owners[ownerId]);
+    return { store, profile, ownerId };
   };
   const own = async (mutation = true) => {
     const session = await context.session();
@@ -152,7 +153,7 @@ export function createMockLawyers(context: LawyerMockContext) {
         !Number.isSafeInteger(input.revision) ||
         input.revision !== (asset.revision ?? 1)
       )
-        throw new LawyerApiError("STALE_REVISION", "자료 상태가 변경됐어요. 다시 확인해 주세요.");
+        throw new LawyerApiError("CONFLICT", "자료 상태가 변경됐어요. 다시 확인해 주세요.");
       // The existing DELETE endpoint permits owned CAS deletion after renewal,
       // including linked assets. It does not save or republish the profile.
       if (store.assets) delete store.assets[input.assetId];
