@@ -81,7 +81,62 @@ test("long review sheets scroll internally, keep 44px controls and return focus 
     await page.mouse.wheel(0, 900);
     await expect.poll(() => content.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
     await finish.scrollIntoViewIfNeeded();
+    await content.hover();
+    await page.mouse.wheel(0, 100000);
+    await expect
+      .poll(() =>
+        content.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop),
+      )
+      .toBe(0);
+    const geometry = await finish.evaluate((node) => {
+      const target = node.getBoundingClientRect();
+      const scroller = node.closest(".ui-dialog__content");
+      if (!scroller) throw new Error("Synthetic review scrollport missing");
+      const port = scroller.getBoundingClientRect();
+      // Sample the button interior: rounded border corners are intentionally
+      // outside its hit shape, even when no other control overlaps it.
+      const hits = [0.25, 0.5, 0.75].flatMap((x) =>
+        [0.25, 0.5, 0.75].map((y) =>
+          node.contains(
+            document.elementFromPoint(
+              target.left + target.width * x,
+              target.top + target.height * y,
+            ),
+          ),
+        ),
+      );
+      return {
+        devicePixelRatio,
+        button: target.toJSON(),
+        scrollport: port.toJSON(),
+        scrollTop: scroller.scrollTop,
+        clientHeight: scroller.clientHeight,
+        scrollHeight: scroller.scrollHeight,
+        maxScroll: scroller.scrollHeight - scroller.clientHeight,
+        clipped: Math.max(
+          0,
+          port.left - target.left,
+          port.top - target.top,
+          target.right - port.right,
+          target.bottom - port.bottom,
+        ),
+        hits,
+      };
+    });
+    await test.info().attach(`long-review-geometry-${width}`, {
+      body: JSON.stringify(geometry, null, 2),
+      contentType: "application/json",
+    });
+    await page.screenshot({ path: `.wrangler/ui01-full/long-review-end-${width}.png` });
     await expect(finish).toBeInViewport({ ratio: 1 });
+    expect(geometry.clipped).toBe(0);
+    expect(geometry.button.width).toBeGreaterThanOrEqual(44);
+    expect(geometry.button.height).toBeGreaterThanOrEqual(44);
+    expect(geometry.hits).toEqual(Array(9).fill(true));
+    expect(geometry.button.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.button.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.button.right).toBeLessThanOrEqual(width ?? 320);
+    expect(geometry.button.bottom).toBeLessThanOrEqual(height ?? 480);
     await expect(close).toBeInViewport({ ratio: 1 });
     expect(await close.boundingBox()).toEqual(headerBefore);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -97,10 +152,11 @@ test("long review sheets scroll internally, keep 44px controls and return focus 
     await page.keyboard.press("Enter");
     await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
-    for (const dismissal of ["close", "escape"]) {
+    for (const dismissal of ["finish", "close", "escape"]) {
       await opener.click();
       await expect(dialog).toBeVisible();
-      if (dismissal === "close") await close.click();
+      if (dismissal === "finish") await finish.click();
+      else if (dismissal === "close") await close.click();
       else await page.keyboard.press("Escape");
       await expect(dialog).not.toBeVisible();
       await expect(opener).toBeFocused();
