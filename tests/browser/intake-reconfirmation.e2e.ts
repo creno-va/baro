@@ -208,24 +208,84 @@ for (const focusInside of [true, false]) {
   });
 }
 
-for (const purpose of ["고소 준비", "주장 대응"] as const) {
-  test(`${purpose}: saves the selected purpose and resumes without an owner-category choice`, async ({
+for (const [entry, purpose, kind] of [
+  ["civil-prepare", "prepare_claim", "civil"],
+  ["civil-response", "respond_to_claim", "civil"],
+  ["criminal-prepare", "prepare_claim", "criminal"],
+  ["criminal-response", "respond_to_claim", "criminal"],
+  ["unknown-prepare", "prepare_claim", "unconfirmed"],
+  ["unknown-response", "respond_to_claim", "unconfirmed"],
+] as const) {
+  test(`${entry}: saves existing purpose and procedure without inventing a stage`, async ({
     page,
   }) => {
     await seed(page);
     await page.goto("/app");
-    await page.getByRole("radio", { name: purpose, exact: true }).check();
+    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(entry);
     await page
       .getByLabel("지금까지 있었던 일")
       .fill("실제 사건이 없는 합성 입력입니다. 서로 다른 입장과 기업 맥락을 따로 저장합니다.");
     await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
     await expect(page).toHaveURL(/\/intake$/);
-    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
+    const label = purpose === "prepare_claim" ? "요구·고소 준비" : "받은 주장에 대응";
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+    const id = new URL(page.url()).pathname.split("/")[2];
+    expect(
+      await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}")[id ?? ""],
+        id,
+      ),
+    ).toMatchObject({
+      casePurpose: purpose,
+      procedure: { kind, stage: "unconfirmed", description: null },
+    });
     await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
     await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
     await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
+  });
+}
+
+for (const fault of ["before", "after"] as const) {
+  test(`entry context ${fault} failure preserves the accepted registration for explicit retry`, async ({
+    page,
+  }) => {
+    await seed(page);
+    await page.goto("/app");
+    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("criminal-response");
+    await page
+      .getByLabel("지금까지 있었던 일")
+      .fill("고소됐다는 연락을 받은 합성 대응 사례예요. 받은 문서는 아직 없어요.");
+    await page.evaluate(
+      (fault) => localStorage.setItem("synthetic-entry-context-fault", fault),
+      fault,
+    );
+    await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+    const retry = page.getByRole("button", { name: "준비 방향 저장 다시 시도", exact: true });
+    await expect(retry).toBeVisible();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByText("선택한 방향은 형사 대응예요.", { exact: false })).toBeVisible();
+    const attempts = () =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticEntryAttempts") ?? "{}"),
+      );
+    expect(await attempts()).toEqual({ create: 1, context: 1 });
+    await retry.click();
+    await expect(page).toHaveURL(/\/intake$/);
+    expect(await attempts()).toEqual({ create: 1, context: fault === "before" ? 2 : 1 });
+    const id = new URL(page.url()).pathname.split("/")[2];
+    expect(
+      await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}")[id ?? ""],
+        id,
+      ),
+    ).toMatchObject({
+      casePurpose: "respond_to_claim",
+      procedure: { kind: "criminal", stage: "unconfirmed" },
+    });
   });
 }
 

@@ -13,7 +13,7 @@ export type MaterialState =
 export const materialStateLabels: Record<MaterialState, string> = {
   uploading: "업로드 중",
   waiting: "처리 대기",
-  processing: "분석 중",
+  processing: "내용 추출 중",
   rejected: "등록 거절",
   failed: "처리 실패 · 확인 필요",
   review: "내용 확인 후 반영 가능",
