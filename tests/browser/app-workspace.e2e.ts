@@ -257,7 +257,7 @@ test("four visible tasks and secondary tools retain every existing route", async
     ["다음 행동", "actions"],
     ["유사 판례", "precedents"],
   ] as const) {
-    await expect(tools.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
+    await expect(tools.getByRole("link", { name: label, exact: true })).toHaveAttribute(
       "href",
       `/cases/shell-case/${suffix}`,
     );
@@ -268,7 +268,7 @@ test("four visible tasks and secondary tools retain every existing route", async
     ["자료", "/files"],
     ["리포트", "/reports"],
     ["문서 초안", "/reports#document-drafts"],
-  ]) {
+  ] as const) {
     await expect(tasks.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
       "href",
       `/cases/shell-case${suffix}`,

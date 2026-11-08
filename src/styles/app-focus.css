@@ -55,7 +55,7 @@
 }
 
 /* A scrollable evidence table needs an explicit keyboard location as well. */
-:root[data-focus-input="keyboard"] .ui-table-scroll:focus-visible {
+:root[data-focus-input="keyboard"] :is(.ui-table-scroll, .report-table):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
