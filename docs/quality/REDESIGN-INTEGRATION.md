@@ -247,3 +247,29 @@ immutable 이력은 남아 있으며 영구 유실로 분류하지 않는다. �
 원본69 domain/reading·브라우저34(5+19+6+모달4) PASS/SKIP0, 최종 typed-fixture 보완 뒤
 quick/build와390/1200px 실제 v2→v3→네 작업→현재 기준 미검토 초안→TXT2 PASS를 구분해 기록한다.
 통합 후보와 새 main의 full/preview 결과는 이 소스 단위 결과를 대체해 별도 정확 SHA로 남긴다.
+
+## 초기 메뉴와 지연된 모달 닫힘의 추가 수리
+
+main920ed full42508889497은 core/native 성공·browser24 FAIL·join SKIPPED로 종료했다.
+23건은 앞의02/04 후속 범위이며 나머지는 actual-Astro1440의 첫 captured-point hit 실패다.
+01의 일반 로컬8회는 통과했지만 실제 Workspace 클라이언트 모듈을 hold한 서버 HTML에서
+open=true/ssr=true/style=null인 메뉴의 기본16,72 좌표가 왼쪽 탐색에 가리는 것을 재현했다.
+CI 당시 DOM은 없으므로 두 관찰의 원인 동일성은 추정으로 구분한다. 기본 CSS는 native summary
+흐름 위치·오른쪽 여백을 사용하고 측정 뒤에는 기존 계산 좌표를 적용한다. 초기화 전의 실제 링크와
+초기화 후 같은 captured point/open 상태·네 링크44px/hit를 검사하며 첫 클릭 전 준비 대기로 덮지 않는다.
+
+첫 통합bab6f9a03ee61268dac7abbc3c794afbc5f9acae의 ci/quick/production/bundle/dry-run과
+committed-history scanner는 통과했지만 합성 브라우저141개 중140 PASS/1 FAIL로 끝났다.
+02가 원본 Home 키보드 제출 검사를 그대로20회 실행해7 FAIL/13 PASS를 재현했다. hydrated=true에서
+submit focus→native close→Dialog restoreFocus/onClose→설명 입력창 Enter/줄바꿈의 인과를 기록했다.
+CaseInput/Dialog과 검사 본문은920/deb85/bab6에서 같았다. 이는 새 리포트 source의 회귀로 분류하지 않는다.
+진단 hook의 전역 첫 submitDisabled 값은 닫힌 제목 수정 모달을 가리켜 근거에서 제외했고 원본을 보존했다.
+01이 controlled close 직후 정상 복귀를 한 번 수행하고 queued close에서는 상태만 동기화하도록 수리한다.
+정상 invalid-field 복귀와 새 명시적 submit 초점 보존을 독립 회귀로 검사하고 원래20회도 재검증한다.
+공통 소스·회귀는01, 원본 Home 독립 반복은02, 리포트 미지원 모달 C/W4는03, 통합·문서는 총괄 소유다.
+
+초기 수동 기록의 message counter 두 selector는 실제 Workspace 사용자 메시지 class와 달랐다.
+그0만으로 자동 전송이 없었다고 판단하지 않는다. 원본은 보존하고 exact920에서 실제
+`.workspace-message--user`로 입력/Enter/네 작업 왕복7상태의 사용자 메시지0과 한글·줄바꿈 보존을
+새로 기록했다. 독립46 자동 검사의 원래 올바른 selector·양성 대조·본문 hash는 유지했다.
+최종 통합/main의 성공 여부는 이후 정확 SHA의 raw receipt·full join·동일 SHA preview로 판정한다.
