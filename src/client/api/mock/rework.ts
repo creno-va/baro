@@ -28,6 +28,7 @@ import { makeMockQuestions } from "./cases";
 import { createReconciliationMock } from "./mock-reconciliation";
 import {
   createReportsMockHandler,
+  mockPreparedAnalysisSourceHash,
   mockReportSourceHash,
   ReportMockError,
   type ReportMockState,
@@ -119,16 +120,7 @@ export function createReworkMock(
     excludedFileIds: [...(state.reports[id]?.excludedFileIds ?? [])].sort(),
     maskIdentifiers: state.reports[id]?.maskIdentifiers ?? false,
   });
-  const sourceHash = (state: MockState, id: string) =>
-    hash({
-      case: state.cases[id],
-      context: context(state, id),
-      files: state.files[id] ?? [],
-      reviews: Object.fromEntries(
-        (state.files[id] ?? []).map((file) => [file.id, state.fileReviews?.[file.id] ?? null]),
-      ),
-      scope: scope(state, id),
-    });
+  const sourceHash = mockPreparedAnalysisSourceHash;
   async function stateFor(id: string) {
     const state = read(),
       item = owned(state, id),

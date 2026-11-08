@@ -141,6 +141,125 @@ for (const change of ["body", "mask", "exclusions", "evidence", "case_revision"]
       await expect(f.client.peekReport(f.item.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     }
   });
+for (const change of ["none", "case", "original", "mask", "exclusions"] as const)
+  test(`explicit report regeneration only rebinds an unchanged prepared source: ${change}`, async () => {
+    const f = fixture();
+    const fileId = "synthetic-binding-file";
+    f.change((state) => {
+      state.files[f.item.id] = [
+        {
+          id: fileId,
+          name: "합성 자료.txt",
+          revision: 1,
+          mimeType: "text/plain",
+          sizeBytes: 50,
+          status: "ready",
+          extractedText: "원본 확인 전 합성 이용자 진술입니다.",
+        },
+      ];
+    });
+    const context = await f.client.getContext(f.item.id);
+    const next = await f.client.updateContext(f.item.id, {
+      expectedRevision: context.workspaceRevision,
+      casePurpose: "respond_to_claim",
+      subjectContext: "individual",
+      procedure: context.context.procedure,
+    });
+    await f.client.executeAction(f.item.id, {
+      action: "prepare_report",
+      requestId: crypto.randomUUID(),
+      expectedRevision: next.workspaceRevision,
+    });
+    const prior = await f.client.peekReport(f.item.id);
+    if (!prior) throw new Error("Synthetic prepared report missing");
+    const reports = createReportsMockHandler({
+      read: f.runtime.read,
+      update: (fn) =>
+        f.runtime.update((state) => fn(state as WorkspaceMockState & ReportMockState)),
+      original: async () => new Blob(["synthetic-original"]),
+    });
+    const marker = "직접 고친 합성 본문은 사건 요약 확정과 별개입니다.";
+    await reports(`/api/v2/cases/${f.item.id}/reports`, {
+      method: "PATCH",
+      body: {
+        expectedRevision: prior.revision,
+        content: `${prior.content}\n${marker}`,
+        excludedFileIds: [],
+        maskIdentifiers: change === "mask",
+      },
+    });
+    let edited = await f.client.peekReport(f.item.id);
+    if (!edited) throw new Error("Synthetic edited report missing");
+    const editedVersionId = edited.id;
+    if (change === "exclusions") {
+      await reports(`/api/v2/cases/${f.item.id}/reports`, {
+        method: "PATCH",
+        body: {
+          expectedRevision: edited.revision,
+          content: edited.content,
+          excludedFileIds: [fileId],
+          maskIdentifiers: edited.maskIdentifiers,
+        },
+      });
+      edited = await f.client.peekReport(f.item.id);
+      if (!edited) throw new Error("Synthetic scoped report missing");
+    }
+    expect(edited.analysisReview.userEdited).toBe(true);
+    expect((await f.client.getResolution(f.item.id)).status).toBe("not_ready");
+    f.change((state) => {
+      const item = state.cases[f.item.id];
+      const file = state.files[f.item.id]?.[0];
+      if (change === "case" && item) item.revision++;
+      if (change === "original" && file) file.extractedText = "바뀐 합성 원본";
+    });
+    await reports(`/api/v2/cases/${f.item.id}/reports`, {
+      method: "POST",
+      body: { expectedRevision: edited.revision },
+    });
+    const refreshed = await f.client.peekReport(f.item.id);
+    if (!refreshed) throw new Error("Synthetic regenerated report missing");
+    expect(refreshed.revision).toBe(edited.revision + 1);
+    expect(refreshed.maskIdentifiers).toBe(change === "mask");
+    expect(refreshed.excludedFileIds).toEqual(change === "exclusions" ? [fileId] : []);
+    expect(refreshed.content).not.toContain(marker);
+    expect(f.read().reportHistory?.[editedVersionId]?.content).toContain(marker);
+    expect(refreshed.analysisReview.analysisId).toBe(
+      change === "none" ? prior.analysisReview.analysisId : null,
+    );
+    expect((await f.client.getConversation(f.item.id)).report.status).toBe(
+      change === "none" ? "ready" : "stale",
+    );
+    if (change !== "none") {
+      expect((await f.client.getResolution(f.item.id)).status).toBe("not_ready");
+      return;
+    }
+    expect(refreshed.analysisReview.userEdited).toBe(false);
+    expect(refreshed.analysisReview.status).toBe("unavailable");
+    const resolution = await f.client.getResolution(f.item.id);
+    expect(resolution.basis?.reportId).toBe(refreshed.id);
+    const selected = await f.client.updateResolution(f.item.id, {
+      expectedRevision: resolution.revision,
+      reportId: refreshed.id,
+      reportRevision: refreshed.revision,
+      action: "select",
+      choice: "self",
+      selectedFileIds: resolution.selectedFileIds,
+      maskIdentifiers: resolution.maskIdentifiers,
+    });
+    const draft = await f.client.prepareDraft(f.item.id, {
+      expectedRevision: selected.revision,
+      reportId: refreshed.id,
+      reportRevision: refreshed.revision,
+      documentKind: "fact_statement",
+      selectedFileIds: selected.selectedFileIds,
+      maskIdentifiers: selected.maskIdentifiers,
+      factsConfirmed: true,
+    });
+    expect(draft.draft?.reviewed).toBe(false);
+    expect(draft.draft?.basis.reportId).toBe(refreshed.id);
+    expect(draft.draft?.content).not.toContain(marker);
+  });
+
 for (const regeneration of ["conversation", "document"] as const)
   test(`a refreshed mock ${regeneration} report retains its current source after saving a photo while edited analysis stays unverified`, async () => {
     const f = fixture();

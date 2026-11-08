@@ -5,7 +5,12 @@ import {
   createZip,
   maskReportText,
 } from "../../../components/reports/download";
-import type { V2CaseContext, V2FileObservation, V2Summary } from "../../../contracts/v2";
+import type {
+  V2CaseContext,
+  V2FileObservation,
+  V2LegalAnalysisSnapshot,
+  V2Summary,
+} from "../../../contracts/v2";
 import type { DomainRequest, DomainRequestInit } from "../reports";
 import { reportSaveSchema } from "../reports";
 import type {
@@ -46,6 +51,14 @@ export type ReportMockState = {
   reworkReportBindings?: Record<string, string>;
   reworkEditedReports?: Record<string, true>;
   reworkContexts?: Record<string, V2CaseContext>;
+  reworkAnalyses?: Record<
+    string,
+    {
+      snapshot: V2LegalAnalysisSnapshot;
+      scope: { excludedFileIds: string[]; maskIdentifiers: boolean };
+      sourceHash: string;
+    }
+  >;
   deletedCaseIds?: string[];
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
@@ -95,6 +108,35 @@ export function requireMockCase(state: ReportMockState, id: string, consent = tr
       "사건을 찾을 수 없어요. 삭제했거나 접근할 수 없는 사건이에요.",
     );
   return item;
+}
+/** The mock analysis and explicit report regeneration must prove the same private source. */
+export function mockPreparedAnalysisSourceHash(
+  state: ReportMockState,
+  id: string,
+  scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean } = {
+    excludedFileIds: state.reports[id]?.excludedFileIds ?? [],
+    maskIdentifiers: state.reports[id]?.maskIdentifiers ?? false,
+  },
+) {
+  const value = JSON.stringify({
+    case: state.cases[id],
+    context: state.reworkContexts?.[id] ?? {
+      casePurpose: "unconfirmed",
+      subjectContext: state.cases[id]?.subjectContext ?? "individual",
+      procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+    },
+    files: state.files[id] ?? [],
+    reviews: Object.fromEntries(
+      (state.files[id] ?? []).map((file) => [file.id, state.fileReviews?.[file.id] ?? null]),
+    ),
+    scope: {
+      excludedFileIds: [...scope.excludedFileIds].sort(),
+      maskIdentifiers: scope.maskIdentifiers,
+    },
+  });
+  return Array.from(sha256(new TextEncoder().encode(value)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 export function mockReportSourceHash(
   state: ReportMockState,
@@ -350,7 +392,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
               "다른 화면에서 리포트가 변경됐어요. 다시 확인한 뒤 저장해 주세요.",
             );
           if (method === "POST") {
-            const exclusions = body.excludedFileIds ?? [];
+            const exclusions = body.excludedFileIds ?? prior?.excludedFileIds ?? [];
             if (
               exclusions.length > 100 ||
               new Set(exclusions).size !== exclusions.length ||
@@ -360,6 +402,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             )
               throw new ReportMockError("VALIDATION_ERROR", "제외할 자료를 다시 확인해 주세요.");
             const next = draft(current, item, (prior?.revision ?? 0) + 1, exclusions);
+            next.maskIdentifiers = prior?.maskIdentifiers ?? false;
             current.reports[id] = next;
             current.reportHistory ??= {};
             current.reportHistory[next.id] = structuredClone(next);
@@ -367,6 +410,17 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             current.reportSources[next.id] = item.revision;
             current.reportSourceHashes ??= {};
             current.reportSourceHashes[next.id] = mockReportSourceHash(current, id, next);
+            const prepared = current.reworkAnalyses?.[id];
+            if (
+              prepared &&
+              prepared.scope.maskIdentifiers === next.maskIdentifiers &&
+              JSON.stringify([...prepared.scope.excludedFileIds].sort()) ===
+                JSON.stringify([...next.excludedFileIds].sort()) &&
+              prepared.sourceHash === mockPreparedAnalysisSourceHash(current, id, next)
+            ) {
+              current.reworkReportBindings ??= {};
+              current.reworkReportBindings[next.id] = prepared.snapshot.id;
+            }
           } else {
             if (!prior) throw new ReportMockError("NOT_FOUND", "먼저 리포트를 확인해 주세요.");
             const input = reportSaveSchema.parse(body);
