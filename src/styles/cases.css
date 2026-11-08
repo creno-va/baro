@@ -45,7 +45,7 @@
   line-height: 1.7;
   resize: vertical;
 }
-.case-shell label:not(.ui-label):not(.ui-check) {
+.case-shell :where(label:not(.ui-label):not(.ui-check)) {
   display: block;
   line-height: 1.6;
   margin: 12px 0;

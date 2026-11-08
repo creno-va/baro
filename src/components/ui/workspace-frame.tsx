@@ -138,7 +138,11 @@ export function CaseWorkspaceFrame({
       className={`case-workspace case-workspace--${kind}`}
       data-panel-open={panelPresent && panelOpen}
     >
-      <div className="case-workspace__header">
+      <section
+        className="case-workspace__header"
+        aria-label="사건 제목과 작업"
+        tabIndex={kind === "conversation" ? 0 : undefined}
+      >
         <div className="case-workspace__heading">{header}</div>
         {panelPresent && (
           <Button
@@ -163,7 +167,7 @@ export function CaseWorkspaceFrame({
             <span>{panelLabel}</span>
           </Button>
         )}
-      </div>
+      </section>
       <div className="case-workspace__body">
         <div className="case-workspace__content">{children}</div>
         {panelPresent && (

@@ -458,6 +458,12 @@
   border-bottom: 1px solid var(--border);
   background: var(--card);
 }
+/* Long titles stay readable without consuming the conversation's writing space. */
+.app-frame[data-app-workspace] .case-workspace--conversation > .case-workspace__header {
+  max-height: calc((var(--app-viewport-height, 100dvh) - var(--app-topbar-height)) / 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .app-frame[data-app-workspace] .case-workspace__heading {
   flex: 1;
   min-width: 0;
