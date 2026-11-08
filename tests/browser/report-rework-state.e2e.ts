@@ -923,7 +923,9 @@ test("embedded report preserves stale edits before generating a new snapshot and
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect(
-    page.getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
+    page
+      .locator(".report-document")
+      .getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
   ).toBeVisible();
   await expect(page.locator(".report-preserved-edit")).toHaveAttribute("open", "");
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveValue(
