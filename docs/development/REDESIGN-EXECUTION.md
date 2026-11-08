@@ -198,6 +198,26 @@ host의 overlay scrollbar는 실제 gutter 검증과, 로컬 Docker 부재는 na
 03은 해당 초점 단정을 유지하고 수리 후 실제 두 브라우저 과업으로 인수한다.
 최신 main 기반 통합 PR에서 나머지 검증 수리와 함께 필수 CI를 다시 실행한다.
 
+원래 full의 browser는 60분 경계에서 중단됐으며 총 68개의 실패 제목과 미실행 범위를
+보존했다. 앞선 수리에 포함된 30개와 추가 확인 대상 38개를 구분한다. 모두 새 제품 결함으로
+단정하지 않고 현재 통합 기준에서 실행 환경·fixture 계약·기대·실제 동작을 먼저 대조한다.
+추가 소유권은 구현 전에 아래처럼 명시 배정했다. 각 파일의 관련 test config도 같은 담당이며,
+공통 helper나 제품 소유 파일을 바꿔야 하면 총괄이 먼저 조율한다.
+
+| 담당 | 추가 검증 파일 |
+| --- | --- |
+| 01 | `app-workspace-app.e2e.ts`, `app-workspace.e2e.ts`, `precedents.e2e.ts` |
+| 02 | `workspace-files-snapshot.e2e.ts`, `customer-recovery-workspace.e2e.ts`, `chat-attachments.e2e.ts`, `evidence-capture.e2e.ts`, `intake103.e2e.ts`, `rework-shared-mock.e2e.ts` |
+| 03 | `report-draft-revision.e2e.ts`, `reports-integrated.e2e.ts` |
+| 04 | `cases.e2e.ts`, `human-review.e2e.ts` |
+| 05 | `redesign-acceptance.config.ts`의 repo-root cwd·플랫폼별 tmp 경로, 기대/fixture 본문 불변 |
+
+위 파일은 `tests/browser/` 아래다. 기준은 통합 후보 `4c891b4`이며 각 담당은 별도
+checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는 01~05 순서로 4861~4865를
+우선 사용하고, 기존 override가 없으면 ignored 임시 config의 host/port/baseURL만 조정한다.
+원본 fixture·환경 flag·expect는 유지하며 최종 Linux full은 저장소의 표준 config로 다시 실행한다.
+같은 worktree의 Astro dev와 quick/build는 캐시 충돌을 막기 위해 순차 실행한다.
+
 지정 세션: 01 `01a1baa9-2cbb-7cb0-a815-35ba474d3797`, 02 `01a1baa9-800a-7542-b8bc-400f84c15709`,
 03 `01a1baa9-cb75-7fc1-8384-c68949dbbdd7`, 04 `01a1baaa-0588-7c01-8563-e59d95e93d52`,
 05 `01a1baaa-4abb-7261-8bb4-e1dd5910615e`。사용자가 개설한 이 세션만 메시지로 조율한다.
