@@ -154,6 +154,7 @@ for (const change of ["none", "case", "original", "mask", "exclusions"] as const
           mimeType: "text/plain",
           sizeBytes: 50,
           status: "ready",
+          coverage: "합성 본문 관찰",
           extractedText: "원본 확인 전 합성 이용자 진술입니다.",
         },
       ];
@@ -171,7 +172,8 @@ for (const change of ["none", "case", "original", "mask", "exclusions"] as const
       expectedRevision: next.workspaceRevision,
     });
     const prior = await f.client.peekReport(f.item.id);
-    if (!prior) throw new Error("Synthetic prepared report missing");
+    if (!prior?.analysisReview?.analysisId) throw new Error("Synthetic prepared analysis missing");
+    const analysisId = prior.analysisReview.analysisId;
     const reports = createReportsMockHandler({
       read: f.runtime.read,
       update: (fn) =>
@@ -204,7 +206,7 @@ for (const change of ["none", "case", "original", "mask", "exclusions"] as const
       edited = await f.client.peekReport(f.item.id);
       if (!edited) throw new Error("Synthetic scoped report missing");
     }
-    expect(edited.analysisReview.userEdited).toBe(true);
+    expect(edited.analysisReview?.userEdited).toBe(true);
     expect((await f.client.getResolution(f.item.id)).status).toBe("not_ready");
     f.change((state) => {
       const item = state.cases[f.item.id];
@@ -223,9 +225,7 @@ for (const change of ["none", "case", "original", "mask", "exclusions"] as const
     expect(refreshed.excludedFileIds).toEqual(change === "exclusions" ? [fileId] : []);
     expect(refreshed.content).not.toContain(marker);
     expect(f.read().reportHistory?.[editedVersionId]?.content).toContain(marker);
-    expect(refreshed.analysisReview.analysisId).toBe(
-      change === "none" ? prior.analysisReview.analysisId : null,
-    );
+    expect(refreshed.analysisReview?.analysisId).toBe(change === "none" ? analysisId : null);
     expect((await f.client.getConversation(f.item.id)).report.status).toBe(
       change === "none" ? "ready" : "stale",
     );
@@ -233,8 +233,8 @@ for (const change of ["none", "case", "original", "mask", "exclusions"] as const
       expect((await f.client.getResolution(f.item.id)).status).toBe("not_ready");
       return;
     }
-    expect(refreshed.analysisReview.userEdited).toBe(false);
-    expect(refreshed.analysisReview.status).toBe("unavailable");
+    expect(refreshed.analysisReview?.userEdited).toBe(false);
+    expect(refreshed.analysisReview?.status).toBe("unavailable");
     const resolution = await f.client.getResolution(f.item.id);
     expect(resolution.basis?.reportId).toBe(refreshed.id);
     const selected = await f.client.updateResolution(f.item.id, {
