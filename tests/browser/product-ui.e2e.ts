@@ -646,6 +646,7 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       `${base}/files`,
       `${base}/timeline`,
       `${base}/reports`,
+      `${base}/reports#document-drafts`,
     ]) {
       await page.goto(route);
       await hydrated(page);
@@ -720,6 +721,7 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       }
       if (route === `${base}/files`) await expectCaseTasks(page, "자료");
       if (route === `${base}/reports`) await expectCaseTasks(page, "리포트");
+      if (route === `${base}/reports#document-drafts`) await expectCaseTasks(page, "문서 초안");
       if ([390, 901, 1440].includes(width))
         await page.screenshot({
           path: `.wrangler/ui332/${width}-${route.replaceAll("/", "-")}.png`,
@@ -742,6 +744,15 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   expect(box).not.toBeNull();
   expect((box?.y ?? 10000) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
   const tasks = await expectCaseTasks(page, "대화");
+  await tasks.getByRole("link", { name: /^자료/ }).click();
+  await expect(page).toHaveURL(`${base}/files`);
+  await expectCaseTasks(page, "자료");
+  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
+  await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
+  await expectCaseTasks(page, "리포트");
+  await tasks.getByRole("link", { name: "문서 초안", exact: true }).click();
+  await expect(page).toHaveURL(`${base}/reports?mode=conversation#document-drafts`);
+  await expectCaseTasks(page, "문서 초안");
   await tasks.getByRole("link", { name: "리포트", exact: true }).click();
   await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
   await expectCaseTasks(page, "리포트");
@@ -769,7 +780,9 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(page.locator(".case-options")).toHaveCount(0);
   await page.goto("/cases");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
-  const remove = page.getByRole("button", {
+  const sidebarMenu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(sidebarMenu).toBeVisible();
+  const remove = sidebarMenu.getByRole("button", {
     name: "돌려받지 못한 보증금, 함께 정리한 이야기 사건 삭제",
     exact: true,
   });
