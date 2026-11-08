@@ -124,6 +124,7 @@ test("report review saves before a compact desktop and full-width mobile PDF dow
   const download = page.waitForEvent("download");
   await report.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/u);
+  await expect(report.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
   const stored = await page.evaluate(
     () =>
       JSON.parse(localStorage.getItem("baro.reports.browser-test.v1") ?? "{}").reports["case-demo"]
@@ -133,12 +134,22 @@ test("report review saves before a compact desktop and full-width mobile PDF dow
   expect(stored).toContain("보존할 합성 근거");
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const bounds = await report.locator(".report-canvas").boundingBox(),
-      footer = await report.locator(".report-export").boundingBox(),
-      body = await report.locator(".report-read-content").boundingBox(),
-      button = await report
-        .getByRole("button", { name: "PDF 다운로드", exact: true })
-        .boundingBox();
+    // Resize/scroll anchoring can move the viewport between separate RPCs.
+    // Read every rectangle in one frame; retain the exact geometry assertions.
+    const { bounds, footer, body, button } = await report.evaluate((root) => {
+      const measure = (selector: string) => {
+        const element = root.querySelector(selector);
+        if (!element) return null;
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return {
+        bounds: measure(".report-canvas"),
+        footer: measure(".report-export"),
+        body: measure(".report-read-content"),
+        button: measure(".report-export .primary"),
+      };
+    });
     if (!bounds || !footer || !body || !button) throw new Error("Missing report download controls");
     expect(button.height).toBeGreaterThanOrEqual(44);
     expect(button.x).toBeGreaterThanOrEqual(bounds.x);
