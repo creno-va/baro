@@ -16,23 +16,72 @@ const tools = [
   { id: "precedents", label: "유사 판례", path: "/precedents" },
 ] as const;
 
+function revealFocusedTool(menu: HTMLElement) {
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement) || !menu.contains(focused)) return;
+  const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  const bounds = menu.getBoundingClientRect();
+  const link = focused.getBoundingClientRect();
+  const top = bounds.top + menu.clientTop * zoom;
+  const bottom = top + menu.clientHeight * zoom;
+  if (link.top < top) menu.scrollTop += (link.top - top) / zoom;
+  else if (link.bottom > bottom) menu.scrollTop += (link.bottom - bottom) / zoom;
+}
+
 function positionTools(disclosure: HTMLDetailsElement | null, trigger: HTMLElement | null) {
   const menu = disclosure?.querySelector<HTMLElement>(".case-tools__menu");
   if (!disclosure?.open || !trigger || !menu) return;
+  const scrollTop = menu.scrollTop;
   const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-  const width = window.visualViewport?.width ?? window.innerWidth;
-  const height = window.visualViewport?.height ?? window.innerHeight;
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
   const edge = 16 * zoom;
-  menu.style.setProperty("--case-tools-width-limit", `${Math.max(44, width / zoom - 32)}px`);
-  menu.style.setProperty("--case-tools-height-limit", `${Math.max(44, height / zoom - 32)}px`);
+  let topEdge = (viewport?.offsetTop ?? 0) + edge;
+  let leftEdge = (viewport?.offsetLeft ?? 0) + edge;
+  const rightEdge = (viewport?.offsetLeft ?? 0) + width - edge;
+  const bottomEdge = (viewport?.offsetTop ?? 0) + height - edge;
+  const navigation = disclosure
+    .closest(".app-frame")
+    ?.querySelector(".app-header")
+    ?.getBoundingClientRect();
+  // Fixed navigation is above the case header's stacking context. Its occupied
+  // top bar or side rail is unavailable even when it lies inside the viewport.
+  if (navigation) {
+    if (navigation.width >= width - 1) topEdge = Math.max(topEdge, navigation.bottom + edge);
+    else if (navigation.height >= height - 1)
+      leftEdge = Math.max(leftEdge, navigation.right + edge);
+  }
+  menu.style.setProperty(
+    "--case-tools-width-limit",
+    `${Math.max(0, rightEdge - leftEdge) / zoom}px`,
+  );
   const anchor = trigger.getBoundingClientRect();
   const bounds = menu.getBoundingClientRect();
-  const left = Math.max(edge, Math.min(anchor.right - bounds.width, width - edge - bounds.width));
-  let top = anchor.bottom + 4 * zoom;
-  if (top + bounds.height > height - edge) top = anchor.top - bounds.height - 4 * zoom;
-  top = Math.max(edge, Math.min(top, height - edge - bounds.height));
+  // Read the full content without expanding the menu: a temporary larger
+  // max-height would clamp its current scrollTop before it is constrained again.
+  const contentHeight = (menu.scrollHeight + menu.offsetHeight - menu.clientHeight) * zoom;
+  const left = Math.max(leftEdge, Math.min(anchor.right - bounds.width, rightEdge - bounds.width));
+  const belowTop = Math.max(topEdge, anchor.bottom + 4 * zoom);
+  const aboveBottom = Math.min(bottomEdge, anchor.top - 4 * zoom);
+  const belowSpace = Math.max(0, bottomEdge - belowTop);
+  const aboveSpace = Math.max(0, aboveBottom - topEdge);
+  const below =
+    contentHeight <= belowSpace || (contentHeight > aboveSpace && belowSpace >= aboveSpace);
+  const space = below ? belowSpace : aboveSpace;
+  // Keep an adjacent placement when a side can show a complete 44px control
+  // plus menu insets. At smaller heights, use the unobscured region and scroll.
+  const limit = space >= 54 * zoom ? space : Math.max(0, bottomEdge - topEdge);
+  menu.style.setProperty("--case-tools-height-limit", `${limit / zoom}px`);
+  const placed = menu.getBoundingClientRect();
+  const top = Math.max(
+    topEdge,
+    Math.min(below ? belowTop : aboveBottom - placed.height, bottomEdge - placed.height),
+  );
   menu.style.setProperty("--case-tools-left", `${left / zoom}px`);
   menu.style.setProperty("--case-tools-top", `${top / zoom}px`);
+  menu.scrollTop = scrollTop;
+  revealFocusedTool(menu);
 }
 
 /** Route navigation only. Business state and the materials toggle belong to the caller. */
@@ -75,6 +124,12 @@ export function CaseNavigation({
   }
   useEffect(() => {
     const position = () => positionTools(disclosure.current, trigger.current);
+    const positionOnScroll = (event: Event) => {
+      // Scrolling links inside the menu does not move its anchor. Measuring an
+      // expanded menu here would clamp the scroll position back toward its start.
+      if (event.target instanceof Element && event.target.closest(".case-tools__menu")) return;
+      position();
+    };
     const closeOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !disclosure.current?.contains(event.target))
         disclosure.current?.removeAttribute("open");
@@ -82,7 +137,8 @@ export function CaseNavigation({
     document.addEventListener("pointerdown", closeOutside);
     window.addEventListener("resize", position);
     window.visualViewport?.addEventListener("resize", position);
-    document.addEventListener("scroll", position, true);
+    window.visualViewport?.addEventListener("scroll", position);
+    document.addEventListener("scroll", positionOnScroll, true);
     const resize = new ResizeObserver(position);
     if (trigger.current) resize.observe(trigger.current);
     const heading =
@@ -98,7 +154,8 @@ export function CaseNavigation({
       document.removeEventListener("pointerdown", closeOutside);
       window.removeEventListener("resize", position);
       window.visualViewport?.removeEventListener("resize", position);
-      document.removeEventListener("scroll", position, true);
+      window.visualViewport?.removeEventListener("scroll", position);
+      document.removeEventListener("scroll", positionOnScroll, true);
       resize.disconnect();
       style.disconnect();
     };
@@ -137,7 +194,11 @@ export function CaseNavigation({
           <summary ref={trigger}>
             사건 도구 <ChevronDown size={16} aria-hidden="true" />
           </summary>
-          <nav className="case-tools__menu" aria-label="사건 도구">
+          <nav
+            className="case-tools__menu"
+            aria-label="사건 도구"
+            onFocusCapture={(event) => revealFocusedTool(event.currentTarget)}
+          >
             {tools.map(({ id, label, path }) => (
               <a key={id} href={`${base}${path}`} aria-current={active === id ? "page" : undefined}>
                 <span>{label}</span>

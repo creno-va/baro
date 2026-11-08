@@ -113,7 +113,13 @@ PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·�
 
 사건 도구는 같은 native details와 네 링크를 유지하되 메뉴를 viewport에 고정 배치한다.
 트리거 좌표를 CSS 배율로 정규화하고 창·visualViewport·머리글 크기·내부 스크롤·root 배율
-변화에 맞춰 재배치한다. 메뉴 안의 Tab/Escape와 트리거 복귀, 기존 href는 그대로다.
+변화에 맞춰 재배치한다. 고정 상단 탐색·측면 rail이 차지한 영역을 제외하고 트리거의 아래·위
+가용 공간을 비교한다. 두 방향 모두 전체 메뉴를 담지 못하면 더 넓은 쪽에서 메뉴만 스크롤한다.
+44px 링크 하나와 메뉴 여백도 담지 못하는 낮은 창은 가림 없는 전체 영역 안에서 스크롤한다.
+메뉴 자체의 스크롤은 트리거 재배치를 일으키지 않는다. 포커스한 링크는 메뉴 내부에서
+완전히 노출하며, 창·root 배율·머리글 스크롤이 바뀌어도 현재 링크의 초점과 조작 영역을 유지한다.
+메뉴 안의 Tab/Escape와 트리거 복귀, 기존 href는 그대로다. 실제 브라우저200%에 대응하는
+600×350/root CSS zoom1과 더 낮은 창에서도 End→열기→Tab→Escape→재열기의 접근을 유지한다.
 CaseLayout의 native label fallback은 낮은 specificity로 유지해 토픽 등 도메인 레이아웃이
 공통 기본 간격·display를 명시적으로 교체할 수 있게 한다.
 

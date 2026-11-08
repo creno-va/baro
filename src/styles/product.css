@@ -407,6 +407,7 @@ body:has(.app-frame[data-app-workspace] .case-workspace--conversation) {
   max-width: min(calc(100vw - 32px), var(--case-tools-width-limit, 216px));
   max-height: min(420px, 65dvh, var(--case-tools-height-limit, 65dvh));
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
