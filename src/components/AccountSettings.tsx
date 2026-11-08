@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
 import { accountDeleted } from "../server/modules/analytics/browser";
 import { ProviderIcon } from "./AuthButtons";
+import { LegacyProfileAssets } from "./lawyers/LegacyProfileAssets";
 import { Button, ButtonLink } from "./ui/button";
 import { Dialog } from "./ui/dialog";
 import { Input, Label } from "./ui/form";
@@ -399,6 +400,7 @@ export function AccountSettings() {
           </a>
         </nav>
       </Section>
+      <LegacyProfileAssets />
       <Section
         title="계정 삭제"
         className="settings-danger"
