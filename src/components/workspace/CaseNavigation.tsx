@@ -85,6 +85,10 @@ export function CaseNavigation({
     document.addEventListener("scroll", position, true);
     const resize = new ResizeObserver(position);
     if (trigger.current) resize.observe(trigger.current);
+    const heading =
+      disclosure.current?.closest(".case-workspace__header") ??
+      disclosure.current?.closest(".case-header");
+    if (heading) resize.observe(heading);
     const style = new MutationObserver(position);
     style.observe(document.documentElement, {
       attributes: true,
