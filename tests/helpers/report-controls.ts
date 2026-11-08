@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 export async function openReportEditor(page: Page) {
+  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
   if (
     await page
       .getByRole("textbox", { name: / 수정$/ })

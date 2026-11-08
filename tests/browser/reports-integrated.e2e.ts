@@ -389,10 +389,11 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     return { id: report.id, revision: report.revision, content: report.content };
   });
   await expect(editor).toHaveValue(displayed);
+  await page.getByRole("button", { name: "편집 취소", exact: true }).click();
   await page.getByRole("button", { name: "새 버전 만들기" }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(editor).toHaveValue(displayed);
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(displayed);
   const current = await page.evaluate(
     () =>
       JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")[

@@ -791,46 +791,46 @@ export function ReportReview({
                 </>
               )}
               {!editing && (
-                <>
-                  <button
-                    type="button"
-                    className="report-edit-toggle"
-                    disabled={
-                      Boolean(busy) ||
-                      accessChecking ||
-                      accessUnknown ||
-                      needsConsent ||
-                      evidenceBusy ||
-                      evidenceDirty ||
-                      resolutionBusy ||
-                      resolutionDirty
-                    }
-                    aria-expanded={editing}
-                    aria-controls="report-edit-fields"
-                    onClick={() => setEditing(true)}
-                  >
-                    <Pencil size={16} aria-hidden="true" />
-                    수정하기
-                  </button>
-                  <button
-                    type="button"
-                    className="report-regenerate primary"
-                    disabled={
-                      Boolean(busy) ||
-                      accessChecking ||
-                      accessUnknown ||
-                      needsConsent ||
-                      evidenceBusy ||
-                      evidenceDirty ||
-                      resolutionBusy ||
-                      resolutionDirty ||
-                      Boolean(preservedEdit && dirty && report.stale)
-                    }
-                    onClick={() => setRegenerate(true)}
-                  >
-                    새 버전 만들기
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="report-edit-toggle"
+                  disabled={
+                    Boolean(busy) ||
+                    accessChecking ||
+                    accessUnknown ||
+                    needsConsent ||
+                    evidenceBusy ||
+                    evidenceDirty ||
+                    resolutionBusy ||
+                    resolutionDirty
+                  }
+                  aria-expanded={editing}
+                  aria-controls="report-edit-fields"
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  수정하기
+                </button>
+              )}
+              {(!editing || report.stale) && (
+                <button
+                  type="button"
+                  className="report-regenerate primary"
+                  disabled={
+                    Boolean(busy) ||
+                    accessChecking ||
+                    accessUnknown ||
+                    needsConsent ||
+                    evidenceBusy ||
+                    evidenceDirty ||
+                    resolutionBusy ||
+                    resolutionDirty ||
+                    Boolean(preservedEdit && dirty && report.stale)
+                  }
+                  onClick={() => setRegenerate(true)}
+                >
+                  새 버전 만들기
+                </button>
               )}
             </fieldset>
           )}
