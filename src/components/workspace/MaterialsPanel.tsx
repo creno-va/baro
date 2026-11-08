@@ -33,6 +33,7 @@ export function MaterialsPanel({
   selected,
   selectionDisabled = false,
   onSelect,
+  onAsk,
   onReview,
   onDelete,
   onRetry,
@@ -52,6 +53,7 @@ export function MaterialsPanel({
   selected: string[];
   selectionDisabled?: boolean;
   onSelect?: (id: string, checked: boolean) => void;
+  onAsk?: (file: FileView) => void;
   onReview: (file: FileView, origin: HTMLElement) => void;
   onDelete: (file: FileView, origin: HTMLElement) => void;
   onRetry: (fileId: string) => void;
@@ -145,6 +147,16 @@ export function MaterialsPanel({
                 </label>
               )}
               <div className="workspace-buttons">
+                {file.status === "ready" && onAsk && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!!busy || readonly || selectionDisabled}
+                    onClick={() => onAsk(file)}
+                  >
+                    이 자료로 질문하기
+                  </Button>
+                )}
                 {((file.status === "failed" && file.canRetry) || file.canStartProcessing) && (
                   <Button
                     variant="outline"

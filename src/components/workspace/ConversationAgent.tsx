@@ -86,6 +86,7 @@ export function ConversationAgent({
   onStateChange,
   onOpenMaterials,
   reportHref,
+  active = true,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -109,6 +110,7 @@ export function ConversationAgent({
   onStateChange?: (state: V2ConversationState | null) => void;
   onOpenMaterials?: () => void;
   reportHref?: string;
+  active?: boolean;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
@@ -159,6 +161,7 @@ export function ConversationAgent({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [paneBusy, setPaneBusy] = useState(false);
+  const observing = active || queuedWork || backgroundBusy || busy || paneBusy;
   const [hasDraft, setHasDraft] = useState(false);
   const [reportRequested, setReportRequested] = useState(false);
   const [viewedReport, setViewedReport] = useState<string | null>(null);
@@ -346,11 +349,18 @@ export function ConversationAgent({
     }
   };
   useEffect(() => {
-    if (ready && Number.isSafeInteger(refreshKey) && refreshKey >= 0 && !locked.current)
+    if (
+      observing &&
+      ready &&
+      Number.isSafeInteger(refreshKey) &&
+      refreshKey >= 0 &&
+      !locked.current
+    )
       void load();
-  }, [ready, load, refreshKey]);
+  }, [ready, load, refreshKey, observing]);
   useEffect(() => {
     if (
+      !observing ||
       !ready ||
       !state ||
       readFailures >= 3 ||
@@ -382,6 +392,7 @@ export function ConversationAgent({
     continuationUnconfirmed,
     reportRequested,
     pane,
+    observing,
   ]);
   const changed = useCallback(async () => {
     const epoch = ticket();

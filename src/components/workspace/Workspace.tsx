@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -44,14 +46,17 @@ import {
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
+import type { ReportQuestionContext } from "../reports/ReportReview";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
 import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { MaterialsPanel } from "./MaterialsPanel";
 import "../../styles/workspace-conversation.css";
+import "../../styles/reports.css";
 import { Button, ButtonLink } from "../ui/button";
+import { Dialog } from "../ui/dialog";
 import { CaseMaterials } from "./CaseMaterials";
-import { CaseNavigation } from "./CaseNavigation";
+import { CaseNavigation, type CaseTask } from "./CaseNavigation";
 import { ChatAttachments } from "./ChatAttachments";
 import {
   ConversationAgent,
@@ -79,6 +84,9 @@ import { TimelineEvidence } from "./TimelineEvidence";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
+const RetainedReportReview = lazy(() =>
+  import("../reports/ReportReview").then((module) => ({ default: module.ReportReview })),
+);
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
 const materialReflectionRequest =
   "선택한 자료에서 읽은 정보를 먼저 요약하고, 근거가 있는 사실·관련 인물·타임라인에 반영해 주세요. 거래 자료라면 거래일자와 송금일시, 플랫폼·은행, 금액, 거래 상태를 각각 구분하고 계좌는 확인되는 끝 4자리만 표시해 주세요. 기존 내용과 다른 점을 설명하고, 이미 나온 정보는 다시 묻지 말고 자료만으로 확인되지 않는 내용만 알려 주세요. 원문에 없는 내용은 추측하지 마세요.";
@@ -127,14 +135,108 @@ function download(blob: Blob, name: string) {
 type WorkspaceProps = {
   caseId: string;
   tab?: WorkspaceTab;
+  initialTask?: CaseTask;
   lookupAvailable?: boolean;
 };
 export function Workspace(props: WorkspaceProps) {
   return <WorkspaceContent key={props.caseId} {...props} />;
 }
-function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: WorkspaceProps) {
+function WorkspaceContent({
+  caseId,
+  tab: initialTab = "chat",
+  initialTask,
+  lookupAvailable = false,
+}: WorkspaceProps) {
+  const [tab, setTab] = useState<WorkspaceTab>(initialTask === "files" ? "files" : initialTab);
+  const [activeTask, setActiveTask] = useState<CaseTask | null>(
+    initialTask ?? (initialTab === "chat" || initialTab === "files" ? initialTab : null),
+  );
+  const [chatVisited, setChatVisited] = useState(
+    initialTask ? initialTask === "chat" : initialTab === "chat",
+  );
+  const [filesVisited, setFilesVisited] = useState(
+    initialTask === "files" || initialTab === "files",
+  );
+  const [reportVisited, setReportVisited] = useState(
+    initialTask === "reports" || initialTask === "drafts",
+  );
+  const [reportSection, setReportSection] = useState<"report" | "drafts">(
+    initialTask === "drafts" ? "drafts" : "report",
+  );
+  const [reportQuestion, setReportQuestion] = useState<ReportQuestionContext | null>(null);
+  const [reportDirty, setReportDirty] = useState(false);
+  const taskScroll = useRef(new Map<string, number>());
+  const activeTaskRef = useRef(activeTask);
+  activeTaskRef.current = activeTask;
+  const root = useRef<HTMLDivElement>(null);
+  const navigateTask = useCallback(
+    (next: CaseTask, history: "push" | "none" = "push") => {
+      const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
+      if (scroller) taskScroll.current.set(activeTask ?? tab, scroller.scrollTop);
+      if (next === "chat") {
+        setChatVisited(true);
+        setContextRequested(true);
+        setTab("chat");
+      } else if (next === "files") {
+        setFilesVisited(true);
+        setTab("files");
+      } else {
+        setReportVisited(true);
+        setReportSection(next === "drafts" ? "drafts" : "report");
+      }
+      setActiveTask(next);
+      if (history === "push") {
+        const base = `/cases/${encodeURIComponent(caseId)}`;
+        const url = new URL(window.location.href);
+        const reportSearch = url.pathname === `${base}/reports` ? url.search : "?mode=conversation";
+        const destination =
+          next === "chat"
+            ? base
+            : next === "files"
+              ? `${base}/files`
+              : `${base}/reports${reportSearch}${next === "drafts" ? "#document-drafts" : ""}`;
+        if (`${url.pathname}${url.search}${url.hash}` !== destination)
+          window.history.pushState(
+            { ...window.history.state, baroCaseTask: next, baroCaseId: caseId },
+            "",
+            destination,
+          );
+      }
+    },
+    [activeTask, tab, caseId],
+  );
+  useLayoutEffect(() => {
+    const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
+    if (scroller) scroller.scrollTop = taskScroll.current.get(activeTask ?? tab) ?? 0;
+  }, [activeTask, tab]);
+  const locationInitialized = useRef(false);
+  useEffect(() => {
+    if (!locationInitialized.current) {
+      locationInitialized.current = true;
+      if (window.location.hash === "#document-drafts") navigateTask("drafts", "none");
+    }
+    const pop = () => {
+      const base = `/cases/${encodeURIComponent(caseId)}`;
+      const path = window.location.pathname;
+      const task =
+        path === base
+          ? "chat"
+          : path === `${base}/files`
+            ? "files"
+            : path === `${base}/reports`
+              ? window.location.hash === "#document-drafts"
+                ? "drafts"
+                : "reports"
+              : null;
+      if (task) navigateTask(task, "none");
+    };
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, [caseId, navigateTask]);
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
-  const [contextRequested, setContextRequested] = useState(false);
+  const [contextRequested, setContextRequested] = useState(
+    initialTask !== "files" && initialTab !== "files",
+  );
   const [contextLoaded, setContextLoaded] = useState(false);
   const preparationAttempt = useRef<{
     target: "timeline" | "actions";
@@ -149,17 +251,17 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     action: V2ConversationIntent;
   } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
-  const [materialsOpen, setMaterialsOpen] = useState(false);
   const [conversationState, setConversationState] = useState<V2ConversationState | null>(null);
-  const openMaterials = useCallback(() => setMaterialsOpen(true), []);
-  useEffect(() => {
-    setMaterialsOpen(window.matchMedia("(min-width: 1200px)").matches);
-  }, []);
+  const openMaterials = useCallback(() => navigateTask("files"), [navigateTask]);
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
   const draftComposing = useRef(false);
-  const messageTooLong = [...draft.trim()].length > 10000;
+  const questionContext = reportQuestion
+    ? `리포트의 ‘${reportQuestion.sectionTitle}’에서 읽은 내용입니다. 아래 발췌는 질문을 위한 맥락이며 확인된 사실로 단정하지 않습니다.\n${reportQuestion.excerpt}\n\n`
+    : "";
+  const messageText = `${questionContext}${draft.trim()}`.trim();
+  const messageTooLong = [...messageText].length > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [localAttachments, setLocalAttachments] = useState<File[]>([]);
   const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
@@ -167,6 +269,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   const queuedUpload = useRef<ConversationUpload | null>(null);
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [notice, setNotice] = useState("");
+  const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
+  const leaveApproved = useRef(false);
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
   const [sourceReference, setSourceReference] = useState<
@@ -238,7 +342,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setConversationRequest(null);
     setAgentBusy(false);
     setConversationState(null);
-    setMaterialsOpen(false);
+    setReportVisited(false);
+    setReportDirty(false);
+    setReportQuestion(null);
+    setLeaveTarget(null);
+    leaveApproved.current = false;
     setView(null);
     setContextRequested(false);
     setContextLoaded(false);
@@ -270,7 +378,12 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   }, []);
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
   const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
-  const readonly = !ready || !canMutate || view?.case.stage !== "active" || agentBusy;
+  const readonly =
+    !ready ||
+    !canMutate ||
+    view?.case.stage !== "active" ||
+    agentBusy ||
+    (activeTask === "chat" && !contextLoaded);
   const privateContent = {
     style: { visibility: ready ? undefined : ("hidden" as const) },
     inert: !ready,
@@ -316,6 +429,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
   const followReply = useCallback(() => {
+    if (activeTaskRef.current !== "chat") return;
     const messages = chatMessages.current;
     if (followingChat.current && messages)
       messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
@@ -421,14 +535,71 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     }
   }, [caseId, tab, ready, view]);
   useEffect(() => {
-    if (!draft.trim() && !localAttachments.length && !chatAttachments.length) return;
+    if (!messageText && !localAttachments.length && !chatAttachments.length && !selected.length)
+      return;
     const warn = (event: BeforeUnloadEvent) => {
+      if (leaveApproved.current) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [draft, localAttachments.length, chatAttachments.length]);
+  }, [messageText, localAttachments.length, chatAttachments.length, selected.length]);
+  const hasUnstoredWork =
+    !!messageText ||
+    localAttachments.length > 0 ||
+    chatAttachments.length > 0 ||
+    selected.length > 0 ||
+    reportDirty ||
+    reviewState.dirty;
+  useEffect(() => {
+    const navigate = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link =
+        event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self"))
+        return;
+      const url = new URL(link.href, window.location.href);
+      if (!["https:", "http:"].includes(url.protocol)) return;
+      const base = `/cases/${encodeURIComponent(caseId)}`;
+      if (url.origin === window.location.origin) {
+        const task =
+          url.pathname === base
+            ? "chat"
+            : url.pathname === `${base}/files` && !url.search
+              ? "files"
+              : url.pathname === `${base}/reports`
+                ? url.hash === "#document-drafts"
+                  ? "drafts"
+                  : "reports"
+                : null;
+        if (task) {
+          event.preventDefault();
+          navigateTask(task);
+          return;
+        }
+        if (
+          url.pathname === window.location.pathname &&
+          url.search === window.location.search &&
+          url.hash
+        )
+          return;
+      }
+      if (!hasUnstoredWork) return;
+      event.preventDefault();
+      setLeaveTarget(url.href);
+    };
+    document.addEventListener("click", navigate);
+    return () => document.removeEventListener("click", navigate);
+  }, [caseId, hasUnstoredWork, navigateTask]);
   const latestMessage = view?.messages.at(-1);
   const latestMessageContent = latestMessage
     ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
@@ -883,7 +1054,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             item,
             state,
             epoch,
-            draft.trim() || materialReflectionRequest,
+            messageText || materialReflectionRequest,
             [...new Set([...selected, ...chatAttachments.map((f) => f.id)])],
           );
           prepared = true;
@@ -909,7 +1080,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       setQueuedSend(true);
       return;
     }
-    const text = draft.trim() || materialReflectionRequest;
+    const text = messageText || materialReflectionRequest;
     const fileIds = [...new Set([...selected, ...chatAttachments.map((file) => file.id)])];
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -995,6 +1166,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       sendAttempt.current = null;
       queuedUpload.current = null;
       setDraft("");
+      setReportQuestion(null);
       setSelected([]);
       setChatAttachments([]);
     });
@@ -1057,13 +1229,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     });
   }
   async function upload(files: FileList | File[] | null, forConversation = tab === "chat") {
-    if (
-      (tab === "chat" && !uploadConsent) ||
-      view?.case.stage !== "active" ||
-      lock.current ||
-      !files?.length
-    )
-      return;
+    if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
     uploadForConversation.current = forConversation;
     const chosen = Array.from(files);
     let complete = false;
@@ -1373,9 +1539,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             저장
           </time>
         </p>
-        <a href="/lawyers">
-          변호사 탐색 <ArrowRight size={14} />
-        </a>
       </div>
     </aside>
   ) : null;
@@ -1449,14 +1612,20 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       facts={view.facts ?? []}
       selected={selected}
       selectionDisabled={queuedSend || !!pendingResponse}
-      {...(tab === "chat"
-        ? {
-            onSelect: (id: string, checked: boolean) =>
-              setSelected((ids) =>
-                checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id),
-              ),
-          }
-        : {})}
+      onSelect={(id, checked) =>
+        setSelected((ids) =>
+          checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id),
+        )
+      }
+      onAsk={(file) => {
+        if (queuedSend || pendingResponse || busy || readonly) return;
+        setSelected((ids) => [...new Set([...ids, file.id])]);
+        navigateTask("chat");
+        setNotice(
+          "자료를 다음 메시지에 사용할 수 있도록 선택했어요. 작성 중인 입력을 확인한 뒤 보내기를 눌러주세요.",
+        );
+        requestAnimationFrame(() => draftInput.current?.focus({ preventScroll: true }));
+      }}
       onReview={(file, origin) => {
         origin.focus();
         void run("file-preview", async () => {
@@ -1472,13 +1641,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       onRetry={(id) => void retryFile(id)}
       acceptedFileRetries={acceptedFileRetries}
       report={conversationState?.report ?? null}
-      standalone={tab === "files"}
+      standalone
       {...(tab === "chat"
         ? { onReportRefresh: () => setConversationRefresh((value) => value + 1) }
         : {})}
     >
-      {tab === "chat" && materialsOpen && errorFeedback}
-      {tab === "chat" && materialsOpen && uploadRecovery}
       {conversationState?.snapshot &&
         !["stale", "pending", "running"].includes(conversationState.analysis.status) && (
           <div {...privateContent}>
@@ -1550,10 +1717,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            if (!busy && !readonly) {
-              if (tab === "chat") chooseAttachments(Array.from(event.dataTransfer.files));
-              else void upload(event.dataTransfer.files);
-            }
+            if (!busy && !readonly) chooseAttachments(Array.from(event.dataTransfer.files));
           }}
         >
           <span className="workspace-upload-icon">
@@ -1594,7 +1758,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   ) : null;
   return (
     <div
-      className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
+      ref={root}
+      className={`workspace workspace--${activeTask ?? tab}${activeTask === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
     >
       {/* Keep the chooser's original node attached during temporary access checks. */}
       <input
@@ -1615,14 +1780,14 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             return;
           }
           uploadChooserScope.current = null;
-          if (tab === "chat") {
-            chooseAttachments(Array.from(event.target.files ?? []));
-            event.target.value = "";
-          } else void upload(event.target.files);
+          chooseAttachments(Array.from(event.target.files ?? []));
+          event.target.value = "";
         }}
       />
       <CaseWorkspaceFrame
-        kind={tab === "chat" ? "conversation" : "document"}
+        kind={
+          activeTask === "chat" ? "conversation" : activeTask === "files" ? "compare" : "document"
+        }
         header={
           <CaseNavigation
             caseId={caseId}
@@ -1631,18 +1796,17 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
             }
             active={tab}
+            {...(activeTask ? { activeTask } : {})}
+            onNavigate={navigateTask}
             fileCount={ready ? view?.files.length : undefined}
           />
         }
-        {...(tab === "chat" && view
-          ? { panel: materialsPanel, panelOpen: materialsOpen, onPanelOpenChange: setMaterialsOpen }
-          : {})}
       >
         <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
           {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
         </div>
-        {!(tab === "chat" && materialsOpen) && errorFeedback}
-        {!(tab === "chat" && materialsOpen) && uploadRecovery}
+        {errorFeedback}
+        {uploadRecovery}
         {!error && !busy && (acceptedFileRetries.length > 0 || uploadReadbackPending) && (
           <Button
             variant="outline"
@@ -1732,9 +1896,23 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               </section>
             )}
             <div className="workspace-grid">
-              <section className="workspace-main" aria-label={tabLabels[tab]}>
-                {tab === "chat" && (
-                  <>
+              <section
+                className="workspace-main"
+                aria-label={
+                  activeTask === "reports"
+                    ? "리포트"
+                    : activeTask === "drafts"
+                      ? "문서 초안"
+                      : tabLabels[tab]
+                }
+              >
+                {chatVisited && (
+                  <div
+                    data-workspace-task="chat"
+                    hidden={activeTask !== "chat"}
+                    inert={activeTask !== "chat"}
+                    style={{ display: activeTask !== "chat" ? "none" : undefined }}
+                  >
                     {!!view.messages.length && (
                       <div className="workspace-chat-heading">
                         <h2>이어서 대화하기</h2>
@@ -1749,6 +1927,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       aria-label="사건 대화"
                       aria-live="polite"
                       onScroll={(event) => {
+                        if (activeTaskRef.current !== "chat") return;
                         const messages = event.currentTarget;
                         followingChat.current =
                           messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 96;
@@ -1767,7 +1946,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                   variant="outline"
                                   disabled={!!busy || readonly}
                                   onClick={() => {
-                                    setDraft(prompt);
+                                    setDraft((existing) =>
+                                      existing.trim() ? `${existing}\n${prompt}` : prompt,
+                                    );
                                     draftInput.current?.focus();
                                   }}
                                 >
@@ -1908,6 +2089,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                         <ConversationAgent
                           key={`${caseId}:${ticket()}`}
                           workspace={view}
+                          active={activeTask === "chat"}
                           client={api.rework}
                           access={{ ready, canMutate, ticket, current, verify }}
                           incomingMessageIds={incomingActionMessages}
@@ -1951,6 +2133,33 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       }}
                     >
                       <div className="workspace-composer-surface">
+                        {reportQuestion && (
+                          <section
+                            className="workspace-report-question"
+                            aria-label="질문용 리포트 참조"
+                          >
+                            <strong>{reportQuestion.sectionTitle} · 리포트에서 읽은 내용</strong>
+                            <p>{reportQuestion.excerpt}</p>
+                            <p>
+                              궁금한 점을 적고 보내기를 눌러주세요. 참조를 준비해도 메시지는 보내지
+                              않아요.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              disabled={!!busy || queuedSend}
+                              onClick={() => setReportQuestion(null)}
+                            >
+                              질문용 참조 제외
+                            </Button>
+                          </section>
+                        )}
+                        {messageTooLong && (
+                          <p role="alert">
+                            리포트 참조와 메시지를 합쳐 10,000자까지 보낼 수 있어요. 입력이나 질문용
+                            참조를 줄여주세요.
+                          </p>
+                        )}
                         <ChatAttachments
                           local={localAttachments}
                           uploaded={chatAttachments}
@@ -2155,10 +2364,57 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                         </div>
                       </div>
                     </form>
-                  </>
+                  </div>
                 )}
-                {tab === "files" && materialsPanel}
-                {tab === "timeline" && (
+                {filesVisited && (
+                  <div
+                    data-workspace-task="files"
+                    id="case-materials-panel"
+                    hidden={activeTask !== "files"}
+                    inert={activeTask !== "files"}
+                    style={{ display: activeTask !== "files" ? "none" : undefined }}
+                  >
+                    {materialsPanel}
+                  </div>
+                )}
+                {reportVisited && (
+                  <div
+                    data-workspace-task="reports"
+                    hidden={activeTask !== "reports" && activeTask !== "drafts"}
+                    inert={activeTask !== "reports" && activeTask !== "drafts"}
+                    style={{
+                      display:
+                        activeTask !== "reports" && activeTask !== "drafts" ? "none" : undefined,
+                    }}
+                  >
+                    <Suspense fallback={<p role="status">저장된 리포트 화면을 불러오고 있어요.</p>}>
+                      <RetainedReportReview
+                        caseId={caseId}
+                        rework
+                        embedded
+                        active={ready && (activeTask === "reports" || activeTask === "drafts")}
+                        initialSection={reportSection}
+                        onNavigateTask={navigateTask}
+                        onDirtyChange={setReportDirty}
+                        onAskAboutReport={(context) => {
+                          if (
+                            reportQuestion &&
+                            !window.confirm(
+                              "질문용으로 준비한 리포트 참조를 새 내용으로 바꿀까요? 작성 중인 메시지는 그대로 남아요.",
+                            )
+                          )
+                            return;
+                          setReportQuestion(context);
+                          navigateTask("chat");
+                          setNotice(
+                            "리포트 내용을 질문용으로 준비했어요. 작성 중인 메시지는 그대로예요. 확인한 뒤 보내기를 눌러주세요.",
+                          );
+                        }}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+                {!activeTask && tab === "timeline" && (
                   <>
                     <div className="workspace-section-heading">
                       <div>
@@ -2234,7 +2490,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                     </ol>
                   </>
                 )}
-                {tab === "actions" && (
+                {!activeTask && tab === "actions" && (
                   <>
                     <div className="workspace-section-heading">
                       <div>
@@ -2310,19 +2566,73 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       </p>
                       <div className="workspace-buttons">
                         <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
-                        <ButtonLink href="/lawyers" variant="outline">
-                          변호사 찾기 <ArrowRight size={17} />
-                        </ButtonLink>
                       </div>
                     </div>
                   </>
                 )}
               </section>
-              {tab !== "chat" && contextSummary}
+              {!activeTask && tab !== "chat" && contextSummary}
             </div>
           </div>
         )}
       </CaseWorkspaceFrame>
+      <Dialog
+        open={!!leaveTarget}
+        title="작성 중인 내용을 두고 이동할까요?"
+        onOpenChange={(open) => {
+          if (!open) setLeaveTarget(null);
+        }}
+      >
+        <p>
+          이 사건의 네 작업 사이에서는 작성 내용을 유지해요. 다른 페이지로 이동하면 아직 보내지 않은
+          메시지·자료 선택과 저장하지 않은 편집은 남지 않을 수 있어요.
+        </p>
+        {localAttachments.length > 0 && (
+          <>
+            <p>
+              아직 업로드하지 않은 파일 {localAttachments.length}개는 이동 후 다시 선택해야 해요.
+              파일명만으로 복원하거나 자동으로 업로드하지 않아요.
+            </p>
+            <ul>
+              {localAttachments.map((file) => (
+                <li key={`${file.name}:${file.size}:${file.lastModified}`}>{file.name}</li>
+              ))}
+            </ul>
+          </>
+        )}
+        <div className="workspace-buttons">
+          <Button variant="outline" onClick={() => setLeaveTarget(null)}>
+            이 화면에서 계속 작성
+          </Button>
+          {localAttachments.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLeaveTarget(null);
+                navigateTask("files");
+              }}
+            >
+              자료에서 업로드 준비
+            </Button>
+          )}
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (!leaveTarget) return;
+              leaveApproved.current = true;
+              window.location.assign(leaveTarget);
+              // A browser-level unsaved report warning may still cancel the transition.
+              // Never clear the actual input/File handles before a navigation succeeds.
+              setTimeout(() => {
+                leaveApproved.current = false;
+                setLeaveTarget(null);
+              }, 0);
+            }}
+          >
+            미저장 내용과 첨부 선택을 버리고 이동
+          </Button>
+        </div>
+      </Dialog>
       {lookupOpen && (
         <LookupDialog
           key={caseId}
