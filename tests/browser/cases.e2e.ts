@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
+import { createCaseResponseSchema } from "../../src/contracts";
 import {
   v2ReworkCreateCaseRequestSchema,
   v2ReworkCreateCaseResponseSchema,
@@ -379,12 +380,23 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
       return { status: response.status, body: await response.json() };
     });
     expect(admitted.status).toBe(201);
-    await page.reload();
-    await page.getByRole("button", { name: "메뉴 열기" }).click();
-    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
-    await page.reload();
-    await page.getByRole("button", { name: "메뉴 열기" }).click();
-    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+    const created = createCaseResponseSchema.parse(admitted.body);
+    for (let reload = 0; reload < 2; reload++) {
+      await page.reload();
+      const listed = page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ });
+      await expect(listed).toBeVisible();
+      await expect(listed).toHaveAttribute("href", `/cases/${created.caseId}`);
+      const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
+      await opener.click();
+      const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+      const recent = menu.getByRole("link", { name: "금전 대여 사건", exact: true });
+      await expect(recent).toBeVisible();
+      await expect(recent).toHaveAttribute("href", `/cases/${created.caseId}`);
+      await page.keyboard.press("Escape");
+      await expect(menu).not.toBeVisible();
+      await expect(opener).toBeFocused();
+      await expect(listed).toBeVisible();
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
