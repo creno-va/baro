@@ -4,6 +4,11 @@ import { ApiError } from "../client/api/errors";
 import { accessHref, returnPathFromLocation, sessionDestination } from "../client/return-path";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
 
+import { Button } from "./ui/button";
+import { InlineNotice } from "./ui/inline-notice";
+import { PageHeader } from "./ui/page-header";
+import { StatePanel } from "./ui/state-panel";
+
 type ConsentState = "loading" | "required" | "redirecting";
 
 export function ConsentForm() {
@@ -85,47 +90,30 @@ export function ConsentForm() {
 
   if (state === "loading") {
     return error ? (
-      <div className="consent-status">
-        <h1>이용 상태를 확인할 수 없어요</h1>
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-        <button className="primary-action" type="button" onClick={() => window.location.reload()}>
-          다시 불러오기
-        </button>
+      <div className="ui-stack">
+        <PageHeader title="이용 상태를 확인할 수 없어요" />
+        <StatePanel
+          variant="error"
+          title={error}
+          action={<Button onClick={() => window.location.reload()}>다시 불러오기</Button>}
+        />
       </div>
     ) : (
-      <p className="consent-status" role="status">
-        이용 상태를 확인하고 있어요.
-      </p>
+      <StatePanel variant="loading" title="이용 상태를 확인하고 있어요." />
     );
   }
-
-  if (state === "redirecting") {
-    return (
-      <p className="consent-status" role="status">
-        내 화면으로 이동하고 있어요.
-      </p>
-    );
-  }
-
+  if (state === "redirecting")
+    return <StatePanel variant="loading" title="내 화면으로 이동하고 있어요." />;
   return (
-    <section className="consent-content" aria-labelledby="consent-title">
-      <header className="consent-intro">
-        <p className="eyebrow">서비스 이용을 위한 필수 확인</p>
-        <h1 id="consent-title">
-          시작 전에 <br />
-          확인해 주세요
-        </h1>
-        <p>
-          서비스 정책을 확인해 주세요.
-          <br />
-          동의를 마치면 이용하던 화면으로 이어집니다.
-        </p>
-      </header>
-      <form className="consent-form" onSubmit={submit} aria-busy={submitting}>
-        {apiMode === "mock" && <p className="case-muted">API 예시 모드 · 합성 동의 기록입니다.</p>}
-        <label>
+    <div className="ui-stack">
+      <PageHeader
+        eyebrow="서비스 이용을 위한 필수 확인"
+        title="시작 전에 확인해 주세요"
+        description="서비스 정책을 확인해 주세요. 동의를 마치면 이용하던 화면으로 이어집니다."
+      />
+      <form className="ui-stack" onSubmit={submit} aria-busy={submitting}>
+        {apiMode === "mock" && <InlineNotice title="API 예시 모드 · 합성 동의 기록입니다." />}
+        <label className="ui-check">
           <input
             checked={accepted}
             disabled={submitting}
@@ -134,36 +122,33 @@ export function ConsentForm() {
           />
           <span>
             <strong>[필수] 서비스 정책 동의</strong>
-            <span className="consent-description">
+            <br />
+            <span className="ui-muted">
               이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.
             </span>
           </span>
         </label>
-        <nav className="consent-policy-links" aria-label="정책 원문">
-          <a href="/policies/terms" target="_blank" rel="noopener noreferrer">
+        <nav className="ui-cluster" aria-label="정책 원문">
+          <a className="ui-link" href="/policies/terms" target="_blank" rel="noopener noreferrer">
             이용약관<span className="sr-only"> (새 창)</span>
           </a>
-          <a href="/policies/privacy" target="_blank" rel="noopener noreferrer">
+          <a className="ui-link" href="/policies/privacy" target="_blank" rel="noopener noreferrer">
             개인정보 처리방침<span className="sr-only"> (새 창)</span>
           </a>
-          <a href="/policies/ai" target="_blank" rel="noopener noreferrer">
+          <a className="ui-link" href="/policies/ai" target="_blank" rel="noopener noreferrer">
             AI 이용 고지<span className="sr-only"> (새 창)</span>
           </a>
         </nav>
-        <button
-          className="primary-action"
+        <Button
           ref={submitButton}
+          loading={submitting}
           disabled={!accepted || submitting}
           type="submit"
         >
           {submitting ? "저장 중…" : "동의하고 계속하기"}
-        </button>
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
+        </Button>
+        {error && <InlineNotice tone="danger" title={error} announce />}
       </form>
-    </section>
+    </div>
   );
 }

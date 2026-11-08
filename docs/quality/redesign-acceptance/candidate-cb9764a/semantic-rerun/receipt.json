@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "cb9764a7936513e9c773a4f76581d6636361430e",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "b47b8dfcd1786c6352bd4eadc2529fde8b0e937b031a6f5d1b22e5a5baebaab0",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:37:55.562Z",
+    "duration": 3267.429,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "rawResultSha256": "e79ccef7da7fb63f74e9928b44e12fa1435a206f539e80961a1656488736a537",
+  "results": [
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

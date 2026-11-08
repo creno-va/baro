@@ -79,8 +79,8 @@
   border-color: var(--primary, #2563eb);
   color: #fff;
 }
-.report-review button:disabled,
-.report-modal button:disabled {
+.report-review button:not(.ui-button):disabled,
+.report-modal button:not(.ui-button):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -255,6 +255,8 @@
   margin-top: 2px;
 }
 .report-review .report-read-content {
+  max-width: var(--reading-width);
+  margin-inline: auto;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -333,7 +335,7 @@
   flex-direction: column;
   gap: 0;
   width: 100%;
-  max-width: none;
+  max-width: var(--reading-width);
   min-width: 0;
   margin: 0 auto;
   padding: 32px;
@@ -561,6 +563,9 @@
 .report-export {
   display: flex;
   justify-content: stretch;
+  width: 100%;
+  max-width: var(--reading-width);
+  margin-inline: auto;
   margin-top: 24px;
   padding: 0;
   border: 0;
@@ -577,7 +582,8 @@
   font-size: 16px;
   border-radius: 12px;
 }
-.report-canvas > .resolution {
+.report-canvas > .resolution,
+.report-canvas > #document-drafts {
   margin-top: 32px;
   border-top: 1px solid var(--border, #e3e8ef);
 }

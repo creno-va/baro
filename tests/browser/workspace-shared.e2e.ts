@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
 import {
   closeWorkspaceMaterials,
+  confirmWorkspaceUpload,
   openCaseTool,
   openWorkspaceMaterials,
   returnToWorkspace,
@@ -42,7 +43,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.").check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await page.goto("/cases/new");
-  await page.getByRole("radio", { name: "고소 준비", exact: true }).check();
+  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("unknown-prepare");
   await page
     .getByLabel("지금까지 있었던 일")
     .fill(
@@ -98,7 +99,7 @@ test("common login and B intake flow through C workspace and D report with origi
     .check();
   await materials.getByRole("button", { name: "선택한 자료 업로드", exact: true }).click();
   await materials.getByRole("button", { name: "업로드 다시 시도" }).click();
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
   await page.reload();
   await openWorkspaceMaterials(page);
   await page.getByRole("button", { name: "자료 확인" }).click();
@@ -195,7 +196,8 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "긴 합성 자료.txt", mimeType: "text/plain", buffer: Buffer.from(text) });
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
+  await confirmWorkspaceUpload(page);
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "자료 확인" }).click();
   const review = page.getByRole("region", { name: "자료 내용 검토" });
   const editors = review.getByRole("textbox", { name: "확인·교정한 내용" });

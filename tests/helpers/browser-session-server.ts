@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { api } from "../../src/server/api";
 import { createCaseApi } from "../../src/server/api/case-create";
+import { saveAccountType } from "../../src/server/auth/account-type";
 import { syntheticWorkflow } from "../adapters/analysis-pipeline";
 import { createTestDatabase, signedSessionCookie } from "./d1";
 import { createOAuthFixture } from "./oauth";
@@ -17,10 +18,9 @@ if (
   browserOrigin.pathname !== "/"
 )
   throw new Error("Synthetic browser harness requires a loopback HTTP origin");
-const oauth =
-  Bun.argv[3] === "account"
-    ? await createOAuthFixture("google", undefined, browserOrigin.origin)
-    : null;
+const oauth = ["account", "account-lawyer"].includes(Bun.argv[3] ?? "")
+  ? await createOAuthFixture("google", undefined, browserOrigin.origin)
+  : null;
 const database = oauth?.database ?? (await createTestDatabase());
 const caseMode = ["cases", "analysis"].includes(Bun.argv[3] ?? "");
 const session = await (async () => {
@@ -47,6 +47,8 @@ const session = await (async () => {
     },
   };
 })();
+if (Bun.argv[3] === "account-lawyer")
+  await saveAccountType(database.binding, session.userId, "lawyer");
 session.env.BETTER_AUTH_URL = browserOrigin.origin;
 session.browserCookie.url = browserOrigin.origin;
 session.env.CASE_DATA_KEY_V1 = btoa("x".repeat(32)).replace(/=+$/, "");

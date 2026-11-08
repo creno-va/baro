@@ -55,8 +55,28 @@ try {
     throw new Error(
       "BUILT_WORKER_START_FAILED: generated production worker did not serve anonymous login HTML",
     );
+  // The same production guard must render its outage/closed-beta page before
+  // SSR. A successful anonymous login cannot prove this independent HTML path.
+  const unavailable = await fetch(`http://127.0.0.1:${port}/app`, {
+    signal: AbortSignal.timeout(5000),
+    redirect: "manual",
+  });
+  const unavailableBody = await unavailable.text();
+  if (
+    unavailable.status !== 503 ||
+    unavailable.headers.get("retry-after") !== "30" ||
+    !unavailable.headers.get("cache-control")?.includes("private, no-store, no-transform") ||
+    unavailable.headers.get("x-content-type-options") !== "nosniff" ||
+    !unavailable.headers.get("content-security-policy")?.includes("frame-ancestors 'none'") ||
+    !unavailableBody.includes("공개 베타를 준비하고 있어요.") ||
+    !unavailableBody.includes("<style>") ||
+    unavailableBody.includes("<script")
+  )
+    throw new Error(
+      "BUILT_WORKER_UNAVAILABLE_PAGE_FAILED: status, protection or shared HTML missing",
+    );
   console.log(
-    "Built production worker started in local workerd and served anonymous login HTML; no deployment or provider calls",
+    "Built production worker served anonymous login and protected shared 503 HTML; no deployment or provider calls",
   );
 } finally {
   if (!stopped && process.platform === "win32") {

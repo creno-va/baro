@@ -62,6 +62,25 @@ export default defineConfig({
                     new URL("./tests/helpers/design-system-page.astro", import.meta.url),
                   ),
                 });
+                injectRoute({
+                  pattern: "/__design-foundation",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/foundation-page.astro", import.meta.url),
+                  ),
+                });
+                // Existing ownership/asset recovery regressions remain test-only after retirement.
+                for (const [pattern, entrypoint] of [
+                  ["/__legacy-lawyer", "lawyer"],
+                  ["/__legacy-lawyers", "directory"],
+                  ["/__legacy-lawyers/[id]", "profile"],
+                ]) {
+                  injectRoute({
+                    pattern: pattern as string,
+                    entrypoint: fileURLToPath(
+                      new URL(`./tests/helpers/retired-web/${entrypoint}.astro`, import.meta.url),
+                    ),
+                  });
+                }
               },
             },
           },

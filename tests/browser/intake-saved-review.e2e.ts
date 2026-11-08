@@ -389,7 +389,7 @@ test("generation recovery has two actions with outline resume and space above th
   }
 });
 
-test("case purpose and context keep visible inset keyboard focus without pointer frames", async ({
+test("case entry choice keeps visible keyboard focus and its six existing-contract mappings", async ({
   page,
   browserName,
 }) => {
@@ -397,24 +397,21 @@ test("case purpose and context keep visible inset keyboard focus without pointer
   await page.goto("/app");
   const nextControlKey =
     browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
-  for (const name of ["고소 준비"]) {
-    const radio = page.getByRole("radio", { name, exact: true });
-    const label = radio.locator("..");
-    await expect(radio).toBeEnabled();
-    const idleShadow = await label.evaluate((node) => getComputedStyle(node).boxShadow);
-    await radio.click();
+  {
+    const select = page.getByRole("combobox", { name: "준비하는 방향" });
+    await expect(select).toBeEnabled();
+    await expect(select.locator("option")).toHaveCount(6);
+    await select.click();
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
-    await expect(label).toHaveCSS("outline-style", "none");
-    await expect(label).toHaveCSS("box-shadow", idleShadow);
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Tab");
     // Establish normal keyboard modality before macOS WebKit's modifier-based
     // navigation, which includes its otherwise skipped compact radio controls.
     if (nextControlKey !== "Tab") await page.keyboard.press(nextControlKey);
-    await radio.focus();
-    await expect(radio).toBeFocused();
+    await select.focus();
+    await expect(select).toBeFocused();
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "keyboard");
-    await expect(label).toHaveCSS("outline-style", "none");
-    await expect(label).toHaveCSS("box-shadow", /inset/);
+    await expect(select).toHaveCSS("box-shadow", "rgb(82, 97, 120) 0px 0px 0px 2px inset");
   }
   expect(await calls(page)).toEqual({ advance: 0, save: 0 });
 });

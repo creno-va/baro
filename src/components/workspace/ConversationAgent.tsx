@@ -86,6 +86,7 @@ export function ConversationAgent({
   onStateChange,
   onOpenMaterials,
   reportHref,
+  active = true,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -109,6 +110,7 @@ export function ConversationAgent({
   onStateChange?: (state: V2ConversationState | null) => void;
   onOpenMaterials?: () => void;
   reportHref?: string;
+  active?: boolean;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
@@ -159,6 +161,7 @@ export function ConversationAgent({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [paneBusy, setPaneBusy] = useState(false);
+  const observing = active || queuedWork || backgroundBusy || busy || paneBusy;
   const [hasDraft, setHasDraft] = useState(false);
   const [reportRequested, setReportRequested] = useState(false);
   const [viewedReport, setViewedReport] = useState<string | null>(null);
@@ -346,11 +349,18 @@ export function ConversationAgent({
     }
   };
   useEffect(() => {
-    if (ready && Number.isSafeInteger(refreshKey) && refreshKey >= 0 && !locked.current)
+    if (
+      observing &&
+      ready &&
+      Number.isSafeInteger(refreshKey) &&
+      refreshKey >= 0 &&
+      !locked.current
+    )
       void load();
-  }, [ready, load, refreshKey]);
+  }, [ready, load, refreshKey, observing]);
   useEffect(() => {
     if (
+      !observing ||
       !ready ||
       !state ||
       readFailures >= 3 ||
@@ -382,6 +392,7 @@ export function ConversationAgent({
     continuationUnconfirmed,
     reportRequested,
     pane,
+    observing,
   ]);
   const changed = useCallback(async () => {
     const epoch = ticket();
@@ -418,6 +429,12 @@ export function ConversationAgent({
   }, []);
   const execute = useCallback(
     async (action: V2ConversationIntent, requestId?: string) => {
+      // Retained legacy/model intents do not restore the removed contact feature.
+      // The report's three choices own their mutation-free unsupported dialog.
+      if (action === "open_lawyers") {
+        setError("현재 변호사 연결 기능은 제공하지 않습니다.");
+        return;
+      }
       if (disabled || !stateIsCurrent || locked.current || paneLocked.current) return;
       if (
         dirty.current &&
@@ -731,7 +748,7 @@ export function ConversationAgent({
               >
                 <legend className="workspace-sr-only">다른 사건 작업</legend>
                 {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
-                  .filter((action) => action !== next)
+                  .filter((action) => action !== next && action !== "open_lawyers")
                   .map((action) =>
                     reportHref &&
                     (["save_report", "resolve_followup", "open_lawyers"].includes(action) ||

@@ -80,7 +80,8 @@ export async function mockRequest<T>(operation: string, input: unknown, key: str
       (input as { privateRead?: boolean } | undefined)?.privateRead === true)
   ) {
     const session = requireSession({
-      consent: !/^lawyers\.(getMine|assets|assetBlob)$/.test(operation),
+      // Existing assets retain their read/deletion right during policy renewal.
+      consent: !/^lawyers\.(getMine|assets|assetBlob|removeAsset)$/.test(operation),
     });
     if (session.user?.accountType !== "lawyer")
       throw new ApiError("NOT_FOUND", "변호사 이용 유형으로 로그인해 주세요.");

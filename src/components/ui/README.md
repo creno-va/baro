@@ -24,7 +24,18 @@ the screen already announces the same operation. `Button loading` disables
 mutations while showing progress. Replaceable read-only searches use `aria-busy`
 and a spinner instead. Reduced motion stops animation and keeps the status text.
 
-Product composition lives in AppLayout's `app-experience.css`; the landing must
-not import that file. Desktop menus pin the account and scroll only the recent
-list. Native Escape requests `onOpenChange`, allowing a pending-operation owner
-to refuse dismissal. Nested cancellation stays inside the top dialog.
+The canonical shared rules are `global.css` (tokens/reset/components/reading) and
+AppLayout's `product.css` (navigation/frame). Previous experience/refresh/workspace
+overrides are removed from AppLayout. Desktop navigation pins the account and
+scrolls the recent list. Native Escape requests `onOpenChange`, allowing a pending
+operation owner to refuse dismissal. Nested cancellation stays inside the top dialog.
+
+The [foundation contract](../../../docs/design/FOUNDATION.md) documents Section,
+ReadingContent, TableScroll, SourceReference, InlineNotice, Select, TextLink,
+ActionGroup and PublicLayout. StatePanel also supports `partial` and `success`.
+`Dialog showCloseButton={false}` keeps an acknowledgement flow to one action,
+without changing Escape or focus restoration. Existing component defaults remain.
+
+`/__design-foundation` is the test-only representative reading/comparison/editing
+preview. `tests/helpers/foundation.playwright.config.ts` verifies task retention,
+dialog/panel focus, six widths, 200% zoom, contrast and sidebar preferences.

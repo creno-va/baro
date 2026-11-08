@@ -1,8 +1,8 @@
 import type { V2CaseContext } from "../../contracts/v2";
 
 export const casePurposeLabels = {
-  prepare_claim: "고소 준비",
-  respond_to_claim: "주장 대응",
+  prepare_claim: "요구·고소 준비",
+  respond_to_claim: "받은 주장에 대응",
   unconfirmed: "미확인 입장",
 } as const;
 const kinds = {

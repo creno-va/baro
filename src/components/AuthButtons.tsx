@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { AccountType } from "../client/api";
 import { api, apiMode, errorMessage } from "../client/api";
-
 import { sessionDestination } from "../client/return-path";
+import { Button } from "./ui/button";
+import { InlineNotice } from "./ui/inline-notice";
 
 type Provider = "google" | "naver" | "kakao";
 
@@ -49,7 +49,6 @@ export function ProviderIcon({ provider }: { provider: Provider }) {
 export function AuthButtons() {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
-  const [accountType, setAccountType] = useState<AccountType>("customer");
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const lastButton = useRef<HTMLButtonElement | null>(null);
@@ -60,9 +59,8 @@ export function AuthButtons() {
   async function signIn(provider: Provider) {
     setPendingProvider(provider);
     setError(null);
-
     try {
-      const result = await api.session.signIn(provider, accountType);
+      const result = await api.session.signIn(provider);
       if (result) window.location.assign(sessionDestination(result));
       return;
     } catch (cause) {
@@ -70,84 +68,33 @@ export function AuthButtons() {
     }
     setPendingProvider(null);
   }
-
   return (
-    <div className="login-options" aria-busy={pendingProvider !== null}>
-      {apiMode === "mock" && (
-        <p className="login-demo-note">API 예시 모드 · 합성 계정으로 시연합니다.</p>
-      )}
+    <div className="ui-stack" aria-busy={pendingProvider !== null}>
+      {apiMode === "mock" && <InlineNotice title="API 예시 모드 · 합성 계정으로 시연합니다." />}
       <fieldset
-        className="login-account-type"
-        aria-describedby="login-role-description"
+        className="ui-auth-providers ui-stack"
         disabled={!ready || pendingProvider !== null}
       >
-        <legend>어떤 목적으로 이용하시나요?</legend>
-        <label>
-          <input
-            type="radio"
-            name="accountType"
-            value="customer"
-            checked={accountType === "customer"}
-            onChange={() => setAccountType("customer")}
-          />
-          <span>고객</span>
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="accountType"
-            value="lawyer"
-            checked={accountType === "lawyer"}
-            onChange={() => setAccountType("lawyer")}
-          />
-          <span>변호사</span>
-        </label>
+        <legend>소셜 계정으로 계속하기</legend>
+        {providers.map((provider) => (
+          <Button
+            key={provider.id}
+            variant="secondary"
+            loading={pendingProvider === provider.id}
+            aria-label={pendingProvider === provider.id ? "연결 중…" : provider.label}
+            disabled={!ready || pendingProvider !== null}
+            onClick={(event) => {
+              lastButton.current = event.currentTarget;
+              void signIn(provider.id);
+            }}
+          >
+            <ProviderIcon provider={provider.id} />
+            <span>{provider.name}</span>
+          </Button>
+        ))}
       </fieldset>
-      <p id="login-role-description" className="login-role-description" aria-live="polite">
-        {accountType === "customer"
-          ? "내 사건과 상담 준비 자료를 정리할게요."
-          : "AI로 사건을 정리하고, 내 변호사 프로필도 관리할게요."}
-      </p>
-      <fieldset className="login-social">
-        <legend>SNS 계정으로 간편하게 시작하기</legend>
-        <div className="login-provider-list">
-          {providers.map((provider) => (
-            <button
-              className={`login-provider login-provider--${provider.id}`}
-              disabled={!ready || pendingProvider !== null}
-              aria-label={pendingProvider === provider.id ? "연결 중…" : provider.label}
-              key={provider.id}
-              onClick={(event) => {
-                lastButton.current = event.currentTarget;
-                void signIn(provider.id);
-              }}
-              type="button"
-            >
-              <span className="login-provider__circle">
-                {pendingProvider === provider.id ? (
-                  <span className="login-provider__spinner" aria-hidden="true" />
-                ) : (
-                  <ProviderIcon provider={provider.id} />
-                )}
-              </span>
-              <span className="login-provider__name" aria-hidden="true">
-                {provider.name}
-              </span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <p className="login-status" role="status">
-        {pendingProvider ? "로그인 페이지로 연결하고 있어요." : ""}
-      </p>
-      {accountType === "lawyer" && (
-        <p className="login-role-note">이용 유형 선택은 변호사 자격 확인을 의미하지 않아요.</p>
-      )}
-      {error ? (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {pendingProvider && <p role="status">로그인 페이지로 연결하고 있어요.</p>}
+      {error && <InlineNotice tone="danger" title={error} announce />}
     </div>
   );
 }

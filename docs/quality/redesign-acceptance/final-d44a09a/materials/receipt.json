@@ -1,0 +1,126 @@
+{
+  "productSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d44a09a/materials/results.json",
+  "rawSha256": "a8605b85faa6c55de7aec8df3fa92ff96301d685f26775711fc5e91991619e11",
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:25:13.104Z",
+    "duration": 21201.005,
+    "expected": 17,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "the mounted materials panel preserves the composer and selection without new reads or actions",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report readiness follows authorized progress reads and never starts work when opening the panel",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "review selection is separate from conversation selection and dirty correction survives resize and Escape",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "local attachments and consent stay local across panel changes before one explicit send",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "reading earlier messages does not jump to the newest reply when panel width changes",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "Korean composition cannot send on Enter and duplicate submission admits one message",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a legacy file URL opens the same correction without loading private conversation context",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "materials and composer remain readable and accessible at phone, tablet, desktop and zoom",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "320px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "390px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "1440px: retained tasks preserve actual File bytes, text, DOM and history without automatic execution",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "asking about a material prepares selection without overwriting or sending the draft",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "explicit material reflection sends once and returns without discarding unsent text or a local File",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "source review targets the exact extracted position and returns to the same unsent conversation",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "source review reports a changed revision and returns to the same unsent conversation",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report queries and draft hash survive retained navigation and browser history",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a changed owner clears retained report work and explains the boundary before explicit reopening",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    }
+  ],
+  "testSources": {
+    "tests/browser/workspace-materials.e2e.ts": "09e549145bef5ddc279a55b157aa5cbd50522cc575fa203793108500ad1c7bb5",
+    "tests/browser/workspace-retained.e2e.ts": "d4a67e45e729f7b111d0dcbd614f66e03c67816b5d58aca8fea59a4acc2a95df",
+    "tests/helpers/workspace-materials-scenario.ts": "36f2af87e8f04edcbaa418d632867b8b962517af942397d14378ce4407c9c252"
+  }
+}

@@ -17,6 +17,7 @@ export function Dialog({
   children,
   variant = "dialog",
   returnFocusRef,
+  showCloseButton = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,6 +27,8 @@ export function Dialog({
   variant?: "dialog" | "sheet";
   /** Validation flows may return to the invalid field instead of the opener. */
   returnFocusRef?: RefObject<HTMLElement | null>;
+  /** Single acknowledgement flows can use their visible action as the only button. */
+  showCloseButton?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
@@ -107,9 +110,11 @@ export function Dialog({
           <h2 id={titleId}>{title}</h2>
           {description && <p id={descriptionId}>{description}</p>}
         </div>
-        <Button variant="ghost" size="icon" aria-label="닫기" onClick={() => onOpenChange(false)}>
-          <X aria-hidden="true" size={20} />
-        </Button>
+        {showCloseButton && (
+          <Button variant="ghost" size="icon" aria-label="닫기" onClick={() => onOpenChange(false)}>
+            <X aria-hidden="true" size={20} />
+          </Button>
+        )}
       </div>
       <div className="ui-dialog__content">{children}</div>
     </dialog>

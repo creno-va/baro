@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("directory searches names and offices case-insensitively while retaining region and field filters", async ({
   page,
@@ -65,18 +70,29 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
     requests.push(route.request().url());
     return route.abort();
   });
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("baro-api-mock-v1:session"))
+      localStorage.setItem(
+        "baro-api-mock-v1:session",
+        JSON.stringify({
+          user: { id: "example-lawyer", name: "합성 기존 이용자", accountType: "lawyer" },
+          needsConsent: true,
+        }),
+      );
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("radio", { name: /변호사/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page).toHaveURL(/\/consent/);
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
   await expect(page).toHaveURL(/\/app/);
-  await page.getByRole("button", { name: "메뉴 열기" }).click();
-  await page.getByRole("link", { name: "변호사 프로필", exact: true }).click();
+  await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+  // Legacy owner-data regressions use an explicit test-only document.
+  await page.goto("/lawyer");
   await expect(page).toHaveURL(/\/lawyer/);
   await page.getByLabel("이름", { exact: true }).fill("E 통합 시연 변호사");
   await page.getByLabel("사무실 이름").fill("합성 시연 사무실");
@@ -190,7 +206,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
     const portfolio = (await lawyerAssets.list()).find((asset) => asset.purpose === "portfolio");
     if (!portfolio) throw new Error("Synthetic portfolio asset missing");
     try {
-      await lawyerAssets.remove(portfolio.id, portfolio.revision);
+      await lawyerAssets.remove(portfolio.id, portfolio.revision + 1);
       return "REMOVED";
     } catch (error) {
       return (error as { code?: string }).code;

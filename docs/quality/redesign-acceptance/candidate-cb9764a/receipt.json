@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "cb9764a7936513e9c773a4f76581d6636361430e",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "c46f660a5bc798e1752a366b0d40a470a2143c6587b9fbb899a5f5b019fe9755",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:36:02.760Z",
+    "duration": 19400.453999999998,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  },
+  "rawResultSha256": "efb3e6d6a9ce31875e4b58be4b9743fd2fa917cd1175e1fe53945f4ccae85b93",
+  "results": [
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('region', { name: '리포트 이후 해결 방법', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('region', { name: '리포트 이후 해결 방법', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('region', { name: '리포트 이후 해결 방법', exact: true })\u001b[22m\n\n\n   at ../helpers/redesign-fixture.ts:78\n\n  76 |   await expect(\n  77 |     page.getByRole(\"region\", { name: \"리포트 이후 해결 방법\", exact: true }),\n> 78 |   ).toBeVisible();\n     |     ^\n  79 | }\n  80 |\n    at prepareRedesignReport (/Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/helpers/redesign-fixture.ts:78:5)\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:32:3"
+      ]
+    },
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('region', { name: '리포트 이후 해결 방법', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('region', { name: '리포트 이후 해결 방법', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('region', { name: '리포트 이후 해결 방법', exact: true })\u001b[22m\n\n\n   at ../helpers/redesign-fixture.ts:78\n\n  76 |   await expect(\n  77 |     page.getByRole(\"region\", { name: \"리포트 이후 해결 방법\", exact: true }),\n> 78 |   ).toBeVisible();\n     |     ^\n  79 | }\n  80 |\n    at prepareRedesignReport (/Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/helpers/redesign-fixture.ts:78:5)\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:32:3"
+      ]
+    }
+  ]
+}

@@ -2,10 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
 import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
   page,
@@ -154,7 +159,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
   else await page.mouse.click(5, 85);
   return page.evaluate(() => {
-    const scope = document.querySelector(".app-frame, .login-page, .consent-page");
+    const scope = document.querySelector(".app-frame, .public-layout");
     if (!scope) throw new Error("Focus audit scope missing");
     const failures: string[] = [];
     let count = 0;
@@ -194,7 +199,9 @@ async function focusAudit(page: Page, keyboard: boolean) {
   });
 }
 
-test("focus feedback covers login roles and consent without pointer outlines", async ({ page }) => {
+test("focus feedback covers common login and consent without pointer outlines", async ({
+  page,
+}) => {
   await seed(page);
   await page.goto(base);
   await hydrated(page);
@@ -206,14 +213,16 @@ test("focus feedback covers login roles and consent without pointer outlines", a
   );
   await page.goto("/login");
   await hydrated(page);
-  const customer = page.getByRole("radio", { name: "고객", exact: true });
-  await expect(customer).toBeEnabled();
+  const provider = page.getByRole("button", { name: "Google로 계속하기", exact: true });
+  await expect(provider).toBeEnabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   for (const keyboard of [false, true]) {
     expect((await focusAudit(page, keyboard)).failures).toEqual([]);
   }
   await page.keyboard.press("Tab");
-  await customer.focus();
-  await expect(customer.locator("..")).toHaveCSS("box-shadow", /inset/);
+  await provider.focus();
+  await expect(provider).toBeFocused();
+  await expect(provider).toHaveCSS("box-shadow", /inset/);
   await page.evaluate(() =>
     localStorage.setItem(
       "baro-api-mock-v1:session",
@@ -443,11 +452,13 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await seed(page);
   await page.goto("/settings");
   await expect(page.getByRole("navigation", { name: "설정 바로가기" })).toHaveCount(0);
-  await expect(page.locator("#settings-usage-title")).toBeVisible();
-  await expect(page.locator("#settings-help-title")).toBeVisible();
-  await expect(page.locator("#settings-danger-title")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "사용량과 한도", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "도움말과 정책", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "계정 삭제", exact: true })).toBeVisible();
   await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
-  const disclosure = page.locator(".settings-usage-guide");
+  const disclosure = page
+    .getByRole("region", { name: "사용량과 한도", exact: true })
+    .locator("details");
   const summary = disclosure.locator("summary");
   const content = disclosure.locator("p");
   const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });
@@ -969,8 +980,10 @@ test("purpose choices change examples and persist without owner-category UI", as
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
-  await expect(page.getByRole("radio")).toHaveCount(2);
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await expect(page.getByRole("combobox", { name: "준비하는 방향" }).locator("option")).toHaveCount(
+    6,
+  );
+  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("unknown-response");
   await expect(page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" })).toBeVisible();
   await expect(page.getByRole("button", { name: "빌려준 돈을 못 받았어요" })).toHaveCount(0);
   await page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" }).click();

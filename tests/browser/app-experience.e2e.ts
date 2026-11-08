@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { syntheticConsentStatus } from "../fixtures/consent-status";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 const stories = Array.from({ length: 30 }, (_, index) => ({
   id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, "0")}`,
@@ -44,6 +45,10 @@ async function fits(page: Page) {
     ),
   ).toBe(true);
 }
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("sidebar delete overlays a full-width title and stays centered on hover and focus", async ({
   page,

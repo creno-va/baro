@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "c89b30d789af5123a2735b6ca81c957c8365794b",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "a36d7d8701104469bad331c4a459c6476c455bf7b6cdf0e4e745fbe34b095716",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:48:11.654Z",
+    "duration": 34994.21,
+    "expected": 32,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  },
+  "rawResultSha256": "f1d61d0bc1233353bcb0e2b54d1e4a15017db38fae871dc931bcd71cd99f4f80",
+  "results": [
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "opening drafts is a read and leaves self selection and generation unchanged",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report source section keeps its full limitation body visible",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "chromium",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n\n  266 |   await page.getByRole(\"link\", { name: \"설정\", exact: true }).click({ noWaitAfter: true });\n  267 |   await expect(input).toHaveValue(unsentMessage);\n> 268 |   expect(warnings).toBe(1);\n      |                    ^\n  269 |   await expect(page).toHaveURL(new RegExp(`/cases/${syntheticCaseId}$`));\n  270 | });\n  271 |\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:268:20"
+      ]
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "owner change removes the previous owner's unsent text from the document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "opening drafts is a read and leaves self selection and generation unchanged",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report source section keeps its full limitation body visible",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "webkit",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m1\u001b[39m\nReceived: \u001b[31m0\u001b[39m\n\n  266 |   await page.getByRole(\"link\", { name: \"설정\", exact: true }).click({ noWaitAfter: true });\n  267 |   await expect(input).toHaveValue(unsentMessage);\n> 268 |   expect(warnings).toBe(1);\n      |                    ^\n  269 |   await expect(page).toHaveURL(new RegExp(`/cases/${syntheticCaseId}$`));\n  270 | });\n  271 |\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:268:20"
+      ]
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "owner change removes the previous owner's unsent text from the document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

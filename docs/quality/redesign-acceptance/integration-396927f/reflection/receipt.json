@@ -1,0 +1,31 @@
+{
+  "productSha": "396927f876fdf73f2527bd5faf3897f75fa90050",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-396927f/reflection/results.json",
+  "rawSha256": "801ab105f527bac2384b93d6d56590439a6314235030e8959d47e5c9a07d4c52",
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:13:20.387Z",
+    "duration": 6077.214,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "explicit material reflection sends once and returns without discarding unsent text or a local File",
+      "project": "",
+      "status": "failed",
+      "errors": [
+        "Error: expect(locator).toHaveValue(expected) failed\n\nLocator:  getByRole('textbox', { name: '추가 사실 또는 질문', exact: true })\nExpected: \"자료 반영과 별개로 계속 작성할 미전송 설명\"\nReceived: \"\"\nTimeout:  5000ms\n\nCall log:\n  - Expect \"toHaveValue\" getByRole('textbox', { name: '추가 사실 또는 질문', exact: true }) with timeout 5000ms\n  - waiting for getByRole('textbox', { name: '추가 사실 또는 질문', exact: true })\n    11 × locator resolved to <textarea rows=\"1\" maxlength=\"20000\" placeholder=\"메시지\" aria-invalid=\"false\" id=\"workspace-message\"></textarea>\n       - unexpected value \"\"\n\n\n  161 |   await page.getByRole(\"button\", { name: \"자료 내용 반영하기\", exact: true }).click();\n  162 |   await expect(page).toHaveURL(new RegExp(`${materialsCasePath}$`));\n> 163 |   await expect(input(page)).toHaveValue(\"자료 반영과 별개로 계속 작성할 미전송 설명\");\n      |                             ^\n  164 |   await expect(input(page)).toHaveAttribute(\"data-retained\", \"before-reflection\");\n  165 |   await expect(page.getByRole(\"list\", { name: \"이번 메시지의 첨부 파일\" })).toContainText(\n  166 |     \"not-uploaded-during-reflection.txt\",\n    at /Users/hwang-eunchan/Desktop/baro/flow-02-cases/tests/browser/workspace-retained.e2e.ts:163:29"
+      ]
+    }
+  ],
+  "testSourceNote": "Test source at execution was owner branch6ca7a32. Owner later changed only the account-boundary assertion in d73d5f9; post-run file hash is recorded separately. Reflection test body unchanged.",
+  "afterRunWorktreeSourceSha256": "d4a67e45e729f7b111d0dcbd614f66e03c67816b5d58aca8fea59a4acc2a95df",
+  "testSourceSha256": "0110e1c7bedc6abfc68c62f505632a55a5ebcb6da153994ece5c98593563f128",
+  "testSourceGitSha": "6ca7a3207ee3d1343d0af548554399d22e55fc08"
+}

@@ -1,0 +1,52 @@
+{
+  "productSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+  "environment": "Actual macOS Chrome, real Astro at4387, explicit local mock; synthetic criminal response case",
+  "zoom": {
+    "nativeBadge": "200%",
+    "DPR": 4,
+    "innerWidth": 600,
+    "outerWidth": 1200,
+    "visualViewportScale": 1,
+    "horizontalOverflow": false
+  },
+  "ime": {
+    "keys": "physical g k s r m f in Korean input source",
+    "duringComposition": "한글",
+    "afterReturn": "한글\n",
+    "userMessages": 0,
+    "afterTasks": "한글\n",
+    "taskSequence": [
+      "자료",
+      "리포트",
+      "문서 초안",
+      "대화"
+    ]
+  },
+  "dirtyModal": {
+    "title": "아직 지원하지 않는 기능이에요",
+    "body": "현재 변호사 연결 기능은 제공하지 않습니다.",
+    "button": "확인",
+    "TabFocus": "확인",
+    "EnterCloses": true,
+    "focusRestoredTo": "변호사와 해결",
+    "correctionPreserved": "합성 최종 검수: 원문과 대조하기 전에는 상대방의 요구를 확정하지 않습니다.",
+    "explicitSave": {
+      "revision": 2,
+      "status": "저장됨",
+      "renderedBodyMatches": true
+    }
+  },
+  "restored": {
+    "inputSource": "English verified by literal g after source-switch completed; probe removed",
+    "nativeZoom": "100%",
+    "DPR": 2,
+    "innerWidth": 1200,
+    "outerWidth": 1200,
+    "IABViewport": "reset",
+    "testTabs": "closed"
+  },
+  "limits": [
+    "Not a mobile virtual keyboard or touch-device test",
+    "No paid provider/OAuth/legal discovery calls"
+  ]
+}

@@ -29,13 +29,13 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.locator("body")).not.toContainText("untrusted-raw-detail");
-    const descriptionBounds = await page.locator(".login-panel__description").boundingBox();
+    const descriptionBounds = await page.locator(".page-header__description").boundingBox();
     const errorBounds = await page.getByRole("alert").boundingBox();
     const roleBounds = await page
-      .getByRole("group", { name: "어떤 목적으로 이용하시나요?" })
+      .getByRole("group", { name: "소셜 계정으로 계속하기" })
       .boundingBox();
     if (!descriptionBounds || !errorBounds || !roleBounds) {
-      throw new Error("Login instructions, error and account choices must remain visible.");
+      throw new Error("Login instructions, error and provider choices must remain visible.");
     }
     expect(errorBounds.y).toBeGreaterThanOrEqual(descriptionBounds.y + descriptionBounds.height);
     expect(roleBounds.y).toBeGreaterThanOrEqual(errorBounds.y + errorBounds.height);
@@ -61,8 +61,7 @@ test("branded social login stays accessible on narrow phones and desktop", async
         logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
       )
       .toBe(true);
-    await expect(page.getByRole("radio", { name: /고객/ })).toBeChecked();
-    await expect(page.getByRole("radio", { name: /변호사/ })).toBeEnabled();
+    await expect(page.getByRole("radio")).toHaveCount(0);
     for (const name of ["Kakao로 계속하기", "Naver로 계속하기", "Google로 계속하기"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
@@ -76,20 +75,10 @@ test("branded social login stays accessible on narrow phones and desktop", async
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       ),
     ).toBe(true);
-    if (viewport.width > 800) {
-      const intro = await page.locator(".login-intro").boundingBox();
-      const panel = await page.locator(".login-panel").boundingBox();
-      expect(panel?.x).toBeGreaterThan((intro?.x ?? 0) + (intro?.width ?? 0));
-      for (const role of ["고객", "변호사"]) {
-        await page.getByRole("radio", { name: role, exact: true }).check();
-        expect(
-          await page.evaluate(() => document.documentElement.scrollHeight),
-        ).toBeLessThanOrEqual(viewport.height);
-      }
-    }
+    const form = await page.locator(".ui-auth").boundingBox();
+    expect(form?.width).toBeLessThanOrEqual(448);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     if (viewport.width === 1366 || viewport.width === 390) {
-      await page.getByRole("radio", { name: "고객", exact: true }).check();
       await page.getByRole("heading", { name: "로그인 · 회원가입", exact: true }).click();
       await page.screenshot({ path: `.wrangler/ui-302-login-${viewport.width}.png` });
     }
@@ -173,8 +162,7 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   await expect(page.getByRole("button", { name: "연결 중…" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Naver로 계속하기" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Kakao로 계속하기" })).toBeDisabled();
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeDisabled();
-  await expect(page.getByRole("radio", { name: /변호사/ })).toBeDisabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   release?.();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요.");
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeFocused();
@@ -182,43 +170,54 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
   await expect(page.getByRole("button", { name: "Naver로 계속하기" })).toBeFocused();
 });
 
-test("keyboard role selection preserves the lawyer role and reaches the shared app after a synthetic OAuth callback", async ({
-  page,
-}) => {
-  await page.route("**/api/auth/sign-in/social", (route) =>
-    route.fulfill({
-      json: {
-        redirect: true,
-        url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
-      },
-    }),
-  );
-  await page.route("**/api/me/account-type", (route) =>
-    route.fulfill({ json: { accountType: "lawyer" } }),
-  );
-  await page.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: syntheticConsentStatus(false) }),
-  );
-  await page.goto("/login");
-  const customer = page.getByRole("radio", { name: /고객/ });
-  const lawyer = page.getByRole("radio", { name: /변호사/ });
-  await expect(customer).toBeEnabled();
-  await customer.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(lawyer).toBeFocused();
-  await expect(lawyer).toBeChecked();
-  const signIn = page.waitForRequest("**/api/auth/sign-in/social");
-  const saveRole = page.waitForRequest("**/api/me/account-type");
-  await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
-  const initiation = (await signIn).postDataJSON();
-  expect(initiation).toMatchObject({ provider: "kakao", errorCallbackURL: "/login?error=oauth" });
-  const callback = new URL(initiation.callbackURL, page.url());
-  expect(callback.pathname).toBe("/consent");
-  expect(callback.searchParams.get("loginAttempt")).toBeTruthy();
-  expect((await saveRole).postDataJSON()).toEqual({ accountType: "lawyer" });
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
-});
+for (const accountType of ["customer", "lawyer"] as const) {
+  test(`common keyboard login preserves existing ${accountType} owner without a role write`, async ({
+    page,
+  }) => {
+    let writes = 0;
+    await page.route("**/api/me/session", (route) =>
+      route.fulfill({
+        json: {
+          user: { id: "synthetic-existing-owner", name: "합성 기존 이용자", accountType },
+          needsConsent: false,
+        },
+      }),
+    );
+    await page.route("**/api/me/account-type", (route) => {
+      writes++;
+      return route.abort();
+    });
+    await page.route("**/api/auth/sign-in/social", (route) =>
+      route.fulfill({
+        json: {
+          redirect: true,
+          url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
+        },
+      }),
+    );
+    await page.route("**/api/me/consent", (route) =>
+      route.fulfill({ json: syntheticConsentStatus(false) }),
+    );
+    await page.goto("/login?returnTo=%2Fsettings");
+    await expect(page.getByRole("radio")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Kakao로 계속하기", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Kakao로 계속하기", exact: true }).focus();
+    const signIn = page.waitForRequest("**/api/auth/sign-in/social");
+    await page.keyboard.press("Enter");
+    const initiation = (await signIn).postDataJSON();
+    expect(initiation).toMatchObject({
+      provider: "kakao",
+      errorCallbackURL: "/login?returnTo=%2Fsettings&error=oauth",
+    });
+    const callback = new URL(initiation.callbackURL, page.url());
+    expect(callback.pathname).toBe("/consent");
+    expect(callback.searchParams.get("returnTo")).toBe("/settings");
+    expect(callback.searchParams.has("loginAttempt")).toBe(false);
+    await expect(page).toHaveURL(/\/settings$/);
+    expect(writes).toBe(0);
+    expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
+  });
+}
 
 test("provider errors are recoverable and a synthetic redirect reaches consent", async ({
   page,
@@ -246,7 +245,7 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
   await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요.");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/consent\?loginAttempt=/);
+  await expect(page).toHaveURL(/\/consent$/);
 });
 
 test("consent loading failure retries; keyboard checks gate save, failure recovers and continues automatically", async ({
@@ -290,7 +289,9 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await page.keyboard.press("Space");
   await expect(save).toBeEnabled();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: /이용약관/ })).toBeFocused();
+  await expect(
+    page.getByRole("navigation", { name: "정책 원문" }).getByRole("link", { name: /이용약관/ }),
+  ).toBeFocused();
   await save.focus();
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");

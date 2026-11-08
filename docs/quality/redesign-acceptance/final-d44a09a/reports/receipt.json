@@ -1,0 +1,83 @@
+{
+  "productSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d44a09a/reports/results.json",
+  "rawSha256": "40fa84e691cbe9c40012b4244941ecbc381d0ffc94cacb313e04fc946bb804a1",
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:25:13.105Z",
+    "duration": 18513.238999999998,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "320px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "390px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "1440px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report route does not expose another owner's report",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report task preserves the draft review and requires explicit reviewed save",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "320px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "390px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "1440px: direct report/hash routes retain edits, query, conversation text and owner-checked read versions",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report route does not expose another owner's report",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "direct report task preserves the draft review and requires explicit reviewed save",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ],
+  "testSources": {
+    "tests/browser/report-task-route.e2e.ts": "07bcf737c510d4c503be167866a28e90a2c3047fc9f9b8e47b227e24c0da1e14",
+    "tests/browser/report-task-route.config.ts": "7744cf4d7b5ee645cafce680878655d65b902ba19d1d741678040c7136993740"
+  }
+}

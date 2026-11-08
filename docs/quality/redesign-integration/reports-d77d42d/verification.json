@@ -1,0 +1,94 @@
+{
+  "sha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "worktree": "/Users/hwang-eunchan/Desktop/baro/redesign-03-final-check",
+  "branch": "codex/765-reports-refreeze-check",
+  "runtime": {
+    "bun": "1.4.0",
+    "node": "24.22.1"
+  },
+  "sourceHashes": {
+    "bun.lock": "203abac9f3fea8eb7ad86e3898c8a4555135dd74da784914107d23ab3a57840f",
+    "src/components/workspace/Workspace.tsx": "20ddf074ec024b07365a6e8f5809cb44303fc88f53a36e60f7112db408830b41",
+    "tests/browser/report-rework-state.e2e.ts": "4d3052f495cd5abb21f8b897a8b39d2b28c7e7457fe107f751db95eb9a81ae18",
+    "tests/browser/report-rework-state.config.ts": "6cc823d877aa1b42218805e9523efdc9ec6b708bae6e645ce04985d9538ef1b4",
+    "tests/browser/report-task-route.e2e.ts": "07bcf737c510d4c503be167866a28e90a2c3047fc9f9b8e47b227e24c0da1e14",
+    "tests/browser/report-task-route.config.ts": "7744cf4d7b5ee645cafce680878655d65b902ba19d1d741678040c7136993740"
+  },
+  "installation": {
+    "command": "bun ci",
+    "exitCode": 0,
+    "log": "install.log"
+  },
+  "workNext": {
+    "command": "bun run work:next",
+    "exitCode": 0,
+    "log": "work-next.log"
+  },
+  "checks": [
+    {
+      "name": "report-state",
+      "command": "BARO_REPORT_TEST_PORT=4638 bunx playwright test --config tests/browser/report-rework-state.config.ts",
+      "log": "report-state.log",
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "7fdd96ce6b53de663c2626f11b5ec478649b8264d64a14d72d03db3c17b58557"
+    },
+    {
+      "name": "direct-url",
+      "command": "BARO_REPORT_TASK_ROUTE_PORT=4640 bunx playwright test --config tests/browser/report-task-route.config.ts",
+      "log": "direct-url.log",
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "14d2e59f71346d63b72624185ee002095ef29393395ee5e1ed41fc72b7ca1eb2"
+    }
+  ],
+  "priorResolutionEvidence": {
+    "executedSha": "396927f876fdf73f2527bd5faf3897f75fa90050",
+    "passed": 98,
+    "executedAtCurrentSha": false,
+    "sourceComparison": "resolution-source-comparison.json",
+    "comparedFiles": 169,
+    "changedFiles": 0
+  },
+  "executionPolicy": "Sequential servers, no build or source changes. Do not combine prior resolution results into current executed counts.",
+  "currentExecutedTotal": {
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  },
+  "finalSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "sourceChanged": false,
+  "sourceHashesUnchanged": true,
+  "servers": [
+    {
+      "port": 4638,
+      "listening": false
+    },
+    {
+      "port": 4640,
+      "listening": false
+    }
+  ],
+  "changedPathsSincePriorSha": [
+    "README.md",
+    "docs/PRD.md",
+    "docs/design/PRODUCT-UI.md",
+    "docs/product/MVP-SPEC.md",
+    "docs/product/UI-DEMONSTRATION.md",
+    "docs/product/UX-SPEC.md",
+    "src/components/workspace/Workspace.tsx",
+    "tests/browser/design-system.e2e.ts",
+    "tests/browser/legacy-profile-assets.e2e.ts",
+    "tests/browser/workspace-retained.e2e.ts",
+    "tests/browser/workspace.e2e.ts",
+    "tests/helpers/case-ui-capture.ts",
+    "tests/helpers/foundation.playwright.config.ts",
+    "tests/security-browser/csp.e2e.ts"
+  ]
+}
