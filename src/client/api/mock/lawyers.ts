@@ -38,7 +38,14 @@ export type LawyerMockStore = {
   owners: Record<string, string>;
   assets?: Record<
     string,
-    { ownerId: string; profileId: string; type: string; data: string; purpose: string }
+    {
+      ownerId: string;
+      profileId: string;
+      type: string;
+      data: string;
+      purpose: string;
+      revision?: number;
+    }
   >;
 };
 export type LawyerMockContext = {
@@ -54,6 +61,15 @@ export function createMockLawyers(context: LawyerMockContext) {
     return context.read() ?? { profiles: structuredClone(lawyersFixture), owners: {} };
   }
   const clone = <T>(value: T): T => structuredClone(value);
+  // Archive reads/deletion must not use getMine's create-if-missing behavior.
+  const existingOwner = async () => {
+    const session = await context.session();
+    if (session.user?.accountType !== "lawyer")
+      throw new LawyerApiError("UNAUTHENTICATED", "로그인 상태를 확인해 주세요.");
+    const store = state();
+    const profile = store.profiles.find((p) => p.id === store.owners[session.user.id]);
+    return { store, profile, ownerId: session.user.id };
+  };
   const own = async (mutation = true) => {
     const session = await context.session();
     if (session.user?.accountType !== "lawyer")
@@ -79,12 +95,13 @@ export function createMockLawyers(context: LawyerMockContext) {
   };
   return {
     async assets() {
-      const owner = await own(false);
-      return Object.entries(state().assets ?? {})
-        .filter(([, a]) => a.profileId === owner.profile.id)
+      const owner = await existingOwner();
+      if (!owner.profile) return [];
+      return Object.entries(owner.store.assets ?? {})
+        .filter(([, a]) => a.profileId === owner.profile?.id && a.ownerId === owner.ownerId)
         .map(([id, a]) => ({
           id,
-          revision: 1,
+          revision: a.revision ?? 1,
           status: "ready",
           purpose: a.purpose,
           kind: a.type === "application/pdf" ? "pdf" : "image",
@@ -124,27 +141,30 @@ export function createMockLawyers(context: LawyerMockContext) {
         kind: input.file.type === "application/pdf" ? "pdf" : "image",
       };
     },
-    async removeAsset(input: { assetId: string }) {
-      const owner = await own();
-      const store = state();
-      if (store.assets?.[input.assetId]?.profileId !== owner.profile.id)
-        throw new LawyerApiError("NOT_FOUND", "본인 자료만 삭제할 수 있어요.");
-      const profile = store.profiles.find((profile) => profile.id === owner.profile.id);
+    async removeAsset(input: { assetId: string; revision: number }) {
+      const { store, profile, ownerId } = await existingOwner();
+      const asset = store.assets?.[input.assetId];
       if (
-        profile?.photoAssetId === input.assetId ||
-        profile?.portfolio.some((entry) => entry.assetId === input.assetId)
+        !profile ||
+        !asset ||
+        asset.ownerId !== ownerId ||
+        asset.profileId !== profile.id ||
+        !Number.isSafeInteger(input.revision) ||
+        input.revision !== (asset.revision ?? 1)
       )
-        throw new LawyerApiError(
-          "CONFLICT",
-          "프로필에서 자료 연결을 해제하고 저장한 뒤 삭제해 주세요.",
-        );
-      delete store.assets[input.assetId];
+        throw new LawyerApiError("STALE_REVISION", "자료 상태가 변경됐어요. 다시 확인해 주세요.");
+      // The existing DELETE endpoint permits owned CAS deletion after renewal,
+      // including linked assets. It does not save or republish the profile.
+      if (store.assets) delete store.assets[input.assetId];
       context.write(store);
     },
     async assetBlob(input: { profileId: string; assetId: string; privateRead: boolean }) {
-      const store = state(),
+      const owner = input.privateRead ? await existingOwner() : null;
+      const store = owner?.store ?? state(),
         asset = store.assets?.[input.assetId];
-      const profile = store.profiles.find((p) => p.id === input.profileId);
+      const profile =
+        owner?.profile ??
+        (!input.privateRead ? store.profiles.find((p) => p.id === input.profileId) : undefined);
       if (
         !profile ||
         !asset ||
@@ -157,7 +177,7 @@ export function createMockLawyers(context: LawyerMockContext) {
       )
         throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
       if (input.privateRead) {
-        if ((await own(false)).profile.id !== profile.id)
+        if (!owner || asset.ownerId !== owner.ownerId)
           throw new LawyerApiError("NOT_FOUND", "본인 자료만 볼 수 있어요.");
       } else if (!profile.published)
         throw new LawyerApiError("NOT_FOUND", "공개 자료를 찾지 못했어요.");
@@ -327,7 +347,8 @@ export const lawyersMockHandlers = {
       },
     });
   },
-  "lawyers.removeAsset": (input: { assetId: string }) => mockLawyers.removeAsset(input),
+  "lawyers.removeAsset": (input: { assetId: string; revision: number }) =>
+    mockLawyers.removeAsset(input),
   "lawyers.assets": () => mockLawyers.assets(),
   "lawyers.uploadAsset": (input: {
     profileId: string;
