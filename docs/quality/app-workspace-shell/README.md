@@ -52,3 +52,29 @@ Mac realpath 차이 회귀는 `TMPDIR=/private/tmp`로 재현 환경을 맞췄�
 
 실제 iOS/Android 가상 키보드, OAuth·AI·법률 API·운영 storage·배포와 전체 기능 인수는 이 합성
 검증에 포함하지 않는다. 기존 자료/리포트 소비자 이전과 main 최종 full 인수는00/02/03이 이어간다.
+
+## 후속 수리: 검토 모달 순서와 확대 높이
+
+02의 실제 Workspace 검토창은 frame의 형제 dialog다. desktop inline 자료 panel을 열고
+별도 FileReview modal에서 교정 중1440→390 resize하면 frame이 panel을 새 modal로 올려
+검토창 위를 덮었다.390→1440에서도 아직 열린 검토창 아래 panel mode를 바꿨다.
+또 root CSS zoom2에서는 raw visualViewport.height를 그대로 사용해 composer가 화면 아래로 밀렸다.
+
+독립 fixture에 같은 sibling와 descendant modal topology를 추가했다. 양방향4개와 CSS zoom1개가
+기존 main에서 RED였다. 00 추가 리뷰의 조건부 close+unmount4개도 document capture 방식에서
+RED였다. 수리 뒤 기존16개+신규9개=25/25 PASS다.
+
+- 다른 active native modal이 있으면 panel을 닫거나 재열지 않고 mode 전환을 보류한다.
+  기다리는 각 dialog의 native close를 직접 일회성으로 받은 뒤 현재 matchMedia mode로 동기화한다.
+  조건부 unmount로 DOM에서 제거된 dialog도 큐의 close가 도달하며, effect cleanup에서 남은 listener를 해제한다.
+- 양방향 resize 동안 교정값·selection·focus·최상단 hit target을 보존한다. Escape는 검토창만
+  닫고 panel은 열린 채 올바른 mode가 된다. 검토 opener, 이후 panel toggle로 초점이 돌아온다.
+- 높이는 visualViewport CSS px를 root computed CSS zoom으로만 환산한다. visualViewport.scale은
+  다시 나누지 않는다. root style/class·resize만 관측하고 별도 앱 루트에 값이 달라질 때만 쓴다.
+  zoom2→1에서 실제 높이 쓰기는 각각1회이며 observer feedback이 없다. body/HTML style 수정0.
+- 초기 열린 panel에 유효한 opener가 없는 경우 body 대신 panel toggle로 돌아온다.
+
+[작은 화면에서도 검토창이 최상단](sibling-review-after-resize.png),
+[200% CSS 확대의 입력창](composer-css-zoom-200.png)은 합성 shell fixture의 실제 Chromium 캡처다.
+Workspace/FileReview의 DOM·업무 state·API에는 변경하지 않았다.02의 실제 소비 검증은 수리 PR의
+CI/main 통합 후 이어진다. 본 기록은 실제 모바일 기기의 가상 키보드 인수를 대신하지 않는다.
