@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "inspectedProductSha": "c89b30d789af5123a2735b6ca81c957c8365794b",
+  "environment": "Actual macOS Google Chrome 2 native UI; explicit local mock on loopback4387",
+  "browserZoom": "Native View/Zoom In plus native keyboard to UI badge 200%; no CSS zoom injection",
+  "metricsAt200": {
+    "devicePixelRatio": 4,
+    "innerWidth": 600,
+    "outerWidth": 1200,
+    "visualViewportScale": 1
+  },
+  "initialMetrics": {
+    "devicePixelRatio": 2,
+    "innerWidth": 1200,
+    "outerWidth": 1200
+  },
+  "entry": "criminal/respond_to_claim; no complaint or summons required; six unknown answers; confirmed summary",
+  "physicalIme": {
+    "inputSourceSwitch": "Control+Space from English to Korean",
+    "keys": [
+      "g",
+      "k",
+      "s",
+      "r",
+      "m",
+      "f"
+    ],
+    "compositionObserved": "한글",
+    "afterCompositionEnter": "한글\n",
+    "userMessagesAfterEnter": 0,
+    "afterFilesRoundTrip": "한글\n",
+    "userMessagesAfterRoundTrip": 0
+  },
+  "restoration": {
+    "englishKeyObserved": "한글g\n",
+    "testKeyRemoved": true,
+    "browserZoom100": true,
+    "finalInput": "한글\n"
+  },
+  "screenshotSha256": "627686275cad93bb5f08557064a4c9df75e3be4de27bce86b09e3a94003e4a34",
+  "synthetic": true,
+  "notFinalAcceptance": true
+}

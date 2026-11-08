@@ -92,3 +92,41 @@ IAB의 실제 UI에서 합성 Google 로그인·합성 동의 → 문서 없는 
 
 기능 제품 코드는 변경하지 않았고 지정된 신규 검수 파일만 소유한다. 최종 통합 SHA는 총괄에게
 받아 별도 결과로 추가한다. 이 기준선 검사는 최종 인수 선언이 아니다.
+
+## 초기 전체 통합의 추가 검수
+
+제품 `c89b30d789af5123a2735b6ca81c957c8365794b`를 독립 `redesign-05-integration`
+checkout의 실제 Astro/mock4387에서 검사했다. 최종 동결 전 초기 통합이며 main의 PR772를 포함한다.
+[첫 실행](initial-c89b30d/first-run/receipt.json)은32 PASS/2 FAIL이다.
+두 실패는 native beforeunload 한 번만 기대하던 검수 코드가 새 이탈 모달을 인식하지 못한 것이다.
+실제 DOM에서 제목의 단일 ID 연결을 확인하고 모달의 계속 작성으로 취소한
+[재검사](initial-c89b30d/guard-rerun/receipt.json)는2 PASS다. 이를 한 실행의34 PASS로 합치지 않는다.
+
+새 네 작업 사이에서 미전송 문장과 File을 유지하고 자동 업로드0을 확인한 뒤,
+명시 전송→첨부 원문 다운로드의 실제 바이트까지 일치시켰다. 파일명만 남은 가짜 복원은 통과하지 않는다.
+초안 조회가 self 선택/생성 receipt를 바꾸지 않는지, 출처 절의 제한 본문이 보이는지,
+계정 전환 시 이전 입력이 DOM에서 제거되는지도 두 엔진에서 확인했다.
+[네 경로와 서식 추가 검사](initial-c89b30d/entry-format/receipt.json)는10 PASS다.
+네 준비 방향을 각각 문서 없이 시작한 후 저장된 입장/분야를 확인했고,
+메시지의 HTML·javascript URL이 실행되거나 원격 이미지를 요청하지 않는지 검사했다.
+
+### 실제 브라우저 확대와 IME
+
+같은 초기 통합본의 macOS Chrome에서 보기 메뉴·네이티브 키로 실제200% 배율을 적용했다.
+Chrome 배율 표시200%, DPR4/innerWidth600/outerWidth1200을 관측했다. CSS zoom 주입이 아니다.
+200%에서 Tab으로 입력에 도달하고, 문서 없는 형사 대응 설명→질문→요약→작업대로 진행했다.
+한국어 입력 소스로 전환한 뒤 물리 키 `g k s r m f`의 조합 중 `한글`을 확인했다.
+대화에서 조합 완료 Enter 뒤 `한글\n`이 남고 사용자 메시지는0건이었다.
+자료 왕복 뒤에도 같은 입력과 미전송 상태가 보존됐다.
+[본문 화면](initial-c89b30d/physical/ime-200.png), [관측 receipt](initial-c89b30d/physical/receipt.json)를 보존한다.
+검사 후 영어 입력 소스와100% 배율(DPR2/innerWidth1200)을 복원했다.
+이 관측을 모바일 기기의 가상 키보드 검사나 최종 SHA의 성공으로 확대하지 않는다.
+
+### 검수 코드 검사
+
+frozen install·docs·Biome·tools TypeScript와 canonical 임시 경로의 전체 `validate:quick`은 통과했다.
+최초 quick은 macOS 기본 임시 경로에서 기존 Babel coverage 검사1건으로 실패했다.
+코드/기존 기대값을 바꾸지 않고 프로세스 `TMPDIR=/private/tmp`로 같은3개 검사를 통과했다.
+재실행 때 검수자가 처음 테스트 경로에 남긴 생성 JSON의 lint 실패3건도 보존했다.
+해당 생성 원본만 `/private/tmp/baro-ux05-raw`로 이동한 뒤 전체 quick EXIT0을 확인했다.
+후속 E2E 보강은 tools TypeScript/Biome로 다시 검증하며 최종 과업은 동결 SHA에서 실행한다.

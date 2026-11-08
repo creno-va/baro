@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import {
@@ -6,6 +7,7 @@ import {
   openRedesignConversation,
   prepareRedesignReport,
   redesignResolution,
+  redesignTask,
   seedRedesignCase,
   syntheticCaseId,
   unsentMessage,
@@ -13,6 +15,71 @@ import {
 
 test.beforeEach(async ({ page }) => {
   await seedRedesignCase(page);
+});
+
+for (const entry of [
+  { label: "민사 준비", purpose: "prepare_claim", kind: "civil" },
+  { label: "민사 대응", purpose: "respond_to_claim", kind: "civil" },
+  { label: "형사 고소 준비", purpose: "prepare_claim", kind: "criminal" },
+  { label: "형사 대응", purpose: "respond_to_claim", kind: "criminal" },
+]) {
+  test(`${entry.label} starts from an explanation without requiring a document`, async ({
+    page,
+  }) => {
+    await page.goto("/app");
+    await page
+      .getByRole("combobox", { name: "준비하는 방향", exact: true })
+      .selectOption({ label: entry.label });
+    await page
+      .getByRole("textbox", { name: "지금까지 있었던 일", exact: true })
+      .fill(
+        "실제 인물이 없는 합성 검수 사건입니다. 문서는 보유하지 않았고 제가 아는 경위와 모르는 범위를 구분해 준비하려고 합니다.",
+      );
+    await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+    await expect(page).toHaveURL(/\/cases\/[^/]+\/intake(?:\?question=0)?$/);
+    await expect(page.getByRole("button", { name: "모름", exact: true })).toBeEnabled();
+    const stored = await page.evaluate(() => {
+      const id = location.pathname.split("/")[2] ?? "";
+      return {
+        context: JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}")[id],
+        files: JSON.parse(localStorage.getItem("baro-api-mock-v1:files") ?? "{}")[id] ?? [],
+      };
+    });
+    expect(stored.context).toMatchObject({
+      casePurpose: entry.purpose,
+      procedure: { kind: entry.kind },
+    });
+    expect(stored.files).toHaveLength(0);
+  });
+}
+
+test("message formatting displays synthetic input without executing injected HTML or URLs", async ({
+  page,
+}) => {
+  await openRedesignConversation(page);
+  await closeMaterials(page);
+  let alerts = 0;
+  let remoteImages = 0;
+  page.on("dialog", async (dialog) => {
+    alerts++;
+    await dialog.dismiss();
+  });
+  await page.route("https://example.invalid/**", async (route) => {
+    remoteImages++;
+    await route.abort();
+  });
+  await page
+    .getByRole("textbox", { name: "추가 사실 또는 질문", exact: true })
+    .fill(
+      '<img src="https://example.invalid/synthetic.png" onerror="alert(1)">\n**합성 확인** [실행](javascript:alert(1))',
+    );
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const message = page.locator(".workspace-message--user").last();
+  await expect(message).toContainText("합성 확인");
+  await expect(message.locator("img,script,iframe,object,embed")).toHaveCount(0);
+  await expect(message.locator('a[href^="javascript:"]')).toHaveCount(0);
+  expect(alerts).toBe(0);
+  expect(remoteImages).toBe(0);
 });
 
 test("reading the report route does not generate or save a report", async ({ page }) => {
@@ -102,9 +169,7 @@ test("all four case tasks remain discoverable with materials closed", async ({ p
   await openRedesignConversation(page);
   await closeMaterials(page);
   for (const name of ["대화", "자료", "리포트", "문서 초안"]) {
-    const task = page
-      .getByRole("link", { name, exact: true })
-      .or(page.getByRole("button", { name, exact: true }));
+    const task = redesignTask(page, name);
     await expect(task, `${name} must be a directly available case task`).toBeVisible();
   }
 });
@@ -116,10 +181,11 @@ test("switching case tasks keeps unsent text and unuploaded bytes", async ({ pag
   await input.fill(unsentMessage);
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "사진·파일 첨부", exact: true }).click();
+  const originalBytes = Buffer.from("복구했다고 표시하려면 이 바이트를 실제로 유지해야 합니다.");
   await (await chooser).setFiles({
     name: "전환-전-선택한-합성파일.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("복구했다고 표시하려면 이 바이트를 실제로 유지해야 합니다."),
+    buffer: originalBytes,
   });
   const warnings: string[] = [];
   page.on("dialog", async (dialog) => {
@@ -127,10 +193,7 @@ test("switching case tasks keeps unsent text and unuploaded bytes", async ({ pag
     await dialog.dismiss();
   });
   for (const name of ["자료", "리포트", "문서 초안", "대화"]) {
-    await page
-      .getByRole("link", { name, exact: true })
-      .or(page.getByRole("button", { name, exact: true }))
-      .click();
+    await redesignTask(page, name).click();
   }
   expect(warnings).toEqual([]);
   await expect(input).toHaveValue(unsentMessage);
@@ -141,6 +204,58 @@ test("switching case tasks keeps unsent text and unuploaded bytes", async ({ pag
     syntheticCaseId,
   );
   expect(files).toHaveLength(0);
+  await page
+    .locator(".workspace-composer")
+    .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
+    .check();
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  const attachment = page
+    .locator(".workspace-message-attachments")
+    .getByRole("link", { name: "전환-전-선택한-합성파일.txt", exact: true })
+    .last();
+  await expect(attachment).toBeVisible();
+  await attachment.click();
+  const original = page.waitForEvent("download");
+  await page
+    .getByRole("dialog", { name: "자료 확인", exact: true })
+    .getByRole("button", { name: "원본 확인 · 다운로드", exact: true })
+    .click();
+  const downloaded = await original;
+  const path = await downloaded.path();
+  if (!path) throw new Error("Original download has no local bytes");
+  expect(await readFile(path)).toEqual(originalBytes);
+  await downloaded.delete();
+});
+
+test("opening drafts is a read and leaves self selection and generation unchanged", async ({
+  page,
+}) => {
+  await prepareRedesignReport(page);
+  const readState = () =>
+    page.evaluate(
+      (id) => ({
+        resolution:
+          JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkResolutions") ?? "{}")[id] ??
+          null,
+        receipts: localStorage.getItem("baro-api-mock-v1:reworkReceipts"),
+      }),
+      syntheticCaseId,
+    );
+  const before = await readState();
+  await redesignTask(page, "문서 초안").click();
+  await expect(page.getByRole("heading", { name: "문서 초안", exact: true })).toBeVisible();
+  expect(await readState()).toEqual(before);
+});
+
+test("report source section keeps its full limitation body visible", async ({ page }) => {
+  await prepareRedesignReport(page);
+  await expect(page.getByRole("heading", { name: "출처와 분석 기준", exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "합성 API 예시입니다. 실제 법 조항·판례와 공식 절차를 확인하지 않았습니다. 사용자 진술·자료 기재와 법률 판단을 구분해 주세요.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 for (const width of [320, 390, 768, 1024, 1440, 1920]) {
@@ -203,7 +318,7 @@ test("unuploaded attachment and unsent message survive material-panel round trip
   expect(files).toHaveLength(0);
 });
 
-test("cancelled page navigation preserves the unsent message", async ({ page }) => {
+test("cancelled page navigation preserves the unsent message", async ({ page }, info) => {
   await openRedesignConversation(page);
   await closeMaterials(page);
   const input = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
@@ -214,8 +329,33 @@ test("cancelled page navigation preserves the unsent message", async ({ page }) 
     await dialog.dismiss();
   });
   await page.getByRole("link", { name: "설정", exact: true }).click({ noWaitAfter: true });
+  const guard = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "작성 중인 내용을 두고 이동할까요?", exact: true }),
+  });
+  await expect.poll(async () => warnings > 0 || (await guard.isVisible())).toBe(true);
+  if (await guard.isVisible()) {
+    const label = await guard.evaluate((dialog) => {
+      const labelledby = dialog.getAttribute("aria-labelledby");
+      return {
+        labelledby,
+        labels: labelledby?.split(/\s+/).map((id) => ({
+          id,
+          matches: [...document.querySelectorAll(`#${CSS.escape(id)}`)].map((node) => ({
+            text: node.textContent,
+            hidden: (node as HTMLElement).hidden,
+          })),
+        })),
+      };
+    });
+    await info.attach("leave-dialog-label", {
+      body: JSON.stringify(label),
+      contentType: "application/json",
+    });
+    await expect(guard).toHaveAccessibleName("작성 중인 내용을 두고 이동할까요?");
+    await guard.getByRole("button", { name: "이 화면에서 계속 작성", exact: true }).click();
+    await expect(guard).not.toBeVisible();
+  } else expect(warnings).toBe(1);
   await expect(input).toHaveValue(unsentMessage);
-  expect(warnings).toBe(1);
   await expect(page).toHaveURL(new RegExp(`/cases/${syntheticCaseId}$`));
 });
 
@@ -236,4 +376,40 @@ test("existing lawyer account can use its own ordinary case", async ({ browser }
   await page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }).fill(unsentMessage);
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
   await context.close();
+});
+
+test("owner change removes the previous owner's unsent text from the document", async ({
+  page,
+}) => {
+  await openRedesignConversation(page);
+  await closeMaterials(page);
+  await page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }).fill(unsentMessage);
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "baro-api-mock-v1:session",
+      JSON.stringify({
+        user: {
+          id: "redesign-different-synthetic-owner",
+          name: "다른 합성 계정",
+          accountType: "customer",
+        },
+        needsConsent: false,
+      }),
+    );
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator("textarea")
+        .evaluateAll(
+          (inputs, secret) =>
+            inputs.some((input) => (input as HTMLTextAreaElement).value.includes(secret)),
+          unsentMessage,
+        ),
+    )
+    .toBe(false);
+  await expect(
+    page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
+  ).not.toBeVisible();
 });

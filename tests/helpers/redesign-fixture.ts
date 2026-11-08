@@ -60,6 +60,7 @@ export async function openMaterials(page: Page) {
   const open = page.getByRole("button", { name: "자료 열기", exact: true });
   if (await open.isVisible()) await open.click();
   const panel = page.locator("#case-materials-panel");
+  if (!(await panel.isVisible())) await redesignTask(page, "자료").click();
   await expect(panel).toBeVisible();
   return panel;
 }
@@ -67,6 +68,8 @@ export async function openMaterials(page: Page) {
 export async function closeMaterials(page: Page) {
   const close = page.getByRole("button", { name: "자료 패널 닫기", exact: true });
   if (await close.isVisible()) await close.click();
+  else if (await page.locator("#case-materials-panel").isVisible())
+    await redesignTask(page, "대화").click();
 }
 
 export async function prepareRedesignReport(page: Page) {
@@ -80,4 +83,11 @@ export function redesignResolution(page: Page) {
   return page.getByRole("region", {
     name: /^(리포트 이후 해결 방법|이해한 내용을 다음 준비로 이어가요)$/,
   });
+}
+
+export function redesignTask(page: Page, name: string) {
+  const accessibleName = name === "자료" ? /^자료(?: \d+개)?$/ : name;
+  return page
+    .getByRole("link", { name: accessibleName, exact: true })
+    .or(page.getByRole("button", { name: accessibleName, exact: true }));
 }
