@@ -1,9 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 const external = process.env.BARO_REDESIGN_URL;
+const repositoryRoot = fileURLToPath(new URL("../..", import.meta.url));
 export default defineConfig({
   testDir: ".",
   testMatch: "redesign-acceptance.e2e.ts",
@@ -14,7 +18,10 @@ export default defineConfig({
   metadata: {
     inspectedProductSha:
       process.env.BARO_REDESIGN_SHA ??
-      execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+      execFileSync("git", ["rev-parse", "HEAD"], {
+        cwd: repositoryRoot,
+        encoding: "utf8",
+      }).trim(),
     synthetic: true,
     provider: "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
     testSourceSha256: createHash("sha256")
@@ -44,11 +51,12 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
+          cwd: repositoryRoot,
           env: {
             PUBLIC_API_MODE: "mock",
             BARO_UI_TEST_FIXTURE: "true",
             ASTRO_TELEMETRY_DISABLED: "1",
-            WRANGLER_LOG_PATH: "/private/tmp/baro-redesign-acceptance-wrangler.log",
+            WRANGLER_LOG_PATH: join(tmpdir(), "baro-redesign-acceptance-wrangler.log"),
           },
           command:
             "node node_modules/astro/bin/astro.mjs dev --ignore-lock --host 127.0.0.1 --port 4385",

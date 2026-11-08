@@ -48,10 +48,33 @@ for (const width of [320, 390, 768, 1024, 1440]) {
   test(`actual Astro shell and direct case routes fit ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const route of ["/app", `/cases/${caseId}`, "/settings", "/lawyers"]) {
-      await page.goto(route);
+      const response = await page.goto(route);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready);
-      await expect(page.locator(".app-frame[data-app-workspace]")).toBeVisible();
+      if (route === "/lawyers") {
+        expect(response?.status()).toBe(410);
+        await expect(page.locator(".public-layout")).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "기능 이용 안내", exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByText("현재 변호사 연결 기능은 제공하지 않습니다.", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByText("기존 계정의 본인 사건·자료·리포트는 계속 이용할 수 있어요.", {
+            exact: false,
+          }),
+        ).toBeVisible();
+        await expect(page.getByRole("link", { name: "내 사건으로", exact: true })).toHaveAttribute(
+          "href",
+          "/app",
+        );
+        await expect(
+          page.getByRole("main").getByRole("link", { name: "도움말", exact: true }),
+        ).toHaveAttribute("href", "/help");
+      } else {
+        await expect(page.locator(".app-frame[data-app-workspace]")).toBeVisible();
+      }
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
         route,

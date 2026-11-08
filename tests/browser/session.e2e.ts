@@ -1,15 +1,12 @@
 import { spawn } from "node:child_process";
-import { expect, test } from "@playwright/test";
-import { syntheticConsentStatus } from "../fixtures/consent-status";
+import { expect, type Page, test } from "@playwright/test";
 
-test("signed SQL session completes the real consent API through the browser, then logout removes access", async ({
-  page,
-  context,
-  baseURL,
-}) => {
-  const child = spawn("bun", ["tests/helpers/browser-session-server.ts", baseURL ?? ""], {
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+async function startSignedSessionServer(baseURL: string, mode?: "cases") {
+  const child = spawn(
+    "bun",
+    ["tests/helpers/browser-session-server.ts", baseURL, ...(mode ? [mode] : [])],
+    { stdio: ["pipe", "pipe", "pipe"] },
+  );
   try {
     const seed = await new Promise<{
       origin: string;
@@ -46,6 +43,21 @@ test("signed SQL session completes the real consent API through the browser, the
         }
       });
     });
+    return { child, seed };
+  } catch (error) {
+    child.stdin.end();
+    child.kill();
+    throw error;
+  }
+}
+
+test("signed SQL session completes the real consent API through the browser, then logout removes access", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const { child, seed } = await startSignedSessionServer(baseURL ?? "");
+  try {
     await context.addCookies([seed.cookie]);
     await page.route("**/api/**", async (route) => {
       const request = route.request();
@@ -89,48 +101,121 @@ test("signed SQL session completes the real consent API through the browser, the
   }
 });
 
-test("persisted role changes invalidate peer navigation without sharing session data", async ({
+test("persisted SQL role changes reauthorize peers while preserving common case access", async ({
   page,
   context,
+  browser,
+  baseURL,
 }) => {
-  let accountType = "customer";
-  await context.route("**/api/me/session", (route) =>
-    route.fulfill({
-      json: {
-        user: { id: "synthetic-owner", name: "합성 이용자", accountType },
-        needsConsent: false,
-      },
-    }),
-  );
-  await context.route("**/api/cases", (route) => route.fulfill({ json: { cases: [] } }));
-  await context.route("**/api/me/account-type", async (route) => {
-    accountType = route.request().postDataJSON().accountType;
-    await route.fulfill({ json: { accountType } });
-  });
-  await context.route("**/api/me/consent", (route) =>
-    route.fulfill({ json: syntheticConsentStatus(false) }),
-  );
-  await context.route("**/api/auth/sign-in/social", (route) =>
-    route.fulfill({
-      json: {
-        redirect: true,
-        url: new URL(route.request().postDataJSON().callbackURL, route.request().url()).href,
-      },
-    }),
-  );
-  await page.goto("/login");
-  const peer = await context.newPage();
-  await peer.goto("/app");
-  const peerNav = peer.getByRole("navigation", { name: "주 메뉴" });
-  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await page.getByRole("radio", { name: "변호사", exact: true }).check();
-  await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(peer).toHaveURL(/\/app$/);
-  await expect(peerNav.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
-  await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toMatch(
-    /^[0-9a-f-]{36}$/,
-  );
-  await peer.close();
+  const { child, seed } = await startSignedSessionServer(baseURL ?? "", "cases");
+  let peer: Page | undefined;
+  try {
+    const peerSessions: Array<{ id: string; accountType: string }> = [];
+    const retiredRequests: string[] = [];
+    let browserRoleWrites = 0;
+    await context.route("**/api/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (!url.pathname.startsWith("/api/")) return route.continue();
+      if (/^\/api\/(?:v2\/)?lawyers?(?:\/|$)/.test(url.pathname))
+        retiredRequests.push(url.pathname);
+      if (url.pathname === "/api/me/account-type" && request.method() === "PUT")
+        browserRoleWrites++;
+      const response = await route.fetch({
+        url: `${seed.origin}${url.pathname}${url.search}`,
+        headers: await request.allHeaders(),
+      });
+      if (url.pathname === "/api/me/session" && request.frame().page() === peer) {
+        const value = await response.json();
+        if (value.user)
+          peerSessions.push({ id: value.user.id, accountType: value.user.accountType });
+      }
+      await route.fulfill({ response });
+    });
+    await page.goto("/login");
+    await expect(
+      page.getByRole("button", { name: "Google로 계속하기", exact: true }),
+    ).toBeEnabled();
+    await expect(page.getByRole("radio", { name: "변호사", exact: true })).toHaveCount(0);
+    await context.addCookies([seed.cookie]);
+    await page.goto("/app");
+    await expect(page).toHaveURL(/\/app$/);
+    peer = await context.newPage();
+    await peer.goto("/app");
+    const peerNav = peer.getByRole("navigation", { name: "주 메뉴", exact: true });
+    await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
+    await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+    await expect.poll(() => peerSessions.at(-1)?.accountType).toBe("customer");
+    const original = peerSessions.at(-1);
+    if (!original) throw new Error("Missing signed peer session");
+    // The real notification carries only an opaque UUID. It triggers a fresh
+    // server read and cannot grant a role before SQL has changed.
+    const notifyPeer = () =>
+      page.evaluate(async () => {
+        const modulePath = "/src/client/session-events.ts";
+        const { notifySessionChanged } = await import(modulePath);
+        notifySessionChanged();
+      });
+    const initialReads = peerSessions.length;
+    await notifyPeer();
+    await expect.poll(() => peerSessions.length).toBeGreaterThan(initialReads);
+    expect(peerSessions.at(-1)).toEqual(original);
+
+    const isolated = await browser.newContext();
+    try {
+      const denied = await isolated.request.put(`${seed.origin}/api/me/account-type`, {
+        headers: { origin: baseURL ?? "" },
+        data: { accountType: "lawyer" },
+      });
+      expect(denied.status()).toBe(401);
+    } finally {
+      await isolated.close();
+    }
+    // An existing installed client may still use this authenticated API. The
+    // web UI neither exposes role switching nor rewrites the stored account.
+    const changed = await context.request.put(`${seed.origin}/api/me/account-type`, {
+      headers: { origin: baseURL ?? "" },
+      data: { accountType: "lawyer" },
+    });
+    expect(changed.status()).toBe(200);
+    expect(await changed.json()).toEqual({ accountType: "lawyer" });
+    const readsBeforeChange = peerSessions.length;
+    await notifyPeer();
+    await expect.poll(() => peerSessions.length).toBeGreaterThan(readsBeforeChange);
+    await expect
+      .poll(() => peerSessions.at(-1))
+      .toEqual({ id: original.id, accountType: "lawyer" });
+    expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toMatch(
+      /^[0-9a-f-]{36}$/,
+    );
+    await peer.reload();
+    await expect(peer).toHaveURL(/\/app$/);
+    await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
+    await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
+      "href",
+      "/cases",
+    );
+    await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
+    expect(
+      await peer.evaluate(async () => {
+        const response = await fetch("/api/cases");
+        return response.status;
+      }),
+    ).toBe(200);
+    await expect(
+      peer.locator(
+        'a[href="/lawyer"], a[href^="/lawyer/"], a[href="/lawyers"], a[href^="/lawyers/"]',
+      ),
+    ).toHaveCount(0);
+    await expect(
+      peer.getByRole("link", { name: /변호사 프로필|변호사 찾기|변호사 등록/ }),
+    ).toHaveCount(0);
+    expect(peerSessions.at(-1)).toEqual({ id: original.id, accountType: "lawyer" });
+    expect(browserRoleWrites).toBe(0);
+    expect(retiredRequests).toEqual([]);
+  } finally {
+    await peer?.close();
+    child.stdin.end();
+    child.kill();
+  }
 });

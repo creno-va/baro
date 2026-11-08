@@ -5,10 +5,19 @@
 }
 
 /* Keyboard location stays visible inside the control, without a blue outer box.
-   Headings, scroll regions, tab panels and entire dialogs receive no decoration. */
+   Static headings, tab panels and entire dialogs receive no decoration. */
 :root[data-focus-input="keyboard"]
   :is(.app-frame, .public-layout, .login-page, .consent-page)
-  :is(button, a[href], input, textarea, select, [role="button"], [role="tab"]):focus-visible {
+  :is(
+    button,
+    a[href],
+    input,
+    textarea,
+    select,
+    [role="button"],
+    [role="tab"],
+    .case-workspace__header
+  ):focus-visible {
   box-shadow: inset 0 0 0 2px #526178;
 }
 

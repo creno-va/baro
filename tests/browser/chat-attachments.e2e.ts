@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
+import { confirmWorkspaceUpload, openWorkspaceMaterials } from "../helpers/workspace-navigation";
 
 const id = "synthetic-chat-attachment";
 const base = `/cases/${id}`;
@@ -188,7 +189,7 @@ test("case header keeps a compact title and accessible tools while deletion stay
   ).toBe(false);
 });
 
-test("legacy materials keep one compact upload area, coverage, context and retries below the new case header", async ({
+test("materials keep one compact upload area, coverage, summary access and retries below the case header", async ({
   page,
 }) => {
   await seed(page, { "files.uploadPart": ["UNAVAILABLE"] });
@@ -197,10 +198,11 @@ test("legacy materials keep one compact upload area, coverage, context and retri
   await expect(target).toBeEnabled();
   await expect(page.locator(".workspace-upload-types")).toHaveCount(0);
   await expect(target).toContainText("문서·이미지 100 MB");
-  const context = page.locator(".workspace-context");
-  const disclosure = context.locator(":scope > summary");
-  const summaryLink = context.getByRole("link", { name: "요약 검토하기" });
-  await expect(context).not.toHaveAttribute("open");
+  const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
+  const disclosure = page.locator(".case-tools > summary");
+  const summaryLink = tools.getByRole("link", { name: "요약 보기 · 재확인", exact: true });
+  await expect(page.locator(".workspace-context")).toHaveCount(0);
+  await expect(tools).not.toBeVisible();
   await expect(summaryLink).not.toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "전체 첨부 파일", exact: true })).toHaveCount(0);
@@ -234,17 +236,24 @@ test("legacy materials keep one compact upload area, coverage, context and retri
       await page.screenshot({ path: `.wrangler/materials-empty-${width}.png`, fullPage: true });
     await disclosure.focus();
     await disclosure.press("Enter");
-    await expect(context).toHaveAttribute("open");
+    await expect(tools).toBeVisible();
     await expect(summaryLink).toBeVisible();
-    await expect(summaryLink).toHaveAttribute("href", `${base}/summary?from=files`);
+    await expect(summaryLink).toHaveAttribute("href", `${base}/summary`);
     if (width === 390 || width === 1440)
       await page.screenshot({ path: `.wrangler/materials-context-${width}.png`, fullPage: true });
-    await disclosure.press("Enter");
-    await expect(context).not.toHaveAttribute("open");
+    await page.keyboard.press("Escape");
+    await expect(tools).not.toBeVisible();
+    await expect(disclosure).toBeFocused();
   }
   const chooser = page.waitForEvent("filechooser");
   await target.click();
   await (await chooser).setFiles(file);
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "업로드 다시 시도", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "선택한 자료 업로드", exact: true }),
+  ).toBeDisabled();
+  await confirmWorkspaceUpload(page);
   const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
   await expect(retry).toBeEnabled();
   await retry.click();
@@ -268,6 +277,11 @@ test("legacy materials keep one compact upload area, coverage, context and retri
       new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }),
     );
   });
+  await expect(page.getByRole("list", { name: "업로드할 자료", exact: true })).toContainText(
+    "두 번째.txt",
+  );
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(1);
+  await confirmWorkspaceUpload(page);
   await expect(page.getByRole("heading", { name: "두 번째.txt", exact: true })).toBeVisible();
   await page.reload();
   await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
@@ -442,6 +456,7 @@ test("materials retain every attachment and mark actual evidence without filter 
   await page.evaluate((id) => {
     const files = ["used", "unused"].map((name) => ({
       id: `synthetic-${name}`,
+      revision: 1,
       name: `${name}.txt`,
       mimeType: "text/plain",
       sizeBytes: 10,
@@ -504,17 +519,40 @@ test("materials retain every attachment and mark actual evidence without filter 
     (await messages(page)).find((message: { role: string }) => message.role === "assistant")
       .references,
   ).toHaveLength(5);
-  await page.locator(".case-tools > summary").click();
-  await page
-    .getByRole("navigation", { name: "사건 도구", exact: true })
-    .getByRole("link", { name: "자료 2", exact: true })
-    .click();
+  const materialsLink = page
+    .getByRole("navigation", { name: "사건 작업", exact: true })
+    .getByRole("link", { name: "자료 2개", exact: true });
+  await expect(materialsLink).toHaveAttribute("href", `${base}/files`);
+  await openWorkspaceMaterials(page);
   await expect(page).toHaveURL(/\/files$/);
   await expect(page.locator(".workspace-file-list")).toContainText("used.txt");
   await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
-  await expect(page.getByText("근거로 활용됨", { exact: true })).toBeVisible();
+  const used = page.locator(".workspace-file-list > li").filter({
+    has: page.getByRole("heading", { name: "used.txt", exact: true }),
+  });
+  const unused = page.locator(".workspace-file-list > li").filter({
+    has: page.getByRole("heading", { name: "unused.txt", exact: true }),
+  });
+  await expect(used).toContainText("현재 자료가 대화 근거로 연결됨");
+  await expect(unused).not.toContainText("현재 자료가 대화 근거로 연결됨");
   await page.goto(`${base}/files?evidence=1`);
   await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await page.evaluate((id) => {
+    const key = "baro-api-mock-v1:files";
+    const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
+    stored[id][0].revision = 2;
+    localStorage.setItem(key, JSON.stringify(stored));
+  }, id);
+  await page.reload();
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await expect(used).not.toContainText("현재 자료가 대화 근거로 연결됨");
+  await expect(unused).not.toContainText("현재 자료가 대화 근거로 연결됨");
+  expect(
+    (await messages(page))
+      .find((message: { role: string }) => message.role === "assistant")
+      .references.find((reference: { kind: string }) => reference.kind === "user_material"),
+  ).toMatchObject({ fileId: "synthetic-used", fileRevision: 1 });
 });
 
 test("dragged and pasted files stay local until consent and sending", async ({ page }) => {

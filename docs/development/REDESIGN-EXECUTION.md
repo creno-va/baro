@@ -175,8 +175,8 @@ core 이력 스캔에서 실패했다. 공개 Git blob ID 세 건은 [정확한 
 | 02 | `tests/browser/{workspace-shared,workspace,customer-real}.e2e.ts` |
 | 03 | `tests/browser/rework-conversation.e2e.ts` |
 | 04 | `tests/browser/{public-preview,app-experience,mobile-scrollbar,session}.e2e.ts` |
-| 총괄 | provenance·실행 문서, PR 검토·통합·원격 보존/정리 |
-| 05 | 기존 실패 수집, 마지막 main 정확 SHA의 full·동일 SHA preview·제한 smoke와 #751 판정 |
+| 총괄 | provenance·실행 문서, PR 검토·통합·원격 보존/정리, 최종 main full·같은 SHA preview·제한 smoke와 #751 판정 |
+| 05 | 독립 UX·회귀 검수, 기존 실패·실행 증거 수집과 통과·실패·미확인 구분 |
 
 과거 여섯 도구·역할 선택/프로필·숨김 삭제 액션·하단 sheet·목록 redirect 기대를 현재
 네 상시 작업과 네 추가 도구·공통 계정 이용·44px 조작·공통 Dialog·독립 목록 계약으로 맞춘다.
@@ -188,6 +188,38 @@ host의 overlay scrollbar는 실제 gutter 검증과, 로컬 Docker 부재는 na
 구분해 기록한다. 필요한 환경을 갖춘 최종 Linux full에서 모든 해당 과업을 실행한다.
 수리 PR의 CI 성공 후 전부 통합한 마지막 main을 확정하며 중간 main에서 배포하지 않는다.
 실패·부분 성공과 합의한 외부 미확인은 보존하고 production은 이번 승인에 포함하지 않는다.
+
+이후 03의 실제 과업에서 자료 확인 창을 Enter로 열고 Escape로 닫으면 `/files`의
+원래 버튼으로 초점이 돌아오지 않는 문제를 Chromium·WebKit에서 확인했다.
+02에 `src/components/workspace/Workspace.tsx`의 별도 native 자료 모달을 명시 배정한다.
+권한 확인·private content의 inert·owner 상실 시 폐기·원본·작성 상태는 유지하며,
+같은 owner의 연결되고 활성인 opener에만 스크롤을 바꾸지 않고 복귀하도록 수리한다.
+공통 Dialog는 01 소유이며 이 경로의 제품 수정 범위에 포함하지 않는다.
+03은 해당 초점 단정을 유지하고 수리 후 실제 두 브라우저 과업으로 인수한다.
+최신 main 기반 통합 PR에서 나머지 검증 수리와 함께 필수 CI를 다시 실행한다.
+
+원래 full의 browser는 60분 경계에서 중단됐으며 총 68개의 실패 제목과 미실행 범위를
+보존했다. 앞선 수리에 포함된 30개와 추가 확인 대상 38개를 구분한다. 모두 새 제품 결함으로
+단정하지 않고 현재 통합 기준에서 실행 환경·fixture 계약·기대·실제 동작을 먼저 대조한다.
+추가 소유권은 구현 전에 아래처럼 명시 배정했다. 각 파일의 관련 test config도 같은 담당이며,
+공통 helper나 제품 소유 파일을 바꿔야 하면 총괄이 먼저 조율한다.
+
+| 담당 | 추가 검증 파일 |
+| --- | --- |
+| 01 | `app-workspace-app.e2e.ts`, `app-workspace.e2e.ts`, `precedents.e2e.ts` |
+| 02 | `workspace-files-snapshot.e2e.ts`, `customer-recovery-workspace.e2e.ts`, `chat-attachments.e2e.ts`, `evidence-capture.e2e.ts`, `intake103.e2e.ts`, `rework-shared-mock.e2e.ts` |
+| 03 | `report-draft-revision.e2e.ts`, `reports-integrated.e2e.ts` |
+| 04 | `cases.e2e.ts`, `human-review.e2e.ts` |
+| 05 | `redesign-acceptance.config.ts`의 repo-root cwd·플랫폼별 tmp 경로, 기대/fixture 본문 불변 |
+
+위 파일은 `tests/browser/` 아래다. 기준은 통합 후보 `4c891b4`이며 각 담당은 별도
+checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는 01~05 순서로 4861~4865를
+우선 사용하고, 기존 override가 없으면 ignored 임시 config의 host/port/baseURL만 조정한다.
+원본 fixture·환경 flag·expect는 유지하며 최종 Linux full은 저장소의 표준 config로 다시 실행한다.
+같은 worktree의 Astro dev와 quick/build는 캐시 충돌을 막기 위해 순차 실행한다.
+총괄은 기존 journeys 아카이브의 경로 구조를 유지하며 독립 검수 JSON·합성 screenshot만
+별도 artifact로 보존해 실제 checkout SHA와 테스트 본문 hash를 대조한다.
+같은 고정 action·권한·14일 보존·판정을 유지하고 hidden 허용은 명시한 QA 경로에만 적용한다.
 
 지정 세션: 01 `01a1baa9-2cbb-7cb0-a815-35ba474d3797`, 02 `01a1baa9-800a-7542-b8bc-400f84c15709`,
 03 `01a1baa9-cb75-7fc1-8384-c68949dbbdd7`, 04 `01a1baaa-0588-7c01-8563-e59d95e93d52`,

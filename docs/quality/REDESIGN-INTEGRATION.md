@@ -150,3 +150,41 @@ Button의 background 보간만 제거하고 border 전환·색 토큰·disabled 
 최종 제품 검증은 이 두 공통 스타일 수정 뒤 고정한 **main의 실제 SHA**에서 수동 full(core/browser/native/join),
 같은 SHA preview와 제한 smoke를 통과해야 한다. 결과 정본은 [#751](https://github.com/creno-va/baro/issues/751)의
 후속 receipt이며 D44의 과거 통과 수를 새 main에서 실행했다고 재사용하지 않는다.
+
+## 최종 전체 회귀 수리 — PR787
+
+main `74396a4d3754cb0a05dbd47d3335ee9612ec416e`의 수동 full
+[42492794662](https://github.com/creno-va/baro/actions/runs/42492794662)는 실패했다.
+core의 공개 Git blob ID 오탐은 PR782에서 정확한 세 fingerprint만 검증해 수리했다.
+native는 성공했지만 browser는 60분 경계에서 취소됐고 join은 실행되지 않았다.
+68개 실패 제목과 미실행 범위를 보존했으며 이를 최종 인수로 세지 않는다.
+
+[PR787](https://github.com/creno-va/baro/pull/787)은 현재 main을 기반으로 각 지정 소유자의
+수리와 전체 회귀 기대를 통합한다. 실제 제품 결함은 비동기 자료 확인 뒤 opener 초점 복귀,
+200% 확대의 긴 제목/입력 공간과 열린 도구 메뉴 위치, 판례 토픽 label cascade,
+embedded 리포트의 heading 순서다. owner 검증·busy 상태·현재 revision·출처·CAS·저장 계약은
+유지한다. 테스트는 명시 업로드, 네 작업, 실제 SQL/HTTP, 실패/재시도·삭제·원본 bytes와
+키보드/기하/axe 검증을 유지하며 현재 UI와 실제 사용하는 reader에 맞춘다.
+
+| 소유자 검증 | 실제 검사 head / 결과 | 구분 |
+| --- | --- | --- |
+| 01 공통 레이아웃 | `ae0d01269896b05ca3a4690b94fce786ad16b4df`, 실제 Astro 5·shell 26·판례 15·공통 프리뷰 19 PASS | 65개·skip0. 후속 `e4bbb1e`는 테스트 지역 변수 이름/포맷만 정리하며 제품 source 불변 |
+| 02 자료·대화 여섯 suite | `7d9fd818bca3ccb99f4a5d8e76edf2754e68086e`, 90 PASS·quick EXIT0 | 제품 변경 없는 회귀 수리. 기존 `1400cf2`의 실제 초점 수리도 통합 |
+| 03 리포트·초안 | `2276ed12cda35de5909b7e6ffe3fdbe02447f821`, 표준 dispatcher 9 + 직접 URL 2 PASS·quick/build EXIT0 | draft revision 본문 불변, 기존 HTTP fixture config 연결. 실제 heading 수리는 canonical h2 한 줄 |
+| 04 목록·자료 교정 | `e13057969865fa67ded927a28370b16434478de3`, 11 PASS·quick EXIT0 | 실제 SQL 생성/재조회, 원본 음성 재생·편집·signout 제거 유지 |
+| 05 독립 runner | `53bd2baacedb5de360f2a803137a4545ccf1617f`, repo 밖 cwd에서 Chromium/WebKit 46 PASS·quick EXIT0 | repo-root cwd/tmp 경로만 수정. 본문 SHA256 `3b2294b14c897bf262466c90b115c7f0be285219218a3117cb30613403fec0fa` 불변 |
+
+위 결과는 각각의 source head 검증이다. 최종 합쳐진 main에서 다시 수동 full의 모든 section과
+join을 통과해야 한다. 독립 46개의 JSON/합성 화면은 별도 artifact로 보존해 실제 checkout SHA,
+본문 hash·양쪽 브라우저 결과를 확인한다. 기존 journeys artifact의 경로 구조는 유지한다.
+
+총괄의 `4c891b4` 로컬 quick은 localhost listen이 막힌 첫 실행을 보존하고 허용된 환경에서
+EXIT0으로 확인했다. 별도 build 두 요청은 자동 검토 시간 만료로 process 생성 전에 끝났으며
+실행/통과로 세지 않는다. 소유자의 실제 build 결과와 최종 정확 main의 full build를 구분한다.
+05의 추가 수동 첨부 재현은 Chrome 확장 file-URL 설정 오류로 완료하지 못했으며 설정을 바꾸지 않았다.
+최종 실제 Chrome 확대·한글 입력 등 독립 검수와 이 도구 제약도 별도 receipt에 남긴다.
+
+오래된 로컬 mock 사건의 PDF 활성 상태 변화는 당시 source hash/binding/revision을 보존하지
+못해 원인을 확정하지 않았다. 새 합성 사건에서는 source hash/binding 일치·명시 편집 저장 뒤
+PDF bytes를 확인했으나 이를 이전 관찰의 원인 규명으로 표현하지 않는다. 실제 외부 공급자 인수,
+문서 단독 시작과 기존 native PDF P3 표현 차이는 앞의 보류 범위를 유지한다.

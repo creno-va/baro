@@ -355,6 +355,12 @@ function WorkspaceContent({
   const uploadInput = useRef<HTMLInputElement>(null);
   const uploadChooserScope = useRef<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const filePreviewOrigin = useRef<{
+    element: HTMLElement;
+    epoch: number;
+    task: CaseTask | null;
+    url: string;
+  } | null>(null);
   const reviewDirty = useRef(false);
   const reviewBusy = useRef(false);
   const [reviewState, setReviewState] = useState({ dirty: false, busy: false });
@@ -415,6 +421,7 @@ function WorkspaceContent({
     setQueuedSend(false);
     queuedUpload.current = null;
     setPreview(null);
+    filePreviewOrigin.current = null;
     setSourceReference(undefined);
     setDeleteFile(null);
     setEntry(null);
@@ -586,6 +593,7 @@ function WorkspaceContent({
     const file = view.files.find((file) => file.id === id);
     if (file && linkedFile.current !== key) {
       linkedFile.current = key;
+      filePreviewOrigin.current = null;
       setPreview(file);
     }
   }, [caseId, tab, ready, view]);
@@ -1086,8 +1094,13 @@ function WorkspaceContent({
       showError({ code: "NOT_FOUND", message: "자료가 삭제됐거나 현재 확인할 수 없어요." }, true);
       return;
     }
-    origin?.focus();
-    void run("file-preview", async () => {
+    // The access preflight disables the opener before showModal can remember it.
+    const destination = origin
+      ? { element: origin, task: activeTaskRef.current, url: window.location.href }
+      : null;
+    origin?.focus({ preventScroll: true });
+    void run("file-preview", async (epoch) => {
+      filePreviewOrigin.current = destination ? { ...destination, epoch } : null;
       setPreview(file);
       setSourceReference(reference);
       setOriginal(null);
@@ -1705,14 +1718,7 @@ function WorkspaceContent({
         );
         requestAnimationFrame(() => draftInput.current?.focus({ preventScroll: true }));
       }}
-      onReview={(file, origin) => {
-        origin.focus();
-        void run("file-preview", async () => {
-          setPreview(file);
-          setSourceReference(undefined);
-          setOriginal(null);
-        });
-      }}
+      onReview={(file, origin) => openConversationFile(file.id, origin)}
       onDelete={(file, origin) => {
         origin.focus();
         setDeleteFile(file);
@@ -2738,6 +2744,30 @@ function WorkspaceContent({
       <dialog
         ref={dialog}
         className={`workspace-dialog${preview ? " workspace-dialog--material" : ""}`}
+        onClose={(event) => {
+          // A queued close may arrive after another preview has already opened.
+          if (event.currentTarget.open) return;
+          const origin = filePreviewOrigin.current;
+          filePreviewOrigin.current = null;
+          if (
+            !origin ||
+            !current(origin.epoch) ||
+            origin.task !== activeTaskRef.current ||
+            origin.url !== window.location.href
+          )
+            return;
+          const element = origin.element;
+          if (
+            !element.isConnected ||
+            element.matches(":disabled") ||
+            element.closest("[hidden], [inert], [aria-hidden='true']") ||
+            !element.getClientRects().length ||
+            getComputedStyle(element).visibility !== "visible"
+          )
+            return;
+          const activeModal = document.querySelector("dialog:modal");
+          if (!activeModal || activeModal.contains(element)) element.focus({ preventScroll: true });
+        }}
         onCancel={(event) => {
           event.preventDefault();
           closeDialog();

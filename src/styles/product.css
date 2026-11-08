@@ -10,6 +10,10 @@
 .app-frame.app-frame--product .ui-button {
   min-height: 44px;
 }
+/* The conversation frame owns its measured viewport; body must not double it at CSS zoom. */
+body:has(.app-frame[data-app-workspace] .case-workspace--conversation) {
+  min-height: 0;
+}
 .app-frame[data-app-workspace] {
   --app-sidebar-width: 232px;
   --app-topbar-height: 0px;
@@ -20,7 +24,7 @@
   --app-sidebar: var(--surface-subtle);
   --app-text: var(--foreground);
   --app-secondary-text: var(--muted-foreground);
-  min-height: 100dvh;
+  min-height: var(--app-viewport-height, 100dvh);
   min-width: 0;
   padding-left: var(--app-sidebar-width);
   padding-top: var(--app-topbar-height);
@@ -396,12 +400,12 @@
   background: var(--muted);
 }
 .case-tools__menu {
-  position: absolute;
-  inset: calc(100% + 4px) 0 auto auto;
+  position: fixed;
+  inset: var(--case-tools-top, 72px) auto auto var(--case-tools-left, 16px);
   z-index: var(--layer-menu);
   width: 216px;
-  max-width: calc(100vw - 32px);
-  max-height: min(420px, 65dvh);
+  max-width: min(calc(100vw - 32px), var(--case-tools-width-limit, 216px));
+  max-height: min(420px, 65dvh, var(--case-tools-height-limit, 65dvh));
   overflow: auto;
   padding: 4px;
   border: 1px solid var(--border);
@@ -457,6 +461,13 @@
   padding-inline: 16px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
+}
+/* Long titles stay readable without consuming the conversation's writing space. */
+.app-frame[data-app-workspace] .case-workspace--conversation > .case-workspace__header {
+  align-items: flex-start;
+  max-height: calc((var(--app-viewport-height, 100dvh) - var(--app-topbar-height)) / 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .app-frame[data-app-workspace] .case-workspace__heading {
   flex: 1;

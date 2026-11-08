@@ -121,7 +121,9 @@ test("returning from a suspended tab immediately reads completed file work witho
     window.dispatchEvent(new Event("pageshow"));
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2, { timeout: 1500 });
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toHaveCount(2, {
+    timeout: 1500,
+  });
   expect(state.retryCalls).toBe(0);
 });
 
@@ -141,7 +143,7 @@ test("files route loads and polls while summary streams are unavailable, then re
   ).toBeVisible();
   await expect(page.getByText("확인한 요약이 아직 없어요.", { exact: true })).toHaveCount(0);
   state.files = [metadata("private-ready"), metadata("accepted-video")];
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toHaveCount(2);
   expect(state.globalReads).toBe(0);
   expect(state.privateReads).toBe(0);
   expect(state.reviewReads).toBe(0);
@@ -182,7 +184,7 @@ test("processing files keep polling after a focus revision failure and clear onl
   ).toBeVisible();
   state.failFinal = false;
   state.files = [metadata("private-ready"), metadata("accepted-video")];
-  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toHaveCount(2);
   await expect(page.getByRole("alert")).toHaveCount(0);
   const reads = state.workspaceReads;
   await page.waitForTimeout(2000);
@@ -213,7 +215,7 @@ for (const [status, message, failRetryRead] of [
     await expect(page.getByRole("alert")).toContainText("최신 자료 목록");
     state.failFinal = false;
     state.files = [metadata("failed-material", false, true), metadata("accepted-video")];
-    await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toHaveCount(1);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.getByRole("alert")).not.toContainText("최신 자료 목록");
     await expect(page.getByRole("alert")).not.toContainText("이전 내용을 비웠어요.");
