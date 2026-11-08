@@ -92,22 +92,16 @@ for (const role of ["customer", "lawyer"] as const) {
       page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
     ).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    if (role === "lawyer") {
-      // Both roles can enter cases and use the shared recent-case navigation.
-      // Settings still omits the customer's legacy archive for lawyers.
-      expect(caseReads).toBeGreaterThanOrEqual(2);
-      await expect(page.getByRole("region", { name: "보관한 사건" })).toHaveCount(0);
-    } else {
-      expect(caseReads).toBeGreaterThanOrEqual(2);
-      await expect(
-        page.getByRole("link", { name: "Synthetic legacy case", exact: true }),
-      ).toHaveAttribute("href", "/cases/11111111-1111-4111-8111-111111111111");
-      await expect(page.getByRole("link", { name: /리포트 확인/ })).toHaveCount(0);
-    }
+    // Every existing account keeps its own archive and deletion rights.
+    expect(caseReads).toBeGreaterThanOrEqual(2);
+    await expect(
+      page.getByRole("link", { name: "Synthetic legacy case", exact: true }),
+    ).toHaveAttribute("href", "/cases/11111111-1111-4111-8111-111111111111");
+    await expect(page.getByRole("link", { name: /리포트 확인/ })).toHaveCount(0);
   });
 }
 
-test("failed OAuth start clears the selected role without rewriting an existing customer session", async ({
+test("failed common OAuth start clears stale selection without rewriting the existing account", async ({
   page,
 }) => {
   let writes = 0;
@@ -133,21 +127,21 @@ test("failed OAuth start clears the selected role without rewriting an existing 
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login");
-  await page.getByRole("radio", { name: "변호사", exact: true }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
-  await page.goto("/lawyer");
-  await expect(page.getByText("변호사 역할로 로그인해 주세요.", { exact: true })).toBeVisible();
+  await page.goto("/consent?returnTo=/app");
+  await expect(page).toHaveURL((url) => url.pathname === "/app");
   expect(writes).toBe(0);
 });
 
-test("successful OAuth return consumes its selected role once and preserves returnTo", async ({
+test("common OAuth return preserves an existing lawyer account and returnTo without any role write", async ({
   page,
 }) => {
   let writes = 0;
   let callback = "";
-  let role = "customer";
+  let role = "lawyer";
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
@@ -180,15 +174,16 @@ test("successful OAuth return consumes its selected role once and preserves retu
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login?returnTo=/settings");
-  await page.getByRole("radio", { name: "변호사", exact: true }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   // A returnTo=/settings query also ends with /settings. Wait for the actual
   // destination pathname before reloading so callback navigation can finish.
   await page.waitForURL((url) => url.pathname === "/settings", { waitUntil: "load" });
   await expect(page).toHaveURL((url) => url.pathname === "/settings");
-  await expect.poll(() => writes).toBe(1);
+  expect(writes).toBe(0);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
   expect(role).toBe("lawyer");
+  expect(new URL(callback, "http://localhost").searchParams.has("loginAttempt")).toBe(false);
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
@@ -273,14 +268,14 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await expect(editor).toHaveCount(0);
 });
 
-test("normal OAuth state/callback and SQL session apply the chosen lawyer role on return", async ({
+test("normal OAuth state/callback and SQL preserve an existing lawyer account on common login", async ({
   page,
   context,
   baseURL,
 }) => {
   const child = spawn(
     "bun",
-    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account"],
+    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account-lawyer"],
     { stdio: ["pipe", "pipe", "pipe"] },
   );
   try {
@@ -310,7 +305,7 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
     });
     // Start signed out: authenticated visits now redirect before the login form.
     // The callback establishes the browser session; the seeded SQL session below
-    // independently verifies that the same account receives the selected role.
+    // independently verifies that the existing account and role are preserved.
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
@@ -334,9 +329,10 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
       });
     });
     await page.goto("/login?returnTo=/settings");
-    await page.getByRole("radio", { name: "변호사", exact: true }).check();
+    await expect(page.getByRole("radio")).toHaveCount(0);
     await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-    await expect(page).toHaveURL(/\/consent\?.*loginAttempt=/);
+    await expect(page).toHaveURL(/\/consent\?returnTo=/);
+    expect(new URL(page.url()).searchParams.has("loginAttempt")).toBe(false);
     await expect
       .poll(async () => {
         const response = await context.request.get(`${seed.origin}/api/me/session`, {
