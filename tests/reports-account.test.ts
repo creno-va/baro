@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { createAccountClient } from "../src/client/api/account";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
 import { casesMockHandlers } from "../src/client/api/mock/cases";
-import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
+import {
+  createReportsMockHandler,
+  mockReportSourceHash,
+  type ReportMockState,
+} from "../src/client/api/mock/reports";
 import { clearMockStore, readStore, writeStore } from "../src/client/api/mock/runtime";
 import {
   createReportsClient,
@@ -774,4 +778,62 @@ test("mock saved ZIP survives consent change and controller reload, then case de
   await f.account.deleteCase("case-demo", "DELETE");
   expect(Object.keys(f.read().reportZips ?? {})).toEqual([]);
   await expect(reloaded.savedZip(saved.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+
+test("private mock document hashes retain a saved source across body edits and detect same-revision evidence drift", async () => {
+  const f = fixture();
+  const original = await f.reports.get("case-demo");
+  const hash = f.read().reportSourceHashes?.[original.id];
+  expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  const edited = await f.reports.save("case-demo", {
+    expectedRevision: original.revision,
+    content: `${original.content}\n사용자 합성 메모`,
+    excludedFileIds: [],
+    maskIdentifiers: false,
+  });
+  expect(f.read().reportSourceHashes?.[edited.id]).toBe(hash);
+  expect((await f.reports.get("case-demo")).stale).toBe(false);
+  const revision = f.read().cases["case-demo"]?.revision;
+  f.update((state) => {
+    const file = state.files["case-demo"]?.[0];
+    if (file) file.extractedText = "동일 사건 revision에서 달라진 합성 자료 관찰";
+  });
+  expect(f.read().cases["case-demo"]?.revision).toBe(revision);
+  expect(mockReportSourceHash(f.read(), "case-demo")).not.toBe(hash);
+  expect((await f.reports.get("case-demo")).stale).toBe(true);
+  expect(f.read().reportHistory?.[original.id]?.content).toBe(original.content);
+  const regenerated = await f.reports.generate("case-demo", []);
+  expect(f.read().reportSourceHashes?.[regenerated.id]).toBe(
+    mockReportSourceHash(f.read(), "case-demo"),
+  );
+  expect((await f.reports.get("case-demo")).stale).toBe(false);
+  await f.account.deleteCase("case-demo", "DELETE");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toEqual([]);
+});
+
+test("legacy mock reports without a private hash keep their source revision through a body save", async () => {
+  const f = fixture();
+  const original = await f.reports.get("case-demo");
+  f.update((state) => {
+    delete state.reportSourceHashes;
+    const item = state.cases["case-demo"];
+    if (item) item.revision++;
+  });
+  const edited = await f.reports.save("case-demo", {
+    expectedRevision: original.revision,
+    content: `${original.content}\n과거 기준 합성 메모`,
+    excludedFileIds: [],
+    maskIdentifiers: false,
+  });
+  expect(f.read().reportSourceHashes?.[edited.id]).toBeUndefined();
+  expect(f.read().reportSources?.[edited.id]).toBe(f.read().reportSources?.[original.id]);
+  expect((await f.reports.get("case-demo")).stale).toBe(true);
+});
+
+test("mock account deletion removes private document hashes with all owned snapshots", async () => {
+  const f = fixture();
+  await f.reports.get("case-demo");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toHaveLength(1);
+  await f.account.deleteAccount("DELETE");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toEqual([]);
 });

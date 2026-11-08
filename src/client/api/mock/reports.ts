@@ -39,6 +39,8 @@ export type ReportMockState = {
     { reportId: string; caseId: string; ownerId: string; fileIds: string[] }
   >;
   reportSources?: Record<string, number>;
+  /** Private document freshness, independent of prepared legal-analysis authority. */
+  reportSourceHashes?: Record<string, string>;
   /** Private prepared-analysis identity, never part of the installed report DTO. */
   reworkReportBindings?: Record<string, string>;
   reworkEditedReports?: Record<string, true>;
@@ -93,6 +95,48 @@ export function requireMockCase(state: ReportMockState, id: string, consent = tr
     );
   return item;
 }
+export function mockReportSourceHash(
+  state: ReportMockState,
+  id: string,
+  scope: { excludedFileIds: readonly string[]; maskIdentifiers: boolean } = {
+    excludedFileIds: state.reports[id]?.excludedFileIds ?? [],
+    maskIdentifiers: state.reports[id]?.maskIdentifiers ?? false,
+  },
+) {
+  const workspace = state.workspace[id];
+  const value = JSON.stringify({
+    case: state.cases[id],
+    context: state.reworkContexts?.[id] ?? null,
+    workspace: {
+      facts: workspace?.facts,
+      people: workspace?.people,
+      timeline: workspace?.timeline,
+      actions: workspace?.actions,
+    },
+    files: state.files[id] ?? [],
+    reviews: (state.files[id] ?? []).map((file) => [
+      file.id,
+      state.fileReviews?.[file.id]?.observations?.map((observation) => observation.value) ?? null,
+    ]),
+    scope: {
+      excludedFileIds: [...scope.excludedFileIds].sort(),
+      maskIdentifiers: scope.maskIdentifiers,
+    },
+  });
+  return Array.from(sha256(new TextEncoder().encode(value)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+function documentStale(state: ReportMockState, report: ReportView) {
+  return (
+    report.stale ||
+    (state.reportSources?.[report.id] ?? state.cases[report.caseId]?.revision) !==
+      state.cases[report.caseId]?.revision ||
+    (Boolean(state.reportSourceHashes?.[report.id]) &&
+      state.reportSourceHashes?.[report.id] !== mockReportSourceHash(state, report.caseId, report))
+  );
+}
+
 function draft(
   state: ReportMockState,
   item: ReportCase,
@@ -288,12 +332,12 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             current.reportHistory[report.id] = structuredClone(report);
             current.reportSources ??= {};
             current.reportSources[report.id] = item.revision;
+            current.reportSourceHashes ??= {};
+            current.reportSourceHashes[report.id] = mockReportSourceHash(current, id, report);
           });
         const current = runtime.read();
         value = structuredClone(current.reports[id] as ReportView);
-        value.stale =
-          (current.reportSources?.[value.id] ?? current.cases[id]?.revision) !==
-          current.cases[id]?.revision;
+        value.stale = documentStale(current, value);
       } else if (method === "PATCH" || method === "POST") {
         const body = init.body as { expectedRevision?: number; excludedFileIds?: string[] };
         runtime.update((current) => {
@@ -320,6 +364,8 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             current.reportHistory[next.id] = structuredClone(next);
             current.reportSources ??= {};
             current.reportSources[next.id] = item.revision;
+            current.reportSourceHashes ??= {};
+            current.reportSourceHashes[next.id] = mockReportSourceHash(current, id, next);
           } else {
             if (!prior) throw new ReportMockError("NOT_FOUND", "먼저 리포트를 확인해 주세요.");
             const input = reportSaveSchema.parse(body);
@@ -369,7 +415,21 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
             current.reportHistory ??= {};
             current.reportHistory[next.id] = structuredClone(next);
             current.reportSources ??= {};
-            current.reportSources[next.id] = item.revision;
+            current.reportSources[next.id] = rebuilt
+              ? item.revision
+              : (current.reportSources[prior.id] ?? item.revision);
+            const priorHash = current.reportSourceHashes?.[prior.id];
+            const sourceHash =
+              rebuilt ||
+              (input.maskIdentifiers !== prior.maskIdentifiers &&
+                priorHash &&
+                priorHash === mockReportSourceHash(current, id, prior))
+                ? mockReportSourceHash(current, id, next)
+                : priorHash;
+            if (sourceHash) {
+              current.reportSourceHashes ??= {};
+              current.reportSourceHashes[next.id] = sourceHash;
+            }
             const parentBinding = current.reworkReportBindings?.[prior.id];
             if (
               parentBinding &&
@@ -428,9 +488,7 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
       if (!report) throw new ReportMockError("NOT_FOUND", "리포트를 찾을 수 없어요.");
       requireMockCase(state, report.caseId, false);
       if (exportPath[2] === "html" && method === "GET") {
-        const stale =
-          (state.reportSources?.[id] ?? state.cases[report.caseId]?.revision) !==
-          state.cases[report.caseId]?.revision;
+        const stale = documentStale(state, report);
         const photos = [];
         const ownerId = state.session.user?.id;
         if (!report.maskIdentifiers)
@@ -600,3 +658,5 @@ export function createReportsMock(runtime: ReportMockRuntime) {
     }
   };
 }
+
+import { sha256 } from "@noble/hashes/sha2.js";
