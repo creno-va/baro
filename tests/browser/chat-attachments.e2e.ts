@@ -456,6 +456,7 @@ test("materials retain every attachment and mark actual evidence without filter 
   await page.evaluate((id) => {
     const files = ["used", "unused"].map((name) => ({
       id: `synthetic-${name}`,
+      revision: 1,
       name: `${name}.txt`,
       mimeType: "text/plain",
       sizeBytes: 10,
@@ -536,6 +537,22 @@ test("materials retain every attachment and mark actual evidence without filter 
   await expect(unused).not.toContainText("현재 자료가 대화 근거로 연결됨");
   await page.goto(`${base}/files?evidence=1`);
   await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await page.evaluate((id) => {
+    const key = "baro-api-mock-v1:files";
+    const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
+    stored[id][0].revision = 2;
+    localStorage.setItem(key, JSON.stringify(stored));
+  }, id);
+  await page.reload();
+  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await expect(used).not.toContainText("현재 자료가 대화 근거로 연결됨");
+  await expect(unused).not.toContainText("현재 자료가 대화 근거로 연결됨");
+  expect(
+    (await messages(page))
+      .find((message: { role: string }) => message.role === "assistant")
+      .references.find((reference: { kind: string }) => reference.kind === "user_material"),
+  ).toMatchObject({ fileId: "synthetic-used", fileRevision: 1 });
 });
 
 test("dragged and pasted files stay local until consent and sending", async ({ page }) => {
