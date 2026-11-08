@@ -8,6 +8,7 @@ export default defineConfig({
     "policy-content.e2e.ts",
     "landing.e2e.ts",
     "public-account-redesign.e2e.ts",
+    "legacy-profile-assets.e2e.ts",
   ],
   workers: 1,
   use: { baseURL: "http://127.0.0.1:4474", browserName: "chromium", trace: "off" },
