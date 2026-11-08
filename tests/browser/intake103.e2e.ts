@@ -393,7 +393,11 @@ test("pending workspace files keep polling after a transient failure and stop on
   await expect(
     page.getByRole("heading", { name: "합성 처리 자료.txt", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "사건 자료", exact: true })
+      .getByText("내용 확인 후 반영 가능", { exact: true }),
+  ).toBeVisible();
   // Two polling periods pass without any further workspace read after completion.
   await page.waitForTimeout(3800);
   expect(await reads()).toBe(3);
