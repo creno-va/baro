@@ -7,14 +7,16 @@ import {
   seedMaterialsScenario,
   setMaterialsReportRead,
 } from "../helpers/workspace-materials-scenario";
-import { openCaseTool } from "../helpers/workspace-navigation";
+import {
+  closeWorkspaceMaterials,
+  openCaseTool,
+  openWorkspaceMaterials,
+} from "../helpers/workspace-navigation";
 
 const panel = (page: Page) => page.locator("#case-materials-panel");
 const input = (page: Page) => page.getByRole("textbox", { name: "추가 사실 또는 질문" });
 async function openMaterials(page: Page) {
-  const open = page.getByRole("button", { name: "자료 열기", exact: true });
-  if (await open.isVisible()) await open.click();
-  await expect(panel(page)).toBeVisible();
+  await openWorkspaceMaterials(page);
 }
 async function openScenario(page: Page, options = {}) {
   await seedMaterialsScenario(page, options);
@@ -27,14 +29,14 @@ test("the mounted materials panel preserves the composer and selection without n
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openScenario(page);
-  await openMaterials(page);
   await input(page).fill("패널을 닫고 화면 폭을 바꿔도 남아 있어야 하는 합성 초안");
   await input(page).evaluate((node) => node.setAttribute("data-ui753-mounted", "original"));
+  await openMaterials(page);
   const choice = panel(page).getByRole("checkbox", { name: /대화에 사용할.*반환 약속/ });
   await choice.check();
   await countMaterialsRequests(page);
   for (const width of [1024, 768, 390, 320, 1440]) {
-    await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+    await closeWorkspaceMaterials(page);
     await expect(panel(page)).not.toBeVisible();
     await page.setViewportSize({ width, height: 900 });
     await expect(input(page)).toHaveValue(/합성 초안$/);
@@ -127,7 +129,7 @@ test("local attachments and consent stay local across panel changes before one e
     buffer: Buffer.from("합성 원본. 실제 사건 정보가 없습니다."),
   });
   await openMaterials(page);
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await closeWorkspaceMaterials(page);
   await page.setViewportSize({ width: 320, height: 844 });
   await expect(input(page)).toHaveValue("첨부와 함께 보내는 합성 입력");
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
@@ -177,7 +179,7 @@ test("local attachments and consent stay local across panel changes before one e
     .toBe(true);
   await openMaterials(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await closeWorkspaceMaterials(page);
   await expect(input(page)).toHaveValue("첨부와 함께 보내는 합성 입력");
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
   expect(
@@ -208,7 +210,7 @@ test("reading earlier messages does not jump to the newest reply when panel widt
   });
   const before = await log.evaluate((node) => node.scrollTop);
   await openMaterials(page);
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await closeWorkspaceMaterials(page);
   const after = await log.evaluate((node) => ({
     top: node.scrollTop,
     bottom: node.scrollHeight - node.clientHeight - node.scrollTop,
@@ -272,6 +274,7 @@ test("materials and composer remain readable and accessible at phone, tablet, de
     await openMaterials(page);
     const footer = panel(page).getByRole("link", { name: "리포트 열기", exact: true });
     await expect(footer).toHaveAttribute("href", `${materialsCasePath}/reports?mode=conversation`);
+    await footer.scrollIntoViewIfNeeded();
     await expect(footer).toBeInViewport();
     expect(
       (await new AxeBuilder({ page }).include(".case-workspace").analyze()).violations,
@@ -280,7 +283,7 @@ test("materials and composer remain readable and accessible at phone, tablet, de
       path: testInfo.outputPath(`materials-${width}.png`),
       animations: "disabled",
     });
-    await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+    await closeWorkspaceMaterials(page);
     await expect(input(page)).toBeInViewport();
     await page.screenshot({
       path: testInfo.outputPath(`conversation-${width}.png`),

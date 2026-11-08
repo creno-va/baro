@@ -296,7 +296,6 @@ export function AccountSettings() {
     <div className="account-settings" aria-busy={Boolean(busy) || checking}>
       <header className="settings-heading">
         <div>
-          <span className="settings-eyebrow">내 계정</span>
           <h1>설정과 사용량</h1>
           <p>이용 현황과 계정 정보를 관리해요.</p>
         </div>
@@ -452,9 +451,6 @@ export function AccountSettings() {
               <ChevronRight size={18} aria-hidden="true" />
             </a>
           </nav>
-          <p className="settings-policy-note">
-            서비스 이용 조건과 정보 처리 방식, AI의 한계를 확인할 수 있어요.
-          </p>
         </section>
       </div>
       <section className="settings-card settings-danger" aria-labelledby="settings-danger-title">

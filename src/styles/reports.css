@@ -7,7 +7,7 @@
 }
 .report-canvas {
   min-width: 0;
-  padding: 24px;
+  padding: 8px 0 24px;
   margin: 0 auto;
 }
 .report-review .report-heading {
@@ -27,7 +27,7 @@
 }
 :where(.report-review.report-workspace) .report-heading h2 {
   margin: 0 0 8px;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.45;
   letter-spacing: -0.025em;
@@ -148,7 +148,7 @@
   font-weight: 600;
 }
 :where(.report-document--outline-closed) .report-outline-toggle span {
-  display: none;
+  display: inline;
 }
 .report-current-tools p span {
   margin-left: 8px;
@@ -263,26 +263,23 @@
   white-space: normal;
 }
 .report-document {
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  align-items: start;
-  gap: 28px;
+  display: block;
   min-width: 0;
 }
 .report-document--outline-closed {
-  grid-template-columns: 44px minmax(0, 1fr);
+  display: block;
 }
 .report-document--short {
   display: block;
 }
 .report-outline {
-  position: sticky;
-  top: 16px;
+  position: static;
   min-width: 0;
-  font-size: 13px;
+  margin-bottom: 12px;
+  font-size: 14px;
 }
 .report-review button.report-outline-toggle {
-  width: 100%;
+  width: auto;
   justify-content: flex-start;
   border: 0;
   background: transparent;
@@ -290,11 +287,18 @@
   font-weight: 600;
 }
 .report-outline nav {
-  max-height: calc(100dvh - 100px);
+  max-height: min(360px, 45dvh);
   overflow: auto;
   margin-top: 8px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .report-outline ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -329,13 +333,13 @@
   flex-direction: column;
   gap: 0;
   width: 100%;
-  max-width: 820px;
+  max-width: none;
   min-width: 0;
   margin: 0 auto;
-  padding: 0;
+  padding: 32px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 16px;
+  background: #fff;
 }
 .report-reading-section {
   min-width: 0;
@@ -351,22 +355,29 @@
 }
 .report-reading-section > header {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 14px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 .report-reading-section > header > span {
-  min-width: 20px;
-  color: #647084;
-  font-size: 13px;
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding-inline: 8px;
+  border-radius: 9px;
+  background: #edf3ff;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 .report-reading-section h3 {
   margin: 0;
   color: var(--foreground, #18212f);
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.6;
-  font-weight: 650;
+  font-weight: 700;
 }
 .report-preparation summary {
   cursor: pointer;
@@ -549,16 +560,22 @@
 }
 .report-export {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border, #e3e8ef);
+  justify-content: stretch;
+  margin-top: 24px;
+  padding: 0;
+  border: 0;
 }
 .report-actions {
   gap: 16px;
 }
+.report-export .report-actions {
+  width: 100%;
+}
 .report-export .primary {
-  min-width: 170px;
+  width: 100%;
+  min-height: 54px;
+  font-size: 16px;
+  border-radius: 12px;
 }
 .report-canvas > .resolution,
 .report-canvas > #document-drafts {
@@ -635,10 +652,14 @@
 }
 @media (max-width: 767px) {
   .report-canvas {
-    padding: 20px 16px;
+    padding: 8px 0 20px;
+  }
+  .report-reading {
+    padding: 20px;
+    border-radius: 14px;
   }
   :where(.report-review.report-workspace) .report-heading h2 {
-    font-size: 20px;
+    font-size: 23px;
   }
   .report-heading-actions {
     width: 100%;

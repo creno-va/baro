@@ -491,7 +491,9 @@ export function ReportReview({
     if (onNavigateTask) onNavigateTask(task);
     else if (task === "reports" || task === "drafts") {
       setSection(task === "drafts" ? "drafts" : "report");
-      history.replaceState(null, "", task === "drafts" ? "#document-drafts" : location.pathname);
+      const url = new URL(window.location.href);
+      url.hash = task === "drafts" ? "document-drafts" : "";
+      history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
     } else
       location.assign(`/cases/${encodeURIComponent(caseId)}${task === "files" ? "/files" : ""}`);
   }
@@ -808,20 +810,6 @@ export function ReportReview({
                   <>
                     <Button
                       variant="outline"
-                      type="button"
-                      disabled={editingBlocked || !dirty || report.stale}
-                      onClick={() =>
-                        void run("수정 내용 저장 중…", async () => {
-                          await save();
-                        })
-                      }
-                    >
-                      <Save size={16} aria-hidden="true" />
-                      저장
-                    </Button>
-                    <Button
-                      variant="outline"
-                      type="button"
                       disabled={editingBlocked}
                       onClick={() => {
                         if (dirty) setCancelEdit(true);
@@ -830,55 +818,62 @@ export function ReportReview({
                     >
                       편집 취소
                     </Button>
+                    <Button
+                      disabled={editingBlocked || !dirty || report.stale}
+                      onClick={() =>
+                        void run("수정 내용 저장 중…", async () => {
+                          await save();
+                          setEditing(false);
+                        })
+                      }
+                    >
+                      <Save size={16} aria-hidden="true" />
+                      수정 내용 저장
+                    </Button>
                   </>
                 )}
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="report-edit-toggle"
-                  disabled={
-                    Boolean(busy) ||
-                    accessChecking ||
-                    accessUnknown ||
-                    needsConsent ||
-                    evidenceBusy ||
-                    evidenceDirty ||
-                    resolutionBusy ||
-                    resolutionDirty
-                  }
-                  aria-expanded={editing}
-                  aria-controls="report-edit-fields"
-                  onClick={() => {
-                    if (editing && dirty && !report.stale)
-                      void run("수정 내용 저장 중…", async () => {
-                        await save();
-                        setEditing(false);
-                      });
-                    else setEditing((value) => !value);
-                  }}
-                >
-                  <Pencil size={16} aria-hidden="true" />
-                  {editing ? "수정 마치기" : "수정하기"}
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="report-regenerate primary"
-                  disabled={
-                    Boolean(busy) ||
-                    accessChecking ||
-                    accessUnknown ||
-                    needsConsent ||
-                    evidenceBusy ||
-                    evidenceDirty ||
-                    resolutionBusy ||
-                    resolutionDirty ||
-                    Boolean(preservedEdit && dirty && report.stale)
-                  }
-                  onClick={() => setRegenerate(true)}
-                >
-                  새 버전 만들기
-                </Button>
+                {!editing && (
+                  <Button
+                    variant="outline"
+                    className="report-edit-toggle"
+                    disabled={
+                      Boolean(busy) ||
+                      accessChecking ||
+                      accessUnknown ||
+                      needsConsent ||
+                      evidenceBusy ||
+                      evidenceDirty ||
+                      resolutionBusy ||
+                      resolutionDirty
+                    }
+                    aria-expanded={editing}
+                    aria-controls="report-edit-fields"
+                    onClick={() => setEditing(true)}
+                  >
+                    <Pencil size={16} aria-hidden="true" />
+                    수정하기
+                  </Button>
+                )}
+                {(!editing || report.stale) && (
+                  <Button
+                    variant="outline"
+                    className="report-regenerate"
+                    disabled={
+                      Boolean(busy) ||
+                      accessChecking ||
+                      accessUnknown ||
+                      needsConsent ||
+                      evidenceBusy ||
+                      evidenceDirty ||
+                      resolutionBusy ||
+                      resolutionDirty ||
+                      Boolean(preservedEdit && dirty && report.stale)
+                    }
+                    onClick={() => setRegenerate(true)}
+                  >
+                    새 버전 만들기
+                  </Button>
+                )}
               </fieldset>
             )}
           </header>

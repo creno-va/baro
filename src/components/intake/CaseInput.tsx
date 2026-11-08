@@ -394,7 +394,9 @@ export function CaseInput({
                       variant="outline"
                       disabled={loading || !canCreate}
                       onClick={() => {
-                        setNarrative(text);
+                        setNarrative((existing) =>
+                          existing.trim() ? `${existing}\n${text}` : text,
+                        );
                         document.getElementById("narrative")?.focus();
                       }}
                     >

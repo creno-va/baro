@@ -54,23 +54,24 @@
   padding: 20px max(16px, calc((100% - var(--app-reading-width, 800px)) / 2));
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scrollbar-width: thin;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+  gap: 24px;
   overflow-anchor: none;
 }
 .app-frame[data-app-workspace]
   .workspace--chat
   .case-workspace
   .workspace-messages::-webkit-scrollbar {
-  display: block;
-  width: 6px;
-  height: auto;
+  display: none;
+  width: 0;
+  height: 0;
 }
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message {
   font-size: 16px;
   line-height: 1.75;
   overflow-wrap: anywhere;
-  margin-block: 20px;
+  margin-block: 0;
 }
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message--assistant {
   padding: 0;
@@ -88,12 +89,13 @@
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer {
   position: static;
   width: 100%;
-  max-width: var(--app-reading-width, 800px);
+  max-width: calc(var(--app-reading-width, 800px) + 32px);
   max-height: min(45dvh, 380px);
   min-width: 0;
   margin: 0 auto;
   padding: 8px 16px 12px;
   overflow-y: auto;
+  background: #fff;
 }
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer-surface {
   border-radius: 16px;
@@ -125,6 +127,117 @@
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-chat-heading {
   display: none;
 }
+/* Published prose has one spacing rhythm instead of literal blank-line gutters. */
+.app-frame[data-app-workspace] .workspace .workspace-message-content {
+  white-space: normal;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content :is(p, ul, ol) {
+  margin: 0 0 14px;
+  font: inherit;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content p {
+  white-space: pre-wrap;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content :last-child {
+  margin-bottom: 0;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content :is(ul, ol) {
+  padding-left: 24px;
+  list-style-position: outside;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content ul {
+  list-style-type: disc;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content ol {
+  list-style-type: decimal;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content li + li {
+  margin-top: 6px;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content h3 {
+  margin: 24px 0 10px;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content h3:first-child {
+  margin-top: 0;
+}
+.app-frame[data-app-workspace] .workspace .workspace-message-content code {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #f1f3f6;
+  font-size: 0.9em;
+}
+
+.app-frame[data-app-workspace] .workspace-message-label {
+  font-size: 13px;
+}
+.app-frame[data-app-workspace] .workspace-message-label time {
+  font-size: 12px;
+}
+.app-frame[data-app-workspace] .workspace .conversation-panel {
+  padding: 22px;
+  margin-block: 8px 20px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: #fafbfc;
+}
+.app-frame[data-app-workspace] .workspace .conversation-panel-heading {
+  margin-bottom: 20px;
+}
+.app-frame[data-app-workspace] .conversation-preparation > details + details {
+  margin-top: 28px;
+}
+.app-frame[data-app-workspace] .conversation-preparation > details > summary {
+  min-height: 44px;
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+.app-frame[data-app-workspace] .workspace .conversation-agent-actions {
+  gap: 8px;
+}
+.app-frame[data-app-workspace] .workspace .conversation-agent-actions > details {
+  flex: 0 1 auto;
+}
+.app-frame[data-app-workspace] .workspace .conversation-agent-actions summary {
+  gap: 8px;
+  padding-inline: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+}
+.app-frame[data-app-workspace] .conversation-agent-actions summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translateY(-2px);
+}
+.app-frame[data-app-workspace] .conversation-agent-actions details[open] {
+  flex-basis: 100%;
+}
+.app-frame[data-app-workspace] .conversation-agent-actions details[open] summary {
+  width: fit-content;
+}
+.app-frame[data-app-workspace] .workspace .conversation-agent-menu {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f5f6f8;
+  border-radius: 12px;
+  gap: 4px;
+}
+.app-frame[data-app-workspace] .workspace .conversation-analysis-source {
+  margin-block: 12px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #f0f2f5;
+}
+
 .app-frame[data-app-workspace] .workspace .materials-panel {
   height: 100%;
   min-height: 0;
@@ -139,14 +252,21 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-y: contain;
-  padding: 12px 16px;
+  padding: 16px;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel .workspace-material-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin: 0 0 16px;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel .workspace-upload-target {
   padding: 16px;
-  min-height: 88px;
+  min-height: 132px;
+  order: -1;
+  background: #f8faff;
+  border-radius: 14px;
+  border-color: #cfdbef;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel .workspace-upload-title {
   font-size: 14px;
@@ -205,14 +325,20 @@
 .app-frame[data-app-workspace] .workspace .materials-panel__report {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 16px;
   border-top: 1px solid var(--app-line, #e2e8f0);
   background: #fff;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel__report p {
+  font-size: 13px;
   margin: 0;
   color: var(--muted-foreground);
+}
+.app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-message--user > p {
+  font-size: 16px;
+  line-height: 1.8;
+  margin-block: 10px 0;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel--page {
   height: auto;
@@ -220,13 +346,26 @@
 }
 .app-frame[data-app-workspace] .workspace .materials-panel--page .materials-panel__body {
   overflow: visible;
-  padding-inline: 0;
+  padding: 0;
+}
+.app-frame[data-app-workspace] .workspace .materials-panel--page .workspace-upload-target {
+  min-height: 180px;
+}
+.app-frame[data-app-workspace]
+  .workspace
+  .materials-panel
+  .workspace-material-upload--compact
+  .workspace-upload-target {
+  min-height: 64px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .app-frame[data-app-workspace] .workspace .materials-panel--page .materials-panel__report {
   margin-top: 20px;
 }
 .app-frame[data-app-workspace] .workspace--files .case-workspace .workspace-grid {
-  max-width: 800px;
+  max-width: none;
 }
 .app-frame[data-app-workspace] .workspace--chat .case-workspace .case-workspace__panel-content {
   padding: 0;
@@ -242,6 +381,10 @@
   .app-frame[data-app-workspace] .workspace--chat .case-workspace .workspace-composer {
     padding: 6px 10px max(8px, env(safe-area-inset-bottom));
   }
+  .app-frame[data-app-workspace] .workspace .case-workspace__panel:modal .materials-panel {
+    flex: 1;
+    height: auto;
+  }
 }
 .app-frame[data-app-workspace] .workspace .workspace-dialog.workspace-dialog--material {
   padding-bottom: 0;
@@ -256,4 +399,14 @@
   .workspace-preview
   > .workspace-buttons {
   padding-bottom: calc(12px + var(--workspace-dialog-padding) + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 767px) {
+  .app-frame[data-app-workspace] .workspace .conversation-panel {
+    padding: 16px;
+  }
+  .app-frame[data-app-workspace] .workspace .conversation-agent-actions > .ui-button {
+    max-width: 100%;
+    white-space: normal;
+  }
 }

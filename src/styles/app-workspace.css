@@ -3,9 +3,9 @@
 .app-frame[data-app-workspace] {
   --app-sidebar-width: 256px;
   --app-topbar-height: 0px;
-  --app-canvas: #fff;
-  --app-line: #e2e8f0;
-  --app-sidebar: #f8fafc;
+  --app-canvas: #f6f7f9;
+  --app-line: #e7eaf0;
+  --app-sidebar: #fff;
   --app-text: #0f172a;
   --app-secondary-text: #475569;
   --app-reading-width: 800px;
@@ -15,9 +15,9 @@
   --product-blue: #2563eb;
   --product-ink: #0f172a;
   --product-line: #e2e8f0;
-  --product-subtle: #f8fafc;
+  --product-subtle: #f3f5f8;
   --muted: #f1f5f9;
-  --muted-foreground: #475569;
+  --muted-foreground: #667085;
   --border: #e2e8f0;
   --product-radius: 12px;
   color: var(--app-text);
@@ -41,10 +41,15 @@
 .app-frame[data-app-workspace] .app-surface::after {
   display: none;
 }
+.app-frame[data-app-workspace] .app-surface:has(.conversation-main)::before,
+.app-frame[data-app-workspace] .app-surface:has(.conversation-main)::after {
+  display: block;
+  opacity: 0.65;
+}
 .app-frame[data-app-workspace].app-frame--product .app-surface > main {
   width: min(1120px, calc(100% - 48px));
   max-width: 1120px;
-  padding-block: 24px 32px;
+  padding-block: 32px 48px;
   margin-inline: auto;
 }
 .app-frame[data-app-workspace] .app-header {
@@ -123,7 +128,7 @@
   padding: 10px 12px;
 }
 .app-frame[data-app-workspace] .sidebar-story__copy strong {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 450;
   line-height: 1.5;
 }
@@ -198,7 +203,7 @@
     .lawyer-editor-heading h1,
     .intake-scene-heading h1
   ) {
-  font-size: clamp(22px, 2vw, 26px);
+  font-size: clamp(26px, 2.5vw, 30px);
   line-height: 1.4;
   letter-spacing: -0.035em;
 }
@@ -218,10 +223,10 @@
 }
 .app-frame[data-app-workspace] .app-surface main.conversation-main {
   width: min(var(--app-reading-width), calc(100% - 40px));
-  padding-block: clamp(40px, 10dvh, 100px) 32px;
+  padding-block: clamp(36px, 8dvh, 80px) 32px;
 }
 .app-frame[data-app-workspace] .conversation-greeting h1 {
-  font-size: clamp(26px, 3vw, 32px);
+  font-size: clamp(28px, 3vw, 36px);
 }
 .app-frame[data-app-workspace] .conversation-emblem {
   display: none;
@@ -367,6 +372,12 @@
 }
 .app-frame[data-app-workspace] .case-workspace__header .case-header {
   margin: 0;
+}
+.app-frame[data-app-workspace] .case-workspace--document .case-workspace__header {
+  padding-inline: 0;
+  margin-bottom: 20px;
+  border: 0;
+  background: transparent;
 }
 .app-frame[data-app-workspace] .case-workspace__toggle {
   flex-shrink: 0;
@@ -583,6 +594,124 @@ html:has(.app-frame[data-app-workspace] .case-workspace__panel[open]):not(:has(d
   }
   .app-frame[data-app-workspace] .case-workspace__toggle > span {
     display: none;
+  }
+}
+.app-frame[data-app-workspace] .case-tools__menu a {
+  gap: 12px;
+}
+.app-frame[data-app-workspace] .case-tools__menu a small {
+  min-width: 24px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.app-frame[data-app-workspace] .case-tools__menu a[aria-current] {
+  font-weight: 600;
+}
+.app-frame[data-app-workspace] :is(.page-header, .settings-heading, .lawyer-editor-heading) {
+  margin-top: 0;
+  gap: 16px;
+}
+.app-frame[data-app-workspace] :is(.page-header, .settings-heading, .lawyer-editor-heading) p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+.app-frame[data-app-workspace] :is(.ui-button, .settings-refresh) {
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition:
+    background-color 140ms,
+    border-color 140ms,
+    color 140ms;
+}
+.app-frame[data-app-workspace] .ui-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] :is(.ui-button--outline, .settings-refresh) {
+  background: #fff;
+  border-color: var(--app-line);
+  color: var(--app-secondary-text);
+}
+.app-frame[data-app-workspace] .ui-button:disabled {
+  cursor: not-allowed;
+}
+.app-frame[data-app-workspace] .ui-state {
+  padding: 24px;
+  gap: 16px;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] .ui-state__title {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.app-frame[data-app-workspace] .ui-state__description {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.app-frame[data-app-workspace] .ui-state__action {
+  margin-top: 18px;
+}
+.app-frame[data-app-workspace] .ui-sheet {
+  border-radius: 0 20px 20px 0;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__header {
+  padding: 20px 20px 0;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__content {
+  padding: 16px 12px;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__content > .brand {
+  display: none;
+}
+.app-frame[data-app-workspace] .sidebar-story-row {
+  overflow: hidden;
+}
+.app-frame[data-app-workspace] :is(.sidebar-story-delete, .sidebar-story-edit) {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+@media (hover: none) {
+  .app-frame[data-app-workspace] :is(.sidebar-story-delete, .sidebar-story-edit) {
+    width: 44px;
+    min-width: 44px;
+  }
+  .app-frame[data-app-workspace] .sidebar-story {
+    padding-right: 94px;
+  }
+}
+@media (max-width: 767px) {
+  .app-frame[data-app-workspace] .case-workspace__panel:modal {
+    inset: auto 0 0;
+    width: 100%;
+    height: auto;
+    max-height: min(86dvh, calc(var(--app-viewport-height, 100dvh) - 24px));
+    border: 0;
+    border-radius: 20px 20px 0 0;
+  }
+  .app-frame[data-app-workspace] .case-workspace__panel:modal::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 36px;
+    height: 4px;
+    margin: 10px auto 2px;
+    border-radius: 4px;
+    background: #d5dae3;
+  }
+  .app-frame[data-app-workspace] .case-workspace__panel:modal .case-workspace__panel-content {
+    display: flex;
+    flex-direction: column;
+  }
+  .app-frame[data-app-workspace] :is(.settings-heading, .page-header) {
+    align-items: flex-start;
   }
 }
 @media (prefers-reduced-motion: reduce) {

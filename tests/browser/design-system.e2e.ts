@@ -185,9 +185,12 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  expect(await opener.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
-    "none",
-  );
+  expect(
+    await opener.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return style.outlineStyle !== "none" || style.boxShadow !== "none";
+    }),
+  ).toBe(true);
 });
 
 for (const activation of ["pointer", "keyboard"] as const)

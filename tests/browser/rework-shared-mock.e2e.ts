@@ -224,7 +224,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
       );
       await report
         .getByRole("group", { name: "리포트 작업", exact: true })
-        .getByRole("button", { name: "저장", exact: true })
+        .getByRole("button", { name: "수정 내용 저장", exact: true })
         .click();
       await expect(report.locator(".report-save-state")).toContainText("버전 3");
       await expect(report.locator(".report-basis-details > summary")).toHaveText("작성 기준");
