@@ -119,8 +119,6 @@ jobs:
         with:
           name: rework-journeys-${{ inputs.target_sha }}
           path: |
-            .wrangler/redesign-results.json
-            .wrangler/redesign-acceptance/**
             /tmp/baro-625-journeys/**/protocol.json
             /tmp/baro-625-journeys/**/report.pdf
             /tmp/baro-625-journeys/**/report.html
@@ -134,6 +132,16 @@ jobs:
             /tmp/baro-625-journeys/**/report-visual.json
             /tmp/baro-625-journeys/**/followup.png
             /tmp/baro-625-journeys/**/followup-visual.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain independent synthetic acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: redesign-acceptance-${{ inputs.target_sha }}
+          path: |
+            .wrangler/redesign-results.json
+            .wrangler/redesign-acceptance/**
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

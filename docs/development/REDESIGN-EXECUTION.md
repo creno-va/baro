@@ -217,8 +217,9 @@ checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는
 우선 사용하고, 기존 override가 없으면 ignored 임시 config의 host/port/baseURL만 조정한다.
 원본 fixture·환경 flag·expect는 유지하며 최종 Linux full은 저장소의 표준 config로 다시 실행한다.
 같은 worktree의 Astro dev와 quick/build는 캐시 충돌을 막기 위해 순차 실행한다.
-총괄은 기존 full browser artifact의 경로에 독립 검수 JSON·합성 screenshot 산출물만 추가해
-실제 checkout SHA와 테스트 본문 hash를 대조한다. 기존 action·권한·14일 보존·판정은 유지한다.
+총괄은 기존 journeys 아카이브의 경로 구조를 유지하며 독립 검수 JSON·합성 screenshot만
+별도 artifact로 보존해 실제 checkout SHA와 테스트 본문 hash를 대조한다.
+같은 고정 action·권한·14일 보존·판정을 유지하고 hidden 허용은 명시한 QA 경로에만 적용한다.
 
 지정 세션: 01 `01a1baa9-2cbb-7cb0-a815-35ba474d3797`, 02 `01a1baa9-800a-7542-b8bc-400f84c15709`,
 03 `01a1baa9-cb75-7fc1-8384-c68949dbbdd7`, 04 `01a1baaa-0588-7c01-8563-e59d95e93d52`,
