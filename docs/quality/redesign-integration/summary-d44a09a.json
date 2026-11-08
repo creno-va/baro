@@ -80,12 +80,16 @@
     "script/style changes after this SHA are absent; later commits are test/docs/evidence only"
   ],
   "publication": {
-    "rawEvidencePublished": false,
-    "reason": "Automatic approval review rejected publishing the independent QA screenshots, PDFs and compressed raw results; only test code and content-free validation metadata are included.",
+    "rawEvidencePublished": true,
+    "reason": "Initially withheld after automatic approval review; subsequently the user explicitly approved this exact synthetic QA payload, repository, branch and Draft PR target in the QA chat.",
     "localQaBranch": "codex/764-independent-final-acceptance",
     "localQaHead": "63c3092e32d37249a0975f82b9afe8ed3e10a301",
     "localQaReport": "redesign-05-final-acceptance/docs/quality/redesign-acceptance/README.md",
-    "localCoordinatorEvidenceBranch": "codex/764-redesign-local-evidence"
+    "localCoordinatorEvidenceBranch": "codex/764-redesign-local-evidence",
+    "approvedQaEvidencePr": 781,
+    "approvedQaEvidenceHead": "63c3092e32d37249a0975f82b9afe8ed3e10a301",
+    "approvedDestination": "creno-va/baro / codex/764-independent-final-acceptance -> codex/764-redesign-integration",
+    "approvalEvidence": "User reply 게시 승인 to the specific QA publishing question in chat 01a1baaa-4abb-7261-8bb4-e1dd5910615e, 2026-11-08 KST; coordinator verified the original user message."
   },
   "independent": {
     "testSourceSha256": "3b2294b14c897bf262466c90b115c7f0be285219218a3117cb30613403fec0fa",
