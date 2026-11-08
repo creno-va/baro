@@ -317,7 +317,7 @@
 .report-outline a span {
   flex: none;
   width: 18px;
-  color: #8b96a5;
+  color: #647084;
   font-variant-numeric: tabular-nums;
 }
 .report-outline a:hover {
@@ -357,7 +357,7 @@
 }
 .report-reading-section > header > span {
   min-width: 20px;
-  color: #8b96a5;
+  color: #647084;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
