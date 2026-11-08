@@ -108,6 +108,14 @@ function draft(
       (ref) => ref.kind !== "user_material" || files.some((file) => file.id === ref.fileId),
     ),
   );
+  const summary = item.summaryDetails?.overview ?? item.summary;
+  const overview =
+    facts.find(
+      (fact) =>
+        fact.attribution === "user_statement" &&
+        fact.references.some((reference) => reference.kind === "intake_narrative"),
+    )?.text ?? summary;
+  const parties = item.summaryDetails?.parties ?? workspace?.people ?? [];
   const observationText = (value: V2FileObservation) => {
     const p = value.position;
     const position =
@@ -127,7 +135,7 @@ function draft(
     "내 사건 한눈에",
     excluded.length
       ? "자료를 제외한 리포트입니다. 남은 사실과 출처를 아래에서 확인하고 사건 개요를 직접 보완해 주세요."
-      : item.summary || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
+      : overview || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
     "",
     "사건 입장과 절차",
     context
@@ -165,11 +173,18 @@ function draft(
     "리포트 보관 · 현재 내용을 저장하고 필요한 자료를 더 확인할 수 있습니다. 추가 내용은 새 버전에서 반영합니다.",
     "",
     "당사자",
+    ...(!excluded.length && parties.length
+      ? []
+      : ["이 범위에서 확인한 당사자·관계 정보가 없습니다. 추가 확인이 필요합니다."]),
     ...(excluded.length ? [] : (item.summaryDetails?.parties ?? workspace?.people ?? [])).map(
       (p) => `${p.label} · ${p.role}`,
     ),
     "",
     "주요 사실",
+    ...(!excluded.length && summary && summary !== overview
+      ? ["### 사용자가 확인한 전체 정리", summary]
+      : []),
+    ...(facts.length ? [] : ["구체적인 사실과 자료의 연결은 아직 확인하지 못했습니다."]),
     ...facts.map(
       (fact) =>
         `${fact.text} · ${fact.userEdited ? "사용자가 수정한 내용" : fact.attribution === "user_material" ? "자료에 적힌 내용" : fact.attribution === "official_source" ? "공식 출처" : fact.attribution === "ai_organization" ? "AI 정리" : "사용자 진술"} · ${{ reported: "진술됨", observed: "자료 내용 확인됨", uncertain: "미확인", conflicting: "상반됨" }[fact.certainty]}`,
@@ -182,6 +197,9 @@ function draft(
     "상대방의 입장과 원본의 진정성은 확인되지 않았습니다. 날짜·금액·출처와 빠진 내용을 직접 확인하세요.",
     "",
     "타임라인",
+    ...(workspace?.timeline?.length
+      ? []
+      : ["날짜와 사건 순서는 미확인입니다. 확인한 시점과 경위를 대화에서 보완해 주세요."]),
     ...(workspace?.timeline ?? []).map(
       (entry) => `${entry.date} · ${entry.title}: ${entry.detail}`,
     ),
