@@ -278,7 +278,16 @@ test("sidebar collapse keeps role navigation, recent management and resize focus
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   const sidebar = page.locator(".sidebar-desktop");
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
+    "href",
+    "/cases",
+  );
+  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "설정", exact: true })).toBeVisible();
   await expect(sidebar.locator(".sidebar-story")).toHaveAttribute("aria-current", "page");
@@ -287,6 +296,7 @@ test("sidebar collapse keeps role navigation, recent management and resize focus
   await sidebar.getByRole("button", { name: "최근 사건 열기" }).click();
   const drawer = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(drawer.locator(".sidebar-story")).toBeVisible();
+  await expect(drawer.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sidebar.getByRole("button", { name: "최근 사건 열기" })).toBeFocused();
   await page.reload();

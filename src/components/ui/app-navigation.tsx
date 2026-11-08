@@ -44,8 +44,14 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
     { href: "/", label: "서비스 소개", icon: "home" },
     { href: "/login", label: "이야기 시작하기", icon: "new" },
   ],
-  user: [{ href: "/app", label: "새 사건 입력", icon: "new" }],
-  lawyer: [{ href: "/app", label: "새 사건 입력", icon: "new" }],
+  user: [
+    { href: "/app", label: "새 사건 입력", icon: "new" },
+    { href: "/cases", label: "내 사건", icon: "cases" },
+  ],
+  lawyer: [
+    { href: "/app", label: "새 사건 입력", icon: "new" },
+    { href: "/cases", label: "내 사건", icon: "cases" },
+  ],
   moderator: [{ href: "/admin/reviews", label: "검토 대기", icon: "reviews" }],
 };
 export function availableNavigation(role: NavigationRole, availableRoutes: readonly string[]) {
