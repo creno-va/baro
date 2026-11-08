@@ -1,5 +1,8 @@
 # 제품 화면 UI 개편
 
+현재는 [전면 개편 계약](../development/REDESIGN-EXECUTION.md)과 [공통 기반](./FOUNDATION.md)이
+아래 이전 화면 정리보다 우선한다. 기존 DS 보존 제약은 없고 모든 웹 경로를 공통 시스템으로 교체한다.
+
 2026-10-22 · [#332](https://github.com/creno-va/baro/issues/332). 랜딩과 `/app`의 브랜드를 기준으로 제품 화면의 정보 위계와 레이아웃을 정리한다.
 
 ## 근거와 적용
