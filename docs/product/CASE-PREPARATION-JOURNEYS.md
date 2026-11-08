@@ -6,6 +6,7 @@
 - Tracking: [#764](https://github.com/creno-va/baro/issues/764), [문서 PR765](https://github.com/creno-va/baro/pull/765)
 - Scope: [기능 범위](./CASE-PREPARATION-SCOPE.md), [ADR-0019](../adr/0019-case-preparation-without-lawyer-platform.md)
 - Proposed architecture: [ADR-0020](../adr/0020-procedure-aware-intake-and-working-reports.md)
+- Screen structure: [대화·자료·리포트·문서 초안 배치](../design/CASE-WORKSPACE-LAYOUT.md)
 
 ## 1. 이번 기획의 기준
 
@@ -22,6 +23,11 @@
 - 초기 AI 질문은 0~2차례, 차례당 최대3문항을 제안한다. 기존2×3 상한·AI200/일·기술 한도·비용 관측 전용·owner/동의/삭제와 독립 검증을 유지한다.
 
 ## 2. 공통 화면과 시작 흐름
+
+사건 상세의 실제 배치/왕복은 [화면 구조 v0.1](../design/CASE-WORKSPACE-LAYOUT.md)에 별도로
+정리한다. 대화/리포트/문서 초안을 항상 보이는 세 작업 화면으로, 자료를 어느 화면에서든
+여는 보조 패널로 두는 안이다. 화면별 스크롤·입력·자료 선택·초안 편집 보존과 주요 액션,
+데스크톱/모바일·직접 URL·W01~W15는 그 문서의 검토 대상이며 현재 구현됐다는 뜻이 아니다.
 
 ```mermaid
 flowchart TD

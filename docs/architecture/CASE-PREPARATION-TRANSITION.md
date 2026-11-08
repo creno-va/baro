@@ -16,6 +16,9 @@ API·공통 client·native 경로가 존재한다. 이 문서는 해당 기능�
 문서 우선 시작의 사건 생성/질문 생성 분리, 작업 중 보관과 기존 reviewed saved 계약의 분리,
 동일 저장본/현재 사건의 구분은 [Proposed ADR-0020](../adr/0020-procedure-aware-intake-and-working-reports.md)을 검토한다.
 기존 API/DB로 이미 제공되는 기능이나 새 계약의 구현 승인으로 해석하지 않는다.
+[사건 상세 화면 기획](../design/CASE-WORKSPACE-LAYOUT.md)의 세 작업 화면·자료/근거 패널을
+검토한다. 특히 별도 페이지 간 작업 중 보관/복귀는 현재 패널 보존과 다르며 안전한 보관 ACK·
+owner/버전·직접 URL 계약이 필요하다. 화면 이동을 위해 새 SPA나 상태 라이브러리를 도입하는 결정은 없다.
 
 ```mermaid
 flowchart LR

@@ -7,6 +7,8 @@
 [민사·형사 준비/대응 상세 흐름 v0.1](./product/CASE-PREPARATION-JOURNEYS.md)은 초기 입력부터
 질문·리포트·문서 초안과 실패 복구까지의 검토안이다. [Proposed ADR-0020](./adr/0020-procedure-aware-intake-and-working-reports.md)은
 문서 우선 생성/확인·작업 중 보관·저장 snapshot의 구현 전 경계를 설명한다.
+[사건 상세 화면 구조 v0.1](./design/CASE-WORKSPACE-LAYOUT.md)은 대화/리포트/문서 초안과
+자료 보조 패널의 데스크톱/모바일 배치·주요 액션·원문/편집 왕복·직접 URL/보관을 구체화한다.
 
 2026-11-08 로그인 이후 앱 개편의 단일 설계·소유권·인수 기록은
 [앱 작업공간·고객용 리포트](./development/APP-WORKSPACE-REWORK.md)와 #751을 따른다.
