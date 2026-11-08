@@ -74,7 +74,7 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(35, 100, 232)",
+    "rgb(37, 99, 235)",
   );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();

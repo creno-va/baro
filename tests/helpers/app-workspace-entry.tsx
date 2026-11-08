@@ -63,6 +63,7 @@ function Fixture() {
   const documentMode = new URLSearchParams(location.search).has("document");
   const noPanel = new URLSearchParams(location.search).has("no-panel");
   const conditional = new URLSearchParams(location.search).has("conditional");
+  const longReview = new URLSearchParams(location.search).has("longReview");
   return (
     <div className="app-frame app-frame--product" data-product-ui="refresh" data-app-workspace>
       <AppNavigation
@@ -134,6 +135,18 @@ function Fixture() {
             <Dialog open={siblingReview} onOpenChange={setSiblingReview} title="독립 자료 검토">
               <label htmlFor="sibling-review">별도 교정 내용</label>
               <input id="sibling-review" defaultValue="" />
+              {longReview && (
+                <>
+                  {Array.from({ length: 28 }, (_, index) => (
+                    <p key={`long-review-${index}`}>
+                      자료 {index + 1}. 기억하는 날짜와 확인한 내용을 차근차근 읽고, 아직 모르는
+                      부분은 확인이 필요한 내용으로 남겨요. 저장한 원문과 준비한 자료를 함께 살펴본
+                      뒤 필요한 부분만 교정해요.
+                    </p>
+                  ))}
+                  <Button onClick={() => setSiblingReview(false)}>검토 닫기</Button>
+                </>
+              )}
             </Dialog>
           )}
         </main>

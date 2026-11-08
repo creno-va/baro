@@ -299,7 +299,9 @@ test("list empty/error/loading, auth and consent gates, refresh/back use server 
   ).toBeVisible();
   fail = false;
   await page.getByRole("button", { name: "다시 불러오기" }).click();
-  await expect(page.locator(".sidebar-desktop .sidebar-empty")).toContainText("나누던 이야기");
+  await expect(page.locator(".sidebar-desktop .sidebar-empty")).toContainText(
+    "아직 사건이 없어요.",
+  );
   present = true;
   await page.reload();
   await expect(
