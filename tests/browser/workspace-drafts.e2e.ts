@@ -113,7 +113,8 @@ test("date precision and long valid timeline titles remain editable", async ({ p
   await page.getByRole("button", { name: "편집", exact: true }).click();
   const title = page.getByLabel("어떤 일이 있었나요?");
   await expect(title).toHaveValue("가".repeat(400));
-  await title.press("End");
+  // macOS uses Command+Right for the input's line end; End scrolls the document.
+  await title.press(process.platform === "darwin" ? "Meta+ArrowRight" : "End");
   await title.press("Backspace");
   await expect(title).toHaveValue("가".repeat(399));
   expect(await title.evaluate((input: HTMLInputElement) => input.validity.tooLong)).toBe(false);

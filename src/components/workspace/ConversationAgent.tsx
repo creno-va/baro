@@ -10,7 +10,7 @@ import type {
   V2ConversationProgress,
   V2ConversationState,
 } from "../../contracts/v2";
-import { Button } from "../ui/button";
+import { Button, ButtonLink } from "../ui/button";
 import { ConversationAnalysis } from "./ConversationAnalysis";
 import { ConversationPanel } from "./ConversationPanel";
 import { observeReportContinuation, type ReportConfirmation } from "./conversation-progress";
@@ -83,6 +83,9 @@ export function ConversationAgent({
   onPaneOpen,
   refreshKey = 0,
   queuedWork = false,
+  onStateChange,
+  onOpenMaterials,
+  reportHref,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -103,6 +106,9 @@ export function ConversationAgent({
   onPaneOpen?: () => void;
   refreshKey?: number;
   queuedWork?: boolean;
+  onStateChange?: (state: V2ConversationState | null) => void;
+  onOpenMaterials?: () => void;
+  reportHref?: string;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
@@ -132,6 +138,9 @@ export function ConversationAgent({
     [],
   );
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
+  useEffect(() => {
+    onStateChange?.(ready && stateIsCurrent && !readFailures ? state : null);
+  }, [state, ready, stateIsCurrent, readFailures, onStateChange]);
   const backgroundBusy =
     (queuedWork &&
       (acceptedRefresh !== refreshKey ||
@@ -166,8 +175,14 @@ export function ConversationAgent({
   const paneEpoch = useRef(ticket());
   const menu = useRef<HTMLDetailsElement>(null);
   const attempt = useRef<{ identity: string; input: V2ConversationActionRequest } | null>(null);
-  const callbacks = useRef({ onChanged, onBusyChange });
-  callbacks.current = { onChanged, onBusyChange };
+  const callbacks = useRef({ onChanged, onBusyChange, onOpenMaterials });
+  callbacks.current = { onChanged, onBusyChange, onOpenMaterials };
+  const choosePane = useCallback((nextPane: ConversationPane) => {
+    if (nextPane === "materials" && callbacks.current.onOpenMaterials) {
+      callbacks.current.onOpenMaterials();
+      setPane(null);
+    } else setPane(nextPane);
+  }, []);
   useEffect(() => {
     callbacks.current.onBusyChange(busy || paneBusy || backgroundBusy);
   }, [busy, paneBusy, backgroundBusy]);
@@ -453,7 +468,7 @@ export function ConversationAgent({
           attempt.current = null;
           dirty.current = false;
           setResult(null);
-          setPane(conversationReadPanes[action]);
+          choosePane(conversationReadPanes[action]);
           await changed();
           return;
         }
@@ -494,7 +509,7 @@ export function ConversationAgent({
         dirty.current = false;
         setHasDraft(false);
         setResult(next);
-        setPane(next.pane);
+        choosePane(next.pane);
         await changed();
       } catch (cause) {
         if (!current(epoch) || !mounted.current) return;
@@ -540,6 +555,7 @@ export function ConversationAgent({
       stateIsCurrent,
       workspace.case.revision,
       observeProgress,
+      choosePane,
     ],
   );
   useEffect(() => {
@@ -689,18 +705,24 @@ export function ConversationAgent({
           )}
           <fieldset className="conversation-agent-actions">
             <legend className="workspace-sr-only">대화에서 이어갈 작업</legend>
-            <Button
-              type="button"
-              variant="default"
-              disabled={disabled || !stateIsCurrent || busy || paneBusy}
-              loading={busy}
-              onClick={(event) => {
-                event.currentTarget.focus();
-                if (next) void execute(next);
-              }}
-            >
-              {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
-            </Button>
+            {reportHref && next === "prepare_report" && state.report.status === "ready" ? (
+              <ButtonLink href={reportHref}>
+                리포트 열기 <ArrowRight size={16} aria-hidden="true" />
+              </ButtonLink>
+            ) : (
+              <Button
+                type="button"
+                variant="default"
+                disabled={disabled || !stateIsCurrent || busy || paneBusy}
+                loading={busy}
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  if (next) void execute(next);
+                }}
+              >
+                {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
+              </Button>
+            )}
             <details ref={menu}>
               <summary>다른 작업</summary>
               <fieldset
@@ -710,20 +732,30 @@ export function ConversationAgent({
                 <legend className="workspace-sr-only">다른 사건 작업</legend>
                 {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
                   .filter((action) => action !== next)
-                  .map((action) => (
-                    <Button
-                      type="button"
-                      key={action}
-                      variant="ghost"
-                      size="sm"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        void execute(action);
-                      }}
-                    >
-                      {conversationActionLabels[action]}
-                    </Button>
-                  ))}
+                  .map((action) =>
+                    reportHref &&
+                    (["save_report", "resolve_followup", "open_lawyers"].includes(action) ||
+                      (action === "prepare_report" && state.report.status === "ready")) ? (
+                      <ButtonLink key={action} href={reportHref} variant="ghost" size="sm">
+                        {action === "prepare_report"
+                          ? "리포트 열기"
+                          : conversationActionLabels[action]}
+                      </ButtonLink>
+                    ) : (
+                      <Button
+                        type="button"
+                        key={action}
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          void execute(action);
+                        }}
+                      >
+                        {conversationActionLabels[action]}
+                      </Button>
+                    ),
+                  )}
               </fieldset>
             </details>
           </fieldset>

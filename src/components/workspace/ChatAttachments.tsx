@@ -26,12 +26,14 @@ export function ChatAttachments({
   disabled,
   removeLocal,
   removeUploaded,
+  label = "이번 메시지의 첨부 파일",
 }: {
   local: File[];
   uploaded: FileView[];
   disabled: boolean;
   removeLocal: (file: File) => void;
   removeUploaded: (id: string) => void;
+  label?: string;
 }) {
   const localKeys = useRef(new WeakMap<File, number>()),
     nextKey = useRef(0);
@@ -45,7 +47,7 @@ export function ChatAttachments({
   };
   if (!local.length && !uploaded.length) return null;
   return (
-    <ul className="workspace-chat-attachments" aria-label="이번 메시지의 첨부 파일">
+    <ul className="workspace-chat-attachments" aria-label={label}>
       {local.map((file) => (
         <li key={localKey(file)}>
           <LocalPreview file={file} />
