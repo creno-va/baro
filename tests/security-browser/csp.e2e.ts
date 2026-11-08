@@ -228,6 +228,14 @@ test("built Worker mobile menu, brand, local font and error state work without C
   );
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.evaluate(() => {
+    // macOS uses overlay scrollbars. A test-only rule in an already allowed
+    // same-origin sheet gives this 15px classic-gutter regression real width.
+    const sheet = [...document.styleSheets].find(
+      (value) => value.href && new URL(value.href).origin === location.origin,
+    );
+    if (!sheet) throw new Error("Built same-origin stylesheet missing");
+    sheet.insertRule("html::-webkit-scrollbar { width: 15px; height: 15px; }", sheet.cssRules.length);
+    document.documentElement.style.overflowY = "scroll";
     document.documentElement.style.scrollbarGutter = "stable";
     document.body.style.minHeight = "calc(100vh + 1px)";
   });
