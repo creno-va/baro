@@ -724,7 +724,7 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   ).toBeVisible();
 });
 
-test("320px case input separates purpose from subject context without overflow", async ({
+test("320px case input keeps both purpose choices at 44px without owner-category controls or overflow", async ({
   page,
 }) => {
   await seed(page);
@@ -736,10 +736,24 @@ test("320px case input separates purpose from subject context without overflow",
     /상대방의 주장/,
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  for (const name of ["고소 준비", "주장 대응", "개인", "기업"]) {
-    const box = await page.getByRole("radio", { name, exact: true }).locator("..").boundingBox();
+  await expect(page.getByRole("radio")).toHaveCount(2);
+  for (const name of ["개인", "기업"])
+    await expect(page.getByRole("radio", { name, exact: true })).toHaveCount(0);
+  for (const name of ["고소 준비", "주장 대응"]) {
+    const radio = page.getByRole("radio", { name, exact: true });
+    const target = radio.locator("..");
+    const box = await target.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
     expect(box?.height).toBeGreaterThanOrEqual(44);
+    await target.click();
+    await expect(radio).toBeChecked();
   }
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeFocused();
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeChecked();
   await page.screenshot({
     path: ".wrangler/ui622/case-input-respond-mobile-320.png",
     fullPage: true,
