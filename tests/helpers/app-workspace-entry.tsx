@@ -69,7 +69,7 @@ function Fixture() {
       <AppNavigation
         role={"user" as const}
         pathname="/cases/shell-case"
-        availableRoutes={["/app", "/lawyers", "/settings"]}
+        availableRoutes={["/app", "/cases", "/settings"]}
       />
       <div className="app-surface">
         <main id="main-content" tabIndex={-1}>
