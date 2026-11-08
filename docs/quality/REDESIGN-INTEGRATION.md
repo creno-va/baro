@@ -227,3 +227,23 @@ main01af의 full42505489653은 core/native 성공 뒤 browser25개 실패·join 
 04는 shell 통합6개와 기존 human review1개 실패를 전담한다. 공통 제품은01 소유를 유지한다.
 장문·원본 bytes/PDF·권한/owner epoch·늦은 응답·file picker/초점·반응형/44px·실패/재시도
 단정을 보존하고 추가 수리의 새 main에서 전체 검증한다. 현재920ed full의 결과도 별도 기록한다.
+
+후속 원본01 `33010036ad1eb58495cad2a16a1f0b4e4da7a999`는 raw composer의 domain 규칙과
+동일 specificity였던 레거시 fallback을 `:where`로 낮춘다. canonical Textarea의 ui-input/ui-textarea
+제외와 bare textarea의 기존220px fallback은 유지한다. 실제 stylesheet 순서를 뒤집어 기존220>140
+실패와 수정 후140px 상한·16px 글자·44px/실제 hit/axe를 대조했다. foundation 포함21 PASS다.
+02 최종 `deb85d3fb56069ecbe0b8f8e3ebf51ed35c919e6`의 workspace90+conversation12,
+04 최종 `81ce728632a90b80a56f63debea6ef1f08a571f3`의 shell9+human6은 SKIP0으로 통과했다.
+닫힌 native details의 비표시 자식 좌표와 실제 가시 overflow를 구분하며 root 폭·모든 열린 링크의
+44px/viewport/hit/키보드 단정은 강화했다. 동의·원본 bytes·권한·늦은 응답·초점 회귀는 유지한다.
+
+03 최종 `ad697de69f7e48f231eed750c34e51d44b695745`는 명시 재생성 전 저장한 수정 본문도
+기존 임시 보관에 남긴다. 네 작업 왕복·TXT bytes·중복 덮어쓰기 차단과 계정 변경 purge를 검증한다.
+새 v3는 현재 준비된 분석과 hash/scope가 같을 때만 mock binding을 회복한다. v2 수정본의 기존
+immutable 이력은 남아 있으며 영구 유실로 분류하지 않는다. 서버의 userEdited 차단·현재 JSON과
+알려진 ID의 HTML/PDF 계약은 그대로이며 영구 이력 UI/API는 추가하지 않는다. 초안 안내는 사실 확정과
+본문 수정의 차이를 설명한다. React 발췌는 기존 안전한 Markdown renderer로 h4/list를 읽게 하며
+불확실성·400자 한계·전체 본문 이동을 보존한다. native PDF의 기존 P3 잔여와 별개다.
+원본69 domain/reading·브라우저34(5+19+6+모달4) PASS/SKIP0, 최종 typed-fixture 보완 뒤
+quick/build와390/1200px 실제 v2→v3→네 작업→현재 기준 미검토 초안→TXT2 PASS를 구분해 기록한다.
+통합 후보와 새 main의 full/preview 결과는 이 소스 단위 결과를 대체해 별도 정확 SHA로 남긴다.

@@ -245,6 +245,21 @@ section/join·동일SHA preview/smoke가 필요하며 과거 통과를 새 실�
 
 ## PR 순서와 구 스타일 제거
 
+### 마지막 코퍼스·리포트 후속의 소유권
+
+main920ed 후속에서01은 `cases.css`의 레거시 textarea fallback만 소유한다.
+02는 conversation-home/workspace 회귀,04는 shell-integration/human-review 회귀를 소유한다.
+03은 ReportReading/ReportReview/FollowUpResolution과 mock reports/rework의 기존 분석 binding
+정합성, 관련 report-state/integrated/domain 테스트를 소유한다. 공통 API·fixture·skip 조건은 바꾸지 않는다.
+총괄은 이 원본 커밋들을 같은 기반에 통합하고 실행·인수 문서와 최종 검증을 책임진다.
+
+새 버전 생성은 저장된 사용자 수정 본문도 기존 preservedEdit 메모리에 보관한다. 같은 사건의
+네 작업 전환에서는 유지하며 새로고침·사건 종료, 독립 리포트 화면 종료 시 사라짐을 안내한다.
+보관 중인 내용을 다음 편집으로 덮어쓰지 않고 기존 TXT 다운로드를 먼저 제공한다. owner/epoch
+변경 시 지운다. 영구 버전 목록·비교·복구는 없는 계약이며 구현했다고 표시하지 않는다.
+mock POST만 실제 서버와 같은 원본 hash·가림·제외 scope 일치 조건으로 준비된 분석을 연결한다.
+수정 본문을 확정 사실로 사용하는 것을 막는 userEdited fence와 서버 저장/버전/CAS 계약은 유지한다.
+
 1. 총괄 계약·인증 보존 선행 변경, 05 현재 문제 수집.
 2. 01 공통 기반 PR: 확정 API·실제 대표 화면·native 소비 검증·CI. 소비자에게 정확 head 인계.
 3. 기반 PR CI·리뷰 후02~04가 같은 exact head를 stacked base로 적용한다. 필요한 독립 모달·fixture는 먼저 준비 가능.
