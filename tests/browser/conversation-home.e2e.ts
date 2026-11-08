@@ -231,7 +231,9 @@ test("recent case titles clear when another tab changes the active account", asy
     );
     window.dispatchEvent(new StorageEvent("storage", { key: "baro-api-mock-v1:session" }));
   });
-  await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
+  ).toBeVisible();
   await expect(recent).toHaveCount(0);
 });
 
@@ -278,7 +280,9 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
       }),
     );
   });
-  await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
+  ).toBeVisible();
   await expect(narrative).toHaveValue("");
   await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();

@@ -34,6 +34,7 @@ async function openAction(page: Page, name: string) {
 type Fixture = Awaited<ReturnType<typeof openReworkBrowserFixture>>;
 const materialText = "합성 검증 계약서. 반환 약속 날짜는 미확인으로 남깁니다.";
 const photoName = "synthetic-conversation-photo.png";
+const journeyArtifacts = process.env.BARO_REWORK_JOURNEY_DIR ?? "/tmp/baro-625-journeys";
 async function counters(f: Fixture) {
   const response = await f.control("stats");
   expect(response.ok()).toBe(true);
@@ -676,11 +677,7 @@ for (const change of ["technical_revision", "file_revision"] as const)
       expect(control.revisions.after > control.revisions.before).toBe(true);
     } finally {
       try {
-        const directory = join(
-          "/tmp/baro-625-journeys",
-          testInfo.project.name,
-          `photo-review-${change}`,
-        );
+        const directory = join(journeyArtifacts, testInfo.project.name, `photo-review-${change}`);
         await mkdir(directory, { recursive: true });
         await writeFile(join(directory, "protocol.json"), JSON.stringify(f.observations, null, 2));
       } finally {
@@ -955,7 +952,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         followup
       ];
       const directory = join(
-        "/tmp/baro-625-journeys",
+        journeyArtifacts,
         String(testInfo.project.name || "chromium"),
         `${purpose}-${branch}`,
       );
@@ -1063,6 +1060,44 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
               (await counters(f)).models.filter((phase) => phase === "workspace_legal_plan").length,
           )
           .toBeGreaterThan(beforeConfirmation);
+        // Model admission starts before publication. Observe the real completed
+        // source and the app's current revision before opening its stored view.
+        expect((await f.control("settle", {})).ok()).toBe(true);
+        await expect
+          .poll(() =>
+            page.evaluate(async (id) => {
+              const path = "/src/client/api/index.ts";
+              const { api } = (await import(path)) as typeof import("../../src/client/api");
+              const [progress, item] = await Promise.all([
+                api.rework.getConversationProgress(id),
+                api.cases.get(id),
+              ]);
+              const state = progress.state;
+              return {
+                analysis: state.analysis.status,
+                report: state.report.status,
+                pendingEvidence: state.pendingEvidenceIds.length,
+                summaryConfirmed: state.summaryConfirmed,
+                currentWorkspace: state.workspaceRevision === item.revision,
+                currentSummary:
+                  state.snapshot?.basis.summaryRevision === item.summaryDetails?.revision,
+              };
+            }, f.info.caseId),
+          )
+          .toEqual({
+            analysis: "ready",
+            report: "ready",
+            pendingEvidence: 0,
+            summaryConfirmed: true,
+            currentWorkspace: true,
+            currentSummary: true,
+          });
+        const completedMaterials = await openWorkspaceMaterials(page);
+        await expect(
+          completedMaterials.locator(".materials-panel__report").getByRole("status"),
+        ).toHaveText("리포트를 열 수 있어요");
+        await closeWorkspaceMaterials(page);
+        const completedResearch = await counters(f);
         await openAction(page, "법률·판례와 현재 약점 확인");
         const analysis = page.getByRole("region", { name: "법률·판례와 현재 약점", exact: true });
         await expect(
@@ -1073,6 +1108,9 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         await expect(analysis.getByText("법 조항·요건과 사건 근거", { exact: true })).toBeVisible();
         await expect(analysis.getByRole("link", { name: /공식 원문/ }).first()).toBeVisible();
+        const afterResearchView = await counters(f);
+        expect(afterResearchView.models).toEqual(completedResearch.models);
+        expect(afterResearchView.sources).toBe(completedResearch.sources);
         if (photoId) {
           const included = await page.evaluate(async (fileId) => {
             const path = "/src/client/api/index.ts";

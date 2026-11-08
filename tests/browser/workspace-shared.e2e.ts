@@ -17,6 +17,13 @@ async function preparedReport(page: Page, caseId: string) {
   }, caseId);
 }
 
+function reportEvidence(page: Page) {
+  return page.locator(".report-reading-section").filter({
+    has: page.getByRole("heading", { name: "증거 자료", exact: true }),
+  });
+}
+const mockCoverage = "API 예시 처리 완료 · 실제 OCR·ASR·영상 처리는 수행되지 않았어요.";
+
 test.skip(
   process.env.BARO_WORKSPACE_SHARED_UI !== "true",
   "Run with PUBLIC_API_MODE=mock and BARO_WORKSPACE_SHARED_UI=true.",
@@ -98,7 +105,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
     page
-      .getByRole("dialog")
+      .getByRole("dialog", { name: "자료 확인", exact: true })
       .locator("details p")
       .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
@@ -129,14 +136,16 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
     "공식 자료를 확인하지 못했어요",
   );
-  await expect(page.getByRole("list", { name: "사건에 추가한 증거" })).toContainText(
-    "shared-synthetic.txt",
-  );
+  const evidence = reportEvidence(page);
+  await expect(evidence).toBeVisible();
+  await expect(evidence).toContainText(`shared-synthetic.txt · ${mockCoverage}`);
+  await expect(evidence).toContainText("공통 저장소의 합성 원본 자료입니다.");
   const savedReport = await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)));
   expect(savedReport?.content).toContain("shared-synthetic.txt");
   expect(savedReport?.content).toContain("공통 저장소의 합성 원본 자료입니다.");
   await page.reload();
   await openReportOptions(page);
+  await expect(evidence).toContainText(`shared-synthetic.txt · ${mockCoverage}`);
   expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
     savedReport,
   );
@@ -214,14 +223,19 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
     "공식 자료를 확인하지 못했어요",
   );
-  await expect(page.getByRole("list", { name: "사건에 추가한 증거" })).toContainText(
-    "긴 합성 자료.txt",
-  );
+  const evidence = reportEvidence(page);
+  await expect(evidence).toBeVisible();
+  await expect(evidence).toContainText(`긴 합성 자료.txt · ${mockCoverage}`);
+  await expect(evidence).toContainText("Synthetic corrected first chunk");
+  await expect(evidence).not.toContainText("Synthetic second chunk");
   const report = await preparedReport(page, "synthetic-material-case");
   expect(report?.content).toContain("긴 합성 자료.txt");
   expect(report?.content).toContain("Synthetic corrected first chunk");
   expect(report?.content).not.toContain("Synthetic second chunk");
   await page.reload();
   await openReportOptions(page);
+  await expect(evidence).toContainText(`긴 합성 자료.txt · ${mockCoverage}`);
+  await expect(evidence).toContainText("Synthetic corrected first chunk");
+  await expect(evidence).not.toContainText("Synthetic second chunk");
   expect(await preparedReport(page, "synthetic-material-case")).toEqual(report);
 });
