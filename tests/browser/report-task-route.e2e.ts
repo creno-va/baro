@@ -112,6 +112,13 @@ test("direct report task preserves the draft review and requires explicit review
   await page.evaluate(async () => {
     const path = "/src/client/api/index.ts";
     const { api } = (await import(path)) as typeof import("../../src/client/api");
+    const current = await api.rework.getContext("synthetic-case");
+    await api.rework.updateContext("synthetic-case", {
+      expectedRevision: current.workspaceRevision,
+      casePurpose: "prepare_claim",
+      subjectContext: "individual",
+      procedure: { kind: "civil", stage: "before_filing", description: null },
+    });
     const state = await api.rework.getConversation("synthetic-case");
     await api.rework.executeAction(
       "synthetic-case",
