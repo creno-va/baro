@@ -654,8 +654,11 @@
     padding-top: 16px;
   }
   .case-header {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
+  }
+  .case-header__actions {
+    justify-self: end;
   }
   .case-header__identity > svg {
     display: none;
