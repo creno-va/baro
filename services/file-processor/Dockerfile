@@ -38,9 +38,9 @@ FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f
 # Native tools stay in this standalone service, never the Workers bundle.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pil weasyprint=62.3-1 ffmpeg poppler-utils tesseract-ocr tesseract-ocr-kor \
-    libreoffice-writer=4:25.2.3-2+deb13u8 libreoffice-calc=4:25.2.3-2+deb13u8 \
-    libreoffice-impress=4:25.2.3-2+deb13u8 libreoffice-java-common=4:25.2.3-2+deb13u8 \
-    python3-uno=4:25.2.3-2+deb13u8 python3-olefile=0.47-1 \
+    libreoffice-writer=4:25.2.3-2+deb13u9 libreoffice-calc=4:25.2.3-2+deb13u9 \
+    libreoffice-impress=4:25.2.3-2+deb13u9 libreoffice-java-common=4:25.2.3-2+deb13u9 \
+    python3-uno=4:25.2.3-2+deb13u9 python3-olefile=0.47-1 \
     fonts-noto-cjk=1:20240730+repack1-1 default-jre-headless=2:1.21-76 \
     && rm -rf /var/lib/apt/lists/*
 

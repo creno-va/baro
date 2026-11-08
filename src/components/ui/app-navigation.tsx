@@ -1,10 +1,13 @@
 import {
   BriefcaseBusiness,
   FileText,
+  History,
   House,
   LogOut,
   Menu,
   MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Settings,
@@ -73,6 +76,72 @@ export function AppNavigation({
 }) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const navigationRoot = useRef<HTMLElement>(null);
+  const collapseButton = useRef<HTMLButtonElement>(null);
+  const menuReturn = useRef<HTMLElement | null>(null);
+  const mobileMenuButton = useRef<HTMLButtonElement>(null);
+  const lastNavigationFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("baro-sidebar-collapsed") === "true");
+    } catch {
+      // A blocked preference store must not block navigation.
+    }
+    const desktop = window.matchMedia("(min-width: 1200px)");
+    const mobile = window.matchMedia("(max-width: 767px)");
+    const updateNavigationFocus = () => {
+      // CSS can blur a disappearing rail control before the media-query event.
+      const focused =
+        document.activeElement === document.body
+          ? lastNavigationFocus.current
+          : document.activeElement;
+      if (desktop.matches) {
+        menuReturn.current = collapseButton.current;
+        setOpen(false);
+      } else if (menuReturn.current && !menuReturn.current.getClientRects().length) {
+        menuReturn.current = mobileMenuButton.current;
+      }
+      if (
+        focused instanceof HTMLElement &&
+        navigationRoot.current?.contains(focused) &&
+        !focused.getClientRects().length
+      )
+        (desktop.matches ? collapseButton.current : mobileMenuButton.current)?.focus();
+    };
+    const clearPointerFocus = (event: PointerEvent) => {
+      if (event.target instanceof Node && !navigationRoot.current?.contains(event.target))
+        lastNavigationFocus.current = null;
+    };
+    document.addEventListener("pointerdown", clearPointerFocus, true);
+    desktop.addEventListener("change", updateNavigationFocus);
+    mobile.addEventListener("change", updateNavigationFocus);
+    return () => {
+      document.removeEventListener("pointerdown", clearPointerFocus, true);
+      desktop.removeEventListener("change", updateNavigationFocus);
+      mobile.removeEventListener("change", updateNavigationFocus);
+    };
+  }, []);
+  useEffect(() => {
+    const frame = navigationRoot.current?.closest<HTMLElement>("[data-app-workspace]");
+    if (frame) frame.dataset.sidebarCollapsed = String(collapsed);
+  }, [collapsed]);
+  function toggleSidebar() {
+    setCollapsed((value) => {
+      const next = !value;
+      try {
+        localStorage.setItem("baro-sidebar-collapsed", String(next));
+      } catch {
+        // This is a display preference only; keep the control usable without storage.
+      }
+      return next;
+    });
+  }
+  function openDrawer(opener: HTMLElement) {
+    opener.focus();
+    menuReturn.current = opener;
+    setOpen(true);
+  }
   const [session, setSession] = useState<SessionView | null>(null);
   const [recent, setRecent] = useState<CaseView[]>([]);
   const [recentState, setRecentState] = useState<"loading" | "ready" | "error">("loading");
@@ -280,6 +349,8 @@ export function AppNavigation({
           key={item.href}
           href={item.href}
           aria-current={active ? "page" : undefined}
+          aria-label={item.label}
+          title={item.label}
         >
           <Icon aria-hidden="true" size={19} strokeWidth={1.65} />
           <span>{item.label}</span>
@@ -290,14 +361,15 @@ export function AppNavigation({
     (resolvedRole === "user" || resolvedRole === "lawyer") &&
     !session?.needsConsent && (
       <div className="sidebar-recent">
+        <h2 className="sidebar-recent__heading">최근 사건</h2>
         <section
           className="sidebar-recent__list"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the bounded recent list.
           tabIndex={0}
-          aria-label="최근 이야기 목록"
+          aria-label="최근 사건 목록"
         >
           {recentState === "loading" ? (
-            <LoadingContent title="최근 이야기를 불러오는 중" />
+            <LoadingContent title="최근 사건을 불러오는 중" />
           ) : recentState === "error" ? (
             <p className="sidebar-empty" role="status">
               사건을 불러오지 못했어요.
@@ -367,9 +439,8 @@ export function AppNavigation({
             <div className="sidebar-empty">
               <MessageCircle size={20} aria-hidden="true" />
               <p>
-                나누던 이야기는 여기에.
-                <br />
-                언제든 이어서 정리할 수 있어요.
+                아직 사건이 없어요.
+                <br />새 사건을 만들면 여기에 표시돼요.
               </p>
             </div>
           )}
@@ -378,9 +449,26 @@ export function AppNavigation({
     );
   const renderAccount = () => (
     <div className="sidebar-account">
+      {session?.user && !session.needsConsent && (
+        <a
+          href="/settings"
+          className="app-nav__link sidebar-settings"
+          aria-label="설정"
+          title="설정"
+          aria-current={pathname === "/settings" ? "page" : undefined}
+        >
+          <Settings size={18} aria-hidden="true" />
+          <span>설정</span>
+        </a>
+      )}
       {session?.user ? (
         <div className="sidebar-account__row">
-          <a href={session.needsConsent ? "/consent" : "/settings"} className="sidebar-profile">
+          <a
+            href={session.needsConsent ? "/consent" : "/settings"}
+            className="sidebar-profile"
+            aria-label={`${session.user.name || "내 계정"} · 계정 관리`}
+            title="계정 관리"
+          >
             <span className="sidebar-avatar" aria-hidden="true">
               {session.user.name.slice(0, 1) || "B"}
             </span>
@@ -428,12 +516,43 @@ export function AppNavigation({
   );
   return (
     <>
-      <header className="app-header">
+      <header
+        ref={navigationRoot}
+        className="app-header"
+        data-collapsed={collapsed}
+        onFocusCapture={(event) => {
+          if (event.target instanceof HTMLElement) lastNavigationFocus.current = event.target;
+        }}
+        onBlurCapture={(event) => {
+          if (
+            event.relatedTarget instanceof Node &&
+            !event.currentTarget.contains(event.relatedTarget)
+          )
+            lastNavigationFocus.current = null;
+        }}
+      >
         <div className="app-header__inner">
           <Brand href={session?.user ? roleStart(session) : "/"} />
-          <span className="mobile-caption">생각이 정리되는 곳</span>
+          <Button
+            ref={collapseButton}
+            className="sidebar-collapse"
+            variant="ghost"
+            size="icon"
+            aria-label={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+            aria-expanded={!collapsed}
+            aria-controls="app-desktop-navigation"
+            title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+            onClick={toggleSidebar}
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={19} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={19} aria-hidden="true" />
+            )}
+          </Button>
           {apiMode === "mock" && <span className="mobile-mode">API 예시</span>}
           <Button
+            ref={mobileMenuButton}
             className="app-menu-trigger"
             variant="ghost"
             size="icon"
@@ -443,17 +562,26 @@ export function AppNavigation({
             disabled={!ready}
             onClick={(event) => {
               // Pointer activation does not always focus the button before the sheet opens.
-              event.currentTarget.focus();
-              setOpen(true);
+              openDrawer(event.currentTarget);
             }}
           >
             <Menu aria-hidden="true" size={22} />
           </Button>
         </div>
-        <div className="sidebar-desktop">
+        <div className="sidebar-desktop" id="app-desktop-navigation">
           <nav className="app-nav app-nav--desktop" aria-label="주 메뉴">
             {renderLinks()}
           </nav>
+          <Button
+            className="sidebar-history-trigger"
+            variant="ghost"
+            size="icon"
+            aria-label="최근 사건 열기"
+            title="최근 사건 열기"
+            onClick={(event) => openDrawer(event.currentTarget)}
+          >
+            <History size={19} aria-hidden="true" />
+          </Button>
           {renderRecent()}
           {renderAccount()}
         </div>
@@ -462,7 +590,8 @@ export function AppNavigation({
         open={open}
         onOpenChange={setOpen}
         title="메뉴"
-        description="이야기를 시작하거나 이어가세요."
+        description="사건을 시작하거나 이어서 정리하세요."
+        returnFocusRef={menuReturn}
       >
         <Brand href={session?.user ? roleStart(session) : "/"} />
         <nav className="app-nav app-nav--mobile" aria-label="모바일 주 메뉴">
