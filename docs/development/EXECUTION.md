@@ -1,5 +1,14 @@
 # 에이전트 실행 기준
 
+## 2026-11-08 고정 빌드 입력 보존
+
+다운로드 복구 PR #773의 CI/PDF 검사는 통과했으나 main `5f108c85`의 GitHub 실행 서버는
+공식 API에도 반복504를 반환했다. 같은 요청은 로컬에서 성공하고 기존 고정 SHA256과
+일치했다. 확인한 원본 archive5개를 빌드/검사 입력으로 보존하여 해당 외부 다운로드를
+제거한다. file-processor source/extension4개와 CI scanner1개이며 버전·체크섬·출력·
+검사 범위는 바꾸지 않는다. Docker context에 필요한 source archive와 기존 report.py를
+명시하고, 출처/무결성/라이선스 보존 방법을 각 입력 디렉터리에 기록한다.
+
 ## 2026-11-08 preview 배포 다운로드 복구
 
 사용자 승인으로 UI PR #772를 CI/PDF 렌더링 성공 후 main `b02357ff`에 병합했다.
