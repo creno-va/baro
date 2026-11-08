@@ -12,6 +12,10 @@
 API·공통 client·native 경로가 존재한다. 이 문서는 해당 기능을 종료한 증거가 아니다.
 새 목표는 하나의 공통 사건 사용자이며 사건의 절차/입장은 사건 맥락이다.
 민사/형사 × 준비/대응은 제안 단계이고 아직 strict DTO·DB enum으로 결정하지 않았다.
+사용자 요청으로 [네 경로 상세 기획](../product/CASE-PREPARATION-JOURNEYS.md)을 작성했다.
+문서 우선 시작의 사건 생성/질문 생성 분리, 작업 중 보관과 기존 reviewed saved 계약의 분리,
+동일 저장본/현재 사건의 구분은 [Proposed ADR-0020](../adr/0020-procedure-aware-intake-and-working-reports.md)을 검토한다.
+기존 API/DB로 이미 제공되는 기능이나 새 계약의 구현 승인으로 해석하지 않는다.
 
 ```mermaid
 flowchart LR

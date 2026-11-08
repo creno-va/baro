@@ -61,6 +61,7 @@
 ## 후속과 미결
 
 - [기능 범위와 검토용 제안](../product/CASE-PREPARATION-SCOPE.md): 민사/형사 × 준비/대응, 문서 우선 진입, 지속 리포트와 목적별 초안.
+- [네 경로 상세 기획](../product/CASE-PREPARATION-JOURNEYS.md)과 [Proposed ADR-0020](./0020-procedure-aware-intake-and-working-reports.md): 초기 입력·질문·리포트·문서 초안의 검토안. 구현 승인은 별도다.
 - [전환 설계](../architecture/CASE-PREPARATION-TRANSITION.md): 기존 role·구형 계약·공개 자산·원격 데이터의 안전한 전환. 정확한 저장/응답 방식은 미결.
 - 민사·형사 4경로의 세부 기능, 첫 문서 종류/절차 범위, 기타 분야 지원 수준은 사용자 검토 전 제안이다.
 - 문서 작성 완료는 기능 제거·미지원 모달 구현·기존 계정 전환·실제 법률/외부/배포 인수 완료가 아니다.

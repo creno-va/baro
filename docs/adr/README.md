@@ -3,6 +3,8 @@
 2026-11-08 [ADR-0019](./0019-case-preparation-without-lawyer-platform.md)은 초기 변호사 연결·전용 사용자 단을 제외하고
 기존 계정의 공통 사건 이용을 유지한다. 문서·기획 단계이며 실제 기능 종료/데이터 전환/배포는 미실행이다.
 민사/형사와 입장별 세부 흐름·지속 리포트는 [검토용 기획](../product/CASE-PREPARATION-SCOPE.md)에서 구분한다.
+[네 경로 상세 기획](../product/CASE-PREPARATION-JOURNEYS.md)과 [ADR-0020](./0020-procedure-aware-intake-and-working-reports.md)은
+문서 우선 입력·질문 생략 조건·지속 리포트/작업 중 초안 보관의 제안이며 ADR-0020은 Proposed다.
 
 2026-11-01 [ADR-0018](./0018-conversation-report-rework.md)은 사용자 요청한 대화·법률 분석·리포트·후속 해결 범위에서
 ADR-0006의 사실 준비 전용/제출문서 일괄 금지와 ADR-0015의 신규 확장 중단을 부분 대체한다. 방향 승인과 독립 법률 인수는 구분한다.
@@ -49,6 +51,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 | [0017](./0017-expo-mobile-and-shared-client-boundaries.md) | Expo 모바일 앱과 공통 클라이언트 경계 | Accepted target; 구조·실행 계획 작성, 앱 구현·실기기 인수 미착수 |
 | [0018](./0018-conversation-report-rework.md) | 대화 중심 법률 분석·리포트·후속 해결 | Accepted; 실제 변호사 연결은0019로 제외, 세 액션/미지원 모달·검증/안전/저장 경계 유지 |
 | [0019](./0019-case-preparation-without-lawyer-platform.md) | 사건 준비 중심 서비스와 변호사 사용자 단 제외 | Accepted product boundary; 문서/기획 단계, 구현·전환·배포 미실행 |
+| [0020](./0020-procedure-aware-intake-and-working-reports.md) | 절차·입장별 입력과 지속 리포트·목적별 초안 | Proposed; 네 경로 상세 기획의 입력/상태/저장 경계, 기존 계약 변경 없음 |
 
 ## v2 부분 대체 관계
 

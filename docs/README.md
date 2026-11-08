@@ -4,6 +4,9 @@
 [확정 범위·민사/형사 기획 제안](./product/CASE-PREPARATION-SCOPE.md), [전환 설계](./architecture/CASE-PREPARATION-TRANSITION.md)를 먼저 읽는다.
 초기 변호사 연결·전용 사용자 단을 제외하며 기존 계정은 일반 사건 이용을 유지한다.
 현재는 문서/기획만 변경하고 코드·원격 데이터·공개 기능·정책 버전·배포는 변경하지 않는다.
+[민사·형사 준비/대응 상세 흐름 v0.1](./product/CASE-PREPARATION-JOURNEYS.md)은 초기 입력부터
+질문·리포트·문서 초안과 실패 복구까지의 검토안이다. [Proposed ADR-0020](./adr/0020-procedure-aware-intake-and-working-reports.md)은
+문서 우선 생성/확인·작업 중 보관·저장 snapshot의 구현 전 경계를 설명한다.
 
 2026-11-08 로그인 이후 앱 개편의 단일 설계·소유권·인수 기록은
 [앱 작업공간·고객용 리포트](./development/APP-WORKSPACE-REWORK.md)와 #751을 따른다.

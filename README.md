@@ -4,6 +4,7 @@
 > 제외합니다. 기존 변호사 계정은 일반 사용자로 본인 사건·자료·리포트 이용을 유지합니다.
 > [ADR-0019](./docs/adr/0019-case-preparation-without-lawyer-platform.md), [범위·민사/형사 흐름 제안](./docs/product/CASE-PREPARATION-SCOPE.md)을 우선합니다.
 > 리포트 세 액션은 유지하고 변호사 액션은 미지원 모달만 표시하도록 기획합니다. 제품 코드·계정 데이터·공개 자산·배포는 아직 변경하지 않았습니다.
+> [민사·형사 준비/대응 상세 흐름 v0.1](./docs/product/CASE-PREPARATION-JOURNEYS.md)에 초기 입력·질문·반복 리포트·목적별 초안과 예외를 구체화했습니다. 세부 동작과 [ADR-0020](./docs/adr/0020-procedure-aware-intake-and-working-reports.md)은 검토안입니다.
 
 > 2026-11-01 사용자 요청으로 대화 중심 사건·법률 분석·리포트·후속 해결 개편을 진행합니다.
 > 이번 범위는 과거 신규 기능 중단·사실 준비 전용의 해당 부분을 대체합니다.
