@@ -217,3 +217,13 @@ resize/root 배율/머리글 스크롤·작성 보존과 pageerror0도 검사한
 후보의 실제 native Chrome 재현과 기존 회귀·quick/build, 새 통합/main SHA 결과는 구분한다.
 원본01af의 동일한 빠른 CSS 배율/머리글 순서에서도 ResizeObserver undelivered 경고1회가
 재현돼 원본/후보 비교 로그에 남겼다. 이를 새 수리의 회귀로 단정하거나 검증에서 숨기지 않는다.
+
+## 전체 코퍼스의 마지막 mock 묶음
+
+main01af의 full42505489653은 core/native 성공 뒤 browser25개 실패·join SKIPPED로 끝났다.
+첫743 full의60분 취소 뒤 미실행이던 마지막 mock 묶음이 포함된다. 원본 로그와25개 제목을
+보존하며, 기존 앱390px 첫 hit1개는 후속 초기 배치 수리와 대조하고 나머지는 현재 main920ed에서
+재현해 실제 제품/fixture/현재 UI 기대를 구분한다.02는 대화 시작·workspace 테스트17개 실패,
+04는 shell 통합6개와 기존 human review1개 실패를 전담한다. 공통 제품은01 소유를 유지한다.
+장문·원본 bytes/PDF·권한/owner epoch·늦은 응답·file picker/초점·반응형/44px·실패/재시도
+단정을 보존하고 추가 수리의 새 main에서 전체 검증한다. 현재920ed full의 결과도 별도 기록한다.
