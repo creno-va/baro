@@ -1,7 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
 
 const photo = { id: "synthetic-photo", revision: 3, status: "ready", purpose: "profile_photo" };
-const documentAsset = { id: "synthetic-document", revision: 7, status: "ready", purpose: "portfolio" };
+const documentAsset = {
+  id: "synthetic-document",
+  revision: 7,
+  status: "ready",
+  purpose: "portfolio",
+};
 const pdf = Buffer.from("%PDF-1.4\nsynthetic private owner document\n%%EOF");
 const image = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRDsAAAAASUVORK5CYII=",
@@ -83,7 +88,10 @@ async function load(page: Page) {
   await expect(
     region(page).getByRole("button", { name: "등록 자료 2 내려받기", exact: true }),
   ).toBeEnabled();
-  await page.screenshot({ path: `.wrangler/redesign-04-legacy-assets-${page.viewportSize()?.width ?? 0}.png`, fullPage: true });
+  await page.screenshot({
+    path: `.wrangler/redesign-04-legacy-assets-${page.viewportSize()?.width ?? 0}.png`,
+    fullPage: true,
+  });
 }
 
 test("general accounts trigger no legacy requests; existing owners explicitly read without creating a profile", async ({
