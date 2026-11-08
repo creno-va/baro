@@ -2,6 +2,54 @@ import { expect, type Locator, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
 
 const caseId = "shell-app-case";
+
+function inspectCaseTool(node: HTMLElement | SVGElement, capturedPoint?: { x: number; y: number }) {
+  const rect = node.getBoundingClientRect();
+  const point = capturedPoint ?? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  const menu = node.closest("nav");
+  const disclosure = node.closest("details");
+  if (!menu || !disclosure) throw new Error("Case tools structure missing");
+  const cover = document.elementFromPoint(point.x, point.y);
+  return {
+    point,
+    open: disclosure.open,
+    ssr: node.closest("astro-island")?.hasAttribute("ssr") ?? false,
+    rect: rect.toJSON(),
+    menu: menu.getBoundingClientRect().toJSON(),
+    inlineStyle: menu.getAttribute("style"),
+    viewport: { width: innerWidth, height: innerHeight },
+    hit: node.contains(cover),
+    cover: cover ? { tag: cover.tagName, class: cover.getAttribute("class") } : null,
+  };
+}
+
+async function expectCaseToolLinks(tools: Locator) {
+  const routes = [
+    ["요약 보기 · 재확인", "summary"],
+    ["타임라인", "timeline"],
+    ["다음 행동", "actions"],
+    ["유사 판례", "precedents"],
+  ] as const;
+  await expect(tools.getByRole("link")).toHaveText(routes.map(([name]) => name));
+  for (const [name, path] of routes) {
+    const link = tools.getByRole("link", { name, exact: true });
+    await expect(link).toHaveAttribute("href", `/cases/${caseId}/${path}`);
+    const point = await link.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    const state = await link.evaluate(inspectCaseTool, point);
+    expect(state.open, JSON.stringify(state)).toBe(true);
+    expect(state.hit, JSON.stringify(state)).toBe(true);
+    expect(state.rect.width).toBeGreaterThanOrEqual(44);
+    expect(state.rect.height).toBeGreaterThanOrEqual(44);
+    expect(state.menu.left).toBeGreaterThanOrEqual(0);
+    expect(state.menu.top).toBeGreaterThanOrEqual(0);
+    expect(state.menu.right).toBeLessThanOrEqual(state.viewport.width);
+    expect(state.menu.bottom).toBeLessThanOrEqual(state.viewport.height);
+    await link.click({ trial: true });
+  }
+}
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(
@@ -92,12 +140,17 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       const rect = node.getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     });
-    expect(
-      await link.evaluate(
-        (node, point) => node.contains(document.elementFromPoint(point.x, point.y)),
-        point,
-      ),
-    ).toBe(true);
+    const hit = await link.evaluate(
+      (node, point) => node.contains(document.elementFromPoint(point.x, point.y)),
+      point,
+    );
+    if (!hit) {
+      await test.info().attach("first-case-tool-hit", {
+        body: JSON.stringify(await link.evaluate(inspectCaseTool, point)),
+        contentType: "application/json",
+      });
+    }
+    expect(hit).toBe(true);
     await link.click();
     await expect(page).toHaveURL(new RegExp(`/cases/${caseId}/precedents$`));
     await expect(page.getByRole("link", { name: "대화로 돌아가기", exact: true })).toHaveAttribute(
@@ -328,6 +381,89 @@ test.describe("short viewport at the native 200% layout size", () => {
     });
     expect(pageErrors).toEqual([]);
   });
+});
+
+test.describe("native case tools before hydration", () => {
+  test.use({ javaScriptEnabled: false });
+  for (const width of [320, 1440]) {
+    test(`server-rendered tools keep four native links actionable at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/cases/${caseId}`);
+      const trigger = page.locator(".case-tools > summary");
+      const details = page.locator(".case-tools");
+      const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
+      expect(await details.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+      await trigger.press("Enter");
+      const state = await tools.getByRole("link").last().evaluate(inspectCaseTool);
+      expect(state.ssr).toBe(true);
+      expect(state.inlineStyle).toBeNull();
+      await expectCaseToolLinks(tools);
+      await trigger.press("Space");
+      expect(await details.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+      await trigger.click();
+      await expectCaseToolLinks(tools);
+      await tools.getByRole("link", { name: "유사 판례", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/cases/${caseId}/precedents$`));
+    });
+  }
+});
+
+test("the first native target and open state survive delayed hydration", async ({ page }) => {
+  let resume = () => {};
+  const released = new Promise<void>((resolve) => {
+    resume = () => resolve();
+  });
+  let held = false;
+  await page.route(/\/src\/components\/workspace\/Workspace\.tsx(?:\?|$)/, async (route) => {
+    held = true;
+    await released;
+    await route.continue();
+  });
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/cases/${caseId}`, { waitUntil: "domcontentloaded" });
+    // Hold the real client module, rather than waiting for readiness before opening.
+    await expect.poll(() => held).toBe(true);
+    const trigger = page.locator(".case-tools > summary");
+    const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
+    expect(
+      await page.locator(".case-tools").evaluate((node) => (node as HTMLDetailsElement).open),
+    ).toBe(false);
+    await trigger.click();
+    const link = tools.getByRole("link", { name: "유사 판례", exact: true });
+    const point = await link.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    const before = await link.evaluate(inspectCaseTool, point);
+    await test.info().attach("before-hydration", {
+      body: JSON.stringify(before),
+      contentType: "application/json",
+    });
+    expect(before.open).toBe(true);
+    expect(before.ssr).toBe(true);
+    expect(before.hit, JSON.stringify(before)).toBe(true);
+    resume();
+    await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+    await expect
+      .poll(() => tools.evaluate((node) => node.style.getPropertyValue("--case-tools-left")))
+      .not.toBe("");
+    const after = await link.evaluate(inspectCaseTool, point);
+    await test
+      .info()
+      .attach("after-hydration", { body: JSON.stringify(after), contentType: "application/json" });
+    expect(after.open).toBe(true);
+    expect(after.ssr).toBe(false);
+    // Keep the original point: a fresh point would hide an initial target moving away.
+    expect(after.hit, JSON.stringify(after)).toBe(true);
+    await expectCaseToolLinks(tools);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`/cases/${caseId}/precedents$`));
+  } finally {
+    resume();
+  }
 });
 
 for (const width of [390, 1440]) {

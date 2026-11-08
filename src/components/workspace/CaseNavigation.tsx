@@ -79,6 +79,7 @@ function positionTools(disclosure: HTMLDetailsElement | null, trigger: HTMLEleme
     Math.min(below ? belowTop : aboveBottom - placed.height, bottomEdge - placed.height),
   );
   menu.style.setProperty("--case-tools-left", `${left / zoom}px`);
+  menu.style.setProperty("--case-tools-right", "auto");
   menu.style.setProperty("--case-tools-top", `${top / zoom}px`);
   menu.scrollTop = scrollTop;
   revealFocusedTool(menu);
