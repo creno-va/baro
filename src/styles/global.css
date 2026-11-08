@@ -176,6 +176,15 @@ select,
 summary {
   scroll-margin-block: 80px 24px;
 }
+:where(.ui-button) > svg {
+  flex-shrink: 0;
+}
+
+:where(.ui-auth-providers) svg {
+  width: 20px;
+  height: 20px;
+}
+
 .skip-link {
   position: fixed;
   top: -100px;
@@ -756,6 +765,7 @@ html:has(dialog:modal) {
 }
 .ui-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   min-width: 0;
 }
@@ -845,9 +855,6 @@ html:has(dialog:modal) {
 :where(.ui-state--loading .ui-state__icon) {
   color: var(--primary);
 }
-:where(.ui-button) > svg {
-  flex-shrink: 0;
-}
 .ui-input[readonly] {
   background: var(--surface-subtle);
 }
@@ -907,6 +914,7 @@ html:has(dialog:modal) {
   gap: 12px;
 }
 .public-main {
+  margin-inline: auto;
   width: min(var(--reading-width), calc(100% - 48px));
   flex: 1;
   padding-block: 48px;
@@ -985,10 +993,6 @@ html:has(dialog:modal) {
 .ui-auth .ui-button {
   width: 100%;
   min-height: 48px;
-}
-:where(.ui-auth-providers) svg {
-  width: 20px;
-  height: 20px;
 }
 .ui-check {
   display: flex;
