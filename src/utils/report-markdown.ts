@@ -47,11 +47,34 @@ export function reportOfficialSourceUrl(line: string): string | undefined {
 export type MarkdownBlock =
   | { kind: "paragraph" | "heading" | "quote" | "source_quote" | "code"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
+  | { kind: "table"; header: string[]; rows: string[][] }
   | { kind: "photo"; id: string; caption: string };
+
+function tableCells(line: string): string[] | null {
+  const value = line.trim();
+  if (!value.startsWith("|") || !value.endsWith("|")) return null;
+  const cells: string[] = [];
+  let cell = "";
+  for (let i = 1; i < value.length - 1; i++) {
+    const char = value[i];
+    if (char === "\\" && value[i + 1] === "|") {
+      cell += "|";
+      i++;
+    } else if (char === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else cell += char;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
 export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   let code: string[] | null = null;
-  for (const line of text.split(/\r?\n/u)) {
+  const lines = text.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index] ?? "";
     if (/^\s*```/.test(line)) {
       if (code) {
         blocks.push({ kind: "code", text: code.join("\n") });
@@ -62,6 +85,29 @@ export function reportMarkdownBlocks(text: string): MarkdownBlock[] {
     if (code) {
       code.push(line);
       continue;
+    }
+    const header = tableCells(line);
+    const separator = tableCells(lines[index + 1] ?? "");
+    if (
+      header &&
+      header.length <= 12 &&
+      separator?.length === header.length &&
+      separator.every((cell) => /^:?-{3,}:?$/u.test(cell))
+    ) {
+      const rows: string[][] = [];
+      let end = index + 2;
+      for (; end < lines.length; end++) {
+        const cells = tableCells(lines[end] ?? "");
+        if (!cells) break;
+        rows.push(cells);
+      }
+      // Fall back to literal lines for malformed/oversized tables; never discard
+      // cells, manufacture photos or reinterpret literal official quotations.
+      if (rows.length <= 200 && rows.every((row) => row.length === header.length)) {
+        blocks.push({ kind: "table", header, rows });
+        index = end - 1;
+        continue;
+      }
     }
     if (!line.trim() || /^(?:주의|출처|작성 시각|검증 시각):/u.test(line.trim())) continue;
     const photo = /^!\[([^\]\r\n]{0,200})\]\(baro-photo:([A-Za-z0-9_-]{1,128})\)\s*$/u.exec(
@@ -134,6 +180,8 @@ export function reportMarkdownHtml(
   };
   return reportMarkdownBlocks(text)
     .map((block) => {
+      if (block.kind === "table")
+        return `<div class="report-table"><table><thead><tr>${block.header.map((cell) => `<th scope="col">${inline(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
       if (block.kind === "list") {
         const tag = block.ordered ? "ol" : "ul";
         return `<${tag}>${block.items.map((item) => `<li>${sourceOrInline(item)}</li>`).join("")}</${tag}>`;

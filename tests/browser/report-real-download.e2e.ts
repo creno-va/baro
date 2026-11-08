@@ -52,7 +52,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
     await openReportEditor(page);
-    const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
+    const editor = page.getByRole("textbox", { name: /^(?:내 사건 한눈에|사건 개요) 수정$/ });
     await expect(editor).toBeVisible();
     const paragraphs = Array.from(
       { length: 80 },
