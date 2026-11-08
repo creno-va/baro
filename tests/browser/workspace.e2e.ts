@@ -17,6 +17,27 @@ test.skip(
 const key = "baro-c-contract-test-state";
 const base = "/cases/synthetic-case";
 
+async function expectCaseTasks(page: Page) {
+  const navigation = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  await expect(navigation.getByRole("link")).toHaveCount(4);
+  for (const [name, path] of [
+    ["대화", ""],
+    ["자료 0개", "/files"],
+    ["리포트", "/reports"],
+    ["문서 초안", "/reports#document-drafts"],
+  ] as const)
+    await expect(navigation.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `${base}${path}`,
+    );
+  await expect(navigation.getByRole("link", { name: "대화", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.locator('a[href="/lawyers"], a[href^="/lawyers/"]')).toHaveCount(0);
+  return navigation;
+}
+
 test("a batch of attachments refreshes the workspace once after both accepted uploads", async ({
   page,
 }) => {
@@ -251,16 +272,32 @@ for (const width of [320, 390, 768, 1440]) {
   test(`workspace navigation and empty composer remain readable at ${width}px`, async ({
     page,
   }) => {
+    const actualProcessing: string[] = [];
+    page.on("request", (request) => {
+      if (/\/api\/(v2|auth)\//.test(new URL(request.url()).pathname))
+        actualProcessing.push(request.url());
+    });
     await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto(base);
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await closeWorkspaceMaterials(page);
+    const tasks = await expectCaseTasks(page);
     await page.locator(".case-tools > summary").click();
     const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const links = navigation.getByRole("link");
-    await expect(links).toHaveCount(6);
+    await expect(links).toHaveCount(4);
+    for (const [name, path] of [
+      ["요약 보기 · 재확인", "/summary"],
+      ["타임라인", "/timeline"],
+      ["다음 행동", "/actions"],
+      ["유사 판례", "/precedents"],
+    ] as const)
+      await expect(navigation.getByRole("link", { name, exact: true })).toHaveAttribute(
+        "href",
+        `${base}${path}`,
+      );
     for (const link of await links.all()) {
       await link.scrollIntoViewIfNeeded();
       const box = await link.boundingBox();
@@ -269,7 +306,25 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
-    await page.locator(".case-tools > summary").click();
+    await links.first().focus();
+    for (let index = 1; index < 4; index++) {
+      await page.keyboard.press("Tab");
+      await expect(links.nth(index)).toBeFocused();
+    }
+    await page.keyboard.press("Escape");
+    await expect(navigation).toBeHidden();
+    await expect(page.locator(".case-tools > summary")).toBeFocused();
+    for (const link of await tasks.getByRole("link").all()) {
+      await page.keyboard.press("Tab");
+      await expect(link).toBeFocused();
+      await expect(link).toBeInViewport({ ratio: 1 });
+      const box = await link.boundingBox();
+      if (!box) throw new Error("Permanent task link is missing its box");
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.width).toBeGreaterThanOrEqual(44);
+    }
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
@@ -311,6 +366,7 @@ for (const width of [320, 390, 768, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    expect(actualProcessing).toEqual([]);
   });
 }
 
@@ -2466,20 +2522,24 @@ test("changing the shared mock owner hides the previous workspace and open edito
 test("workspace panels keep their navigation, readable layouts and accessible controls on desktop and mobile", async ({
   page,
 }) => {
+  const actualProcessing: string[] = [];
+  page.on("request", (request) => {
+    if (/\/api\/(v2|auth)\//.test(new URL(request.url()).pathname))
+      actualProcessing.push(request.url());
+  });
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await closeWorkspaceMaterials(page);
+  await expectCaseTasks(page);
   await page.locator(".case-tools > summary").click();
   const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
-  await expect(navigation.getByRole("link")).toHaveCount(6);
+  await expect(navigation.getByRole("link")).toHaveCount(4);
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
   for (const [name, path] of [
     ["요약 보기 · 재확인", "/summary"],
-    ["자료 0", "/files"],
     ["타임라인", "/timeline"],
     ["다음 행동", "/actions"],
     ["유사 판례", "/precedents"],
-    ["리포트 보기", "/reports"],
   ] as const)
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveAttribute(
       "href",
@@ -2501,7 +2561,10 @@ test("workspace panels keep their navigation, readable layouts and accessible co
     mimeType: "text/plain",
     buffer: Buffer.from("반환 약속 날짜를 확인하는 합성 자료입니다."),
   });
-  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
+  await confirmWorkspaceUpload(page);
+  await expect(
+    page.locator("#case-materials-panel").getByText("내용 확인 후 반영 가능", { exact: true }),
+  ).toBeVisible();
   await captureCaseViewports(page, "files");
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
@@ -2520,6 +2583,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
     "1",
   );
   await captureCaseViewports(page, "actions");
+  expect(actualProcessing).toEqual([]);
 });
 
 for (const canRetry of [true, false])

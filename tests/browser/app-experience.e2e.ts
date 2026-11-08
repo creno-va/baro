@@ -50,7 +50,7 @@ test.beforeEach(async ({ page }) => {
   await installLegacyLawyerPages(page);
 });
 
-test("sidebar delete overlays a full-width title and stays centered on hover and focus", async ({
+test("sidebar delete stays visible beside the title and centered on hover and focus", async ({
   page,
 }) => {
   await session(page);
@@ -69,17 +69,26 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
     await page.locator("main").focus();
     await expect(page.locator("main")).toBeFocused();
     await page.mouse.move(800, 400);
-    await expect(controls).toHaveCSS("opacity", "0");
-    await expect(controls).toHaveCSS("pointer-events", "none");
+    await expect(controls).toHaveCSS("opacity", "1");
+    await expect(controls).toHaveCSS("pointer-events", "auto");
+    await expect(remove).toBeVisible();
+    await expect(remove).toBeEnabled();
     const rowBounds = await row.boundingBox();
     const linkBounds = await link.boundingBox();
     const copyBounds = await copy.boundingBox();
-    if (!rowBounds || !linkBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
+    const controlBounds = await controls.boundingBox();
+    const restButton = await remove.boundingBox();
+    if (!rowBounds || !linkBounds || !copyBounds || !controlBounds || !restButton)
+      throw new Error("Synthetic sidebar row missing");
     const contentWidth = await link.evaluate((node) => {
       const style = getComputedStyle(node);
       return node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     });
-    expect(linkBounds.width).toBeCloseTo(rowBounds.width, 1);
+    expect(linkBounds.width).toBeGreaterThan(0);
+    expect(linkBounds.width + controlBounds.width).toBeCloseTo(rowBounds.width, 1);
+    expect(linkBounds.x + linkBounds.width).toBeLessThanOrEqual(controlBounds.x + 0.5);
+    expect(restButton.width).toBeGreaterThanOrEqual(44);
+    expect(restButton.height).toBeGreaterThanOrEqual(44);
     expect(copyBounds.width).toBeCloseTo(contentWidth, 1);
     await expect(link).toHaveAttribute("title", stories[0]?.title ?? "");
     await expect(copy).toHaveCSS("text-overflow", "ellipsis");
@@ -149,10 +158,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
   }
 });
 
-test("touch sidebar retains a visible centered overlay delete control", async ({
-  browser,
-  baseURL,
-}) => {
+test("touch sidebar retains a visible centered delete control", async ({ browser, baseURL }) => {
   if (!baseURL) throw new Error("Synthetic sidebar base URL missing");
   const context = await browser.newContext({
     baseURL,
@@ -192,7 +198,7 @@ test("press feedback keeps the pointer target fixed with motion enabled", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/cases");
   await settled(page);
-  const opener = page.getByRole("button", {
+  const opener = page.locator(".sidebar-desktop").getByRole("button", {
     name: `${stories[0]?.title} 사건 삭제`,
     exact: true,
   });
@@ -250,9 +256,7 @@ test("recent stories scroll independently while account controls stay visible at
   }
 });
 
-test("dialogs settle inside the viewport as mobile sheets or centered dialogs and restore focus", async ({
-  page,
-}) => {
+test("dialogs stay centered inside every viewport and restore focus", async ({ page }) => {
   await session(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const [width, height] of [
@@ -268,7 +272,7 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     await page.setViewportSize({ width: width ?? 320, height: height ?? 480 });
     await page.goto("/cases");
     await settled(page);
-    const opener = page.getByRole("button", {
+    const opener = page.locator(".sidebar-desktop, .ui-sheet").getByRole("button", {
       name: `${lastStory.title} 사건 삭제`,
       exact: true,
     });
@@ -294,10 +298,7 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
-    const verticalAnchor =
-      (width ?? 320) <= 760
-        ? bounds.y + bounds.height - (height ?? 480)
-        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    const verticalAnchor = bounds.y + bounds.height / 2 - (height ?? 480) / 2;
     expect(Math.abs(verticalAnchor)).toBeLessThan(2);
     for (const name of ["닫기", "취소", "사건 삭제"]) {
       const button = dialog.getByRole("button", { name, exact: true });
@@ -342,7 +343,7 @@ test("pending list keeps structure, announces loading, stops motion on request a
   const loading = page.locator(".ui-sheet .ui-loading");
   await expect(loading).toHaveAttribute("role", "status");
   await expect(loading.locator('[data-slot="skeleton"]')).toHaveCount(12);
-  await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "app-spin");
+  await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "ui-spin");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "none");
   await expect(loading.locator('[data-slot="skeleton"]').first()).toHaveCSS(
@@ -476,8 +477,15 @@ test("Escape cannot hide a deletion request that the dialog owner is still waiti
   });
   await page.goto("/cases");
   await settled(page);
-  const opener = page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
-  await page.locator(".sidebar-desktop .sidebar-story-row").filter({ has: opener }).hover();
+  const opener = page
+    .locator(".sidebar-desktop")
+    .getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true });
+  await page
+    .locator(".sidebar-desktop .sidebar-story-row")
+    .filter({
+      has: page.getByRole("button", { name: `${lastStory.title} 사건 삭제`, exact: true }),
+    })
+    .hover();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
@@ -519,9 +527,7 @@ test("Escape dismisses only the top dialog and restores focus inside its parent"
   await expect(opener).toBeFocused();
 });
 
-test("a pending consent shows its account action without pretending to load recent cases", async ({
-  page,
-}) => {
+test("a pending consent returns to consent without loading recent cases", async ({ page }) => {
   await session(page);
   await page.route("**/api/me/session", (route) =>
     route.fulfill({
@@ -531,10 +537,18 @@ test("a pending consent shows its account action without pretending to load rece
       },
     }),
   );
-  await page.goto("/help");
-  await expect(page.locator(".sidebar-desktop .sidebar-profile")).toHaveAttribute(
-    "href",
-    "/consent",
+  await page.route("**/api/me/consent", (route) =>
+    route.fulfill({ json: syntheticConsentStatus(true) }),
   );
+  const caseReads: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/cases" || path === "/api/v2/cases") caseReads.push(path);
+  });
+  await page.goto("/app");
+  await expect(page).toHaveURL(/\/consent\?returnTo=%2Fapp$/);
+  await expect(page.getByRole("checkbox")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "동의하고 계속하기", exact: true })).toBeDisabled();
   await expect(page.locator(".sidebar-desktop .sidebar-recent")).toHaveCount(0);
+  expect(caseReads).toEqual([]);
 });

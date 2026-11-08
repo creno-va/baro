@@ -376,9 +376,39 @@ for (const viewport of [
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
       if (viewport.width === 1280) {
+        await expect.poll(() => apiInFlight).toBe(0);
+        const writesBeforeNavigation = mutations.length;
+        const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+        const taskLinks = tasks.getByRole("link");
+        await expect(taskLinks).toHaveCount(4);
+        for (const [name, path] of [
+          ["대화", ""],
+          ["자료 0개", "/files"],
+          ["리포트", "/reports"],
+          ["문서 초안", "/reports#document-drafts"],
+        ] as const)
+          await expect(tasks.getByRole("link", { name, exact: true })).toHaveAttribute(
+            "href",
+            `${base}${path}`,
+          );
+        await expect(tasks.getByRole("link", { name: "대화", exact: true })).toHaveAttribute(
+          "aria-current",
+          "page",
+        );
+        await expect(page.locator('a[href="/lawyers"], a[href^="/lawyers/"]')).toHaveCount(0);
         const menu = await openCaseTools(page);
         const links = menu.getByRole("link");
-        await expect(links).toHaveCount(6);
+        await expect(links).toHaveCount(4);
+        for (const [name, path] of [
+          ["요약 보기 · 재확인", "/summary"],
+          ["타임라인", "/timeline"],
+          ["다음 행동", "/actions"],
+          ["유사 판례", "/precedents"],
+        ] as const)
+          await expect(menu.getByRole("link", { name, exact: true })).toHaveAttribute(
+            "href",
+            `${base}${path}`,
+          );
         const columns = () =>
           links.evaluateAll(
             (items) => new Set(items.map((item) => item.getBoundingClientRect().left)).size,
@@ -394,6 +424,8 @@ for (const viewport of [
             expect(bounds).not.toBeNull();
             expect(bounds?.x).toBeGreaterThanOrEqual(0);
             expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
+            expect(bounds?.height).toBeGreaterThanOrEqual(44);
+            expect(bounds?.width).toBeGreaterThanOrEqual(44);
           }
           await links.first().focus();
           await expect(links.first()).toBeFocused();
@@ -405,7 +437,27 @@ for (const viewport of [
             await expect(links.nth(index)).toBeInViewport({ ratio: 1 });
           }
         };
+        const checkTasks = async () => {
+          await taskLinks.first().focus();
+          for (let index = 0; index < 4; index++) {
+            if (index > 0) {
+              const nextLinkKey =
+                browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+              await page.keyboard.press(nextLinkKey);
+            }
+            const link = taskLinks.nth(index);
+            await expect(link).toBeFocused();
+            await expect(link).toBeInViewport({ ratio: 1 });
+            const bounds = await link.boundingBox();
+            if (!bounds) throw new Error("Permanent task link is missing its box");
+            expect(bounds.x).toBeGreaterThanOrEqual(0);
+            expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+            expect(bounds.height).toBeGreaterThanOrEqual(44);
+            expect(bounds.width).toBeGreaterThanOrEqual(44);
+          }
+        };
         await checkTools();
+        await checkTasks();
         expect(await columns()).toBe(1);
         await page.evaluate(() => {
           document.documentElement.style.zoom = "1";
@@ -416,7 +468,10 @@ for (const viewport of [
           )
           .toBe(true);
         await checkTools();
+        await checkTasks();
         expect(await columns()).toBe(1);
+        await expect.poll(() => apiInFlight).toBe(0);
+        expect(mutations).toHaveLength(writesBeforeNavigation);
         await page.screenshot({
           path: testInfo.outputPath("customer-real-desktop.png"),
           fullPage: true,

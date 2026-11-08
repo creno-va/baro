@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { openReportOptions } from "../helpers/report-controls";
 import {
@@ -24,6 +25,19 @@ function reportEvidence(page: Page) {
   });
 }
 const mockCoverage = "API 예시 처리 완료 · 실제 OCR·ASR·영상 처리는 수행되지 않았어요.";
+
+async function expectOriginalBytes(page: Page, name: string, expected: Uint8Array) {
+  const pending = page.waitForEvent("download");
+  await page
+    .getByRole("dialog", { name: "자료 확인", exact: true })
+    .getByRole("button", { name: "원본 확인 · 다운로드", exact: true })
+    .click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe(name);
+  const path = await download.path();
+  if (!path) throw new Error("Synthetic original download was not saved");
+  expect(await readFile(path)).toEqual(Buffer.from(expected));
+}
 
 test.skip(
   process.env.BARO_WORKSPACE_SHARED_UI !== "true",
@@ -98,8 +112,12 @@ test("common login and B intake flow through C workspace and D report with origi
     .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
     .check();
   await materials.getByRole("button", { name: "선택한 자료 업로드", exact: true }).click();
-  await materials.getByRole("button", { name: "업로드 다시 시도" }).click();
-  await expect(page.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page
+    .getByRole("region", { name: "자료 업로드 이어하기", exact: true })
+    .getByRole("button", { name: "업로드 다시 시도", exact: true })
+    .click();
+  await expect(materials.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
   await page.reload();
   await openWorkspaceMaterials(page);
   await page.getByRole("button", { name: "자료 확인" }).click();
@@ -110,6 +128,7 @@ test("common login and B intake flow through C workspace and D report with origi
       .locator("details p")
       .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
+  await expectOriginalBytes(page, source.name, source.buffer);
   await page
     .getByRole("dialog", { name: "자료 확인", exact: true })
     .getByRole("button", { name: "닫기", exact: true })
@@ -124,14 +143,18 @@ test("common login and B intake flow through C workspace and D report with origi
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("원본 메시지 날짜 확인");
+  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "원본 메시지 날짜 확인" })).toBeVisible();
+  await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-shared-desktop.png", fullPage: true });
-  await openCaseTool(page, "리포트 보기");
-  await expect(page).toHaveURL(`${base}/reports`);
+  await openCaseTool(page, "리포트");
+  await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
   await expect(page.locator(".report-review")).toBeVisible();
+  expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toBeNull();
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);
   await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(
@@ -151,14 +174,49 @@ test("common login and B intake flow through C workspace and D report with origi
     savedReport,
   );
   await returnToWorkspace(page);
-  await page.getByRole("link", { name: "변호사 찾기", exact: true }).click();
-  await expect(page).toHaveURL(/\/lawyers$/);
+  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  await expect(tasks.getByRole("link")).toHaveCount(4);
+  for (const [name, path] of [
+    ["대화", ""],
+    ["자료 1개", "/files"],
+    ["리포트", "/reports"],
+    ["문서 초안", "/reports#document-drafts"],
+  ] as const)
+    await expect(tasks.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `${base}${path}`,
+    );
+  const draft = page.getByLabel("추가 사실 또는 질문");
+  await draft.fill("자료와 리포트를 읽고 돌아와 이어서 쓸 미전송 합성 설명");
+  const reopenedMaterials = await openWorkspaceMaterials(page);
+  await expect(
+    reopenedMaterials.getByRole("heading", { name: source.name, exact: true }),
+  ).toBeVisible();
+  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
+  await expect(tasks.getByRole("link", { name: "리포트", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(evidence).toContainText("공통 저장소의 합성 원본 자료입니다.");
+  expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
+    savedReport,
+  );
+  await tasks.getByRole("link", { name: "대화", exact: true }).click();
+  await expect(draft).toHaveValue("자료와 리포트를 읽고 돌아와 이어서 쓸 미전송 합성 설명");
+  await expect(
+    page.locator('a[href="/lawyer"], a[href="/lawyers"], a[href^="/lawyers/"]'),
+  ).toHaveCount(0);
   expect(actualProcessing).toEqual([]);
 });
 
 test("uploaded long mock material can be reviewed, edited and excluded after reload", async ({
   page,
 }) => {
+  const actualProcessing: string[] = [];
+  page.on("request", (request) => {
+    if (/\/api\/(v2|auth)\//.test(new URL(request.url()).pathname))
+      actualProcessing.push(request.url());
+  });
   await page.goto("/login");
   await page.evaluate(() => {
     const put = (name: string, value: unknown) =>
@@ -219,6 +277,7 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   ).not.toBeChecked();
   await review.getByText("원본 추출 내용", { exact: true }).nth(0).click();
   await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
+  await expectOriginalBytes(page, "긴 합성 자료.txt", Buffer.from(text));
   await page.goto("/cases/synthetic-material-case/reports");
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);
@@ -240,4 +299,5 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
   await expect(evidence).toContainText("Synthetic corrected first chunk");
   await expect(evidence).not.toContainText("Synthetic second chunk");
   expect(await preparedReport(page, "synthetic-material-case")).toEqual(report);
+  expect(actualProcessing).toEqual([]);
 });
