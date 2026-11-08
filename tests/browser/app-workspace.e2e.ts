@@ -284,3 +284,28 @@ test("visual viewport resize keeps the composer above the shortened viewport", a
   expect((bounds?.y ?? 0) + (bounds?.height ?? 0)).toBeLessThanOrEqual(481);
   await expect(composer).toHaveValue("키보드를 열어도 유지할 초안");
 });
+
+for (const width of [390, 1440]) {
+  test(`initially open panel uses the actual viewport mode at ${width}px`, async ({ page }) => {
+    await seed(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript(() => {
+      const show = HTMLDialogElement.prototype.showModal;
+      HTMLDialogElement.prototype.showModal = function () {
+        this.dataset.modalOpenCount = String(Number(this.dataset.modalOpenCount ?? "0") + 1);
+        return show.call(this);
+      };
+    });
+    await page.goto("/?open&focus");
+    const panel = page.getByRole("dialog", { name: "자료", exact: true });
+    await expect(panel).toBeVisible();
+    expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(width < 1200);
+    if (width >= 1200) {
+      expect(await panel.getAttribute("data-modal-open-count")).toBeNull();
+      await expect(page.getByRole("textbox", { name: "메시지 초안" })).toBeFocused();
+    } else {
+      await expect(panel).toHaveAttribute("data-modal-open-count", "1");
+      await expect(panel.getByRole("button", { name: "자료 패널 닫기" })).toBeFocused();
+    }
+  });
+}

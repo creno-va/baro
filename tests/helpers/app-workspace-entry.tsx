@@ -39,7 +39,7 @@ function MaterialsFixture() {
   );
 }
 function Fixture() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(new URLSearchParams(location.search).has("open"));
   const documentMode = new URLSearchParams(location.search).has("document");
   const noPanel = new URLSearchParams(location.search).has("no-panel");
   return (
@@ -93,7 +93,11 @@ function Fixture() {
                 </section>
                 <label className="shell-fixture-composer">
                   메시지 초안
-                  <textarea defaultValue="" />
+                  <textarea
+                    defaultValue=""
+                    // biome-ignore lint/a11y/noAutofocus: This opt-in fixture reproduces a consumer's initial composer focus.
+                    autoFocus={new URLSearchParams(location.search).has("focus")}
+                  />
                 </label>
               </div>
             )}

@@ -1,5 +1,5 @@
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Button } from "./button";
 
 export interface CaseWorkspaceFrameProps {
@@ -28,7 +28,6 @@ export function CaseWorkspaceFrame({
   const dialog = useRef<HTMLDialogElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
-  const [desktop, setDesktop] = useState(false);
   const panelPresent = panel !== undefined && panel !== null;
   // Read latest controlled state from queued native close events, including a mode change.
   const current = useRef({ panelOpen, onPanelOpenChange });
@@ -52,32 +51,34 @@ export function CaseWorkspaceFrame({
     };
   }, [kind]);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 1200px)");
-    const update = () => setDesktop(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  useEffect(() => {
     const node = dialog.current;
     if (!node) return;
-    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const inside = focused && node.contains(focused);
-    if (node.open) node.close();
-    if (panelOpen && panelPresent) {
-      if (!inside) previousFocus.current = focused;
-      if (desktop) node.show();
-      else node.showModal();
-      // Native mode changes must preserve the current field/selection, not refocus the first control.
-      if (inside) focused.focus({ preventScroll: true });
-      else if (desktop && focused?.isConnected) focused.focus({ preventScroll: true });
-    } else if (inside) {
-      const opener = previousFocus.current;
-      const destination =
-        opener?.isConnected && opener.getClientRects().length ? opener : toggle.current;
-      destination?.focus({ preventScroll: true });
-    }
-  }, [panelOpen, desktop, panelPresent]);
+    const query = window.matchMedia("(min-width: 1200px)");
+    const syncPanel = () => {
+      // SSR markup stays identical. First opening uses the real viewport mode.
+      const inline = query.matches;
+      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) return;
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const inside = focused && node.contains(focused);
+      if (node.open) node.close();
+      if (panelOpen && panelPresent) {
+        if (!inside) previousFocus.current = focused;
+        if (inline) node.show();
+        else node.showModal();
+        // Mode changes preserve the current field/selection, not the first control.
+        if (inside) focused.focus({ preventScroll: true });
+        else if (inline && focused?.isConnected) focused.focus({ preventScroll: true });
+      } else if (inside) {
+        const opener = previousFocus.current;
+        const destination =
+          opener?.isConnected && opener.getClientRects().length ? opener : toggle.current;
+        destination?.focus({ preventScroll: true });
+      }
+    };
+    syncPanel();
+    query.addEventListener("change", syncPanel);
+    return () => query.removeEventListener("change", syncPanel);
+  }, [panelOpen, panelPresent]);
   useEffect(() => {
     const node = dialog.current;
     return () => {
@@ -145,7 +146,7 @@ export function CaseWorkspaceFrame({
                 opener.focus({ preventScroll: true });
             }}
             onKeyDown={(event) => {
-              if (desktop || event.key !== "Tab") return;
+              if (!event.currentTarget.matches(":modal") || event.key !== "Tab") return;
               const node = event.currentTarget;
               if (!(event.target instanceof Element) || event.target.closest("dialog") !== node)
                 return;
@@ -167,7 +168,8 @@ export function CaseWorkspaceFrame({
               }
             }}
             onClick={(event) => {
-              if (desktop || event.target !== event.currentTarget) return;
+              if (!event.currentTarget.matches(":modal") || event.target !== event.currentTarget)
+                return;
               const rect = event.currentTarget.getBoundingClientRect();
               if (
                 event.clientX < rect.left ||

@@ -22,9 +22,12 @@ CI 성공·main 병합 뒤 소비하여 검증한다. 리포트 document/목차�
 - 고정 Bun1.4.0 `bun ci`: PASS, 의존성/lock 변경0.
 - `bun run validate:quick`: PASS. 문서·경계·공급망 attestation·lint·웹/도구/native 타입 및 기존 선택 회귀.
 - `bun run validate:build`: PASS. production build·bundle·Worker dry-run·실제 local workerd login HTML.
-- 독립 shell14/14:320/390/768/1024/1440px, 긴 제목·한글·panel 초안/선택 유지, resize·포커스 복귀,
+- 독립 shell16/16:320/390/768/1024/1440px, 긴 제목·한글·panel 초안/선택 유지, resize·포커스 복귀,
   nested dialog Escape/Tab trap, 역할·설정·rename/CAS 충돌·삭제 취소·owner 변경,
   로딩/실패/빈 목록/재시도,200% zoom·axe·문서 스크롤·visualViewport 축소.
+  00 리뷰의 초기 열린 desktop 패널이 일시 modal로 열리는 회귀를 RED로 재현한 뒤, 첫 동기화부터
+  실제 matchMedia mode를 사용하도록 수정했다. desktop showModal0회/중앙 초기초점 유지와 mobile
+  showModal1회/정상 패널 초점의2개 초기 열림 회귀도 통과했다.
 - 실제 Astro5/5:5폭×새 사건/대화/설정/변호사 찾기 캡처, legacy files/timeline/actions/precedents/reports
   직접 URL,6개 가로 탭 없음, 사건 도구 링크의 hit test와 실제 이동/대화 복귀.
 - 기존 shell-integration 세션 회귀6/6:로그인·동의·로그아웃, 다른 탭 logout, 만료·늦은 응답,
