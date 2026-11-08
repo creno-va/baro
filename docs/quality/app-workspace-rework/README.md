@@ -18,9 +18,12 @@ pixel 비교 자료가 아니다. 모바일 대화는390px, 기존 리포트는3
 
 ## 대화와 자료
 
-PR762 exact `4b7707611ec09eedb4bb42c8053d1ea08409856b`의 실제 Astro 합성 시나리오다.
+PR762의 제품을 후속768/770 main 뒤 소비한 PR769 exact
+`3e83b081a82d726e1f3f27dd9cf466702fbda39b`의 실제 Astro 합성 시나리오다.
 입력·선택·미저장 교정·업로드 접수 대기 중 panel 개폐와 화면 폭 변경, 한글 composition 이벤트,
 200% 확대에서의 실제 일정 저장을 검증한8개 시나리오의 화면이다.
+[44건 검증 receipt](./workspace-regression-results.json)의6개 로그 SHA256도00이 직접 대조했다.
+로컬 Docker 미실행/native 전체 미완료는 실제 결과대로 기록하고 새 최종 full에서 확정한다.
 
 | 화면 | 데스크톱 | 모바일 |
 | --- | --- | --- |
@@ -59,3 +62,32 @@ PR761 exact `2e5c65fb9b67888fe50b462d2ffbd7010fc2342b`의 저장본 읽기 fixtu
 사진·저장 snapshot은 같다. axe를 약화하지 않고 실제 통합 report3과 최종130을 다시 통과했다.
 00의 별도 실제 Astro 조작에서도 저장v2의 사용자 메모·PDF3쪽이 자료 변경 후 유지되고,
 명시적 갱신만 새 자료를 반영함을 확인했다. 실제 외부·법률·물리 기기 인수를 대신하지 않는다.
+
+## 첫 full의 후속 수리 증거
+
+첫 main96ff935의 수동 full42453874134는 browser817 PASS/15 FAIL/2 baseline opt-in SKIP,
+core/native SUCCESS·join SKIPPED다. 아래 후속 검사로 첫 full을 성공으로 바꾸지 않으며,
+모든 수리/통합 기록 병합 뒤 새 main의 full과 같은 SHA preview를 #751에 기록한다.
+
+PR768 exact `ebf2d71294acae940265eef803e779c3e1b9b492`의
+[103건 receipt](./common-regression-results.json)는 Node24.22.1/Bun1.4.0의 ci/quick/build와
+목적44px·모달 기하·긴 본문/초점을 포함한다. [실제390px 장문 화면](./long-review-after-mobile.jpg)은
+독립 실제 Dialog fixture의 최대 scroll 후 끝 버튼을 보여 준다. strict 완전노출1·가림0을 유지했다.
+큰 wheel 직후 paint가 빈 자동 PNG는 최종 시각 근거로 사용하지 않았다.
+[320px 새 사건 화면](./new-case-after-mobile.png)은 같은103건의 실제 목적2개·44px·클릭/
+방향키·초점 검사의 화면이다. 개인/기업 선택 UI0과 기존 저장 context는 구분해 보존한다.
+
+PR770 exact `cf4232a160f16f08aa1a8d14c3a4ef99b06ba53a`의 독립 리포트 fixture는 기존 저장본을
+명시 편집한 읽기 화면이다. 기존 body의 상담/의뢰인 문구를 자동 재정제하지 않는 보존 사례이며,
+새 생성의 고객 본문은 위 native 청구/대응 예시로 확인한다. 전체 AppLayout pixel 비교가 아니다.
+desktop에서 연 목차는390px로 resize해도 열린 상태가 유지된다. 신규 mobile 진입의 기본 접힌
+목차와 구분한다. PDF CTA는 desktop compact, mobile 유효 본문 폭100%다.
+
+| 후속 리포트 | 데스크톱 | 모바일 |
+| --- | --- | --- |
+| 저장본 읽기·PDF CTA | [1440px](./report-export-after-desktop.png) | [390px](./report-export-after-mobile.png) |
+
+[사진 제거 receipt](./report-photo-removal.json)는 실제 증거자료 절의 inline/legacy token1개 삭제,
+새 id/revision+1·새 저장본/HTML 사진0·이전 저장본 사진1과 나머지 원문/출처 보존을 검사한다.
+browser fixture의 PDF header와 SQL renderer 입력 HTML 검증은 실제 native 이미지 자원 검증과
+구분한다. 실제 native/전후 이미지와 최종 full 결과는 단일 계약과 #751 receipt가 정본이다.
