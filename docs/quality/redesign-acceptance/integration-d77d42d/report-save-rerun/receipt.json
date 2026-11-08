@@ -1,0 +1,39 @@
+{
+  "productSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d77d42d/report-save-rerun/results.json",
+  "rawSha256": "f5b4d28b8f6463d9b8473b716c55ae63cdefbbdeffabf1bf0216536665ebc51d",
+  "metadata": {
+    "inspectedProductSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "a5d55a629d898933a2369e6df5cb3f465b38273c77c6f1e5fdd8fc7b5419adeb",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:18:40.653Z",
+    "duration": 21836.723,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "chromium",
+      "status": "failed",
+      "errors": [
+        "Error: expect(locator).toHaveValue(expected) failed\n\nLocator: locator('.report-reading-section textarea').first()\nExpected: \"합성 수정: 일부 반환 사실은 진술이며 원문과 대조가 필요합니다.\"\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toHaveValue\" locator('.report-reading-section textarea').first() with timeout 7000ms\n  - waiting for locator('.report-reading-section textarea').first()\n\n\n  319 |     })\n  320 |     .toEqual({ revision: before.revision + 1, includesCorrection: true });\n> 321 |   await expect(editor).toHaveValue(correction);\n      |                        ^\n  322 | });\n  323 |\n  324 | for (const width of [320, 390, 768, 1024, 1440, 1920]) {\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:321:24"
+      ]
+    },
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "webkit",
+      "status": "failed",
+      "errors": [
+        "Error: expect(locator).toHaveValue(expected) failed\n\nLocator: locator('.report-reading-section textarea').first()\nExpected: \"합성 수정: 일부 반환 사실은 진술이며 원문과 대조가 필요합니다.\"\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toHaveValue\" locator('.report-reading-section textarea').first() with timeout 7000ms\n  - waiting for locator('.report-reading-section textarea').first()\n\n\n  319 |     })\n  320 |     .toEqual({ revision: before.revision + 1, includesCorrection: true });\n> 321 |   await expect(editor).toHaveValue(correction);\n      |                        ^\n  322 | });\n  323 |\n  324 | for (const width of [320, 390, 768, 1024, 1440, 1920]) {\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:321:24"
+      ]
+    }
+  ]
+}

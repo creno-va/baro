@@ -1,0 +1,40 @@
+{
+  "productSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d77d42d/report-save/results.json",
+  "rawSha256": "2c43188f3eb20aff44c76ff3144c4389ed43d1d7af6c20b166054f7a7e4e3171",
+  "metadata": {
+    "inspectedProductSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "56feb5c1ab7819608e2187898886c3e8f7caa510dec0f2b14b901c7f21181ba8",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:17:07.008Z",
+    "duration": 54601.26,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "chromium",
+      "status": "timedOut",
+      "errors": [
+        "Test timeout of 45000ms exceeded.",
+        "Error: page.reload: Test timeout of 45000ms exceeded.\nCall log:\n  - waiting for navigation until \"load\"\n\n\n  278 |     await dialog.dismiss();\n  279 |   });\n> 280 |   await page.reload().catch((error: Error) => {\n      |              ^\n  281 |     if (!/ERR_ABORTED|Navigation.*cancel|interrupted|frame.*detached/i.test(error.message))\n  282 |       throw error;\n  283 |   });\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:280:14"
+      ]
+    },
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "webkit",
+      "status": "failed",
+      "errors": [
+        "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByRole('alert')\nExpected substring: \"합성 검수 저장 실패\"\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toContainText\" getByRole('alert') with timeout 7000ms\n  - waiting for getByRole('alert')\n\n\n  299 |   const save = page.getByRole(\"button\", { name: \"수정 내용 저장\", exact: true });\n  300 |   await save.click();\n> 301 |   await expect(page.getByRole(\"alert\")).toContainText(\"합성 검수 저장 실패\");\n      |                                         ^\n  302 |   await expect(editor).toHaveValue(correction);\n  303 |   expect(await storedReport()).toEqual(before);\n  304 |   await expect(save).toBeEnabled();\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:301:41"
+      ]
+    }
+  ]
+}

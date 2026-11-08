@@ -1,0 +1,30 @@
+{
+  "productSha": "396927f876fdf73f2527bd5faf3897f75fa90050",
+  "browser": "macOS native Chrome",
+  "zoom": {
+    "nativeBadge": "200%",
+    "DPR": 4,
+    "innerWidth": 600,
+    "outerWidth": 1200
+  },
+  "ime": {
+    "inputSource": "Korean; physical key composition g k s r m f",
+    "duringComposition": "한글",
+    "afterReturn": "한글\n",
+    "userMessages": 0,
+    "afterTasks": "한글\n",
+    "taskSequence": [
+      "자료",
+      "리포트",
+      "문서 초안",
+      "대화"
+    ]
+  },
+  "restored": {
+    "inputSource": "English verified g then removed",
+    "nativeZoom": "100%",
+    "DPR": 2,
+    "innerWidth": 1200,
+    "outerWidth": 1200
+  }
+}

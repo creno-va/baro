@@ -1,0 +1,287 @@
+{
+  "productSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d77d42d/independent/results.json",
+  "rawSha256": "6992f0d974a41e2d05f154002a9c5345516b0fc407050c53bade2d529ffca5ed",
+  "metadata": {
+    "inspectedProductSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "80e8240f211fe50e5394a16cd05c90f5e1a86f6a4755d933311eddbce79ac2ec",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:14:19.653Z",
+    "duration": 51044.337999999996,
+    "expected": 44,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "민사 준비 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 대응 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 고소 준비 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 대응 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "message formatting displays synthetic input without executing injected HTML or URLs",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "opening drafts is a read and leaves self selection and generation unchanged",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report source section keeps its full limitation body visible",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "owner change removes the previous owner's unsent text from the document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 준비 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 대응 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 고소 준비 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 대응 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "message formatting displays synthetic input without executing injected HTML or URLs",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "opening drafts is a read and leaves self selection and generation unchanged",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "report source section keeps its full limitation body visible",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "owner change removes the previous owner's unsent text from the document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}
