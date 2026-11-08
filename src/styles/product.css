@@ -401,7 +401,7 @@ body:has(.app-frame[data-app-workspace] .case-workspace--conversation) {
 }
 .case-tools__menu {
   position: fixed;
-  inset: var(--case-tools-top, 72px) auto auto var(--case-tools-left, 16px);
+  inset: var(--case-tools-top, auto) var(--case-tools-right, 16px) auto var(--case-tools-left, auto);
   z-index: var(--layer-menu);
   width: 216px;
   max-width: min(calc(100vw - 32px), var(--case-tools-width-limit, 216px));

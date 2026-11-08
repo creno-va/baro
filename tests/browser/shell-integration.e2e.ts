@@ -1,6 +1,7 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
-import { goToCaseTool } from "../helpers/case-navigation";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+import { confirmWorkspaceUpload, openCaseTool } from "../helpers/workspace-navigation";
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
   page,
@@ -121,7 +122,7 @@ test("long service content fits narrow screens and the menu stays closable after
       if (path === "/cases")
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
-        await expect(page.locator(".settings-refresh")).toBeVisible();
+        await expect(page.getByRole("button", { name: "다시 확인", exact: true })).toBeEnabled();
         await expect(page.locator(".settings-case-delete")).toHaveCount(0);
       }
       if (path.endsWith("/reports")) {
@@ -174,7 +175,7 @@ test("customer login consent logout share the product shell without external API
   await page.goto("/login?error=access_denied");
   await expect(page.getByRole("alert")).toContainText("로그인을 취소");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("radio", { name: /고객/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Naver로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toBeDisabled();
@@ -190,7 +191,7 @@ test("customer login consent logout share the product shell without external API
     .getByRole("button", { name: "로그아웃", exact: true })
     .click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expectCommonLogin(page);
   expect(requests).toEqual([]);
 });
 
@@ -215,8 +216,14 @@ test("customer completes intake workspace original PDF report and cascading dele
     .getByLabel("지금까지 있었던 일")
     .fill("합성 시연 사건입니다. 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
-  for (let index = 0; index < 6; index++)
+  for (let index = 0; index < 6; index++) {
+    await expect(
+      page.getByText(`${Math.floor(index / 3) + 1}차 질문 · ${(index % 3) + 1} / 3`, {
+        exact: true,
+      }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "모름", exact: true }).click();
+  }
   await expect(page).toHaveURL(/\/summary/);
   await page.getByRole("button", { name: "맞아요", exact: true }).click();
   await page
@@ -230,17 +237,36 @@ test("customer completes intake workspace original PDF report and cascading dele
     .fill("합성 추가 사실입니다. 반환 약속 메시지를 자료로 보관했습니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await goToCaseTool(page, "files");
+  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
+  await expect(tasks.getByRole("link")).toHaveCount(4);
+  for (const name of ["대화", /^자료/, "리포트", "문서 초안"])
+    await expect(tasks.getByRole("link", { name, exact: true })).toBeVisible();
+  await openCaseTool(page, "자료");
   await expect(page).toHaveURL(`${casePath}/files`);
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
+  const originalBytes = Buffer.from("통합 시연용 합성 원본입니다. 실제 사건 자료가 아닙니다.");
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
     mimeType: "text/plain",
-    buffer: Buffer.from("통합 시연용 합성 원본입니다. 실제 사건 자료가 아닙니다."),
+    buffer: originalBytes,
   });
+  await expect(
+    page.getByRole("button", { name: "선택한 자료 업로드", exact: true }),
+  ).toBeDisabled();
+  await confirmWorkspaceUpload(page);
   await expect(page.getByRole("heading", { name: "합성증거.txt" })).toBeVisible();
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
-  await goToCaseTool(page, "timeline");
+  const material = page.locator(".workspace-file-list li").filter({ hasText: "합성증거.txt" });
+  await material.getByRole("button", { name: "자료 확인", exact: true }).click();
+  const review = page.getByRole("dialog", { name: "자료 확인", exact: true });
+  const originalPromise = page.waitForEvent("download");
+  await review.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
+  const originalPath = await (await originalPromise).path();
+  if (!originalPath) throw new Error("Synthetic original download missing");
+  expect(await readFile(originalPath)).toEqual(originalBytes);
+  await page.keyboard.press("Escape");
+  await expect(review).not.toBeVisible();
+  await openCaseTool(page, "타임라인");
   await expect(page).toHaveURL(`${casePath}/timeline`);
   await page.getByRole("button", { name: "일정 추가" }).click();
   for (const viewport of [
@@ -248,15 +274,12 @@ test("customer completes intake workspace original PDF report and cascading dele
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
-    // Resizing into the mobile breakpoint starts the bottom-sheet entrance.
-    // Verify its settled geometry without disabling the customer's animation.
+    // The shared Dialog remains centered at both widths; preserve its animation.
     await expect
       .poll(async () => {
         const bounds = await page.getByRole("dialog").last().boundingBox();
         if (!bounds) return Number.POSITIVE_INFINITY;
-        return viewport.width <= 760
-          ? Math.abs(bounds.y + bounds.height - viewport.height)
-          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+        return Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
       })
       .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
@@ -264,12 +287,13 @@ test("customer completes intake workspace original PDF report and cascading dele
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
     );
-    if (viewport.width <= 760)
-      expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) - viewport.height)).toBeLessThan(2);
-    else
-      expect(
-        Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2),
-      ).toBeLessThan(2);
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+    expect(modal?.x).toBeGreaterThanOrEqual(0);
+    expect(modal?.y).toBeGreaterThanOrEqual(0);
+    expect((modal?.x ?? 0) + (modal?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
+    expect((modal?.y ?? 0) + (modal?.height ?? 0)).toBeLessThanOrEqual(viewport.height);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 확인");
@@ -290,6 +314,9 @@ test("customer completes intake workspace original PDF report and cascading dele
   const pdf = await pdfPromise;
   expect(pdf.suggestedFilename()).toMatch(/\.pdf$/);
   await pdf.saveAs(".wrangler/integration-synthetic.pdf");
+  expect((await readFile(".wrangler/integration-synthetic.pdf")).subarray(0, 5).toString()).toBe(
+    "%PDF-",
+  );
   await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/customer-integration-390.png", fullPage: true });
   await page.goto("/settings");
@@ -305,9 +332,7 @@ test("customer completes intake workspace original PDF report and cascading dele
       .poll(async () => {
         const bounds = await page.getByRole("dialog").last().boundingBox();
         if (!bounds) return Number.POSITIVE_INFINITY;
-        return viewport.width <= 760
-          ? Math.abs(bounds.y + bounds.height - viewport.height)
-          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+        return Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
       })
       .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
@@ -315,12 +340,13 @@ test("customer completes intake workspace original PDF report and cascading dele
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
       2,
     );
-    if (viewport.width <= 760)
-      expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) - viewport.height)).toBeLessThan(2);
-    else
-      expect(
-        Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2),
-      ).toBeLessThan(2);
+    expect(Math.abs((modal?.y ?? 0) + (modal?.height ?? 0) / 2 - viewport.height / 2)).toBeLessThan(
+      2,
+    );
+    expect(modal?.x).toBeGreaterThanOrEqual(0);
+    expect(modal?.y).toBeGreaterThanOrEqual(0);
+    expect((modal?.x ?? 0) + (modal?.width ?? 0)).toBeLessThanOrEqual(viewport.width);
+    expect((modal?.y ?? 0) + (modal?.height ?? 0)).toBeLessThanOrEqual(viewport.height);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page
@@ -328,6 +354,10 @@ test("customer completes intake workspace original PDF report and cascading dele
     .getByRole("button", { name: "사건 삭제", exact: true })
     .click();
   await expect(page.getByRole("dialog", { name: "이 사건을 삭제할까요?" })).not.toBeVisible();
+  await page.goto("/cases");
+  await expect(page.getByRole("heading", { name: "불러온 사건 0개", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "불러온 사건 0개", exact: true })).toBeVisible();
   await page.goto(`${casePath}/reports`);
   await expect(page.getByRole("alert")).toBeVisible();
   expect(requests).toEqual([]);
@@ -360,12 +390,21 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
       "/help",
       "/policies/terms",
     ]) {
-      await page.goto(path);
+      const response = await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
       if (path === "/app" || path === "/cases/new")
         await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
-      if (path === "/lawyers")
-        await expect(page.getByRole("link", { name: "김예시", exact: true })).toBeVisible();
+      if (path === "/lawyers") {
+        expect(response?.status()).toBe(410);
+        await expect(
+          page.getByText("현재 변호사 연결 기능은 제공하지 않습니다.", { exact: true }),
+        ).toBeVisible();
+        await expect(page.getByRole("link", { name: "내 사건으로", exact: true })).toHaveAttribute(
+          "href",
+          "/app",
+        );
+        await expect(page.getByRole("link", { name: "김예시", exact: true })).toHaveCount(0);
+      }
       if (path === "/settings")
         await expect(page.getByRole("button", { name: "다시 확인", exact: true })).toBeEnabled();
       expect(
@@ -377,16 +416,25 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
     }
     await page.goto("/help#limits");
     const target = await page.locator("#limits").boundingBox();
-    const header = await page.locator(".app-header").boundingBox();
+    const heading = page
+      .locator("#limits")
+      .getByRole("heading", { name: "사용량·한도·대기", exact: true });
+    await expect(heading).toBeInViewport({ ratio: 1 });
+    const headingBounds = await heading.boundingBox();
+    const header = await page.locator(".public-header").boundingBox();
     expect(target).not.toBeNull();
     expect(header).not.toBeNull();
-    if (viewport.width < 768) {
-      expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
-    } else {
-      // Tablet and desktop navigation occupies the left edge rather than the top.
-      expect(target?.x).toBeGreaterThanOrEqual((header?.x ?? 0) + (header?.width ?? 0));
-      expect(target?.y).toBeGreaterThanOrEqual(0);
-    }
+    expect(target?.x).toBeGreaterThanOrEqual(0);
+    expect(headingBounds?.y).toBeGreaterThanOrEqual(0);
+    await test.info().attach(`help-anchor-${viewport.width}`, {
+      body: JSON.stringify({ target, heading: headingBounds, header }),
+      contentType: "application/json",
+    });
+    const position = await page
+      .locator(".public-header")
+      .evaluate((node) => getComputedStyle(node).position);
+    if (position === "fixed" || position === "sticky")
+      expect(headingBounds?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
   }
 });
 
@@ -427,7 +475,8 @@ test("peer logout clears the draft and opens plain login in both tabs", async ({
   await expect(peer).toHaveURL(/\/login$/);
   await expect(page).toHaveURL(/\/login$/);
   await expect(draft).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expectCommonLogin(page);
+  await expectCommonLogin(peer);
 });
 
 test("expired session retains the safe return path instead of explicit logout behavior", async ({
@@ -512,8 +561,16 @@ test("same-tab logout still navigates when cross-tab notification storage is una
   });
   await logoutFromMenu(page);
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expectCommonLogin(page);
 });
+
+async function expectCommonLogin(page: Page) {
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Naver로 계속하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Kakao로 계속하기", exact: true })).toBeEnabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await expect(page.locator('a[href="/lawyer"], a[href="/lawyers"]')).toHaveCount(0);
+}
 
 async function prepareReport(page: Page) {
   const reading = page.getByRole("region", { name: "리포트 검토 본문", exact: true });

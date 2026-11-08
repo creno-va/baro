@@ -26,6 +26,22 @@ test("customer reading restores preparation and official sources while retaining
   expect(html).toContain("추가 확인 사항");
 });
 
+test("orientation excerpts reuse safe report headings and lists without rewriting content or promoting links", () => {
+  const content =
+    "다음 행동과 필요 자료\n### 자료 원본 보관하기\n- 준비 내용: 미확인 원본\n- 확인 전에는 단정하지 않아요.\n<script>alert(1)</script>\n[합성 링크](https://example.com)";
+  const html = renderToStaticMarkup(<ReportReading content={content} />);
+  const orientation = html.split('class="report-document')[0] ?? "";
+  expect(orientation).toContain("본문 발췌");
+  expect(orientation).toContain("<h4>자료 원본 보관하기</h4>");
+  expect(orientation).toContain("<ul>");
+  expect(orientation).toContain("<li>준비 내용: 미확인 원본</li>");
+  expect(orientation).toContain("확인 전에는 단정하지 않아요.");
+  expect(orientation).not.toContain("###");
+  expect(orientation).not.toContain("<script>");
+  expect(orientation).not.toContain('href="https://example.com"');
+  expect(content).toContain("### 자료 원본 보관하기\n- 준비 내용: 미확인 원본");
+});
+
 test("restoring old coverage sections does not move existing compatibility photos or change raw saved bytes", () => {
   const content =
     "사건 요약\n저장한 사실\n\n준비할 자료와 처리 범위\n처리 범위 미확인\n\n당사자\n합성 관계";

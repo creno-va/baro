@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "../browser",
-  testMatch: ["design-foundation.e2e.ts", "design-system.e2e.ts"],
+  testMatch: ["design-foundation.e2e.ts", "design-system.e2e.ts", "dialog-focus.e2e.ts"],
   workers: 1,
   use: { baseURL: "http://127.0.0.1:4591", browserName: "chromium", trace: "retain-on-failure" },
   webServer: {

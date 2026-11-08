@@ -34,7 +34,7 @@
   color: var(--primary-foreground);
   border-color: var(--primary);
 }
-.case-shell textarea:not(.ui-input) {
+.case-shell :where(textarea:not(.ui-input):not(.ui-textarea)) {
   display: block;
   width: 100%;
   min-height: 220px;

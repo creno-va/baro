@@ -94,6 +94,8 @@ import { InlineNotice } from '../../components/ui/inline-notice';
 `StatePanel`의 partial은 완료한 결과와 실패한 항목의 재시도를 함께 표시한다.
 단일 확인 모달은 `Dialog showCloseButton={false}`와 명시 확인 버튼을 사용한다.
 `onOpenChange`가 busy 거절을 판단하며 실제 저장/삭제 완료를 UI가 추정하지 않는다.
+controlled Dialog를 실제로 닫은 직후 invalid field 또는 opener로 한 번 복귀한다. 늦은 native
+close 이벤트는 owner 상태만 동기화하며 사용자가 새로 선택한 초점을 다시 가져가지 않는다.
 
 PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·공개 헤더·정책 footer를 소유한다.
 페이지에 두 번째 main을 추가하지 않는다. 인증은 `.ui-auth`, provider 그룹은
@@ -112,6 +114,11 @@ PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·�
 리포트 등 긴 본문은 기존 문서 스크롤을 유지한다.
 
 사건 도구는 같은 native details와 네 링크를 유지하되 메뉴를 viewport에 고정 배치한다.
+hydration 전에도 summary의 흐름 위치와 viewport 오른쪽 여백에서 native 링크를 열 수 있다.
+측정한 좌표를 적용할 때 이 기본 오른쪽 정렬을 해제하며, 이미 연 상태와 최초 클릭 대상을 보존한다.
+비동기 제목은 즉시 표시하지만 제목 변경만으로 열린 메뉴의 클릭 대상을 옮기지 않는다.
+같은 열림의 queued toggle은 재배치하지 않으며, viewport·root 배율·앵커의 상위 스크롤·재열기는
+현재 앵커를 다시 측정한다. 메뉴·대화·사이드바 등 앵커와 무관한 내부 스크롤은 배치를 바꾸지 않는다.
 트리거 좌표를 CSS 배율로 정규화하고 창·visualViewport·머리글 크기·내부 스크롤·root 배율
 변화에 맞춰 재배치한다. 고정 상단 탐색·측면 rail이 차지한 영역을 제외하고 트리거의 아래·위
 가용 공간을 비교한다. 두 방향 모두 전체 메뉴를 담지 못하면 더 넓은 쪽에서 메뉴만 스크롤한다.
@@ -120,8 +127,9 @@ PublicLayout은 `title/description/showStart?`를 받으며 main/skip target·�
 완전히 노출하며, 창·root 배율·머리글 스크롤이 바뀌어도 현재 링크의 초점과 조작 영역을 유지한다.
 메뉴 안의 Tab/Escape와 트리거 복귀, 기존 href는 그대로다. 실제 브라우저200%에 대응하는
 600×350/root CSS zoom1과 더 낮은 창에서도 End→열기→Tab→Escape→재열기의 접근을 유지한다.
-CaseLayout의 native label fallback은 낮은 specificity로 유지해 토픽 등 도메인 레이아웃이
-공통 기본 간격·display를 명시적으로 교체할 수 있게 한다.
+CaseLayout의 native label·textarea fallback은 `:where(...)` 안에서 낮은 specificity로 유지한다.
+공통 입력 클래스는 제외하고, 클래스 없는 legacy textarea의 기본 높이 220px는 유지한다. 도메인의
+composer·자료 교정 등 명시한 배치가 stylesheet 순서에 상관없이 fallback보다 우선해야 한다.
 
 - canonical `global.css`: 의미 토큰, font/reset, 공통 UI/상태/본문/공개 레이아웃.
 - canonical `product.css`: 앱 탐색·사건 작업·근거 패널·반응형. AppLayout은 이 파일만 가져온다.

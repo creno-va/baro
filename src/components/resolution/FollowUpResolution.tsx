@@ -680,10 +680,16 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         </div>
       )}
       {state?.status === "not_ready" && (
-        <p>
-          아직 연결할 현재 리포트·분석이 없어요. 리포트를 확인해 주세요. 기존 리포트 저장은 이용할
-          수 있어요.
-        </p>
+        <div className="resolution-notice">
+          <p>
+            아직 연결할 현재 리포트·분석이 없어요. 사건 요약을 확인한 뒤 리포트에서 ‘리포트 준비’
+            또는 ‘새 버전 만들기’를 실행해 주세요. 기존 리포트 저장은 이용할 수 있어요.
+          </p>
+          <p>
+            본문 수정은 사건 요약·분석에 자동 반영되지 않아요. 사실을 바꾸려면 대화에서 내용을
+            확인하고 사건 요약에 반영한 뒤 새 버전을 만들어 주세요.
+          </p>
+        </div>
       )}
       {state?.status === "paused" && (
         <div className="resolution-notice">

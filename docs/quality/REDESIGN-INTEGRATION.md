@@ -217,3 +217,74 @@ resize/root 배율/머리글 스크롤·작성 보존과 pageerror0도 검사한
 후보의 실제 native Chrome 재현과 기존 회귀·quick/build, 새 통합/main SHA 결과는 구분한다.
 원본01af의 동일한 빠른 CSS 배율/머리글 순서에서도 ResizeObserver undelivered 경고1회가
 재현돼 원본/후보 비교 로그에 남겼다. 이를 새 수리의 회귀로 단정하거나 검증에서 숨기지 않는다.
+
+## 전체 코퍼스의 마지막 mock 묶음
+
+main01af의 full42505489653은 core/native 성공 뒤 browser25개 실패·join SKIPPED로 끝났다.
+첫743 full의60분 취소 뒤 미실행이던 마지막 mock 묶음이 포함된다. 원본 로그와25개 제목을
+보존하며, 기존 앱390px 첫 hit1개는 후속 초기 배치 수리와 대조하고 나머지는 현재 main920ed에서
+재현해 실제 제품/fixture/현재 UI 기대를 구분한다.02는 대화 시작·workspace 테스트17개 실패,
+04는 shell 통합6개와 기존 human review1개 실패를 전담한다. 공통 제품은01 소유를 유지한다.
+장문·원본 bytes/PDF·권한/owner epoch·늦은 응답·file picker/초점·반응형/44px·실패/재시도
+단정을 보존하고 추가 수리의 새 main에서 전체 검증한다. 현재920ed full의 결과도 별도 기록한다.
+
+후속 원본01 `33010036ad1eb58495cad2a16a1f0b4e4da7a999`는 raw composer의 domain 규칙과
+동일 specificity였던 레거시 fallback을 `:where`로 낮춘다. canonical Textarea의 ui-input/ui-textarea
+제외와 bare textarea의 기존220px fallback은 유지한다. 실제 stylesheet 순서를 뒤집어 기존220>140
+실패와 수정 후140px 상한·16px 글자·44px/실제 hit/axe를 대조했다. foundation 포함21 PASS다.
+02 최종 `deb85d3fb56069ecbe0b8f8e3ebf51ed35c919e6`의 workspace90+conversation12,
+04 최종 `81ce728632a90b80a56f63debea6ef1f08a571f3`의 shell9+human6은 SKIP0으로 통과했다.
+닫힌 native details의 비표시 자식 좌표와 실제 가시 overflow를 구분하며 root 폭·모든 열린 링크의
+44px/viewport/hit/키보드 단정은 강화했다. 동의·원본 bytes·권한·늦은 응답·초점 회귀는 유지한다.
+
+03 최종 `ad697de69f7e48f231eed750c34e51d44b695745`는 명시 재생성 전 저장한 수정 본문도
+기존 임시 보관에 남긴다. 네 작업 왕복·TXT bytes·중복 덮어쓰기 차단과 계정 변경 purge를 검증한다.
+새 v3는 현재 준비된 분석과 hash/scope가 같을 때만 mock binding을 회복한다. v2 수정본의 기존
+immutable 이력은 남아 있으며 영구 유실로 분류하지 않는다. 서버의 userEdited 차단·현재 JSON과
+알려진 ID의 HTML/PDF 계약은 그대로이며 영구 이력 UI/API는 추가하지 않는다. 초안 안내는 사실 확정과
+본문 수정의 차이를 설명한다. React 발췌는 기존 안전한 Markdown renderer로 h4/list를 읽게 하며
+불확실성·400자 한계·전체 본문 이동을 보존한다. native PDF의 기존 P3 잔여와 별개다.
+원본69 domain/reading·브라우저34(5+19+6+모달4) PASS/SKIP0, 최종 typed-fixture 보완 뒤
+quick/build와390/1200px 실제 v2→v3→네 작업→현재 기준 미검토 초안→TXT2 PASS를 구분해 기록한다.
+통합 후보와 새 main의 full/preview 결과는 이 소스 단위 결과를 대체해 별도 정확 SHA로 남긴다.
+
+## 초기 메뉴와 지연된 모달 닫힘의 추가 수리
+
+main920ed full42508889497은 core/native 성공·browser24 FAIL·join SKIPPED로 종료했다.
+23건은 앞의02/04 후속 범위이며 나머지는 actual-Astro1440의 첫 captured-point hit 실패다.
+01의 일반 로컬8회는 통과했지만 실제 Workspace 클라이언트 모듈을 hold한 서버 HTML에서
+open=true/ssr=true/style=null인 메뉴의 기본16,72 좌표가 왼쪽 탐색에 가리는 것을 재현했다.
+CI 당시 DOM은 없으므로 두 관찰의 원인 동일성은 추정으로 구분한다. 기본 CSS는 native summary
+흐름 위치·오른쪽 여백을 사용하고 측정 뒤에는 기존 계산 좌표를 적용한다. 초기화 전의 실제 링크와
+초기화 후 같은 captured point/open 상태·네 링크44px/hit를 검사하며 첫 클릭 전 준비 대기로 덮지 않는다.
+
+첫 통합bab6f9a03ee61268dac7abbc3c794afbc5f9acae의 ci/quick/production/bundle/dry-run과
+committed-history scanner는 통과했지만 합성 브라우저141개 중140 PASS/1 FAIL로 끝났다.
+02가 원본 Home 키보드 제출 검사를 그대로20회 실행해7 FAIL/13 PASS를 재현했다. hydrated=true에서
+submit focus→native close→Dialog restoreFocus/onClose→설명 입력창 Enter/줄바꿈의 인과를 기록했다.
+CaseInput/Dialog과 검사 본문은920/deb85/bab6에서 같았다. 이는 새 리포트 source의 회귀로 분류하지 않는다.
+진단 hook의 전역 첫 submitDisabled 값은 닫힌 제목 수정 모달을 가리켜 근거에서 제외했고 원본을 보존했다.
+01이 controlled close 직후 정상 복귀를 한 번 수행하고 queued close에서는 상태만 동기화하도록 수리했다.
+정상 invalid-field 복귀와 새 명시적 submit 초점 보존을 독립 회귀로 검사하고 원래20회도 재검증한다.
+공통 소스·회귀는01, 원본 Home 독립 반복은02, 리포트 미지원 모달 C/W4는03, 통합·문서는 총괄 소유다.
+두 공통 수리와 독립 회귀의 원본은 `114bbace8030ed89d295c72f5451f7fda063e0e7`이며
+이미 통합한330의 후속1커밋이다. 정상/새 초점 회귀의 Chromium·WebKit 예비 통과와 최종 통합 검증은 구분한다.
+
+추가114의 원래5폭×4회 first-hit 검사에서는15 PASS/5 FAIL(320px3·390px2)을 발견해 PR789를
+Draft로 유지했다. 통합a1a1d2c의143+메뉴9·독립모달4와 fresh PR CI3개 통과로 이 실패를 덮지 않는다.
+짧은 로딩 제목이 실제 긴 제목으로 바뀌며 ResizeObserver가 이미 열린 메뉴를24px 아래로 옮겼다.
+390px 실제 module hold에서도 최초 open/point hit→release→SSR0→실제 긴 h1 표시→header ResizeObserver
+delivery 뒤 같은 point(266,307)가 이동한 유사 판례(top313)를 놓치는 것을 재현했다.
+후속은 제목을 즉시 표시하면서 열린 메뉴의 기존 대상을 보존하며 명시적인 viewport/root 배율·
+ancestor scroll·재열기는 재배치한다. private 제목 캐시나 준비 대기로 실패를 숨기지 않는다.
+후속 소스와 새 frozen head의 관련 반복·통합·CI 결과를 확인한 뒤 병합하며 아직 preview에 배포하지 않는다.
+후속 원본 `efced2e1df2f57a1a03ee75ecbaccbabb61d4965`는114의 자식1커밋이며 제목-only
+ResizeObserver와 같은 열림의 queued toggle을 구분한다. 현재 prop만 배치 revision 감지에 쓰고
+현재 제목/tooltip을 즉시 렌더한다. 390 결정 재현과 원래20회의 수정 전후를 보존하며 예비20/20
+통과 뒤 해당 커밋의 전체 공통 회귀·quick/build와 새 통합 head/CI를 별도로 검증한다.
+
+초기 수동 기록의 message counter 두 selector는 실제 Workspace 사용자 메시지 class와 달랐다.
+그0만으로 자동 전송이 없었다고 판단하지 않는다. 원본은 보존하고 exact920에서 실제
+`.workspace-message--user`로 입력/Enter/네 작업 왕복7상태의 사용자 메시지0과 한글·줄바꿈 보존을
+새로 기록했다. 독립46 자동 검사의 원래 올바른 selector·양성 대조·본문 hash는 유지했다.
+최종 통합/main의 성공 여부는 이후 정확 SHA의 raw receipt·full join·동일 SHA preview로 판정한다.

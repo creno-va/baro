@@ -50,8 +50,12 @@ export function Dialog({
       previousFocus.current =
         document.activeElement instanceof HTMLElement ? document.activeElement : null;
       dialog.showModal();
-    } else if (!open && dialog.open) dialog.close();
-  }, [open]);
+    } else if (!open && dialog.open) {
+      dialog.close();
+      // Return once at the controlled close, before later input can choose a new target.
+      restoreFocus(returnFocusRef?.current ?? previousFocus.current);
+    }
+  }, [open, returnFocusRef]);
   return (
     <dialog
       ref={ref}
@@ -90,8 +94,8 @@ export function Dialog({
       onClose={(event) => {
         // A queued close event can arrive after a keyboard user has reopened the dialog.
         if (event.currentTarget.open) return;
+        // Native close delivery is queued; it must not steal a newer explicit focus.
         onOpenChange(false);
-        restoreFocus(returnFocusRef?.current ?? previousFocus.current);
       }}
       onClick={(event) => {
         if (event.target !== event.currentTarget) return;

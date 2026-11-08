@@ -217,6 +217,20 @@ checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는
 우선 사용하고, 기존 override가 없으면 ignored 임시 config의 host/port/baseURL만 조정한다.
 원본 fixture·환경 flag·expect는 유지하며 최종 Linux full은 저장소의 표준 config로 다시 실행한다.
 같은 worktree의 Astro dev와 quick/build는 캐시 충돌을 막기 위해 순차 실행한다.
+
+후속 full42505489653(main01af)의 browser는 취소가 아니라 전체 실행 뒤 실패로 끝났다.
+총괄이25개 실패 제목과 원본 로그를 보존했고, 첫 full743이 취소된 뒤 미실행이던 마지막
+mock 묶음도 포함됐다. 현재 main920ed에서 재현·분류한 뒤 수리하며 기존 기대를 약화하지 않는다.
+구현 전 추가 테스트 소유권은02의 `conversation-home.e2e.ts`·`workspace.e2e.ts`,04의
+`shell-integration.e2e.ts`·기존 `human-review.e2e.ts` 전체 파일로 명시한다. 관련 기존 runner
+config도 해당 담당이 대조하며 원본 fixture/flag/helper를 임의 교체하지 않는다. 이 배정이
+이전 테스트 파일 소유권보다 우선하고 제품 소유권은 그대로다.01만 공통CSS/CaseNavigation/
+AppLayout을 수정하며02의 Workspace·03의 리포트·04의 공개/계정 제품 파일을 서로 수정하지 않는다.
+실제 공통 결함은 담당이 DOM·좌표·상태로 총괄에 인계해01에 재배정한다. 각 담당은 새 별도
+checkout/codex 브랜치를 main920ed에서 만들고 원본 커밋·worktree·실패를 보존한다.
+현재920ed full42508889497의 결과도 별도로 수집한다. 추가 수리 뒤 새 정확 main의 모든
+section/join·동일SHA preview/smoke가 필요하며 과거 통과를 새 실행으로 재사용하지 않는다.
+
 실제 Chrome200%의600×350px에서 발견한 도구 재열기 가림은01의 공통 배치/회귀 소유다.
 40자 합성 제목·머리글 End→열기→Tab→Escape→재열기와 모든 링크의 실제 조작성,
 상단 탐색을 제외한 가용 영역·작은 높이의 스크롤·초점/작성 보존을 검증한다.
@@ -230,6 +244,21 @@ checkout/worktree와 `codex/` 브랜치를 사용한다. 로컬 전용 포트는
 05 `01a1baaa-4abb-7261-8bb4-e1dd5910615e`。사용자가 개설한 이 세션만 메시지로 조율한다.
 
 ## PR 순서와 구 스타일 제거
+
+### 마지막 코퍼스·리포트 후속의 소유권
+
+main920ed 후속에서01은 `cases.css`의 레거시 textarea fallback만 소유한다.
+02는 conversation-home/workspace 회귀,04는 shell-integration/human-review 회귀를 소유한다.
+03은 ReportReading/ReportReview/FollowUpResolution과 mock reports/rework의 기존 분석 binding
+정합성, 관련 report-state/integrated/domain 테스트를 소유한다. 공통 API·fixture·skip 조건은 바꾸지 않는다.
+총괄은 이 원본 커밋들을 같은 기반에 통합하고 실행·인수 문서와 최종 검증을 책임진다.
+
+새 버전 생성은 저장된 사용자 수정 본문도 기존 preservedEdit 메모리에 보관한다. 같은 사건의
+네 작업 전환에서는 유지하며 새로고침·사건 종료, 독립 리포트 화면 종료 시 사라짐을 안내한다.
+보관 중인 내용을 다음 편집으로 덮어쓰지 않고 기존 TXT 다운로드를 먼저 제공한다. owner/epoch
+변경 시 지운다. 영구 버전 목록·비교·복구는 없는 계약이며 구현했다고 표시하지 않는다.
+mock POST만 실제 서버와 같은 원본 hash·가림·제외 scope 일치 조건으로 준비된 분석을 연결한다.
+수정 본문을 확정 사실로 사용하는 것을 막는 userEdited fence와 서버 저장/버전/CAS 계약은 유지한다.
 
 1. 총괄 계약·인증 보존 선행 변경, 05 현재 문제 수집.
 2. 01 공통 기반 PR: 확정 API·실제 대표 화면·native 소비 검증·CI. 소비자에게 정확 head 인계.

@@ -171,6 +171,30 @@ test("editing the body cannot keep the validated completion label, while the ori
   expect(await f.reports.html(f.actor.ownerId, first.id)).not.toContain("직접 고친 인용");
 });
 
+test("explicit regeneration binds the current analysis without rewriting the saved edited version", async () => {
+  const f = await fixture("respond_to_claim");
+  const first = await f.reports.get(f.actor.ownerId, f.workspaceId);
+  const marker = "합성 수정본은 원본 확인 전 이용자 진술입니다.";
+  const edited = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: first.revision,
+    content: `${first.content}\n${marker}`,
+    maskIdentifiers: false,
+    excludedFileIds: [],
+  });
+  expect((await f.reports.peek(f.actor.ownerId, f.workspaceId))?.analysisReview.userEdited).toBe(
+    true,
+  );
+  const next = await f.reports.generate(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+    expectedRevision: edited.revision,
+  });
+  const current = await f.reports.peek(f.actor.ownerId, f.workspaceId);
+  expect(next.revision).toBe(edited.revision + 1);
+  expect(current?.analysisReview.analysisId).toBe(f.snapshot.id);
+  expect(current?.analysisReview.userEdited).toBe(false);
+  expect(current?.content).not.toContain(marker);
+  expect(await f.reports.html(f.actor.ownerId, edited.id)).toContain(marker);
+});
+
 test("only an explicit matching-scope receipt can include a freshly masked analysis", async () => {
   const f = await reportPreparedAnalysisFixture();
   let snapshot = v2LegalAnalysisSnapshotSchema().parse(f.snapshot);

@@ -923,9 +923,11 @@ test("embedded report preserves stale edits before generating a new snapshot and
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect(
-    page.getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
+    page
+      .locator(".report-document")
+      .getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
   ).toBeVisible();
-  await page.getByText("새 버전을 만들기 전의 편집 내용 보관", { exact: true }).click();
+  await expect(page.locator(".report-preserved-edit")).toHaveAttribute("open", "");
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveValue(
     /유실하면 안 되는 직접 편집/,
   );
@@ -934,7 +936,7 @@ test("embedded report preserves stale edits before generating a new snapshot and
     .getByRole("textbox", { name: "보관한 리포트 편집 내용" })
     .inputValue();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "보관한 편집 내용 저장", exact: true }).click();
+  await page.getByRole("button", { name: "보관한 본문 TXT 다운로드", exact: true }).click();
   const saved = await download;
   // WebKit on macOS returns canonically equivalent decomposed Korean names.
   expect(saved.suggestedFilename().normalize("NFC")).toBe("BARO-synthetic-new-report-편집보관.txt");
@@ -945,10 +947,21 @@ test("embedded report preserves stale edits before generating a new snapshot and
   expect(savedBody).toContain("저장 전이지만 유실하면 안 되는 직접 편집입니다.");
   expect(savedBody).not.toContain("최신 사건으로 생성한 새로운 합성 리포트입니다.");
   await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
+  await page.getByRole("button", { name: "수정하기", exact: true }).click();
+  await page.getByRole("textbox", { name: "사건 개요 수정" }).fill("SYNTHETIC-PRIVATE-PRESERVED");
+  report = { ...report, stale: true };
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveValue(
+    /SYNTHETIC-PRIVATE-PRESERVED/,
+  );
   owner = "synthetic-another-owner";
   await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
   await expect(page.locator(".report-reading")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveCount(0);
+  expect(await page.content()).not.toContain("SYNTHETIC-PRIVATE-PRESERVED");
 });
 
 for (const side of ["prepare_claim", "respond_to_claim"] as const)

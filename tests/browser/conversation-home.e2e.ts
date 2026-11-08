@@ -185,25 +185,52 @@ test("a short account is accepted and recent-story deletion requires explicit co
   await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
 });
 
-test("help and policy profile entries follow the current role", async ({ page }) => {
-  await setSession(page, customer);
+test("help and policy preserve account access for both roles without contact profile entries", async ({
+  page,
+}) => {
+  // Keep the chosen role across public → application navigation in this test.
+  await page.addInitScript((session) => {
+    if (localStorage.getItem("help-role-seeded")) return;
+    localStorage.setItem("help-role-seeded", "true");
+    localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
+  }, customer);
   for (const url of ["/help", "/policies/ai"]) {
-    await page.goto(url);
-    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
-    await page.evaluate(() => {
-      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
-      s.user.accountType = "lawyer";
-      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
-      window.dispatchEvent(new Event("baro-session-changed"));
-    });
-    await expect(page.locator('a[href="/lawyer"]').first()).toBeVisible();
-    await page.evaluate(() => {
-      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
-      s.user.accountType = "customer";
-      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
-      window.dispatchEvent(new Event("baro-session-changed"));
-    });
-    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    for (const accountType of ["customer", "lawyer", "customer"] as const) {
+      await page.goto(url);
+      const name = accountType === "lawyer" ? "합성 기존 계정" : "합성 고객";
+      await page.evaluate(
+        ({ accountType, name }) => {
+          const key = "baro-api-mock-v1:session";
+          const session = JSON.parse(localStorage.getItem(key) ?? "{}");
+          session.user.accountType = accountType;
+          session.user.name = name;
+          localStorage.setItem(key, JSON.stringify(session));
+          window.dispatchEvent(new Event("baro-session-changed"));
+        },
+        { accountType, name },
+      );
+      const start = page
+        .getByRole("navigation", { name: "서비스 안내", exact: true })
+        .getByRole("link", { name: "사건 준비 시작", exact: true });
+      await expect(start).toBeVisible();
+      await expect(start).toHaveAttribute("href", "/app");
+      await expect(
+        page.locator('a[href="/lawyer"], a[href="/lawyers"], a[href^="/lawyers/"]'),
+      ).toHaveCount(0);
+      await start.click();
+      await expect(page).toHaveURL(/\/app$/);
+      await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
+      const account = page.getByRole("link", { name: `${name} · 계정 관리`, exact: true }).first();
+      await expect(account).toBeVisible();
+      await expect(account).toHaveAttribute("href", "/settings");
+      await expect(
+        page.locator('a[href="/lawyer"], a[href="/lawyers"], a[href^="/lawyers/"]'),
+      ).toHaveCount(0);
+      const session = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}"),
+      );
+      expect(session.user).toMatchObject({ id: customer.user?.id, accountType, name });
+    }
   }
 });
 
@@ -279,10 +306,12 @@ test("conversation screens remain accessible and responsive from home through ch
   await expect
     .poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth)))
     .toBe(0);
-  await expect(page.getByText("API 예시", { exact: true })).toBeVisible();
+  await expect(page.getByText("API 예시", { exact: true })).not.toBeVisible();
   await page.screenshot({ path: ".wrangler/ui-review/home-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "메뉴 열기" }).click();
-  await expect(page.getByRole("dialog", { name: "메뉴", exact: true })).toBeVisible();
+  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByText("API 예시 모드 · 합성 데이터", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "메뉴 열기" })).toBeFocused();
   await page
