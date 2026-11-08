@@ -272,3 +272,40 @@ test("direct report queries and draft hash survive retained navigation and brows
     }),
   ).toEqual({ action: 0, send: 0 });
 });
+
+test("a changed owner clears retained report work and explains the boundary before explicit reopening", async ({
+  page,
+}) => {
+  await seedMaterialsScenario(page);
+  await page.goto(materialsCasePath);
+  await expect(input(page)).toBeEnabled();
+  await input(page).fill("이전 계정에서만 보여야 하는 미전송 설명");
+  await task(page, "리포트");
+  await expect(page.locator(".report-review")).toBeVisible();
+  await countMaterialsRequests(page);
+  await page.evaluate(() => {
+    const session = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+    session.user.id = "synthetic-next-owner";
+    localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
+    const owners = JSON.parse(localStorage.getItem("baro-api-mock-v1:caseOwners") ?? "{}");
+    owners["synthetic-case"] = session.user.id;
+    localStorage.setItem("baro-api-mock-v1:caseOwners", JSON.stringify(owners));
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect(page.locator(".report-review")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
+  await expect(input(page)).toHaveValue("");
+  await page.getByRole("button", { name: "현재 계정으로 다시 열기", exact: true }).click();
+  await expect(page.locator(".report-review")).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "계정 또는 접근 상태가 변경됐어요." }),
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(() => {
+      const counts = (
+        window as unknown as { materialsRequestCounts: { send: number; action: number } }
+      ).materialsRequestCounts;
+      return { send: counts.send, action: counts.action };
+    }),
+  ).toEqual({ send: 0, action: 0 });
+});

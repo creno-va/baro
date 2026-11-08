@@ -302,6 +302,8 @@ function WorkspaceContent({
   const [conversationState, setConversationState] = useState<V2ConversationState | null>(null);
   const openMaterials = useCallback(() => navigateTask("files"), [navigateTask]);
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
+  const [accessChanged, setAccessChanged] = useState(false);
+  const privateViewLoaded = useRef(false);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
   const draftComposing = useRef(false);
@@ -376,6 +378,8 @@ function WorkspaceContent({
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
+    if (privateViewLoaded.current) setAccessChanged(true);
+    privateViewLoaded.current = false;
     ++latest.current;
     operationError.current = null;
     acknowledgedTimeline.current = false;
@@ -452,6 +456,7 @@ function WorkspaceContent({
   );
 
   const apply = useCallback((next: WorkspaceView, animateNew = true) => {
+    privateViewLoaded.current = true;
     const previous = previousMessages.current;
     if (previous && animateNew) {
       const added = next.messages.filter(
@@ -1592,8 +1597,28 @@ function WorkspaceContent({
       </details>
     </aside>
   ) : null;
+  const accessChangeFeedback = accessChanged ? (
+    <>
+      <p>계정 또는 접근 상태가 변경됐어요.</p>
+      <p>
+        이전 작업의 미저장 내용과 첨부 선택을 비웠어요. 현재 계정의 권한으로 다시 확인해 주세요.
+      </p>
+      {!error && ready && view && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setAccessChanged(false);
+            navigateTask(activeTask ?? "chat");
+          }}
+        >
+          현재 계정으로 다시 열기
+        </Button>
+      )}
+    </>
+  ) : null;
   const errorFeedback = error ? (
     <section className="workspace-error" role="alert">
+      {accessChangeFeedback}
       <strong>{error.message}</strong>
       <p>
         {error.code === "CONFLICT"
@@ -1634,6 +1659,10 @@ function WorkspaceContent({
           </Button>
         )}
       </div>
+    </section>
+  ) : accessChanged ? (
+    <section className="workspace-error" role="alert">
+      {accessChangeFeedback}
     </section>
   ) : null;
   const uploadRecovery =
