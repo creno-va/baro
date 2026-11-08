@@ -159,6 +159,36 @@ docs/quality/redesign-acceptance/**만 소유한다. 기존 테스트 수정은 
 제품·ADR·실행·의존성·충돌은 총괄, FOUNDATION.md는01, 독립 검수 기록은05가 소유한다.
 공유 client/contracts/server/DB·lock은 명시 재배정 전 수정하지 않는다.
 
+### 2026-11-09 최종 full 실패 후 검증 수리 소유권
+
+main `74396a4`의 수동 full [42492794662](https://github.com/creno-va/baro/actions/runs/42492794662)은
+core 이력 스캔에서 실패했다. 공개 Git blob ID 세 건은 [정확한 분류 근거](../quality/SECRET-SCAN-2026-11-09.md)와
+새 탐지 차단 검증을 거쳐 [PR #782](https://github.com/creno-va/baro/pull/782)로 수리했다.
+같은 실행의 browser 결과는 별도로 보존하며 개별 native 성공을 전체 성공으로 확대하지 않는다.
+
+총괄은 기존 지정 세션에 아래 파일을 수정 전에 명시 재배정했다. 앞 표의 일반 소유권보다
+이번 검증 파일의 구체적인 배정이 우선하며 제품·공통 helper·fixture·config는 포함하지 않는다.
+
+| 담당 | 이번 검증 파일 |
+| --- | --- |
+| 01 | `.gitleaksignore`의 정확한 세 지문, `tests/browser/product-ui.e2e.ts` |
+| 02 | `tests/browser/{workspace-shared,workspace,customer-real}.e2e.ts` |
+| 03 | `tests/browser/rework-conversation.e2e.ts` |
+| 04 | `tests/browser/{public-preview,app-experience,mobile-scrollbar,session}.e2e.ts` |
+| 총괄 | provenance·실행 문서, PR 검토·통합·원격 보존/정리 |
+| 05 | 기존 실패 수집, 마지막 main 정확 SHA의 full·동일 SHA preview·제한 smoke와 #751 판정 |
+
+과거 여섯 도구·역할 선택/프로필·숨김 삭제 액션·하단 sheet·목록 redirect 기대를 현재
+네 상시 작업과 네 추가 도구·공통 계정 이용·44px 조작·공통 Dialog·독립 목록 계약으로 맞춘다.
+원본 실패를 먼저 보존하고 기존 사용자 과업·권한·원본 바이트·CAS·질문·저장/재조회·접근성
+검증을 유지하거나 강화한다. 테스트/단정 삭제·skip 추가·fixture로 실제 화면 대체는 하지 않는다.
+동일 파일명이나 텍스트가 중복되면 의도한 실제 영역으로 locator를 한정한다.
+
+host의 overlay scrollbar는 실제 gutter 검증과, 로컬 Docker 부재는 native PDF의 미완료와
+구분해 기록한다. 필요한 환경을 갖춘 최종 Linux full에서 모든 해당 과업을 실행한다.
+수리 PR의 CI 성공 후 전부 통합한 마지막 main을 확정하며 중간 main에서 배포하지 않는다.
+실패·부분 성공과 합의한 외부 미확인은 보존하고 production은 이번 승인에 포함하지 않는다.
+
 지정 세션: 01 `01a1baa9-2cbb-7cb0-a815-35ba474d3797`, 02 `01a1baa9-800a-7542-b8bc-400f84c15709`,
 03 `01a1baa9-cb75-7fc1-8384-c68949dbbdd7`, 04 `01a1baaa-0588-7c01-8563-e59d95e93d52`,
 05 `01a1baaa-4abb-7261-8bb4-e1dd5910615e`。사용자가 개설한 이 세션만 메시지로 조율한다.
