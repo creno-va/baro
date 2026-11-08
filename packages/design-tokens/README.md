@@ -16,6 +16,11 @@ Short hex colors are normalized without changing their value. Responsive layout-
 are independent; missing/duplicate/viewport-specific token declarations and unsupported value
 formats require an explicit mapping instead of a silent fallback.
 
+The web foundation now uses these same canonical colors at runtime, without a later
+root palette override. Extraction also rejects drift between primary/text/subtle/line
+and the product compatibility names. Existing portable keys and values are unchanged;
+web document sections and native cards retain their platform-specific geometry.
+
 The check covers normal body/muted/status text and primary action contrast, and the handed
 44px minimum. Decorative lines are not sole interactive boundaries. Native consumers keep
 their 48dp targets, platform font scaling, keyboard/safe-area behavior and distinct controls.

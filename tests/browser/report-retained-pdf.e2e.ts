@@ -77,7 +77,8 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect.poll(() => metadataReads).toBeGreaterThan(0);
     await expect(editor).toHaveValue(originalText);
-    await expect(page.locator(".report-edit-toggle")).toBeEnabled();
+    await expect(editor).toBeEnabled();
+    await expect(page.getByRole("button", { name: "편집 취소", exact: true })).toBeEnabled();
     await expect(page.locator("html")).toHaveAttribute(
       "data-report-viewed",
       JSON.stringify({ id: report.id, revision: report.revision }),
@@ -85,7 +86,8 @@ test("stored real PDF and report remain readable after source change/re-consent,
     await page.unroute(reportPath);
     await page.reload();
     await openReportEditor(page);
-    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+    await page.getByRole("button", { name: "편집 취소", exact: true }).click();
     const firstEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "PDF 다운로드", exact: true }).click();
     const first = await firstEvent,

@@ -205,7 +205,7 @@ test("peer account switch clears dirty report, selected originals, confirmation 
     state.reports["case-demo"].revision++;
     localStorage.setItem(key, JSON.stringify(state));
   });
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "다시 확인" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -416,7 +416,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
     state.reports["case-demo"].content = "다른 화면에서 저장한 내용";
     localStorage.setItem(key, JSON.stringify(state));
   });
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "다시 확인" }).click();
   await expect(page.getByRole("dialog")).toContainText("저장하지 않은 편집");
