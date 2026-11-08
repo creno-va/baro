@@ -86,6 +86,10 @@ import { InlineNotice } from '../../components/ui/inline-notice';
 `ReadingContent`는 `width='reading'|'wide'|'full'`, `Section`은
 `title/description/action/headingLevel(2|3)`와 section 속성을 받는다.
 `TableScroll label` 안에는 native table을 둔다. 영역은 키보드로 가로 이동할 수 있다.
+목록은 `list.tsx`의 List/ListRow/ListLink/ListTitle/ListMeta를 사용한다.
+행의 이동 링크와 삭제/관리 버튼은 형제로 두며, 제목은 완전히 노출하고 상태/수정 시각을 구분한다.
+작은 화면에서는 링크 내부의 본문/메타를 한 열로 쌓는다. 전역 탐색의 `내 사건`은 `/cases`로 연결하며
+현재 위치, 키보드/축소 rail/모바일 sheet의 같은 접근을 유지한다.
 `InlineNotice`의 tone은 neutral/success/warning/danger이며 동적 결과만 `announce`로 알린다.
 `StatePanel`의 partial은 완료한 결과와 실패한 항목의 재시도를 함께 표시한다.
 단일 확인 모달은 `Dialog showCloseButton={false}`와 명시 확인 버튼을 사용한다.
