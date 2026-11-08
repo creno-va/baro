@@ -203,3 +203,40 @@ for (const changed of [false, true]) {
     expect(Math.abs((await log.evaluate((node) => node.scrollTop)) - before)).toBeLessThan(2);
   });
 }
+
+test("direct report queries and draft hash survive retained navigation and browser history", async ({
+  page,
+}) => {
+  await seedMaterialsScenario(page, { files: 0 });
+  await page.goto(
+    `${materialsCasePath}/reports?mode=conversation&version=synthetic-saved-v1#document-drafts`,
+  );
+  await expect(
+    navigation(page).getByRole("link", { name: "문서 초안", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await task(page, "대화");
+  await expect(input(page)).toBeEnabled();
+  await input(page).fill("직접 리포트 URL에서 돌아와 작성하는 미전송 설명");
+  await countMaterialsRequests(page);
+  await task(page, "리포트");
+  await expect(page).toHaveURL(
+    new RegExp(`${materialsCasePath}/reports\\?mode=conversation&version=synthetic-saved-v1$`),
+  );
+  await task(page, "문서 초안");
+  await expect(page).toHaveURL(/version=synthetic-saved-v1#document-drafts$/);
+  await page.goBack();
+  await expect(navigation(page).getByRole("link", { name: "리포트", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await page.goBack();
+  await expect(input(page)).toHaveValue("직접 리포트 URL에서 돌아와 작성하는 미전송 설명");
+  expect(
+    await page.evaluate(() => {
+      const counts = (
+        window as unknown as { materialsRequestCounts: { action: number; send: number } }
+      ).materialsRequestCounts;
+      return { action: counts.action, send: counts.send };
+    }),
+  ).toEqual({ action: 0, send: 0 });
+});
