@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { validateSelfPhoto } from "../../src/server/modules/lawyers/self-profile";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 function readyProfile(id: string, name = "합성 변호사") {
   return {
@@ -30,6 +31,10 @@ test.beforeEach(async ({ page }) => {
       },
     }),
   );
+});
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
 });
 
 test("portal saves one portfolio file without header actions or a sticky divider at 320px", async ({

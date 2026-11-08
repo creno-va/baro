@@ -83,22 +83,24 @@ test("account deletion is inline with one entry and shows only linked SSO option
         .toBe(true);
       if (width === 1440) {
         const layout = await card.evaluate((node) => {
-          const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
+          const heading = node
+            .querySelector(".ui-section__header > div:first-child")
+            ?.getBoundingClientRect();
           const action = node.querySelector("button")?.getBoundingClientRect();
           if (!heading || !action) throw new Error("Account deletion controls missing");
           return {
             inline: action.left >= heading.right,
-            center: Math.abs(action.top + action.height / 2 - heading.top - heading.height / 2),
+            top: Math.abs(action.top - heading.top),
           };
         });
         expect(layout.inline).toBe(true);
-        expect(layout.center).toBeLessThanOrEqual(1);
+        expect(layout.top).toBeLessThanOrEqual(1);
       }
       if (linked.length === 2) {
         await card.screenshot({ path: `.wrangler/settings-danger-inline-${width}.png` });
         if (width === 1440)
           for (const section of ["usage", "help"])
-            await page.locator(`.settings-${section} .settings-section-heading`).screenshot({
+            await page.locator(`.settings-${section} .ui-section__header`).screenshot({
               path: `.wrangler/settings-${section}-heading.png`,
             });
       }

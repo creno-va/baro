@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { DirectoryItem, DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 const directoryLawyer: DirectoryItem = {
   id: publicLawyer.id,
@@ -20,6 +21,10 @@ const directoryPage = (items: DirectoryItem[] = []): DirectoryPage => ({
   nextCursor: null,
   expiresAt: "2099-01-01T00:00:00Z",
   rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
+});
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
 });
 
 test("profile round trip retains applied search filters after reload and ignores unrelated return parameters", async ({

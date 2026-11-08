@@ -1,0 +1,10 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { Editor } from "../../../src/components/lawyers/Editor";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
+import AppLayout from "../../../src/layouts/AppLayout.astro";
+import "./styles/index.css";
+---
+<AppLayout title="내 변호사 프로필" description="본인 프로필의 소개와 연락처, 공개 설정을 관리하세요." role="lawyer" availableRoutes={["/app", "/lawyer", "/settings"]}>
+  <Editor client:load />
+</AppLayout>
