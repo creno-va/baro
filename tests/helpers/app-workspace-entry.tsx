@@ -8,7 +8,13 @@ import { Dialog } from "../../src/components/ui/dialog";
 import { CaseWorkspaceFrame } from "../../src/components/ui/workspace-frame";
 import { CaseNavigation } from "../../src/components/workspace/CaseNavigation";
 
-function MaterialsFixture() {
+function MaterialsFixture({
+  onSiblingReview,
+  conditional,
+}: {
+  onSiblingReview: () => void;
+  conditional: boolean;
+}) {
   const [nested, setNested] = useState(false);
   return (
     <div className="shell-fixture-materials">
@@ -24,6 +30,15 @@ function MaterialsFixture() {
       >
         자료 확인창
       </Button>
+      <Button
+        variant="outline"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          onSiblingReview();
+        }}
+      >
+        독립 자료 검토창
+      </Button>
       {Array.from({ length: 10 }, (_, index) => (
         <p key={`static-${index}`}>
           자료 {index + 1} · {"아주 긴 한글 파일명과 확인할 내용 ".repeat(3)}
@@ -32,16 +47,22 @@ function MaterialsFixture() {
       <a href="/?document" className="ui-button ui-button--outline">
         리포트 열기
       </a>
-      <Dialog open={nested} onOpenChange={setNested} title="합성 자료 확인">
-        <p>안쪽 확인창을 닫아도 자료 패널은 유지됩니다.</p>
-      </Dialog>
+      {(!conditional || nested) && (
+        <Dialog open={nested} onOpenChange={setNested} title="합성 자료 확인">
+          <p>안쪽 확인창을 닫아도 자료 패널은 유지됩니다.</p>
+          <label htmlFor="nested-review">안쪽 교정 내용</label>
+          <input id="nested-review" defaultValue="" />
+        </Dialog>
+      )}
     </div>
   );
 }
 function Fixture() {
   const [open, setOpen] = useState(new URLSearchParams(location.search).has("open"));
+  const [siblingReview, setSiblingReview] = useState(false);
   const documentMode = new URLSearchParams(location.search).has("document");
   const noPanel = new URLSearchParams(location.search).has("no-panel");
+  const conditional = new URLSearchParams(location.search).has("conditional");
   return (
     <div className="app-frame app-frame--product" data-product-ui="refresh" data-app-workspace>
       <AppNavigation
@@ -60,7 +81,14 @@ function Fixture() {
                 fileCount={10}
               />
             }
-            panel={noPanel ? undefined : <MaterialsFixture />}
+            panel={
+              noPanel ? undefined : (
+                <MaterialsFixture
+                  onSiblingReview={() => setSiblingReview(true)}
+                  conditional={conditional}
+                />
+              )
+            }
             panelOpen={open}
             onPanelOpenChange={setOpen}
             kind={documentMode ? "document" : "conversation"}
@@ -102,6 +130,12 @@ function Fixture() {
               </div>
             )}
           </CaseWorkspaceFrame>
+          {(!conditional || siblingReview) && (
+            <Dialog open={siblingReview} onOpenChange={setSiblingReview} title="독립 자료 검토">
+              <label htmlFor="sibling-review">별도 교정 내용</label>
+              <input id="sibling-review" defaultValue="" />
+            </Dialog>
+          )}
         </main>
       </div>
     </div>

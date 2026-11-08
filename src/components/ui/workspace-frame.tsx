@@ -36,17 +36,28 @@ export function CaseWorkspaceFrame({
     const frame = root.current?.closest<HTMLElement>("[data-app-workspace]");
     if (!frame || kind !== "conversation") return;
     const viewport = window.visualViewport;
-    const update = () =>
-      frame.style.setProperty(
-        "--app-viewport-height",
-        `${viewport?.height ?? window.innerHeight}px`,
-      );
+    const update = () => {
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      const height = `${(viewport?.height ?? window.innerHeight) / zoom}px`;
+      if (frame.style.getPropertyValue("--app-viewport-height") !== height)
+        frame.style.setProperty("--app-viewport-height", height);
+    };
     update();
     viewport?.addEventListener("resize", update);
     window.addEventListener("resize", update);
+    // CSS zoom can change without resizing the browser's visual viewport.
+    const resize = new ResizeObserver(update);
+    resize.observe(document.documentElement);
+    const style = new MutationObserver(update);
+    style.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
     return () => {
       viewport?.removeEventListener("resize", update);
       window.removeEventListener("resize", update);
+      resize.disconnect();
+      style.disconnect();
       frame.style.removeProperty("--app-viewport-height");
     };
   }, [kind]);
@@ -54,15 +65,45 @@ export function CaseWorkspaceFrame({
     const node = dialog.current;
     if (!node) return;
     const query = window.matchMedia("(min-width: 1200px)");
+    const waiting = new Set<HTMLDialogElement>();
+    const afterReviewClose = (event: Event) => {
+      if (event.currentTarget instanceof HTMLDialogElement) waiting.delete(event.currentTarget);
+      syncPanel();
+    };
+    const clearWaiting = () => {
+      for (const modal of waiting) modal.removeEventListener("close", afterReviewClose);
+      waiting.clear();
+    };
     const syncPanel = () => {
+      if (!node.isConnected) return;
       // SSR markup stays identical. First opening uses the real viewport mode.
       const inline = query.matches;
-      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) return;
+      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) {
+        clearWaiting();
+        return;
+      }
+      // A review may be a sibling of this frame, not a React descendant. Never
+      // reopen the panel above another active native modal during a resize.
+      const otherModals = [...document.querySelectorAll<HTMLDialogElement>("dialog:modal")].filter(
+        (modal) => modal !== node,
+      );
+      if (panelOpen && otherModals.length) {
+        for (const modal of otherModals) {
+          if (waiting.has(modal)) continue;
+          waiting.add(modal);
+          // Conditional consumers close during unmount. Their queued native
+          // close still reaches this direct listener after DOM removal.
+          modal.addEventListener("close", afterReviewClose, { once: true });
+        }
+        return;
+      }
+      clearWaiting();
       const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const inside = focused && node.contains(focused);
       if (node.open) node.close();
       if (panelOpen && panelPresent) {
-        if (!inside) previousFocus.current = focused;
+        if (!inside && focused !== document.body && focused !== document.documentElement)
+          previousFocus.current = focused;
         if (inline) node.show();
         else node.showModal();
         // Mode changes preserve the current field/selection, not the first control.
@@ -77,7 +118,10 @@ export function CaseWorkspaceFrame({
     };
     syncPanel();
     query.addEventListener("change", syncPanel);
-    return () => query.removeEventListener("change", syncPanel);
+    return () => {
+      query.removeEventListener("change", syncPanel);
+      clearWaiting();
+    };
   }, [panelOpen, panelPresent]);
   useEffect(() => {
     const node = dialog.current;
