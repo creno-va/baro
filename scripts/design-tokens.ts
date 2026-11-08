@@ -41,6 +41,10 @@ export function extractDesignTokens(source: { product: string; global: string })
       "--product-radius",
     ]),
     root = block(source.global, ":root", [
+      "--primary",
+      "--foreground",
+      "--surface-subtle",
+      "--line-subtle",
       "--background",
       "--card",
       "--primary-foreground",
@@ -53,6 +57,17 @@ export function extractDesignTokens(source: { product: string; global: string })
       "--warning",
     ]),
     button = block(source.product, ".app-frame.app-frame--product .ui-button", ["min-height"]);
+  // Product compatibility names must resolve to the canonical shared palette.
+  // A generated/native value cannot silently differ from the actual web control.
+  for (const [shared, compatibility] of [
+    ["--primary", "--product-blue"],
+    ["--foreground", "--product-ink"],
+    ["--surface-subtle", "--product-subtle"],
+    ["--line-subtle", "--product-line"],
+  ]) {
+    if (shared && compatibility && color(root, shared) !== color(product, compatibility))
+      throw new Error(`DESIGN_TOKEN_ALIAS:${shared}`);
+  }
   return {
     color: {
       primary: color(product, "--product-blue"),

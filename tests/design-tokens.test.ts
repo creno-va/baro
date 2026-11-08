@@ -32,6 +32,17 @@ test("missing/duplicate/ambiguous CSS tokens and unsupported color/unit changes 
   ])
     expect(() => extractDesignTokens({ ...source, product })).toThrow();
 });
+test("runtime shared colors cannot drift from the portable/native compatibility palette", () => {
+  for (const declaration of [
+    "--primary: #2364e8;",
+    "--foreground: #191f28;",
+    "--surface-subtle: #f6f8fb;",
+    "--line-subtle: #edf0f4;",
+  ]) {
+    const global = source.global.replace(declaration, declaration.replace(/#[a-f0-9]+/, "#ffffff"));
+    expect(() => extractDesignTokens({ ...source, global })).toThrow("DESIGN_TOKEN_ALIAS");
+  }
+});
 test("text/action contrast uses known WCAG extrema and blocks low-contrast palette or undersized controls", () => {
   expect(contrastRatio("#000000", "#ffffff")).toBe(21);
   expect(contrastRatio("#ffffff", "#ffffff")).toBe(1);

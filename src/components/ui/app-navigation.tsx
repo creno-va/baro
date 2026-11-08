@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  CircleHelp,
   FileText,
   History,
   House,
@@ -442,6 +443,16 @@ export function AppNavigation({
     );
   const renderAccount = () => (
     <div className="sidebar-account">
+      <a
+        className="app-nav__link sidebar-help"
+        href="/help"
+        aria-label="도움말"
+        title="도움말"
+        onClick={() => setOpen(false)}
+      >
+        <CircleHelp aria-hidden="true" size={18} />
+        <span>도움말</span>
+      </a>
       {session?.user && !session.needsConsent && (
         <a
           href="/settings"
@@ -467,13 +478,7 @@ export function AppNavigation({
             </span>
             <span>
               <strong>{session.user.name || "내 계정"}</strong>
-              <small>
-                {session.needsConsent
-                  ? "필수 확인 필요"
-                  : session.user.accountType === "lawyer"
-                    ? "변호사 계정"
-                    : "나의 BARO"}
-              </small>
+              <small>{session.needsConsent ? "필수 확인 필요" : "나의 BARO"}</small>
             </span>
           </a>
           <Button
