@@ -2,10 +2,10 @@
 
 - 결정일: 2026-11-08 KST. 근거: 현재 총괄 채팅의 사용자 직접 지시.
 - 기준 main: `7236c14f88f21a64c5fe916a90779d7c238fff6d`.
-- 조사 중 최신 main 변경: PR772가 2026-11-08 19:19 KST 병합되어 `b02357ffde3bc6af94218086cca1c0706c938d36`가 됐다. 최종 통합은 이 변경을 포함해 다시 검증한다.
+- 조사 중 최신 main 변경: PR772가 2026-11-08 19:19 KST 병합되어 `b02357ffde3bc6af94218086cca1c0706c938d36`가 됐다. 최종 통합은 이 변경을 포함해 다시 검증한다. 이후 main e5871a4(PR773/776)의 고정 빌드 입력 복구도 보존했다.
 - 총괄: `redesign-00` / `codex/764-redesign-integration`.
 - 추적: [#764](https://github.com/creno-va/baro/issues/764), [미병합 기획 PR765](https://github.com/creno-va/baro/pull/765).
-- 상태: 조사·설계 계약 확정, 제품 마이그레이션·통합 인수는 진행 중. 이 문서는 완료 증거가 아니다.
+- 상태: 조사·설계·전체 웹 마이그레이션을 통합했고 최종 검수를 진행한다. 경로별 결과·검사 SHA·잔여는 [통합 인수](../quality/REDESIGN-INTEGRATION.md)와 연결 receipt가 정본이다.
 - 세션별 최신 커밋과 도구 지연 시 인계는 [REDESIGN-HANDOFF](./REDESIGN-HANDOFF.md)를 함께 확인한다.
 
 ## 결정의 우선순위와 구현 경계
@@ -108,6 +108,7 @@ BaseLayout의 global/shell 값과 domain 스타일도 겹친다. 같은 버튼·
 | Button/ButtonLink | 행동과 이동 구분, primary/secondary/ghost/danger. 한 작업의 주요 액션만 강조 |
 | Input/Textarea/Select/Label | label·설명·오류 연결. pending 때 입력값 유지, 실패·부분 성공은 명시 |
 | PageHeader/Section/ReadingContent | 같은 제목 위계와 폭. domain별 독자 헤더/카드 복제 금지 |
+| List/ListRow/ListLink/ListTitle/ListMeta | native 목록·별도 행 액션·전체 제목·공통 구분선/모바일 단일 열 |
 | StatePanel/InlineNotice/Badge | loading/empty/partial/error/retry/blocked/selected를 일관되게 표현 |
 | Dialog/Sheet | native modality·Escape·busy dismissal·opener focus·resize 보존 |
 | CaseNavigation | 기존 caseId/title/active 호환. 네 작업 상시 진입과 선택적 onNavigate callback |
@@ -180,16 +181,16 @@ docs/quality/redesign-acceptance/**만 소유한다. 기존 테스트 수정은 
 
 | ID | 필수 인수 | 현재 결과 |
 | --- | --- | --- |
-| R01 | 모든 경로·상태·DS/API·반응형 적용 목록 | 조사/계약 작성, 제품 검증 대기 |
-| R02 | 네 경로·문서 없는 대응·추출 확인과 중복 질문 구분 | 기존DTO 매핑 구현 중. 사용자 후속 결정으로 설명 시작→자료 추가, 문서 단독 시작/첫 질문 문서 반영은 미완료 목표로 보류 |
-| R03 | 대화·File 선택→자료/리포트/초안 왕복·스크롤/편집 보존 | 구현 대기 |
-| R04 | 리포트가 항상 진입 가능, 읽기만으로 생성/저장0 | 구현 대기 |
-| R05 | 세 액션 유지; lawyer 지정 문구/확인·network0·선택/편집 유지·focus | 현재 결함 확인,03 수정 중 |
-| R06 | 기존 lawyer계정 일반 이용·데이터/권리·신규로그인 role 보존 | 인증 경계 감사 중 |
-| R07 | 부분 분석/출처 실패·stale/CAS/계정전환/삭제·늦은응답 | 기존 회귀 보존, 통합 검증 대기 |
-| R08 | 320/390/768/1024/1440/1920·200%·keyboard·긴본문 | 독립 기준선 수집 중 |
-| R09 | bun ci·quick·build·필요 회귀·정확 SHA/PR CI | baseline ci/work:next PASS, 제품 변경 후 재검증 |
-| R10 | unused CSS/중복 제거·native/PDF 영향 확인 | 01 소비 감사 중 |
+| R01 | 모든 경로·상태·DS/API·반응형 적용 목록 | 전체 경로·공통/도메인 API 통합. 정확 SHA별 결과는 통합 인수표 참조 |
+| R02 | 네 경로·문서 없는 대응·추출 확인과 중복 질문 구분 | 기존DTO의 네 경로/미정 매핑·문서 없는 대응 구현/회귀. 사용자 후속 결정으로 설명 시작→자료 추가, 문서 단독 시작/첫 질문 문서 반영은 미완료 목표로 보류 |
+| R03 | 대화·File 선택→자료/리포트/초안 왕복·스크롤/편집 보존 | 동일 React owner로 통합, 자료 반영/계정 변경의 실제 결함 수리. 최종 검수 receipt 참조 |
+| R04 | 리포트가 항상 진입 가능, 읽기만으로 생성/저장0 | 네 작업 상시 진입·직접 URL·조회 부작용0 회귀 통과. 명시 실행만 유지 |
+| R05 | 세 액션 유지; lawyer 지정 문구/확인·network0·선택/편집 유지·focus | 지정 모달/요청0·선택/편집 보존·focus 복귀 구현과 회귀 통과 |
+| R06 | 기존 lawyer계정 일반 이용·데이터/권리·신규로그인 role 보존 | 공통 로그인 유형 보존·기존 본인 자료 권리 UI·owner/epoch/CAS 회귀 통과 |
+| R07 | 부분 분석/출처 실패·stale/CAS/계정전환/삭제·늦은응답 | 처리 범위/출처/현재rev·owner/늦은 응답·CAS 회귀 유지. 합성/실제 외부 인수 구분 |
+| R08 | 320/390/768/1024/1440/1920·200%·keyboard·긴본문 | 여섯 폭·CSS200·키보드/긴본문 검사. 실제 Chrome200/IME는 최종 제품 SHA receipt로 구분 |
+| R09 | bun ci·quick·build·필요 회귀·정확 SHA/PR CI | d77 frozen ci/quick/build와 CI/native 성공. 마지막 공통503 후 최종 실행 SHA를 통합 인수에 기록 |
+| R10 | unused CSS/중복 제거·native/PDF 영향 확인 | 구 CSS26개·중복 랜딩 제거, portable token 키/값과 독립 PDF 출력 경로 보존 |
 
 실제 OAuth·모델·공식 법률 API·remote 저장·물리 IME·독립 법률 검증은 합성 인수와 구분한다.
 검증된 SHA·명령·결과·artifact·PR 링크를 후속 기록하며 캡처만으로 과업 성공을 선언하지 않는다.

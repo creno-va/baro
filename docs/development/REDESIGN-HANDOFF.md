@@ -32,6 +32,13 @@ root는 route `486cd16c6c7dce310419aaf0914f43b7140f92d4`와 fixture `5111da7`를
 ## 최신 main
 
 첫 기준7236c14 이후 main b02357f/PR772를 각 owner가 보존해 통합했다.
-후속 main `5f108c859ee27fdd6c32908cb9ed3fafc096f894` 알림도 받았으며 실제 fetch/최종 인수가 남았다.
-변경은 workflow·실행 문서·file-processor Docker 다운로드 복구라는 보고이고 실제 확인 후 보존한다.
+후속 PR773/776을 실제 fetch하고 최신 main `e5871a4067bd725608803bccf999be1d485c9499`를
+root e088674에 병합했다. EXECUTION의 충돌은 현재 전면 개편 계약과 빌드 복구 기록을 함께 보존했다.
 과거 SHA의 성공을 최종 통합 SHA 검사로 확대하지 않는다.
+
+## 통합 수신 완료와 최종 검수
+
+01 cleanup43/05/4a/739, List922와02소비34b,03route486/511,04권리fec와공유mock3d/0135,
+공통9b검사확장·dcf제목정합,02test233/d73를 수신했다.02실제보존결함3dc/6ca도통합했다.
+제품396의계정설명3FAIL·자료반영1FAIL과d77재검증을분리한다.현재PR과최종정확SHA증거는
+[통합 인수](../quality/REDESIGN-INTEGRATION.md)에 기록한다.새 API·DB·영구복구를 추가하지 않는다.

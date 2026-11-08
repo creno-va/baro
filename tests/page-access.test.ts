@@ -260,9 +260,15 @@ test("OAuth configuration and database failures return safe 503s without login l
       const response = await application().request(path, { headers: { cookie } }, env);
       expect(response.status).toBe(503);
       expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("retry-after")).toBe("30");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       expect(response.headers.get("cache-control")).toContain("private, no-store");
       const body = await response.text();
       expect(body).toContain("로그인 상태를 확인할 수 없어요.");
+      expect(body).toContain("<style>");
+      expect(body).toContain('href="/app"');
+      expect(body).toContain('href="/"');
+      expect(body).not.toContain("<script");
       expect(body).not.toMatch(/SQL|credential|synthetic-token|BETTER_AUTH_SECRET/);
       expect(body).not.toContain("Synthetic application reached");
     }
