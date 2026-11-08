@@ -45,7 +45,7 @@
 }
 .app-surface > main.conversation-main {
   width: min(var(--reading-width), calc(100% - 48px));
-  padding-top: clamp(32px, 8dvh, 80px);
+  padding-top: 24px;
 }
 .app-frame .app-header {
   position: fixed;
