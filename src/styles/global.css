@@ -557,6 +557,7 @@ html:has(dialog:modal) {
   background: transparent;
   color: var(--muted-foreground);
   min-height: 44px;
+  font-size: 0.875rem;
   padding: 10px 16px;
   cursor: pointer;
 }
@@ -637,6 +638,7 @@ html:has(dialog:modal) {
 /* Shared reading grammar: surrounding controls may be dense; prose is never compressed. */
 .ui-reading {
   width: 100%;
+  margin-inline: auto;
   max-width: var(--reading-width);
   min-width: 0;
   font-size: 1rem;

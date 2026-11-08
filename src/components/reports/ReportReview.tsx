@@ -766,18 +766,6 @@ export function ReportReview({
                 <>
                   <button
                     type="button"
-                    disabled={editingBlocked || !dirty || report.stale}
-                    onClick={() =>
-                      void run("수정 내용 저장 중…", async () => {
-                        await save();
-                      })
-                    }
-                  >
-                    <Save size={16} aria-hidden="true" />
-                    저장
-                  </button>
-                  <button
-                    type="button"
                     disabled={editingBlocked}
                     onClick={() => {
                       if (dirty) setCancelEdit(true);
@@ -786,53 +774,64 @@ export function ReportReview({
                   >
                     편집 취소
                   </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={editingBlocked || !dirty || report.stale}
+                    onClick={() =>
+                      void run("수정 내용 저장 중…", async () => {
+                        await save();
+                        setEditing(false);
+                      })
+                    }
+                  >
+                    <Save size={16} aria-hidden="true" />
+                    수정 내용 저장
+                  </button>
                 </>
               )}
-              <button
-                type="button"
-                className="report-edit-toggle"
-                disabled={
-                  Boolean(busy) ||
-                  accessChecking ||
-                  accessUnknown ||
-                  needsConsent ||
-                  evidenceBusy ||
-                  evidenceDirty ||
-                  resolutionBusy ||
-                  resolutionDirty
-                }
-                aria-expanded={editing}
-                aria-controls="report-edit-fields"
-                onClick={() => {
-                  if (editing && dirty && !report.stale)
-                    void run("수정 내용 저장 중…", async () => {
-                      await save();
-                      setEditing(false);
-                    });
-                  else setEditing((value) => !value);
-                }}
-              >
-                <Pencil size={16} aria-hidden="true" />
-                {editing ? "수정 마치기" : "수정하기"}
-              </button>
-              <button
-                type="button"
-                className="report-regenerate primary"
-                disabled={
-                  Boolean(busy) ||
-                  accessChecking ||
-                  accessUnknown ||
-                  needsConsent ||
-                  evidenceBusy ||
-                  evidenceDirty ||
-                  resolutionBusy ||
-                  resolutionDirty ||
-                  Boolean(preservedEdit && dirty && report.stale)
-                }
-                onClick={() => setRegenerate(true)}
-              >
-                새 버전 만들기
-              </button>
+              {!editing && (
+                <button
+                  type="button"
+                  className="report-edit-toggle"
+                  disabled={
+                    Boolean(busy) ||
+                    accessChecking ||
+                    accessUnknown ||
+                    needsConsent ||
+                    evidenceBusy ||
+                    evidenceDirty ||
+                    resolutionBusy ||
+                    resolutionDirty
+                  }
+                  aria-expanded={editing}
+                  aria-controls="report-edit-fields"
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil size={16} aria-hidden="true" />
+                  수정하기
+                </button>
+              )}
+              {(!editing || report.stale) && (
+                <button
+                  type="button"
+                  className="report-regenerate primary"
+                  disabled={
+                    Boolean(busy) ||
+                    accessChecking ||
+                    accessUnknown ||
+                    needsConsent ||
+                    evidenceBusy ||
+                    evidenceDirty ||
+                    resolutionBusy ||
+                    resolutionDirty ||
+                    Boolean(preservedEdit && dirty && report.stale)
+                  }
+                  onClick={() => setRegenerate(true)}
+                >
+                  새 버전 만들기
+                </button>
+              )}
             </fieldset>
           )}
         </header>
@@ -874,12 +873,8 @@ export function ReportReview({
                             stale: "사건과 자료 변경을 반영해야 해요",
                           }[preparation.analysis.status]}
                   </h3>
-                  <span>보완 내용과 준비 도구</span>
                 </summary>
-                <p>
-                  리포트는 준비된 검증 결과를 사용합니다. PDF를 저장할 때 새 분석을 요청하지
-                  않습니다.
-                </p>
+                <p>최신 사건과 자료를 확인한 뒤 리포트를 만들어요.</p>
                 {preparation.report.failure && (
                   <p>리포트 준비 실패 · {preparationFailureText(preparation.report.failure)}</p>
                 )}

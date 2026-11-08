@@ -884,7 +884,7 @@ test("reports start in reading mode and retain editing through a focus check", a
   await expect(editor).toBeVisible();
   await expect(editor).toHaveValue("수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.");
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(
     "수정 중인 합성 리포트입니다. 날짜와 사실을 확인하고 있어요.",
   );

@@ -76,7 +76,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
         "합성 마지막 문장 · 모든 내용과 출처를 확인한 뒤 사용자가 직접 전달합니다.",
       ].join("\n"),
     );
-    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
     await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
     // Compare the saved HTML endpoint with the file received through the owner-checked UI.

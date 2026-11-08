@@ -1338,26 +1338,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           )}
         </div>
       </details>
-      <div className="workspace-context-footer">
-        <p className="workspace-saved">
-          <CheckCheck size={14} />
-          <time
-            dateTime={view.case.updatedAt}
-            title={new Date(view.case.updatedAt).toLocaleString("ko-KR")}
-          >
-            {new Date(view.case.updatedAt).toLocaleString("ko-KR", {
-              month: "numeric",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
-            저장
-          </time>
-        </p>
-        <a href="/lawyers">
-          변호사 탐색 <ArrowRight size={14} />
-        </a>
-      </div>
     </aside>
   ) : null;
   const errorFeedback = error ? (
@@ -2218,9 +2198,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                     <div className="workspace-section-heading">
                       <div>
                         <h2>다음 행동</h2>
-                        <p>
-                          확인한 사실과 자료, 아직 모르는 내용을 하나씩 점검하며 준비를 이어가요.
-                        </p>
+                        <p>자료와 대화를 바탕으로 준비할 일을 정리해요.</p>
                       </div>
                       <div className="workspace-section-actions">
                         <Button
@@ -2282,11 +2260,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       ))}
                     </ul>
                     <div className="workspace-next">
-                      <h3>준비한 내용과 남은 조건을 리포트에서 확인하세요</h3>
-                      <p>
-                        리포트에서 준비한 내용과 남은 확인 조건을 검토하세요. 직접 준비를
-                        이어가거나, 전문가의 도움을 받거나, 리포트만 보관할 수 있어요.
-                      </p>
+                      <h3>정리한 내용을 다음 단계로</h3>
+                      <p>리포트를 검토하고 필요한 준비나 상담을 이어가세요.</p>
                       <div className="workspace-buttons">
                         <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
                         <ButtonLink href="/lawyers" variant="outline">

@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: Stable document sections can repeat titles. */
 import { ImagePlus, List, PanelLeftClose } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   isReportSourceSection,
   type ReportPhoto,
@@ -116,10 +116,7 @@ export function ReportReading({
   photoUrls?: Readonly<Record<string, string>> | undefined;
 }) {
   const outlineId = useId().replaceAll(":", "");
-  const [outlineOpen, setOutlineOpen] = useState(true);
-  useEffect(() => {
-    setOutlineOpen(!window.matchMedia("(max-width: 1199px)").matches);
-  }, []);
+  const [outlineOpen, setOutlineOpen] = useState(false);
   const sections = reportReviewSections(content);
   const photos: ReportPhoto[] = reportId
     ? [...new Set([...photoCandidates.map((photo) => photo.id), ...savedPhotoIds])].map((id) => ({
