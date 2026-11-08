@@ -26,7 +26,12 @@ import {
 import type { CaseView } from "../types";
 import { makeMockQuestions } from "./cases";
 import { createReconciliationMock } from "./mock-reconciliation";
-import { createReportsMockHandler, ReportMockError, type ReportMockState } from "./reports";
+import {
+  createReportsMockHandler,
+  mockReportSourceHash,
+  ReportMockError,
+  type ReportMockState,
+} from "./reports";
 import {
   ensureMockWorkspace,
   mockFailure,
@@ -187,10 +192,17 @@ export function createReworkMock(
         ["ready", "partial", "empty", "unavailable"].includes(conversation.analysis.status) &&
         state.reworkReportBindings?.[report.id] === snapshot.id,
       userEdited =
-        !!state.reworkEditedReports?.[report.id] || !state.reworkReportBindings?.[report.id];
+        !!state.reworkEditedReports?.[report.id] || !state.reworkReportBindings?.[report.id],
+      frozenSource = state.reportSourceHashes?.[report.id],
+      sourceRevision = state.reportSources?.[report.id],
+      documentCurrent =
+        (sourceRevision === undefined || sourceRevision === state.cases[id]?.revision) &&
+        (frozenSource ? frozenSource === mockReportSourceHash(state, id, report) : current);
     return {
       ...report,
-      stale: report.stale || !current,
+      // A freshly rebuilt factual document can be current while its separate
+      // analysis remains unavailable or requires review. Never bless that audit.
+      stale: report.stale || !documentCurrent,
       analysisReview: {
         analysisId: current ? snapshot.id : null,
         status: current && !userEdited ? snapshot.status : "review_required",

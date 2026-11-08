@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { openReportEditor } from "../helpers/report-controls";
 import {
   closeWorkspaceMaterials,
   readWorkspaceReport,
@@ -22,6 +23,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
       .getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.")
       .check();
     await page.getByRole("button", { name: "동의하고 계속하기", exact: true }).click();
+    await expect(page).toHaveURL(/\/app$/);
     await page.goto("/cases/new");
     await page.getByRole("radio", { name: purpose, exact: true }).check();
     await page
@@ -202,9 +204,41 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await actions.getByRole("button", { name: "리포트 준비·검토", exact: true }).click();
     const report = await readWorkspaceReport(page);
     await expect(
-      report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+      report.getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
     ).toBeVisible();
     await expect(report).toContainText(/보완 필요|확인하지 못|원문 확인/);
+    if (purpose.startsWith("고소")) {
+      // An unavailable analysis deliberately takes the explicit document POST,
+      // not another analysis action. Editing that fresh document cannot make
+      // its source stale or turn the unavailable audit into a verified result.
+      await report.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "새 버전을 만들까요?", exact: true })
+        .getByRole("button", { name: "새 버전 생성", exact: true })
+        .click();
+      await expect(report.locator(".report-save-state")).toContainText("버전 2");
+      await openReportEditor(page);
+      const overview = report.getByRole("textbox", { name: "내 사건 한눈에 수정", exact: true });
+      await overview.fill(
+        `${await overview.inputValue()}\n사용자가 직접 확인한 합성 보완 설명입니다.`,
+      );
+      await report
+        .getByRole("group", { name: "리포트 작업", exact: true })
+        .getByRole("button", { name: "저장", exact: true })
+        .click();
+      await expect(report.locator(".report-save-state")).toContainText("버전 3");
+      await expect(report.locator(".report-basis-details > summary")).toHaveText("작성 기준");
+      const saved = await page.evaluate(async () => {
+        const path = "/src/client/api/index.ts";
+        const { api } = (await import(path)) as typeof import("../../src/client/api");
+        return api.rework.peekReport(decodeURIComponent(location.pathname.split("/")[2] ?? ""));
+      });
+      expect(saved).toMatchObject({
+        stale: false,
+        analysisReview: { userEdited: true, status: "review_required" },
+      });
+      await expect(report.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
+    }
     if (purpose.startsWith("고소"))
       await page.screenshot({ path: "/tmp/baro-625-report-main-320.png", fullPage: true });
     await expect(page).toHaveURL(`${conversationUrl}/reports?mode=conversation`);

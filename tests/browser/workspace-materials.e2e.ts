@@ -141,7 +141,53 @@ test("local attachments and consent stay local across panel changes before one e
     ),
   ).toBe(0);
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+  await page.evaluate(async () => {
+    const path = "/src/client/api/index.ts";
+    const { api } = (await import(path)) as typeof import("../../src/client/api");
+    const upload = api.files.upload;
+    const state = window as unknown as {
+      materialsUploadCalls: number;
+      materialsUploadCommitted: boolean;
+      releaseMaterialsUpload?: () => void;
+    };
+    state.materialsUploadCalls = 0;
+    state.materialsUploadCommitted = false;
+    api.files = new Proxy(api.files, {
+      get(target, property) {
+        if (property !== "upload") return Reflect.get(target, property);
+        return async (...args: Parameters<typeof upload>) => {
+          state.materialsUploadCalls++;
+          const result = await upload(...args);
+          state.materialsUploadCommitted = true;
+          await new Promise<void>((resolve) => {
+            state.releaseMaterialsUpload = resolve;
+          });
+          return result;
+        };
+      },
+    });
+  });
   await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { materialsUploadCommitted?: boolean }).materialsUploadCommitted,
+      ),
+    )
+    .toBe(true);
+  await openMaterials(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await expect(input(page)).toHaveValue("첨부와 함께 보내는 합성 입력");
+  await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () => (window as Window & { materialsUploadCalls?: number }).materialsUploadCalls,
+    ),
+  ).toBe(1);
+  await page.evaluate(() =>
+    (window as Window & { releaseMaterialsUpload?: () => void }).releaseMaterialsUpload?.(),
+  );
   await expect(page.locator(".workspace-message--user")).toHaveCount(1);
   await expect(page.locator(".workspace-message-attachments")).toContainText(
     "패널 전환 중 보존할 합성 자료.txt",
@@ -231,11 +277,15 @@ test("materials and composer remain readable and accessible at phone, tablet, de
       (await new AxeBuilder({ page }).include(".case-workspace").analyze()).violations,
     ).toEqual([]);
     await page.screenshot({
-      path: testInfo.outputPath(`workspace-${width}.png`),
+      path: testInfo.outputPath(`materials-${width}.png`),
       animations: "disabled",
     });
     await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
     await expect(input(page)).toBeInViewport();
+    await page.screenshot({
+      path: testInfo.outputPath(`conversation-${width}.png`),
+      animations: "disabled",
+    });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );

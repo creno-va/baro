@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { z } from "zod";
 import { v2AcceptedOperationSchema } from "../../src/contracts/v2";
+import { openReportEditor } from "../helpers/report-controls";
 import { openReworkBrowserFixture } from "../helpers/rework-browser-proxy";
 import {
   closeWorkspaceMaterials,
@@ -54,7 +55,7 @@ async function reportReady(page: Page) {
     ).toBeVisible();
   const report = await readWorkspaceReport(page);
   await expect(
-    report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+    report.getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
   ).toBeVisible();
 }
 async function stableForeground(locator: Locator) {
@@ -755,10 +756,24 @@ test("a foreign signed account cannot retain the previous conversation report or
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
+    const priorTitle = await page.locator(".report-heading h2").innerText();
+    const priorBody = await page.locator(".report-reading .report-markdown").first().innerText();
+    await expect(page.getByText(priorTitle, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(priorBody, { exact: true })).toHaveCount(1);
+    await openReportEditor(page);
+    const privateDraft = "다른 계정에 남으면 안 되는 합성 리포트 편집 초안";
+    await page.locator(".report-reading textarea").first().fill(privateDraft);
     await context.clearCookies();
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await expect(page.locator(".report-reading")).not.toBeVisible();
+    await expect(page.locator(".report-reading")).toHaveCount(0);
+    await expect(page.locator(".report-heading h2")).toHaveCount(0);
+    await expect(page.getByText(priorTitle, { exact: true })).toHaveCount(0);
+    await expect(page.getByText(priorBody, { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox")).toHaveCount(0);
+    expect(
+      await page.evaluate((draft) => document.body.textContent?.includes(draft), privateDraft),
+    ).toBe(false);
     await expect(page.getByRole("alert").first()).toBeVisible();
   } finally {
     await f.close();
@@ -876,7 +891,10 @@ test("the report's own prepare button recovers an actual committed response loss
     await enterWorkspace(page, f.info.caseId, f.info.reconciliationExplanation);
     await page.goto(`/cases/${encodeURIComponent(f.info.caseId)}/reports`);
     await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
-    const ready = page.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true });
+    const ready = page.getByRole("heading", {
+      name: "이해한 내용을 다음 준비로 이어가요",
+      exact: true,
+    });
     const failure = page.locator(".report-error");
     await expect
       .poll(async () => (await ready.isVisible()) || (await failure.isVisible()))
@@ -1079,7 +1097,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         ).toBeVisible();
         const report = await readWorkspaceReport(page);
         await expect(
-          report.getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+          report.getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
         ).toBeVisible();
         if (purpose === "prepare_claim" && followup === "직접 해결")
           await page.screenshot({ path: "/tmp/baro-625-real-conversation-320.png" });
