@@ -16,7 +16,11 @@ const bundle = await Bun.build({
     ),
   ],
   target: "browser",
-  define: { "import.meta.env.PUBLIC_API_MODE": '"real"' },
+  define: {
+    "import.meta.env.PUBLIC_API_MODE": JSON.stringify(
+      Bun.env.BARO_REPORT_MOCK_PHOTOS === "true" ? "mock" : "real",
+    ),
+  },
   minify: false,
   plugins: [
     {
@@ -40,12 +44,13 @@ const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
   .replace(/@theme inline\s*\{[^}]*\}/s, "");
 const css =
   globalCss +
+  (await Bun.file(`${root}/src/styles/app-workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
   (await Bun.file(`${root}/src/styles/evidence.css`).text()) +
   (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
   (await Bun.file(`${root}/src/styles/settings.css`).text()) +
-  "body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
+  ".app-frame[data-app-workspace]{display:block}body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(Bun.env.BARO_REPORT_TEST_PORT ?? 4343),
@@ -63,7 +68,7 @@ const server = Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body><p>API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body class="app-frame" data-app-workspace><p>API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
       {
         headers: {
           "content-type": "text/html;charset=utf-8",

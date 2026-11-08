@@ -29,7 +29,10 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
           needsConsent: false,
         },
       });
-    if (path.endsWith("/photos/synthetic-inline-photo"))
+    if (
+      path.endsWith("/photos/synthetic-inline-photo") ||
+      path.endsWith("/files/synthetic-inline-photo/content")
+    )
       return route.fulfill({
         path: "tests/fixtures/media/image-markers.jpg",
         contentType: "image/jpeg",
@@ -138,4 +141,62 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     await page.screenshot({ path: `.wrangler/report-inline-editor-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileOutline = page.getByRole("navigation", { name: "리포트 목차", exact: true });
+  if ((await page.locator(".report-outline-toggle").getAttribute("aria-expanded")) === "false")
+    await page.locator(".report-outline-toggle").click();
+  const mobileNavBox = await mobileOutline.boundingBox();
+  expect(mobileNavBox && mobileNavBox.height <= 844 * 0.45 + 1).toBe(true);
+  const mobileLink = mobileOutline.getByRole("link", { name: "증거 자료", exact: true });
+  const target = page.locator((await mobileLink.getAttribute("href")) as string);
+  await mobileLink.click();
+  await expect(mobileOutline).toBeHidden();
+  await expect(target).toBeFocused();
+  await expect(target).toBeInViewport();
+  await page.getByText("현재 사건에서 더 준비하기", { exact: true }).click();
+  await expect(page.getByRole("link", { name: "현재 할 일 관리", exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const outline = page.getByRole("navigation", { name: "리포트 목차", exact: true });
+  const outlineToggle = page.locator(".report-outline-toggle");
+  if ((await outlineToggle.getAttribute("aria-expanded")) === "true") await outlineToggle.click();
+  await expect(outline).toBeHidden();
+  await outlineToggle.click();
+  await expect(outline).toBeVisible();
+  await outline.getByRole("link", { name: "증거 자료", exact: true }).click();
+  await expect(image).toBeVisible();
+  await openReportEditor(page);
+  const overview = page.getByRole("textbox", { name: "사건 개요 수정", exact: true });
+  const originalOverview = await overview.inputValue();
+  await overview.fill(`${originalOverview}\n취소할 합성 편집`);
+  await page.getByRole("button", { name: "편집 취소", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "편집을 취소할까요?", exact: true })
+    .getByRole("button", { name: "계속 편집", exact: true })
+    .click();
+  await expect(overview).toHaveValue(/취소할 합성 편집/);
+  await page.getByRole("button", { name: "편집 취소", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "편집을 취소할까요?", exact: true })
+    .getByRole("button", { name: "저장본으로 돌아가기", exact: true })
+    .click();
+  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+  expect(saveCount).toBe(1);
+  await openReportEditor(page);
+  await expect(overview).toHaveValue(originalOverview);
+  await overview.fill(`${originalOverview}\n명시 저장한 합성 설명`);
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".report-reading")).toContainText("명시 저장한 합성 설명");
+  expect(saveCount).toBe(2);
+  for (const [name, path] of [
+    ["자료와 원본 확인", "/files"],
+    ["현재 할 일 관리", "/actions"],
+    ["현재 경위 정리", "/timeline"],
+    ["현재 판례 탐색", "/precedents"],
+    ["대화로 돌아가기", ""],
+  ] as const)
+    await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      `/cases/synthetic-inline-case${path}`,
+    );
 });

@@ -1,7 +1,7 @@
 import { reportPhotoIds, reportPhotoToken } from "../../utils/report-markdown";
 import { reportSections } from "../../utils/report-sections";
 
-const omitted = new Set([
+const legacyPhotoOmissions = new Set([
   "사실·주장·출처",
   "공식 출처",
   "자료 처리 범위",
@@ -10,6 +10,7 @@ const omitted = new Set([
   "연락과 전달",
   "안내",
 ]);
+const omitted = new Set(["사실·주장·출처"]);
 export const reportSectionTitle = (title: string) =>
   ({
     "사건 요약": "사건 개요",
@@ -18,6 +19,13 @@ export const reportSectionTitle = (title: string) =>
     타임라인: "주요 경위",
     "미확인 사항": "추가 확인 사항",
     "미확인·상반되는 내용": "추가 확인 사항",
+    "준비할 행동": "지금 준비할 일",
+    "다음 행동과 필요 자료": "지금 준비할 일",
+    "공식 출처": "공식 원문과 출처",
+    "자료 처리 범위": "자료를 확인한 범위",
+    "준비할 자료와 처리 범위": "자료를 확인한 범위",
+    "연락과 전달": "전문가 도움과 공유",
+    안내: "읽기 전 확인",
   })[title] ?? title;
 export type ReviewSection = { title: string; start: number; end: number; text: string };
 
@@ -76,7 +84,11 @@ export function withInlineReportPhotos(
 ) {
   const present = new Set(reportPhotoIds(content));
   const missing = photos.filter((photo) => !present.has(photo.id));
-  const sections = reportReviewSections(content);
+  // Restoring older preparation/source sections must not move already selected
+  // compatibility photos to a different document position.
+  const sections = reportReviewSections(content).filter(
+    (section) => !legacyPhotoOmissions.has(section.title),
+  );
   const target =
     sections.find((section) => section.title === "증거 자료") ??
     sections.find((section) => section.title.includes("자료")) ??

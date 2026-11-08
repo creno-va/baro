@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: Stable document sections can repeat titles. */
-import { ImagePlus } from "lucide-react";
-import { useRef } from "react";
+import { ImagePlus, List, PanelLeftClose } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   isReportSourceSection,
   type ReportPhoto,
@@ -103,6 +103,7 @@ export function ReportReading({
   photoCandidates = [],
   savedPhotoIds = [],
   reportId,
+  photoUrls,
 }: {
   content: string;
   editing?: boolean;
@@ -111,45 +112,101 @@ export function ReportReading({
   photoCandidates?: readonly PhotoChoice[];
   savedPhotoIds?: readonly string[];
   reportId?: string;
+  /** Mock originals use the same bounded data-image vocabulary as saved HTML. */
+  photoUrls?: Readonly<Record<string, string>> | undefined;
 }) {
+  const outlineId = useId().replaceAll(":", "");
+  const [outlineOpen, setOutlineOpen] = useState(true);
+  useEffect(() => {
+    setOutlineOpen(!window.matchMedia("(max-width: 1199px)").matches);
+  }, []);
+  const sections = reportReviewSections(content);
   const photos: ReportPhoto[] = reportId
     ? [...new Set([...photoCandidates.map((photo) => photo.id), ...savedPhotoIds])].map((id) => ({
         id,
         name: photoCandidates.find((photo) => photo.id === id)?.name ?? "사건 사진",
-        url: `/api/v2/reports/${encodeURIComponent(reportId)}/photos/${encodeURIComponent(id)}`,
+        url: photoUrls
+          ? (photoUrls[id] ?? "")
+          : `/api/v2/reports/${encodeURIComponent(reportId)}/photos/${encodeURIComponent(id)}`,
       }))
     : [];
   return (
-    <div className="report-reading">
-      {reportReviewSections(content).map((section, index) => (
-        <section key={`${index}:${section.title}`} className="report-reading-section">
-          <header>
-            <span aria-hidden="true">{index + 1}</span>
-            <h3>{reportSectionTitle(section.title)}</h3>
-          </header>
-          {editing ? (
-            <SectionEditor
-              content={content}
-              section={section}
-              disabled={disabled}
-              photos={photoCandidates}
-              onChange={onChange}
-            />
-          ) : (
-            <div
-              className="report-markdown"
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: Escaped renderer permits owned photos and bounded official-source navigation only; covered by XSS tests.
-              dangerouslySetInnerHTML={{
-                __html: reportMarkdownHtml(
-                  section.text,
-                  photos,
-                  isReportSourceSection(section.title),
-                ),
-              }}
-            />
-          )}
-        </section>
-      ))}
+    <div
+      className={`report-document${outlineOpen ? "" : " report-document--outline-closed"}${sections.length < 2 ? " report-document--short" : ""}`}
+    >
+      {sections.length > 1 && (
+        <aside className="report-outline" aria-label="문서 탐색">
+          <button
+            type="button"
+            className="report-outline-toggle"
+            aria-expanded={outlineOpen}
+            aria-controls={`${outlineId}-outline`}
+            aria-label={`문서 목차 ${outlineOpen ? "접기" : "펼치기"}`}
+            onClick={() => setOutlineOpen((open) => !open)}
+          >
+            {outlineOpen ? (
+              <PanelLeftClose size={17} aria-hidden="true" />
+            ) : (
+              <List size={17} aria-hidden="true" />
+            )}
+            <span>문서 목차</span>
+          </button>
+          <nav id={`${outlineId}-outline`} aria-label="리포트 목차" hidden={!outlineOpen}>
+            <ol>
+              {sections.map((section, index) => (
+                <li key={`${index}:${section.title}`}>
+                  <a
+                    href={`#${outlineId}-section-${index}`}
+                    onClick={() => {
+                      if (window.matchMedia("(max-width: 1199px)").matches) setOutlineOpen(false);
+                    }}
+                  >
+                    <span aria-hidden="true">{index + 1}</span>
+                    {reportSectionTitle(section.title)}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        </aside>
+      )}
+      <div className="report-reading">
+        {sections.map((section, index) => (
+          <section
+            key={`${index}:${section.title}`}
+            id={`${outlineId}-section-${index}`}
+            tabIndex={-1}
+            className="report-reading-section"
+            data-report-source={isReportSourceSection(section.title) || undefined}
+          >
+            <header>
+              <span aria-hidden="true">{index + 1}</span>
+              <h3>{reportSectionTitle(section.title)}</h3>
+            </header>
+            {editing ? (
+              <SectionEditor
+                content={content}
+                section={section}
+                disabled={disabled}
+                photos={photoCandidates}
+                onChange={onChange}
+              />
+            ) : (
+              <div
+                className="report-markdown"
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: Escaped renderer permits owned photos and bounded official-source navigation only; covered by XSS tests.
+                dangerouslySetInnerHTML={{
+                  __html: reportMarkdownHtml(
+                    section.text,
+                    photos,
+                    isReportSourceSection(section.title),
+                  ),
+                }}
+              />
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
