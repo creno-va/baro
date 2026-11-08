@@ -146,6 +146,42 @@ test("accepted deletion sends opaque shared invalidation; failed or ambiguous re
     else Reflect.deleteProperty(globalThis, "localStorage");
   }
 });
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const) {
+  test(`customer mock ${purpose} retains the chosen purpose and prior edited snapshots without inventing legal completion`, async () => {
+    const f = fixture();
+    f.update((state) => {
+      state.reworkContexts = {
+        "case-demo": {
+          casePurpose: purpose,
+          subjectContext: "individual",
+          procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+        },
+      };
+    });
+    const first = await f.reports.get("case-demo");
+    expect(first.content).toContain("사용자가 정한 목적");
+    expect(first.content).toContain(
+      purpose === "prepare_claim" ? "고소·청구 준비" : "상대방 주장에 대응",
+    );
+    expect(first.content).toContain("절차 단계 미확인");
+    expect(first.content.indexOf("다음 행동과 필요 자료")).toBeLessThan(
+      first.content.indexOf("주요 사실"),
+    );
+    expect(first.content).toContain("실제 법률 분석을 실행하지 않은 합성 예시");
+    const edited = "사건 요약\n이미 보관한 직접 편집본";
+    const saved = await f.reports.save("case-demo", {
+      content: edited,
+      excludedFileIds: [],
+      maskIdentifiers: false,
+    });
+    expect((await createReportsClient(f.request).get("case-demo")).content).toBe(saved.content);
+    expect(saved.content).toBe(edited);
+    const next = await f.reports.generate("case-demo");
+    expect(next.content).toContain("내 사건 한눈에");
+    expect(f.read().reportHistory?.[saved.id]?.content).toBe(edited);
+  });
+}
+
 test("review edits and masking persist through storage reload; old versions retain their reviewed content", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
@@ -225,7 +261,8 @@ test("mock reports use current facts, people, actions and corrected observations
   for (const text of [
     "현재 교정한 사실",
     "현재 관계자",
-    "최신 행동 (완료)",
+    "최신 행동",
+    "저장 당시 상태 · 완료로 표시",
     "교정한 자료 관찰",
     "1.25–2.75초",
   ])

@@ -4,7 +4,7 @@ import {
   createZip,
   maskReportText,
 } from "../../../components/reports/download";
-import type { V2FileObservation, V2Summary } from "../../../contracts/v2";
+import type { V2CaseContext, V2FileObservation, V2Summary } from "../../../contracts/v2";
 import type { DomainRequest, DomainRequestInit } from "../reports";
 import { reportSaveSchema } from "../reports";
 import type {
@@ -42,6 +42,7 @@ export type ReportMockState = {
   /** Private prepared-analysis identity, never part of the installed report DTO. */
   reworkReportBindings?: Record<string, string>;
   reworkEditedReports?: Record<string, true>;
+  reworkContexts?: Record<string, V2CaseContext>;
   deletedCaseIds?: string[];
   reportRequests?: Record<string, { fingerprint: string; value: ReportView }>;
   workspaceReceipts?: Record<string, unknown>;
@@ -100,6 +101,7 @@ function draft(
 ): ReportView {
   const files = (state.files[item.id] ?? []).filter((file) => !excluded.includes(file.id));
   const workspace = state.workspace[item.id];
+  const context = state.reworkContexts?.[item.id];
   const generatedAt = new Date().toISOString();
   const facts = (item.summaryDetails?.facts ?? workspace?.facts ?? []).filter((fact) =>
     fact.references.every(
@@ -119,18 +121,55 @@ function draft(
     return `${p.kind === "image" ? "" : `${position}\n`}${value.userEdited ? "직접 수정한 내용 (원문 대조 필요): " : value.certainty === "uncertain" ? "확인 필요: " : ""}${value.text}`;
   };
   const content = [
-    "[합성 API 예시 · 실제 AI/외부 처리 결과가 아닙니다]",
+    "리포트 준비 상태",
+    "합성 API 예시 · 실제 AI/공식 법률 조회를 실행하지 않았습니다. 사실 정리와 검증된 법률 분석은 구분해 주세요.",
     "",
-    "사건의 사실과 주장",
+    "내 사건 한눈에",
     excluded.length
       ? "자료를 제외한 리포트입니다. 남은 사실과 출처를 아래에서 확인하고 사건 개요를 직접 보완해 주세요."
       : item.summary || "아직 확인된 사건 요약이 없습니다. 내용을 직접 입력해 주세요.",
+    "",
+    "사건 입장과 절차",
+    context
+      ? `사용자가 정한 목적 · ${{ prepare_claim: "고소·청구 준비", respond_to_claim: "상대방 주장에 대응", unconfirmed: "목적 확인 필요" }[context.casePurpose]}`
+      : "이 저장 기준에서 사건 목적 정보를 확인하지 못했습니다. 사건에서 정한 목적은 대화에서 확인해 주세요.",
+    ...(context
+      ? [
+          `${{ civil: "민사", criminal: "형사", family: "가사", administrative: "행정", labor: "노동", other: "기타 분야", unconfirmed: "사건 분야 미확인" }[context.procedure.kind]} · ${{ before_filing: "신고·제소 전", investigation: "수사 중", first_instance: "1심", appeal: "항소", final_appeal: "상고", enforcement: "집행", other: "기타 단계", unconfirmed: "절차 단계 미확인" }[context.procedure.stage]}`,
+          ...(context.procedure.description ? [context.procedure.description] : []),
+        ]
+      : []),
+    "",
+    "먼저 확인할 핵심 쟁점",
+    "실제 법률 분석을 실행하지 않은 합성 예시입니다. 법적 요건 충족·법률 선택지·판례 비교를 확인한 것으로 볼 수 없습니다.",
+    "",
+    "다음 행동과 필요 자료",
+    "저장 당시의 준비 항목입니다. 나열한 순서가 법적 필수 순서·기한을 뜻하지 않습니다. 현재 완료 상태는 대화 작업공간에서 확인해 주세요.",
+    ...(workspace?.actions?.length
+      ? workspace.actions.flatMap((action) => [
+          `### ${action.title.replace(/[\r\n]/gu, " ")}`,
+          `- 준비 내용 · ${action.detail}`,
+          `- 저장 당시 상태 · ${action.done ? "완료로 표시" : "할 일"}`,
+        ])
+      : ["연결된 준비 행동이 없습니다. 아래 미확인 사항과 보유 자료를 확인해 주세요."]),
+    "별도의 이유·준비물·완료 기준은 제공되지 않았습니다. 원본과 연결 근거를 대조하고 필요한 기준을 대화에서 추가로 확인해 주세요.",
+    "",
+    "선택지와 확인 조건",
+    context?.casePurpose === "respond_to_claim"
+      ? "직접 준비 · 상대방의 요구, 인정하는 사실과 다투는 사실, 각각의 자료를 구분해 정리할 수 있습니다."
+      : context?.casePurpose === "prepare_claim"
+        ? "직접 준비 · 원하는 해결과 청구 근거가 되는 사실, 부족한 자료를 구분해 정리할 수 있습니다."
+        : "직접 준비 · 사건에서 정한 목적과 상대방의 요구를 대화에서 확인하고 사실·자료를 정리할 수 있습니다.",
+    "공식 절차·제출처·기한·서식은 해당 사건의 공식 안내에서 확인해야 합니다. 이 합성 리포트가 확인한 것으로 표시하지 않습니다.",
+    "전문가 검토 · 상반된 자료의 법적 의미나 청구·대응 범위의 판단이 필요할 때 선택할 수 있습니다. 확인할 질문과 원문을 함께 준비하세요.",
+    "리포트 보관 · 현재 내용을 저장하고 필요한 자료를 더 확인할 수 있습니다. 추가 내용은 새 버전에서 반영합니다.",
     "",
     "당사자",
     ...(excluded.length ? [] : (item.summaryDetails?.parties ?? workspace?.people ?? [])).map(
       (p) => `${p.label} · ${p.role}`,
     ),
     "",
+    "주요 사실",
     ...facts.map(
       (fact) =>
         `${fact.text} · ${fact.userEdited ? "사용자가 수정한 내용" : fact.attribution === "user_material" ? "자료에 적힌 내용" : fact.attribution === "official_source" ? "공식 출처" : fact.attribution === "ai_organization" ? "AI 정리" : "사용자 진술"} · ${{ reported: "진술됨", observed: "자료 내용 확인됨", uncertain: "미확인", conflicting: "상반됨" }[fact.certainty]}`,
@@ -147,12 +186,10 @@ function draft(
       (entry) => `${entry.date} · ${entry.title}: ${entry.detail}`,
     ),
     "",
-    "준비할 행동",
-    ...(workspace?.actions ?? []).map(
-      (action) => `${action.title} (${action.done ? "완료" : "진행 전"}) · ${action.detail}`,
-    ),
-    "",
-    "준비할 자료와 처리 범위",
+    "증거 자료",
+    ...(files.length
+      ? []
+      : ["포함된 자료가 없습니다. 자료가 없다는 것만으로 사실의 유무를 판단하지 않습니다."]),
     ...files.flatMap((file) => [
       `${file.name} · ${file.coverage || "처리 범위를 직접 확인하세요."}`,
       ...(state.fileReviews?.[file.id]?.observations
@@ -161,8 +198,8 @@ function draft(
         (file.extractedText ? [file.extractedText] : [])),
     ]),
     "",
-    "연락과 전달",
-    "사용자가 검토한 자료를 선택한 변호사에게 직접 전달합니다. 법률 판단·소송 전략이나 결과를 보장하지 않습니다.",
+    "출처와 분석 기준",
+    "합성 API 예시입니다. 실제 법 조항·판례와 공식 절차를 확인하지 않았습니다. 사용자 진술·자료 기재와 법률 판단을 구분해 주세요.",
   ].join("\n");
   if (content.length > 30000)
     throw new ReportMockError(
