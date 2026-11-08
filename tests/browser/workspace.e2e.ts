@@ -1643,6 +1643,7 @@ test("an old owner upload cannot clear the next owner's progress", async ({ page
     mimeType: "text/plain",
     buffer: Buffer.from("다음 합성 자료"),
   });
+  await confirmWorkspaceUpload(page);
   await expect(page.getByText("second.txt · 1/1개", { exact: true })).toBeVisible();
   await page.evaluate(() =>
     (window as unknown as { uploadFailures: (() => void)[] }).uploadFailures[0]?.(),
@@ -2369,6 +2370,14 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await expect(page.getByRole("link", { name: "사용량 확인" })).toBeVisible();
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("합성 한도 요청");
   await openCaseTool(page, "타임라인");
+  const leave = page.getByRole("dialog", {
+    name: "작성 중인 내용을 두고 이동할까요?",
+    exact: true,
+  });
+  await expect(leave).toContainText("아직 보내지 않은");
+  await leave
+    .getByRole("button", { name: "미저장 내용과 첨부 선택을 버리고 이동", exact: true })
+    .click();
   await page.getByRole("button", { name: "일정 추가" }).click();
   await expect(page.locator(".workspace-dialog")).toBeVisible();
   await page.keyboard.press("Escape");
