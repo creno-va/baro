@@ -1280,14 +1280,14 @@ function WorkspaceContent({
       const next = await api.workspace.sendMessage(caseId, sendAttempt.current);
       if (!(await verify()) || !current(epoch)) return;
       sendAttempt.current = null;
-      if (tab === "chat") {
-        apply(next);
-        setPreview(null);
-        setOriginal(null);
-        setNotice(
-          "자료 내용을 대화에 반영하고 있어요. 확인된 결과가 나오면 이어서 검토할 수 있어요.",
-        );
-      } else window.location.assign(base);
+      apply(next);
+      setContextLoaded(true);
+      setPreview(null);
+      setOriginal(null);
+      navigateTask("chat");
+      setNotice(
+        "자료 내용을 대화에 반영하고 있어요. 확인된 결과가 나오면 이어서 검토할 수 있어요.",
+      );
     });
   }
   async function upload(files: FileList | File[] | null, forConversation = tab === "chat") {
