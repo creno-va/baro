@@ -755,12 +755,14 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   const item = await seed(page, "active");
   await page.goto(`/cases/${item.id}/summary`);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).not.toBeChecked();
+  await expect(
+    page.getByRole("radio", { name: "받은 주장에 대응", exact: true }),
+  ).not.toBeChecked();
   await page.getByRole("button", { name: "나중에 확인", exact: true }).click();
   await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
   expect((await canonical(page, item.id)).revision).toBe(12);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).check();
   await page.getByRole("button", { name: "입장 저장", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "어떤 입장에서 정리하고 싶나요?" }),
@@ -768,7 +770,7 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("주장 대응", { exact: true }),
+      .getByText("받은 주장에 대응", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("기업 사건", { exact: true })).toHaveCount(0);
   await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
@@ -780,7 +782,7 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("주장 대응", { exact: true }),
+      .getByText("받은 주장에 대응", { exact: true }),
   ).toBeVisible();
 });
 
@@ -790,7 +792,7 @@ test("320px case input keeps both purpose choices at 44px without owner-category
   await seed(page);
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/app");
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
+  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).check();
   await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
     "placeholder",
     /상대방의 주장/,
@@ -799,7 +801,7 @@ test("320px case input keeps both purpose choices at 44px without owner-category
   await expect(page.getByRole("radio")).toHaveCount(2);
   for (const name of ["개인", "기업"])
     await expect(page.getByRole("radio", { name, exact: true })).toHaveCount(0);
-  for (const name of ["고소 준비", "주장 대응"]) {
+  for (const name of ["요구·고소 준비", "받은 주장에 대응"]) {
     const radio = page.getByRole("radio", { name, exact: true });
     const target = radio.locator("..");
     const box = await target.boundingBox();
@@ -808,12 +810,12 @@ test("320px case input keeps both purpose choices at 44px without owner-category
     await target.click();
     await expect(radio).toBeChecked();
   }
-  await page.getByRole("radio", { name: "주장 대응", exact: true }).focus();
+  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).focus();
   await page.keyboard.press("ArrowLeft");
-  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "요구·고소 준비", exact: true })).toBeChecked();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeFocused();
-  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "받은 주장에 대응", exact: true })).toBeFocused();
+  await expect(page.getByRole("radio", { name: "받은 주장에 대응", exact: true })).toBeChecked();
   await page.screenshot({
     path: ".wrangler/ui622/case-input-respond-mobile-320.png",
     fullPage: true,

@@ -682,6 +682,10 @@ function WorkspaceContent({
     window.addEventListener("resize", fit);
     window.visualViewport?.addEventListener("resize", fit);
     const style = new MutationObserver(fit);
+    const resize = new ResizeObserver(fit);
+    // CSS zoom can change the root layout without a window/visualViewport resize.
+    // Observe that layout as well as style mutations while this modal is mounted.
+    resize.observe(document.documentElement);
     style.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["style", "class"],
@@ -690,6 +694,7 @@ function WorkspaceContent({
       window.removeEventListener("resize", fit);
       window.visualViewport?.removeEventListener("resize", fit);
       style.disconnect();
+      resize.disconnect();
     };
   }, [preview, deleteFile, entry]);
 
@@ -2601,7 +2606,9 @@ function WorkspaceContent({
                     </ul>
                     <div className="workspace-next">
                       <h3>정리한 내용을 다음 단계로</h3>
-                      <p>리포트에서 정리한 내용과 아직 확인할 일을 살펴보고 사건 준비를 이어가세요.</p>
+                      <p>
+                        리포트에서 정리한 내용과 아직 확인할 일을 살펴보고 사건 준비를 이어가세요.
+                      </p>
                       <div className="workspace-buttons">
                         <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
                       </div>

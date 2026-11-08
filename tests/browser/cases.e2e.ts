@@ -72,9 +72,9 @@ async function challenge(page: Page) {
     };
   });
 }
-for (const [purposeLabel, casePurpose, subjectContext] of [
-  ["고소 준비", "prepare_claim", "individual"],
-  ["주장 대응", "respond_to_claim", "individual"],
+for (const [entryChoice, purposeLabel, casePurpose, subjectContext] of [
+  ["unknown-prepare", "요구·고소 준비", "prepare_claim", "individual"],
+  ["unknown-response", "받은 주장에 대응", "respond_to_claim", "individual"],
 ] as const) {
   test(`${casePurpose}: intake validates code points, blocks duplicates, preserves replay key and focus after errors`, async ({
     page,
@@ -191,8 +191,10 @@ for (const [purposeLabel, casePurpose, subjectContext] of [
       route.fulfill({ json: null }),
     );
     await page.goto("/cases/new");
-    await page.getByRole("radio", { name: purposeLabel, exact: true }).check();
-    await expect(page.getByRole("radio")).toHaveCount(2);
+    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(entryChoice);
+    await expect(
+      page.getByRole("combobox", { name: "준비하는 방향" }).locator("option"),
+    ).toHaveCount(6);
     const input = page.getByRole("textbox");
     const submit = page.getByRole("button", { name: "저장하고 계속" });
     // Five supplementary characters are ten UTF-16 code units but only five code points.
