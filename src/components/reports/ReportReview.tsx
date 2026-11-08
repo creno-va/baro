@@ -86,6 +86,7 @@ export function ReportReview({
   const [regenerate, setRegenerate] = useState(false);
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [cancelEdit, setCancelEdit] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(true);
   const [mockPhotos, setMockPhotos] = useState<{
     key: string;
     urls: Record<string, string>;
@@ -237,6 +238,13 @@ export function ReportReview({
     [clearOwnerState],
   );
   const mockPhotoIds = JSON.stringify(maskIdentifiers ? [] : (report?.includedPhotoIds ?? []));
+  useEffect(() => {
+    const screen = window.matchMedia("(min-width: 768px)");
+    const update = () => setToolsOpen(screen.matches);
+    update();
+    screen.addEventListener("change", update);
+    return () => screen.removeEventListener("change", update);
+  }, []);
   const mockPhotoKey = `${report?.id ?? ""}:${report?.revision ?? 0}:${mockPhotoIds}`;
   useEffect(() => {
     if (apiMode !== "mock" || !report?.id) return;
@@ -1051,15 +1059,22 @@ export function ReportReview({
                 )}
               </details>
             </section>
-            <nav className="report-current-tools" aria-label="현재 사건에서 더 준비하기">
-              <p>
-                현재 사건에서 더 준비하기 <span>변경한 내용은 새 리포트에서 반영해요.</span>
-              </p>
-              <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료와 원본 확인</a>
-              <a href={`/cases/${encodeURIComponent(caseId)}/actions`}>현재 할 일 관리</a>
-              <a href={`/cases/${encodeURIComponent(caseId)}/timeline`}>현재 경위 정리</a>
-              <a href={`/cases/${encodeURIComponent(caseId)}/precedents`}>현재 판례 탐색</a>
-            </nav>
+            <details
+              className="report-current-tools-menu"
+              open={toolsOpen}
+              onToggle={(event) => setToolsOpen(event.currentTarget.open)}
+            >
+              <summary>현재 사건에서 더 준비하기</summary>
+              <nav className="report-current-tools" aria-label="현재 사건에서 더 준비하기">
+                <p>
+                  현재 사건에서 더 준비하기 <span>변경한 내용은 새 리포트에서 반영해요.</span>
+                </p>
+                <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료와 원본 확인</a>
+                <a href={`/cases/${encodeURIComponent(caseId)}/actions`}>현재 할 일 관리</a>
+                <a href={`/cases/${encodeURIComponent(caseId)}/timeline`}>현재 경위 정리</a>
+                <a href={`/cases/${encodeURIComponent(caseId)}/precedents`}>현재 판례 탐색</a>
+              </nav>
+            </details>
             {preservedEdit && (
               <details className="report-preserved-edit">
                 <summary>새 버전을 만들기 전의 편집 내용 보관</summary>

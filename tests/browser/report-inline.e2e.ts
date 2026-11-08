@@ -141,6 +141,20 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     await page.screenshot({ path: `.wrangler/report-inline-editor-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileOutline = page.getByRole("navigation", { name: "리포트 목차", exact: true });
+  if ((await page.locator(".report-outline-toggle").getAttribute("aria-expanded")) === "false")
+    await page.locator(".report-outline-toggle").click();
+  const mobileNavBox = await mobileOutline.boundingBox();
+  expect(mobileNavBox && mobileNavBox.height <= 844 * 0.45 + 1).toBe(true);
+  const mobileLink = mobileOutline.getByRole("link", { name: "증거 자료", exact: true });
+  const target = page.locator((await mobileLink.getAttribute("href")) as string);
+  await mobileLink.click();
+  await expect(mobileOutline).toBeHidden();
+  await expect(target).toBeFocused();
+  await expect(target).toBeInViewport();
+  await page.getByText("현재 사건에서 더 준비하기", { exact: true }).click();
+  await expect(page.getByRole("link", { name: "현재 할 일 관리", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
   const outline = page.getByRole("navigation", { name: "리포트 목차", exact: true });
   const outlineToggle = page.locator(".report-outline-toggle");

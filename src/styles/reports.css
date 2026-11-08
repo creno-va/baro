@@ -139,6 +139,9 @@
   border-bottom: 1px solid var(--border, #e3e8ef);
   font-size: 13px;
 }
+.report-current-tools-menu > summary {
+  display: none;
+}
 .report-current-tools p {
   flex-basis: 100%;
   margin: 0 0 4px;
@@ -621,8 +624,8 @@
     display: inline;
   }
   .report-outline nav {
-    max-height: none;
-    overflow: visible;
+    max-height: min(360px, 45dvh);
+    overflow-y: auto;
   }
   .report-outline ol {
     display: grid;
@@ -638,6 +641,29 @@
   }
   .report-heading-actions {
     width: 100%;
+  }
+  .report-current-tools-menu {
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border, #e3e8ef);
+  }
+  .report-current-tools-menu > summary {
+    display: list-item;
+    min-height: 44px;
+    padding: 10px 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .report-current-tools {
+    margin-bottom: 0;
+    border-bottom: 0;
+  }
+  .report-heading {
+    gap: 12px;
+  }
+  .report-scope {
+    margin: 8px 0 16px;
+    padding: 0;
   }
   .report-current-tools p span {
     display: block;
