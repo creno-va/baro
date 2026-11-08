@@ -36,7 +36,9 @@ import { CaseNavigation } from '../workspace/CaseNavigation';
 panel은 항상 같은 React 트리에 남는다. 닫힌 native dialog는 화면·키보드 탐색에서 제외되지만
 하위 입력·상태는 unmount하지 않는다. 1200px 이상에서는 non-modal inline, 그 아래는 같은
 DOM을 `showModal()`로 전환한다. 내부 dialog의 Escape는 외부 패널을 닫지 않는다. resize 중
-교정 필드의 값·선택·초점을 보존한다. 닫으면 opener로 복귀하고 sidebar drawer를 desktop으로
+교정 필드의 값·선택·초점을 보존한다. 별도 sibling 또는 내부 descendant native modal이 열려 있으면
+panel mode 전환은 해당 modal의 native close가 끝날 때까지 보류한다. 다른 dialog를 닫거나
+재열지 않으며, 실제 현재 폭에 맞춰 한 번 동기화한다. 닫으면 opener로 복귀하고 sidebar drawer를 desktop으로
 전환해 닫는 경우에는 보이는 사이드바 버튼으로 돌아간다.
 
 `CaseNavigation`은 기존 `caseId,title,active,fileCount?`와 `actions?: ReactNode`를 받는다.
@@ -56,6 +58,8 @@ header actions에 중복 자료 버튼을 넣지 않는다. 보조 화면은 대
   `minmax(0,1fr)` 메시지 영역에 overflow:auto, 마지막 행에 composer를 둔다. 바깥 fixed composer는 쓰지 않는다.
 - `case-workspace__panel-content`: 독립 overflow:auto; 소비자는 자체 sticky 리포트 footer를 넣을 수 있다.
 - conversation frame이 `visualViewport.resize`에서 앱 루트의 `--app-viewport-height` 한 값을 갱신한다.
+  root computed CSS zoom으로 한 번 환산하며 visualViewport.scale로 다시 나누지 않는다. root style/class
+  변경과 resize를 관측하되 값이 달라질 때만 별도 앱 루트에 쓴다. body/HTML style은 변경하지 않는다.
   fallback은100dvh다. 기존 탭 높이·composer 높이를 빼는 `--chat-panel-height` 계산은 제거한다.
 - AppLayout main은 conversation opt-in에서만 viewport grid를 쓰며 CaseLayout 고지는 마지막 자동 행이다.
   문서·리포트는 기본 body 스크롤을 유지한다. document frame에 목차/읽기 본문을 조립하고 필요한 작업바만 sticky한다.

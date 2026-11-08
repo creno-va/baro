@@ -36,17 +36,28 @@ export function CaseWorkspaceFrame({
     const frame = root.current?.closest<HTMLElement>("[data-app-workspace]");
     if (!frame || kind !== "conversation") return;
     const viewport = window.visualViewport;
-    const update = () =>
-      frame.style.setProperty(
-        "--app-viewport-height",
-        `${viewport?.height ?? window.innerHeight}px`,
-      );
+    const update = () => {
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      const height = `${(viewport?.height ?? window.innerHeight) / zoom}px`;
+      if (frame.style.getPropertyValue("--app-viewport-height") !== height)
+        frame.style.setProperty("--app-viewport-height", height);
+    };
     update();
     viewport?.addEventListener("resize", update);
     window.addEventListener("resize", update);
+    // CSS zoom can change without resizing the browser's visual viewport.
+    const resize = new ResizeObserver(update);
+    resize.observe(document.documentElement);
+    const style = new MutationObserver(update);
+    style.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
     return () => {
       viewport?.removeEventListener("resize", update);
       window.removeEventListener("resize", update);
+      resize.disconnect();
+      style.disconnect();
       frame.style.removeProperty("--app-viewport-height");
     };
   }, [kind]);
@@ -58,11 +69,19 @@ export function CaseWorkspaceFrame({
       // SSR markup stays identical. First opening uses the real viewport mode.
       const inline = query.matches;
       if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) return;
+      // A review may be a sibling of this frame, not a React descendant. Never
+      // reopen the panel above another active native modal during a resize.
+      if (
+        panelOpen &&
+        [...document.querySelectorAll("dialog:modal")].some((modal) => modal !== node)
+      )
+        return;
       const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const inside = focused && node.contains(focused);
       if (node.open) node.close();
       if (panelOpen && panelPresent) {
-        if (!inside) previousFocus.current = focused;
+        if (!inside && focused !== document.body && focused !== document.documentElement)
+          previousFocus.current = focused;
         if (inline) node.show();
         else node.showModal();
         // Mode changes preserve the current field/selection, not the first control.
@@ -77,7 +96,14 @@ export function CaseWorkspaceFrame({
     };
     syncPanel();
     query.addEventListener("change", syncPanel);
-    return () => query.removeEventListener("change", syncPanel);
+    const afterReviewClose = (event: Event) => {
+      if (event.target instanceof HTMLDialogElement && event.target !== node) syncPanel();
+    };
+    document.addEventListener("close", afterReviewClose, true);
+    return () => {
+      query.removeEventListener("change", syncPanel);
+      document.removeEventListener("close", afterReviewClose, true);
+    };
   }, [panelOpen, panelPresent]);
   useEffect(() => {
     const node = dialog.current;

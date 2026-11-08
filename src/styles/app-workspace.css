@@ -49,7 +49,7 @@
 }
 .app-frame[data-app-workspace] .app-header {
   width: var(--app-sidebar-width);
-  height: 100dvh;
+  height: var(--app-viewport-height, 100dvh);
   background: var(--app-sidebar);
   border-right: 1px solid var(--app-line);
 }
@@ -433,7 +433,7 @@
 .app-frame[data-app-workspace] .case-workspace--document .case-workspace__panel {
   position: sticky;
   top: 16px;
-  height: calc(100dvh - 32px - var(--app-topbar-height));
+  height: calc(var(--app-viewport-height, 100dvh) - 32px - var(--app-topbar-height));
 }
 /* Only the opted-in conversation fills the viewport. General pages/reports keep document scroll. */
 .app-frame[data-app-workspace].app-frame--product
@@ -528,8 +528,8 @@ html:has(.app-frame[data-app-workspace] .case-workspace__panel[open]):not(:has(d
     inset: 0 0 0 auto;
     width: min(var(--app-panel-width), calc(100% - 16px));
     max-width: none;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: var(--app-viewport-height, 100dvh);
+    max-height: var(--app-viewport-height, 100dvh);
     padding-bottom: env(safe-area-inset-bottom);
   }
   .app-frame[data-app-workspace] .case-workspace__panel::backdrop {
