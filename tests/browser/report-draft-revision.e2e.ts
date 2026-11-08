@@ -205,6 +205,9 @@ test("report generation shows the actual elapsed request inside its confirmation
       });
     },
   });
+  // A fresh report exposes regeneration while reading, after the clean editor closes.
+  await page.getByRole("button", { name: "편집 취소", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveCount(0);
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect.poll(() => generations).toBe(1);
