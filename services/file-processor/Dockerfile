@@ -4,16 +4,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake pkg-config curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
-RUN curl -fsSLo de265.tar.gz https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz \
-    && echo '554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905  de265.tar.gz' | sha256sum -c - \
+# Unmodified official release bytes; verify before extracting or executing build scripts.
+COPY services/file-processor/vendor/libde265-1.1.3.tar.gz /build/de265.tar.gz
+RUN echo '554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905  de265.tar.gz' | sha256sum -c - \
     && tar -xzf de265.tar.gz \
     && cmake -S libde265-1.1.3 -B de265-build -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/opt/baro-heif -DCMAKE_INSTALL_LIBDIR=lib \
       -DCMAKE_INSTALL_RPATH=/opt/baro-heif/lib -DENABLE_SDL=OFF \
       -DENABLE_DECODER=OFF -DENABLE_ENCODER=OFF -DBUILD_SHARED_LIBS=ON \
     && cmake --build de265-build --parallel 2 && cmake --install de265-build
-RUN curl -fsSLo heif.tar.gz https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz \
-    && echo '4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125  heif.tar.gz' | sha256sum -c - \
+COPY services/file-processor/vendor/libheif-1.23.6.tar.gz /build/heif.tar.gz
+RUN echo '4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125  heif.tar.gz' | sha256sum -c - \
     && tar -xzf heif.tar.gz \
     && PKG_CONFIG_PATH=/opt/baro-heif/lib/pkgconfig cmake -S libheif-1.23.6 -B heif-build \
       -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/baro-heif \
@@ -50,9 +51,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 # Official release bytes and corresponding tagged source, both immutable pins.
-RUN curl -fLsS https://github.com/ebandal/H2Orestart/releases/download/v0.7.14/H2Orestart.oxt -o original.oxt \
-    && echo 'cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8  original.oxt' | sha256sum -c - \
-    && curl -fLsS https://codeload.github.com/ebandal/H2Orestart/tar.gz/refs/tags/v0.7.14 -o source.tar.gz \
+COPY services/file-processor/vendor/H2Orestart-0.7.14.oxt /build/original.oxt
+COPY services/file-processor/vendor/H2Orestart-0.7.14-source.tar.gz /build/source.tar.gz
+RUN echo 'cbea23bc37861361bbc534bc0675e5bc67b36f712072490f82a9bf410d7c04d8  original.oxt' | sha256sum -c - \
     && echo 'a73246fdfd00e7f7f69915e577b8d3e602113087cbed1c1e1ebba3087fde6a15  source.tar.gz' | sha256sum -c - \
     && tar -xzf source.tar.gz && mkdir extension classes && unzip -q original.oxt -d extension
 COPY services/file-processor/build-hwp.py /build/build-hwp.py
