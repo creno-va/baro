@@ -687,9 +687,11 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   await expect(readingHeader).not.toHaveAttribute("tabindex");
   await expect(readingHeader).toHaveCSS("max-height", "none");
   await expect(readingHeader).toHaveCSS("overflow-y", "visible");
-  const document = page.locator(".shell-fixture-document");
-  await document.locator("p").last().scrollIntoViewIfNeeded();
-  await expect(document.locator("p").last()).toBeInViewport({ ratio: 1 });
-  expect(await document.evaluate((node) => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+  const readingDocument = page.locator(".shell-fixture-document");
+  await readingDocument.locator("p").last().scrollIntoViewIfNeeded();
+  await expect(readingDocument.locator("p").last()).toBeInViewport({ ratio: 1 });
+  expect(await readingDocument.evaluate((node) => node.scrollHeight <= node.clientHeight + 1)).toBe(
+    true,
+  );
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });
