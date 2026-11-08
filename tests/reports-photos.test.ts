@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
 import { createReportHtml } from "../src/components/reports/document";
+import {
+  replaceReportReviewSection,
+  reportReviewSections,
+  withInlineReportPhotos,
+} from "../src/components/reports/review-sections";
 import type { V2Fact } from "../src/contracts/v2";
 import type { ApiEnvironment } from "../src/server/api/errors";
 import { createReportsApi } from "../src/server/api/v2/reports";
@@ -8,6 +13,8 @@ import { createV2Core, snapshotStatements } from "../src/server/db/v2-core";
 import { renderReportPdf } from "../src/server/modules/reports/pdf";
 import { createReportDependencies } from "../src/server/modules/reports/runtime";
 import { createReportsService } from "../src/server/modules/reports/service";
+import { reportPhotoIds, reportPhotoToken } from "../src/utils/report-markdown";
+import { reportSections } from "../src/utils/report-sections";
 import { signedSessionCookie, testEnvironment } from "./helpers/d1";
 import { fixture, uploaded } from "./helpers/file-processing-fixture";
 import { reportFixture } from "./helpers/report-fixture";
@@ -182,6 +189,86 @@ test("inline photo markers save exact position; forged selections and repeated i
       }),
     ).rejects.toThrow();
 });
+
+for (const placement of ["inline", "legacy"] as const)
+  test(`${placement} photo removal preserves source text and excludes the image from the next SQL HTML/PDF render`, async () => {
+    const f = await photoFixture();
+    const draft = await f.reports.get(f.actor.ownerId, f.workspaceId);
+    const photo = draft.photoCandidates?.find((candidate) => candidate.id === f.id);
+    if (!photo) throw new Error("Missing owned synthetic photo candidate");
+    const selected = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: draft.revision,
+      content:
+        placement === "inline" ? withInlineReportPhotos(draft.content, [photo]) : draft.content,
+      includedPhotoIds: [f.id],
+      maskIdentifiers: false,
+      excludedFileIds: [],
+    });
+    const reloaded = await f.reports.get(f.actor.ownerId, f.workspaceId);
+    expect(reloaded.id).toBe(selected.id);
+    expect(reloaded.includedPhotoIds).toEqual([f.id]);
+    expect(reportPhotoIds(reloaded.content)).toEqual(placement === "inline" ? [f.id] : []);
+    expect(
+      (await f.reports.html(f.actor.ownerId, selected.id)).includes(`data-report-photo="${f.id}"`),
+    ).toBe(true);
+    await f.reports.pdf(f.actor.ownerId, selected.id);
+    expect(f.rendered[0]?.includes(`data-report-photo="${f.id}"`)).toBe(true);
+
+    const displayed = withInlineReportPhotos(reloaded.content, [photo]);
+    const evidence = reportReviewSections(displayed).find(
+      (section) => section.title === "증거 자료",
+    );
+    if (!evidence) throw new Error("Missing synthetic evidence section");
+    const token = reportPhotoToken(photo.id, photo.name);
+    expect(evidence.text.split(token)).toHaveLength(2);
+    const content = replaceReportReviewSection(
+      displayed,
+      evidence,
+      evidence.text.replace(token, ""),
+    );
+    expect(reportPhotoIds(content)).toEqual([]);
+    const saved = await f.reports.save(f.actor.ownerId, f.workspaceId, crypto.randomUUID(), {
+      expectedRevision: reloaded.revision,
+      content,
+      includedPhotoIds: [],
+      maskIdentifiers: false,
+      excludedFileIds: [],
+    });
+    expect(saved.id).not.toBe(selected.id);
+    expect(saved.revision).toBe(selected.revision + 1);
+    expect(saved.includedPhotoIds).toEqual([]);
+    expect(saved.content).toBe(content);
+    expect((await f.reports.get(f.actor.ownerId, f.workspaceId)).content).toBe(content);
+    if (placement === "inline") {
+      expect(saved.content).toBe(reloaded.content.replace(token, ""));
+    } else {
+      // Compatibility adds two separator lines around its display-only token.
+      // Removing that token must retain every other raw byte of the old report.
+      let boundary = 0;
+      while (
+        boundary < reloaded.content.length &&
+        reloaded.content[boundary] === saved.content[boundary]
+      )
+        boundary++;
+      expect(saved.content.slice(boundary, boundary + 2)).toBe("\n\n");
+      expect(saved.content.slice(0, boundary) + saved.content.slice(boundary + 2)).toBe(
+        reloaded.content,
+      );
+    }
+    const otherSections = (value: string) =>
+      reportSections(value).filter((section) => section.title !== "증거 자료");
+    expect(otherSections(saved.content)).toEqual(otherSections(reloaded.content));
+    const html = await f.reports.html(f.actor.ownerId, saved.id);
+    expect(html.includes(`data-report-photo="${f.id}"`)).toBe(false);
+    expect(html.includes("<figure")).toBe(false);
+    await f.reports.pdf(f.actor.ownerId, saved.id);
+    expect(f.rendered).toHaveLength(2);
+    expect(f.rendered[1]?.includes(`data-report-photo="${f.id}"`)).toBe(false);
+    expect(f.rendered[1]?.includes("<figure")).toBe(false);
+    expect(
+      (await f.reports.html(f.actor.ownerId, selected.id)).includes(`data-report-photo="${f.id}"`),
+    ).toBe(true);
+  });
 
 test("report body retains correction attribution while captions contain only the chosen filename", async () => {
   const f = await photoFixture();
