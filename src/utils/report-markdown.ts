@@ -196,7 +196,7 @@ export function reportMarkdownHtml(
   return reportMarkdownBlocks(text)
     .map((block) => {
       if (block.kind === "table")
-        return `<div class="report-table"><table><thead><tr>${block.header.map((cell) => `<th scope="col">${inline(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+        return `<div class="report-table" role="region" aria-label="리포트 표" tabindex="0"><table><thead><tr>${block.header.map((cell) => `<th scope="col">${inline(cell)}</th>`).join("")}</tr></thead><tbody>${block.rows.map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
       if (block.kind === "list") {
         const tag = block.ordered ? "ol" : "ul";
         return `<${tag}>${block.items.map((item) => `<li>${sourceOrInline(item)}</li>`).join("")}</${tag}>`;

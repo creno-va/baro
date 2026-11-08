@@ -1,7 +1,8 @@
 import type { ReworkReportView } from "@baro/api-client";
-import { Download, Pencil } from "lucide-react";
+import { Download, Pencil, Save } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
+import { apiMode } from "../../client/api/core";
 import type { ReportView as BaseReportView, FileView } from "../../client/api/types";
 import { isExplicitSignOut } from "../../client/session-events";
 import type { V2ConversationActionRequest, V2ConversationState, V2Fact } from "../../contracts/v2";
@@ -9,6 +10,7 @@ import { reportPhotoIds } from "../../utils/report-markdown";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { Button } from "../ui/button";
 import { LoadingContent, Spinner } from "../ui/loading";
+import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { CaseNavigation } from "../workspace/CaseNavigation";
 import { EvidenceUpload } from "../workspace/EvidenceUpload";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -83,6 +85,11 @@ export function ReportReview({
   const [editing, setEditing] = useState(false);
   const [regenerate, setRegenerate] = useState(false);
   const [reloadConfirm, setReloadConfirm] = useState(false);
+  const [cancelEdit, setCancelEdit] = useState(false);
+  const [mockPhotos, setMockPhotos] = useState<{
+    key: string;
+    urls: Record<string, string>;
+  } | null>(null);
   const [accessChecking, setAccessChecking] = useState(true);
   const [accessUnknown, setAccessUnknown] = useState(false);
   const [needsConsent, setNeedsConsent] = useState(false);
@@ -177,6 +184,8 @@ export function ReportReview({
 
     setRegenerate(false);
     setReloadConfirm(false);
+    setCancelEdit(false);
+    setMockPhotos(null);
 
     setAccessChecking(false);
     setAccessUnknown(false);
@@ -227,6 +236,46 @@ export function ReportReview({
     },
     [clearOwnerState],
   );
+  const mockPhotoIds = JSON.stringify(maskIdentifiers ? [] : (report?.includedPhotoIds ?? []));
+  const mockPhotoKey = `${report?.id ?? ""}:${report?.revision ?? 0}:${mockPhotoIds}`;
+  useEffect(() => {
+    if (apiMode !== "mock" || !report?.id) return;
+    setMockPhotos(null);
+    let active = true;
+    const sequence = loadSequence.current;
+    const current = () => active && sequence === loadSequence.current;
+    const ids = JSON.parse(mockPhotoIds) as string[];
+    if (ids.length > 12) return;
+    void (async () => {
+      const urls: Record<string, string> = {};
+      let total = 0;
+      await verifyOwner(current);
+      for (const id of ids) {
+        const blob = await api.files.original(caseId, id);
+        await verifyOwner(current);
+        total += blob.size;
+        if (
+          blob.size > 5_000_000 ||
+          total > 8_000_000 ||
+          !/^image\/(jpeg|png|webp)$/.test(blob.type)
+        )
+          throw new Error("REPORT_PHOTO_LIMIT");
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        if (!current()) return;
+        let raw = "";
+        for (let offset = 0; offset < bytes.length; offset += 8192)
+          raw += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+        urls[id] = `data:${blob.type};base64,${btoa(raw)}`;
+      }
+      await verifyOwner(current);
+      if (current()) setMockPhotos({ key: mockPhotoKey, urls });
+    })().catch(() => {
+      if (current()) setMockPhotos(null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [caseId, report?.id, mockPhotoIds, mockPhotoKey, verifyOwner]);
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setAccessChecking(true);
@@ -672,29 +721,65 @@ export function ReportReview({
     values.includes(id) ? values.filter((x) => x !== id) : [...values, id];
   const progressText = `${busy || "계정 접근 상태 확인 중…"}${busyStartedAt !== null ? ` · 요청 시작 후 ${elapsedSeconds}초` : ""}`;
   const initialLoading = !report && !error && Boolean(busy || accessChecking);
-  return (
+  const editingBlocked =
+    Boolean(busy) ||
+    exportingPdf ||
+    accessChecking ||
+    accessUnknown ||
+    needsConsent ||
+    evidenceBusy ||
+    evidenceDirty ||
+    resolutionBusy ||
+    resolutionDirty;
+  const displayTitle = report
+    ? maskIdentifiers
+      ? maskReportText(report.title)
+      : report.title
+    : "내 사건 이해와 해결 준비";
+  const reportDocument = (
     <div
       className={`report-review report-workspace${embedded ? " report-embedded" : ""}`}
       aria-busy={Boolean(busy) || accessChecking}
     >
-      {!embedded && (
-        <CaseNavigation
-          caseId={caseId}
-          title={report ? report.title : "사건 정리"}
-          active="reports"
-          {...(report ? { fileCount: files.length } : {})}
-        />
-      )}
       <div className="report-canvas">
         <header className="report-heading">
           {!embedded && (
             <div className="report-heading-copy">
-              <h2>전달할 리포트를 준비해요</h2>
-              <p>내용을 확인하고, 필요한 부분을 고쳐 다운로드하세요.</p>
+              {report && displayTitle !== "내 사건 이해와 해결 준비" && (
+                <p className="report-eyebrow">내 사건 이해와 해결 준비</p>
+              )}
+              <h2>{displayTitle}</h2>
+              <p>핵심 쟁점과 지금 준비할 일을 살펴보고, 필요한 내용을 고쳐 보관하세요.</p>
             </div>
           )}
           {report && (
-            <div className="report-heading-actions">
+            <fieldset className="report-heading-actions" aria-label="리포트 작업">
+              {editing && (
+                <>
+                  <button
+                    type="button"
+                    disabled={editingBlocked || !dirty || report.stale}
+                    onClick={() =>
+                      void run("수정 내용 저장 중…", async () => {
+                        await save();
+                      })
+                    }
+                  >
+                    <Save size={16} aria-hidden="true" />
+                    저장
+                  </button>
+                  <button
+                    type="button"
+                    disabled={editingBlocked}
+                    onClick={() => {
+                      if (dirty) setCancelEdit(true);
+                      else setEditing(false);
+                    }}
+                  >
+                    편집 취소
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 className="report-edit-toggle"
@@ -740,7 +825,7 @@ export function ReportReview({
               >
                 새 버전 만들기
               </button>
-            </div>
+            </fieldset>
           )}
         </header>
         {!initialLoading && (busy || accessChecking) && (
@@ -758,82 +843,92 @@ export function ReportReview({
             preparation.report.status === "failed" ||
             actionMissing.length > 0) && (
             <section
-              className="report-preparation"
+              className={`report-preparation${report ? " report-preparation--compact" : ""}`}
               aria-label="리포트 준비 상태"
               aria-live="polite"
             >
-              <h3>
-                {preparation.report.status === "pending"
-                  ? "리포트를 준비하고 있어요"
-                  : preparation.report.status === "failed"
-                    ? "새 리포트를 완성하지 못했어요"
-                    : {
-                        not_started: "현재 사건의 법률 분석을 준비해요",
-                        pending: "법률 분석을 준비하고 있어요",
-                        running: "법 조항과 판례를 확인하고 있어요",
-                        ready: "검증한 분석으로 리포트를 준비할 수 있어요",
-                        partial: "확인된 분석과 보완할 항목이 있어요",
-                        empty: "조사한 범위에서 관련 결과를 찾지 못했어요",
-                        unavailable: "공식 자료를 확인하지 못했어요",
-                        failed: "분석을 완료하지 못했어요",
-                        stale: "사건과 자료 변경을 반영해야 해요",
-                      }[preparation.analysis.status]}
-              </h3>
-              <p>
-                리포트는 준비된 검증 결과를 사용합니다. PDF를 저장할 때 새 분석을 요청하지 않습니다.
-              </p>
-              {preparation.report.failure && (
-                <p>리포트 준비 실패 · {preparationFailureText(preparation.report.failure)}</p>
-              )}
-              {preparation.analysis.failure && (
-                <p>분석 실패 · {preparationFailureText(preparation.analysis.failure)}</p>
-              )}
-              {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].length >
-                0 && (
-                <ul>
-                  {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].map(
-                    (item) => (
-                      <li key={item}>{item}</li>
-                    ),
-                  )}
-                </ul>
-              )}
-              {pollPaused && <p>처리가 계속되고 있을 수 있어요. 상태를 다시 확인해 주세요.</p>}
-              <div className="report-preparation-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={
-                    Boolean(busy) ||
-                    accessChecking ||
-                    needsConsent ||
-                    Boolean(pendingJob) ||
-                    evidenceBusy ||
-                    evidenceDirty ||
-                    resolutionBusy ||
-                    resolutionDirty
-                  }
-                  onClick={() =>
-                    void run("리포트 준비 요청 중…", async () => {
-                      await prepareReport();
-                    })
-                  }
-                >
-                  리포트 준비
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy) || accessChecking}
-                  onClick={() => refreshStatus.current()}
-                >
-                  상태 확인
-                </button>
-              </div>
+              <details open={!report || Boolean(pendingJob)}>
+                <summary>
+                  <h3>
+                    {preparation.report.status === "pending"
+                      ? "리포트를 준비하고 있어요"
+                      : preparation.report.status === "failed"
+                        ? "새 리포트를 완성하지 못했어요"
+                        : {
+                            not_started: "현재 사건의 법률 분석을 준비해요",
+                            pending: "법률 분석을 준비하고 있어요",
+                            running: "법 조항과 판례를 확인하고 있어요",
+                            ready: "검증한 분석으로 리포트를 준비할 수 있어요",
+                            partial: "확인된 분석과 보완할 항목이 있어요",
+                            empty: "조사한 범위에서 관련 결과를 찾지 못했어요",
+                            unavailable: "공식 자료를 확인하지 못했어요",
+                            failed: "분석을 완료하지 못했어요",
+                            stale: "사건과 자료 변경을 반영해야 해요",
+                          }[preparation.analysis.status]}
+                  </h3>
+                  <span>보완 내용과 준비 도구</span>
+                </summary>
+                <p>
+                  리포트는 준비된 검증 결과를 사용합니다. PDF를 저장할 때 새 분석을 요청하지
+                  않습니다.
+                </p>
+                {preparation.report.failure && (
+                  <p>리포트 준비 실패 · {preparationFailureText(preparation.report.failure)}</p>
+                )}
+                {preparation.analysis.failure && (
+                  <p>분석 실패 · {preparationFailureText(preparation.analysis.failure)}</p>
+                )}
+                {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].length >
+                  0 && (
+                  <ul>
+                    {[...new Set([...preparation.analysis.missingItems, ...actionMissing])].map(
+                      (item) => (
+                        <li key={item}>{item}</li>
+                      ),
+                    )}
+                  </ul>
+                )}
+                {pollPaused && <p>처리가 계속되고 있을 수 있어요. 상태를 다시 확인해 주세요.</p>}
+                <div className="report-preparation-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={
+                      Boolean(busy) ||
+                      accessChecking ||
+                      needsConsent ||
+                      Boolean(pendingJob) ||
+                      evidenceBusy ||
+                      evidenceDirty ||
+                      resolutionBusy ||
+                      resolutionDirty
+                    }
+                    onClick={() =>
+                      void run("리포트 준비 요청 중…", async () => {
+                        await prepareReport();
+                      })
+                    }
+                  >
+                    리포트 준비
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || accessChecking}
+                    onClick={() => refreshStatus.current()}
+                  >
+                    상태 확인
+                  </button>
+                </div>
+              </details>
             </section>
           )}
         {newReportAvailable && (
           <section className="report-callout" role="status">
-            <p>새 리포트가 준비됐어요. 현재 편집 내용은 확인한 뒤 전환할 수 있어요.</p>
+            <p>
+              {dirty
+                ? "새 리포트가 준비됐어요. 저장하지 않은 편집 내용을 확인한 뒤 전환하세요."
+                : "새 리포트가 준비됐어요. 새 버전을 열어 내용을 확인하세요."}
+            </p>
             <button
               type="button"
               disabled={
@@ -932,24 +1027,39 @@ export function ReportReview({
                       ? "검증된 분석으로 준비한 리포트"
                       : "사건 리포트 · 분석 상태와 보완 항목을 확인해 주세요"}
               </strong>
-              <p>
-                리포트 버전 {report.revision}
-                {report.basis
-                  ? ` · 요약 ${report.basis.summaryRevision} · 사건 ${report.basis.workspaceRevision}`
-                  : ""}{" "}
-                ·{" "}
-                {new Date(report.basis?.generatedAt ?? report.updatedAt).toLocaleString("ko-KR", {
-                  timeZone: "Asia/Seoul",
-                })}
-              </p>
-              {report.stale && (
+              <span className="report-save-state">
+                버전 {report.revision} · {dirty ? "미저장 편집 있음" : "저장됨"}
+                {!dirty &&
+                  ` · ${new Date(report.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`}
+              </span>
+              <details className="report-basis-details">
+                <summary>작성 기준{report.stale ? " · 현재 사건과 다름" : ""}</summary>
                 <p>
-                  이후 사건·증거·분석 변경은 이 리포트를 바꾸지 않습니다. 최신 내용을 반영하려면 새
-                  버전을 만들어 주세요.
+                  {report.basis
+                    ? `요약 ${report.basis.summaryRevision} · 사건 ${report.basis.workspaceRevision} · `
+                    : ""}
+                  {new Date(report.basis?.generatedAt ?? report.updatedAt).toLocaleString("ko-KR", {
+                    timeZone: "Asia/Seoul",
+                  })}{" "}
+                  기준
                 </p>
-              )}
-              {dirty && <p>저장하지 않은 수정이 있습니다.</p>}
+                {report.stale && (
+                  <p>
+                    이후 사건·증거·분석 변경은 이 리포트를 바꾸지 않습니다. 최신 내용을 반영하려면
+                    새 버전을 만들어 주세요.
+                  </p>
+                )}
+              </details>
             </section>
+            <nav className="report-current-tools" aria-label="현재 사건에서 더 준비하기">
+              <p>
+                현재 사건에서 더 준비하기 <span>변경한 내용은 새 리포트에서 반영해요.</span>
+              </p>
+              <a href={`/cases/${encodeURIComponent(caseId)}/files`}>자료와 원본 확인</a>
+              <a href={`/cases/${encodeURIComponent(caseId)}/actions`}>현재 할 일 관리</a>
+              <a href={`/cases/${encodeURIComponent(caseId)}/timeline`}>현재 경위 정리</a>
+              <a href={`/cases/${encodeURIComponent(caseId)}/precedents`}>현재 판례 탐색</a>
+            </nav>
             {preservedEdit && (
               <details className="report-preserved-edit">
                 <summary>새 버전을 만들기 전의 편집 내용 보관</summary>
@@ -1030,6 +1140,13 @@ export function ReportReview({
                   editing={editing}
                   disabled={Boolean(busy) || needsConsent}
                   reportId={report.id}
+                  photoUrls={
+                    apiMode === "mock"
+                      ? mockPhotos?.key === mockPhotoKey
+                        ? mockPhotos.urls
+                        : {}
+                      : undefined
+                  }
                   photoCandidates={maskIdentifiers ? [] : photoCandidates}
                   savedPhotoIds={maskIdentifiers ? [] : (report.includedPhotoIds ?? [])}
                   onChange={(next) => {
@@ -1112,7 +1229,8 @@ export function ReportReview({
           />
         )}
         {rework && owner.current && (
-          <div className="report-evidence-entry">
+          <details className="report-evidence-entry">
+            <summary>자료 추가와 사건 반영</summary>
             <EvidenceUpload
               caseId={caseId}
               disabled={
@@ -1139,7 +1257,7 @@ export function ReportReview({
               새 증거의 업로드 접수, 처리·관찰 검토, 사건 반영과 재분석은 각각 다른 단계예요. 기존
               리포트는 바뀌지 않으며 최신 분석으로 새 버전을 만들어 주세요.
             </p>
-          </div>
+          </details>
         )}
         {regenerate && report && (
           <ConfirmDialog
@@ -1203,6 +1321,33 @@ export function ReportReview({
             </div>
           </ConfirmDialog>
         )}
+        {cancelEdit && report && (
+          <ConfirmDialog
+            title="편집을 취소할까요?"
+            busy={Boolean(busy)}
+            onCancel={() => setCancelEdit(false)}
+          >
+            <p>저장하지 않은 본문·사진 배치·선택 변경을 취소하고 저장본으로 돌아갑니다.</p>
+            <div className="report-modal-actions">
+              <Button variant="outline" onClick={() => setCancelEdit(false)}>
+                계속 편집
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setContent(report.content);
+                  setIncludedPhotos(report.includedPhotoIds ?? []);
+                  setExcluded(report.excludedFileIds);
+                  setMaskIdentifiers(report.maskIdentifiers);
+                  setEditing(false);
+                  setCancelEdit(false);
+                }}
+              >
+                저장본으로 돌아가기
+              </Button>
+            </div>
+          </ConfirmDialog>
+        )}
         {reloadConfirm && (
           <ConfirmDialog
             title="저장 내용을 다시 불러올까요?"
@@ -1228,5 +1373,22 @@ export function ReportReview({
         )}
       </div>
     </div>
+  );
+  return embedded ? (
+    reportDocument
+  ) : (
+    <CaseWorkspaceFrame
+      kind="document"
+      header={
+        <CaseNavigation
+          caseId={caseId}
+          title={displayTitle}
+          active="reports"
+          {...(report ? { fileCount: files.length } : {})}
+        />
+      }
+    >
+      {reportDocument}
+    </CaseWorkspaceFrame>
   );
 }

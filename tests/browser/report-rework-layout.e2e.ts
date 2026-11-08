@@ -14,7 +14,9 @@ for (const side of ["claim", "response"])
             exact: true,
           }),
         ).toBeVisible();
-        await expect(page.getByText("출처와 분석 기준", { exact: true })).toBeVisible();
+        await expect(
+          page.getByRole("heading", { name: "출처와 분석 기준", exact: true }),
+        ).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
