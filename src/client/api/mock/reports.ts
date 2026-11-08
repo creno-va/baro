@@ -1,3 +1,4 @@
+import { sha256 } from "@noble/hashes/sha2.js";
 import { createReportHtml } from "../../../components/reports/document";
 import {
   createSyntheticPdf,
@@ -523,7 +524,11 @@ export function createReportsMockHandler(runtime: ReportMockRuntime): DomainRequ
       const content = report.maskIdentifiers ? maskReportText(report.content) : report.content;
       if (exportPath[2] === "pdf" && method === "GET") {
         if (!report.pdfAvailable) requireMockAccount(state);
-        const blob = await createSyntheticPdf(report.title, content, report.revision);
+        const blob = await createSyntheticPdf(
+          report.maskIdentifiers ? maskReportText(report.title) : report.title,
+          content,
+          report.revision,
+        );
         const latest = runtime.read();
         requireMockCase(latest, report.caseId, false);
         if (latest.session.user?.id !== state.session.user?.id)
@@ -658,5 +663,3 @@ export function createReportsMock(runtime: ReportMockRuntime) {
     }
   };
 }
-
-import { sha256 } from "@noble/hashes/sha2.js";

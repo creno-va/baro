@@ -786,7 +786,6 @@ test("private mock document hashes retain a saved source across body edits and d
   const hash = f.read().reportSourceHashes?.[original.id];
   expect(hash).toMatch(/^[a-f0-9]{64}$/);
   const edited = await f.reports.save("case-demo", {
-    expectedRevision: original.revision,
     content: `${original.content}\n사용자 합성 메모`,
     excludedFileIds: [],
     maskIdentifiers: false,
@@ -820,7 +819,6 @@ test("legacy mock reports without a private hash keep their source revision thro
     if (item) item.revision++;
   });
   const edited = await f.reports.save("case-demo", {
-    expectedRevision: original.revision,
     content: `${original.content}\n과거 기준 합성 메모`,
     excludedFileIds: [],
     maskIdentifiers: false,
@@ -836,4 +834,60 @@ test("mock account deletion removes private document hashes with all owned snaps
   expect(Object.keys(f.read().reportSourceHashes ?? {})).toHaveLength(1);
   await f.account.deleteAccount("DELETE");
   expect(Object.keys(f.read().reportSourceHashes ?? {})).toEqual([]);
+});
+
+test("mock PDF masks the actual rasterized title and body, while an explicit unmasked version retains its original title", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const rendered: string[] = [];
+  const jpeg = Buffer.from(
+    await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer(),
+  ).toString("base64");
+  const ctx = {
+    measureText: (text: string) => ({ width: text.length * 20 }),
+    fillRect: () => {},
+    fillText: (text: string) => rendered.push(text),
+  };
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      fonts: { load: async () => [], ready: Promise.resolve() },
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ctx,
+        toDataURL: () => `data:image/jpeg;base64,${jpeg}`,
+      }),
+    },
+  });
+  try {
+    const f = fixture();
+    f.update((state) => {
+      const item = state.cases["case-demo"];
+      if (item) item.title = "합성 사건 010-1234-5678";
+    });
+    const original = await f.reports.get("case-demo");
+    const masked = await f.reports.save("case-demo", {
+      content: original.content,
+      excludedFileIds: [],
+      maskIdentifiers: true,
+    });
+    const pdf = await f.reports.pdf(masked.id);
+    expect(new TextDecoder().decode(await pdf.slice(0, 5).arrayBuffer())).toBe("%PDF-");
+    expect(rendered).toContain("합성 사건 [전화번호 가림]");
+    expect(rendered.join("\n")).not.toContain("010-1234-5678");
+    const html = await f.reports.html(masked.id);
+    expect(await html.text()).not.toContain("010-1234-5678");
+    const unmasked = await f.reports.save("case-demo", {
+      content: original.content,
+      excludedFileIds: [],
+      maskIdentifiers: false,
+    });
+    rendered.length = 0;
+    await f.reports.pdf(unmasked.id);
+    expect(rendered).toContain(original.title);
+    expect(f.read().reportHistory?.[original.id]?.title).toBe(original.title);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous);
+    else Reflect.deleteProperty(globalThis, "document");
+  }
 });
