@@ -37,7 +37,7 @@ and partial-coverage contract remains unchanged.
 
 - Official Node 24 `trixie-slim` image digest:
   `sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66`.
-- Debian LibreOffice/UNO `4:25.2.3-2+deb13u8`, python3-olefile `0.47-1`,
+- Debian LibreOffice/UNO `4:25.2.3-2+deb13u9`, python3-olefile `0.47-1`,
   Noto CJK `1:20240730+repack1-1`, JRE `2:1.21-76`. The Debian
   [LibreOffice security tracker](https://security-tracker.debian.org/tracker/source-package/libreoffice)
   identifies fixed trixie packages for the current PICT/WMF/CFF and external-link

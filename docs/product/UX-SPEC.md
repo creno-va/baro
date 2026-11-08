@@ -1,5 +1,7 @@
 # BARO v2 UX 및 화면 상태 명세
 
+> 2026-11-08 사용자 직접 요청의 로그인 이후 앱 구조는 [작업공간·고객 리포트 통합 계약](../development/APP-WORKSPACE-REWORK.md)이 아래 과거 탭 구조를 대체한다. 접이식 앱 사이드바·중앙 대화·오른쪽 자료와 고객이 직접 이해·준비하는 리포트를 제공하며 기존 기능·URL·저장본을 보존한다. 랜딩·로그인·native는 이번 개편 범위 밖이다.
+
 - Version: 2.0
 - Status: Current MVP scope; implementation integrated; final live acceptance pending
 - Updated: 2026-10-14
