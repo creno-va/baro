@@ -82,7 +82,9 @@ test("a short account is accepted and recent-story deletion requires explicit co
   await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
 });
 
-test("help and policy profile entries follow the current role", async ({ page }) => {
+test("help and policy keep account settings available without restoring lawyer profile navigation", async ({
+  page,
+}) => {
   await setSession(page, customer);
   for (const url of ["/help", "/policies/ai"]) {
     await page.goto(url);
@@ -93,7 +95,13 @@ test("help and policy profile entries follow the current role", async ({ page })
       localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
       window.dispatchEvent(new Event("baro-session-changed"));
     });
-    await expect(page.locator('a[href="/lawyer"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    await expect(page.locator('a[href="/settings"]').first()).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
+      ),
+    ).toBe("lawyer");
     await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
       s.user.accountType = "customer";
