@@ -45,10 +45,9 @@ import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
-import { CaseWorkspaceFrame } from "../ui/workspace-frame";
-import { MaterialsPanel } from "./MaterialsPanel";
-import "../../styles/workspace-conversation.css";
 import { Button, ButtonLink } from "../ui/button";
+import { CaseWorkspaceFrame } from "../ui/workspace-frame";
+import { CaseContextPanel } from "./CaseContextPanel";
 import { CaseMaterials } from "./CaseMaterials";
 import { CaseNavigation } from "./CaseNavigation";
 import { ChatAttachments } from "./ChatAttachments";
@@ -68,8 +67,10 @@ import {
 import { ElapsedTime } from "./ElapsedTime";
 import { EvidencePicker } from "./EvidencePicker";
 import { EvidenceRequirements } from "./EvidenceRequirements";
+import { evidenceRequirementStates } from "./evidence-state";
 import { FileReview } from "./FileReview";
 import { LookupDialog } from "./LookupDialog";
+import { MaterialsPanel } from "./MaterialsPanel";
 import { ProgressiveReply } from "./ProgressiveReply";
 import { uploadProgressLabel } from "./processing-progress";
 import { SourceCards } from "./SourceCards";
@@ -149,6 +150,16 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const composerMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !composerMenu.current?.contains(event.target))
+        composerMenu.current?.removeAttribute("open");
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, []);
+  const reviewOrigin = useRef<HTMLElement | null>(null);
   const [conversationState, setConversationState] = useState<V2ConversationState | null>(null);
   const openMaterials = useCallback(() => setMaterialsOpen(true), []);
   useEffect(() => {
@@ -433,10 +444,10 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     followReply();
   }, [latestMessageContent, tab, followReply]);
   useEffect(() => {
-    const open = !!(preview || deleteFile || entry);
+    const open = !!((preview && tab !== "chat") || deleteFile || entry);
     if (open && !dialog.current?.open) dialog.current?.showModal();
     if (!open && dialog.current?.open) dialog.current?.close();
-  }, [preview, deleteFile, entry]);
+  }, [preview, deleteFile, entry, tab]);
 
   useEffect(() => {
     const modal = dialog.current;
@@ -840,8 +851,17 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       showError({ code: "NOT_FOUND", message: "자료가 삭제됐거나 현재 확인할 수 없어요." }, true);
       return;
     }
+    if (
+      reviewBusy.current ||
+      (preview?.id !== file.id &&
+        reviewDirty.current &&
+        !window.confirm("저장하지 않은 교정 내용이 있어요. 내용을 버리고 다른 자료를 열까요?"))
+    )
+      return;
     origin?.focus();
+    reviewOrigin.current = origin ?? null;
     void run("file-preview", async () => {
+      if (tab === "chat") setMaterialsOpen(true);
       setPreview(file);
       setOriginal(null);
     });
@@ -1166,18 +1186,25 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     });
   }
   function closeDialog() {
-    if (busy || reviewBusy.current) return;
+    if (busy || reviewBusy.current) return false;
     if (
       reviewDirty.current &&
       !window.confirm("저장하지 않은 교정 내용이 있어요. 내용을 버리고 닫을까요?")
     )
-      return;
+      return false;
     reviewDirty.current = false;
     setTimelineRecovery(false);
     setPreview(null);
     setDeleteFile(null);
     setEntry(null);
     setOriginal(null);
+    if (tab === "chat")
+      requestAnimationFrame(() => {
+        const origin = reviewOrigin.current;
+        if (origin?.isConnected && origin.getClientRects().length)
+          origin.focus({ preventScroll: true });
+      });
+    return true;
   }
   async function saveEntry(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1244,6 +1271,18 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     ].flatMap((ref) => (ref.kind === "user_material" ? [ref.fileId] : [])),
   );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
+  const missingRequirements =
+    ready &&
+    conversationState?.snapshot &&
+    !["stale", "pending", "running"].includes(conversationState.analysis.status)
+      ? evidenceRequirementStates(
+          conversationState.snapshot.evidenceRequirements,
+          view?.files ?? [],
+          view?.facts ?? [],
+        )
+          .filter((item) => item.status !== "linked")
+          .map((item) => item.requirement)
+      : [];
   const contextSummary = view ? (
     <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황" {...privateContent}>
       <details
@@ -1399,6 +1438,141 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         </div>
       </section>
     ) : null;
+  const fileViewer = preview ? (
+    <section
+      className="workspace-preview"
+      role={tab === "chat" ? "dialog" : "region"}
+      aria-label="자료 확인"
+      hidden={!ready}
+      inert={!ready}
+      onKeyDown={(event) => {
+        if (tab === "chat" && event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          closeDialog();
+        }
+      }}
+    >
+      <div className="inline-review-heading">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={closeDialog}
+          disabled={!!busy || reviewState.busy}
+        >
+          자료 목록
+        </Button>
+        <h3>{preview.name}</h3>
+      </div>
+      <p>
+        {preview.uploadRejection ? "등록 거절" : fileStatus[preview.status]} ·{" "}
+        {size(preview.sizeBytes)}
+      </p>
+      {preview.uploadRejection && (
+        <p>
+          파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로 선택해
+          주세요.
+        </p>
+      )}
+      <h4>처리 범위</h4>
+      <p>{preview.coverage || "추출 범위를 아직 확인할 수 없어요."}</p>
+      <FileReview
+        key={preview.id}
+        caseId={caseId}
+        fileId={preview.id}
+        canEdit={!readonly}
+        onChanged={load}
+        onError={fileReviewError}
+        onDirtyChange={fileReviewDirtyChanged}
+        onBusyChange={fileReviewBusyChanged}
+        refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
+      />
+      {preview.status === "ready" && (
+        <div className="workspace-material-apply">
+          <p>
+            교정을 저장한 뒤 자료 내용을 대화로 보내면 사건의 사실을 함께 정리해요. 긴 자료는 일부만
+            참고할 수 있으니 전체 원문도 확인하세요. 저장한 리포트는 새 버전에서 갱신할 수 있어요.
+          </p>
+        </div>
+      )}
+      <div className="workspace-buttons">
+        {preview.status === "ready" && (
+          <Button
+            disabled={!!busy || readonly || reviewState.dirty || reviewState.busy}
+            onClick={() => void reflectMaterial(preview.id)}
+          >
+            자료 내용 반영하기 <ArrowRight size={16} />
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          disabled={!!busy || !ready || preview.status === "uploading"}
+          onClick={() =>
+            void run("original", async (epoch) => {
+              const blob = await api.files.original(caseId, preview.id);
+              if (!(await verify()) || !current(epoch)) return;
+              const type = blob.type === "application/octet-stream" ? preview.mimeType : blob.type;
+              const safe =
+                /^(image\/(png|jpeg|webp|gif|bmp)|audio\/(mpeg|mp4|x-m4a|wav|x-wav|ogg|webm)|video\/(mp4|webm|ogg))$/.test(
+                  type,
+                );
+              if (safe) {
+                const url = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(String(reader.result));
+                  reader.onerror = () => reject(new Error("원본 미리보기를 불러오지 못했어요."));
+                  reader.readAsDataURL(new Blob([blob], { type }));
+                });
+                if (!(await verify()) || !current(epoch)) return;
+                setOriginal({ url, type });
+              } else download(blob, preview.name);
+              setNotice(
+                safe
+                  ? "원본 미리보기를 불러왔어요."
+                  : "원본을 내려받았어요. 파일을 열어 확인하세요.",
+              );
+            })
+          }
+        >
+          원본 확인 · 다운로드
+        </Button>
+        {original && (
+          <Button
+            variant="outline"
+            disabled={!!busy || !ready}
+            onClick={() =>
+              void run("original", async (epoch) => {
+                const blob = await api.files.original(caseId, preview.id);
+                if (!(await verify()) || !current(epoch)) return;
+                download(blob, preview.name);
+                setNotice("원본을 내려받았어요. 파일을 열어 확인하세요.");
+              })
+            }
+          >
+            원본 다운로드
+          </Button>
+        )}
+        <Button variant="ghost" onClick={closeDialog} disabled={!!busy}>
+          닫기
+        </Button>
+      </div>
+      {original &&
+        (original.type.startsWith("audio/") ? (
+          // biome-ignore lint/a11y/useMediaCaption: Private source recording; editable transcript is shown above, no verified timed captions exist.
+          <audio controls src={original.url} aria-label={`${preview.name} 원음 듣기`} />
+        ) : original.type.startsWith("video/") ? (
+          // biome-ignore lint/a11y/useMediaCaption: Private source video; extracted text is shown above, no verified timed captions exist.
+          <video controls src={original.url} aria-label={`${preview.name} 원본 영상`} />
+        ) : (
+          <img src={original.url} alt={`${preview.name} 원본 미리보기`} />
+        ))}
+      {error && (
+        <p role="alert" className="workspace-error">
+          {error.message}
+        </p>
+      )}
+    </section>
+  ) : null;
   const materialsPanel = view ? (
     <MaterialsPanel
       caseId={caseId}
@@ -1417,13 +1591,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               ),
           }
         : {})}
-      onReview={(file, origin) => {
-        origin.focus();
-        void run("file-preview", async () => {
-          setPreview(file);
-          setOriginal(null);
-        });
-      }}
+      onReview={(file, origin) => openConversationFile(file.id, origin)}
       onDelete={(file, origin) => {
         origin.focus();
         setDeleteFile(file);
@@ -1594,7 +1762,43 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           />
         }
         {...(tab === "chat" && view
-          ? { panel: materialsPanel, panelOpen: materialsOpen, onPanelOpenChange: setMaterialsOpen }
+          ? {
+              panel: (
+                <CaseContextPanel
+                  caseId={caseId}
+                  files={ready ? view.files : []}
+                  reportStatus={conversationState?.report.status}
+                  materials={materialsPanel}
+                  viewer={fileViewer}
+                  viewingFileId={preview?.id}
+                  needsEvidence={missingRequirements.length > 0}
+                  preparation={
+                    <EvidenceRequirements
+                      requirements={missingRequirements}
+                      files={view.files}
+                      facts={view.facts ?? []}
+                      disabled={
+                        readonly ||
+                        !!busy ||
+                        queuedSend ||
+                        !!localAttachments.length ||
+                        !!chatAttachments.length
+                      }
+                      onAdd={openUploadChooser}
+                      onReview={openConversationFile}
+                    />
+                  }
+                  onAdd={openUploadChooser}
+                  canAdd={!readonly && !busy && !queuedSend}
+                  onReview={(file, origin) => openConversationFile(file.id, origin)}
+                />
+              ),
+              panelOpen: materialsOpen,
+              onPanelOpenChange: (open: boolean) => {
+                if (!open && preview && !closeDialog()) return;
+                setMaterialsOpen(open);
+              },
+            }
           : {})}
       >
         <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
@@ -1974,66 +2178,108 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                             )}
                           </div>
                         )}
-                        {!!readyFiles.length && (
-                          <details className="workspace-evidence">
-                            <summary>
-                              <Paperclip size={15} /> 대화에 사용할 자료{" "}
-                              {selected.length > 0 && <span>{selected.length}개 선택</span>}
-                              <ChevronDown size={15} />
-                            </summary>
-                            <fieldset disabled={!!busy || readonly || queuedSend}>
-                              <legend>대화에 함께 사용할 자료</legend>
-                              <div className="workspace-file-choices">
-                                {readyFiles.map((file) => (
-                                  <label key={file.id}>
-                                    <input
-                                      type="checkbox"
-                                      checked={selected.includes(file.id)}
-                                      onChange={(event) =>
-                                        setSelected((ids) =>
-                                          event.target.checked
-                                            ? [...ids, file.id]
-                                            : ids.filter((id) => id !== file.id),
-                                        )
-                                      }
-                                    />
-                                    {file.name}
-                                  </label>
-                                ))}
-                              </div>
-                            </fieldset>
-                          </details>
+                        {!!selected.length && (
+                          <section className="composer-mentions" aria-label="멘션한 자료">
+                            {readyFiles
+                              .filter((file) => selected.includes(file.id))
+                              .map((file) => (
+                                <span key={file.id}>
+                                  <FileText size={14} />
+                                  {file.name}
+                                  <button
+                                    type="button"
+                                    aria-label={`${file.name} 멘션 해제`}
+                                    disabled={!!busy || readonly || queuedSend}
+                                    onClick={() =>
+                                      setSelected((ids) => ids.filter((id) => id !== file.id))
+                                    }
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </span>
+                              ))}
+                          </section>
                         )}
                         <div className="workspace-composer-row">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="workspace-attach"
-                            title="사진·파일 첨부"
-                            aria-label="사진·파일 첨부"
-                            disabled={!!busy || readonly || queuedSend}
-                            onClick={openUploadChooser}
+                          <details
+                            ref={composerMenu}
+                            className="composer-add-menu"
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                event.currentTarget.open = false;
+                                event.currentTarget.querySelector("summary")?.focus();
+                              } else if (event.key === "Tab") {
+                                requestAnimationFrame(() => {
+                                  const menu = composerMenu.current;
+                                  if (menu && !menu.contains(document.activeElement))
+                                    menu.open = false;
+                                });
+                              }
+                            }}
                           >
-                            <Plus size={19} />
-                          </Button>
-                          {lookupAvailable && view.case.schemaVersion === "2" && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="workspace-lookup-open"
-                              aria-label="외부 조회"
-                              title="외부 조회"
-                              disabled={!!busy || readonly || queuedSend || pendingResponse}
-                              onClick={() => {
-                                lookupAttempt.current = null;
-                                setLookupOpen(true);
-                              }}
-                            >
-                              <Search size={17} />
-                            </Button>
-                          )}
+                            <summary aria-label="자료 추가 및 멘션" title="자료 추가 및 멘션">
+                              <Plus size={20} />
+                            </summary>
+                            <div className="composer-add-menu__content">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={!!busy || readonly || queuedSend}
+                                onClick={(event) => {
+                                  event.currentTarget.closest("details")?.removeAttribute("open");
+                                  openUploadChooser();
+                                }}
+                              >
+                                <Upload size={17} />
+                                자료 추가
+                              </Button>
+                              <fieldset disabled={!!busy || readonly || queuedSend}>
+                                <legend>
+                                  <Paperclip size={16} /> 자료 멘션{" "}
+                                  {selected.length > 0 && `· ${selected.length}개 선택`}
+                                </legend>
+                                {readyFiles.length ? (
+                                  readyFiles.map((file) => (
+                                    <label key={file.id}>
+                                      <input
+                                        type="checkbox"
+                                        checked={selected.includes(file.id)}
+                                        onChange={(event) =>
+                                          setSelected((ids) =>
+                                            event.target.checked
+                                              ? [...new Set([...ids, file.id])]
+                                              : ids.filter((id) => id !== file.id),
+                                          )
+                                        }
+                                      />
+                                      <span>{file.name}</span>
+                                    </label>
+                                  ))
+                                ) : (
+                                  <p>처리가 완료된 자료를 대화에 연결할 수 있어요.</p>
+                                )}
+                              </fieldset>
+                              {lookupAvailable && view.case.schemaVersion === "2" && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="workspace-lookup-open"
+                                  aria-label="외부 조회"
+                                  title="외부 조회"
+                                  disabled={!!busy || readonly || queuedSend || pendingResponse}
+                                  onClick={() => {
+                                    lookupAttempt.current = null;
+                                    setLookupOpen(true);
+                                  }}
+                                >
+                                  <Search size={17} />
+                                  <span>외부 조회</span>
+                                </Button>
+                              )}
+                            </div>
+                          </details>
                           <label className="workspace-sr-only" htmlFor="workspace-message">
                             추가 사실 또는 질문
                           </label>
@@ -2060,7 +2306,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                               draftComposing.current = false;
                               setDraft([...event.currentTarget.value].slice(0, 10000).join(""));
                             }}
-                            placeholder="메시지"
+                            placeholder="사건에 대해 궁금한 점이나 추가할 내용을 적어 주세요"
                             aria-invalid={messageTooLong}
                             onKeyDown={(event) => {
                               if (
@@ -2315,121 +2561,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             <X size={20} />
           </Button>
         </div>
-        {preview && (
-          <div className="workspace-preview" hidden={!ready} inert={!ready}>
-            <h3>{preview.name}</h3>
-            <p>
-              {preview.uploadRejection ? "등록 거절" : fileStatus[preview.status]} ·{" "}
-              {size(preview.sizeBytes)}
-            </p>
-            {preview.uploadRejection && (
-              <p>
-                파일 등록이 거절됐어요. 암호·보호를 해제하거나 지원하는 형식으로 저장한 파일을 새로
-                선택해 주세요.
-              </p>
-            )}
-            <h4>처리 범위</h4>
-            <p>{preview.coverage || "추출 범위를 아직 확인할 수 없어요."}</p>
-            <FileReview
-              key={preview.id}
-              caseId={caseId}
-              fileId={preview.id}
-              canEdit={!readonly}
-              onChanged={load}
-              onError={fileReviewError}
-              onDirtyChange={fileReviewDirtyChanged}
-              onBusyChange={fileReviewBusyChanged}
-              refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
-            />
-            {preview.status === "ready" && (
-              <div className="workspace-material-apply">
-                <p>
-                  교정을 저장한 뒤 자료 내용을 대화로 보내면 사건의 사실을 함께 정리해요. 긴 자료는
-                  일부만 참고할 수 있으니 전체 원문도 확인하세요. 저장한 리포트는 새 버전에서 갱신할
-                  수 있어요.
-                </p>
-              </div>
-            )}
-            <div className="workspace-buttons">
-              {preview.status === "ready" && (
-                <Button
-                  disabled={!!busy || readonly || reviewState.dirty || reviewState.busy}
-                  onClick={() => void reflectMaterial(preview.id)}
-                >
-                  자료 내용 반영하기 <ArrowRight size={16} />
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                disabled={!!busy || !ready || preview.status === "uploading"}
-                onClick={() =>
-                  void run("original", async (epoch) => {
-                    const blob = await api.files.original(caseId, preview.id);
-                    if (!(await verify()) || !current(epoch)) return;
-                    const type =
-                      blob.type === "application/octet-stream" ? preview.mimeType : blob.type;
-                    const safe =
-                      /^(image\/(png|jpeg|webp|gif|bmp)|audio\/(mpeg|mp4|x-m4a|wav|x-wav|ogg|webm)|video\/(mp4|webm|ogg))$/.test(
-                        type,
-                      );
-                    if (safe) {
-                      const url = await new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(String(reader.result));
-                        reader.onerror = () =>
-                          reject(new Error("원본 미리보기를 불러오지 못했어요."));
-                        reader.readAsDataURL(new Blob([blob], { type }));
-                      });
-                      if (!(await verify()) || !current(epoch)) return;
-                      setOriginal({ url, type });
-                    } else download(blob, preview.name);
-                    setNotice(
-                      safe
-                        ? "원본 미리보기를 불러왔어요."
-                        : "원본을 내려받았어요. 파일을 열어 확인하세요.",
-                    );
-                  })
-                }
-              >
-                원본 확인 · 다운로드
-              </Button>
-              {original && (
-                <Button
-                  variant="outline"
-                  disabled={!!busy || !ready}
-                  onClick={() =>
-                    void run("original", async (epoch) => {
-                      const blob = await api.files.original(caseId, preview.id);
-                      if (!(await verify()) || !current(epoch)) return;
-                      download(blob, preview.name);
-                      setNotice("원본을 내려받았어요. 파일을 열어 확인하세요.");
-                    })
-                  }
-                >
-                  원본 다운로드
-                </Button>
-              )}
-              <Button variant="ghost" onClick={closeDialog} disabled={!!busy}>
-                닫기
-              </Button>
-            </div>
-            {original &&
-              (original.type.startsWith("audio/") ? (
-                // biome-ignore lint/a11y/useMediaCaption: Private source recording; editable transcript is shown above, no verified timed captions exist.
-                <audio controls src={original.url} aria-label={`${preview.name} 원음 듣기`} />
-              ) : original.type.startsWith("video/") ? (
-                // biome-ignore lint/a11y/useMediaCaption: Private source video; extracted text is shown above, no verified timed captions exist.
-                <video controls src={original.url} aria-label={`${preview.name} 원본 영상`} />
-              ) : (
-                <img src={original.url} alt={`${preview.name} 원본 미리보기`} />
-              ))}
-            {error && (
-              <p role="alert" className="workspace-error">
-                {error.message}
-              </p>
-            )}
-          </div>
-        )}
+        {tab !== "chat" && fileViewer}
         {deleteFile && ready && (
           <>
             <p>

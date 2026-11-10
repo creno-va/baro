@@ -15,13 +15,20 @@ import { Spinner } from "../ui/loading";
 import { CaseNavigation } from "./CaseNavigation";
 import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
 import { PrecedentDocument } from "./PrecedentDocument";
+import "../../styles/precedents.css";
 
 type Item = V2PrecedentSearchResponse["items"][number];
 const allTopics = Object.keys(PRECEDENT_TOPIC_LABELS) as V2PrecedentTopic[];
 const isAccessError = (error: unknown) =>
   error instanceof ApiError && ["UNAUTHENTICATED", "CONSENT_REQUIRED"].includes(error.code);
 
-export function PrecedentResearch({ caseId }: { caseId: string }) {
+export function PrecedentResearch({
+  caseId,
+  embedded = false,
+}: {
+  caseId: string;
+  embedded?: boolean;
+}) {
   const [context, setContext] = useState<V2PrecedentResearchContext | null>(null);
   const [topics, setTopics] = useState<V2PrecedentTopic[]>([]);
   const [result, setResult] = useState<V2PrecedentSearchResponse | null>(null);
@@ -130,7 +137,7 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
     setReading(false);
     requestAnimationFrame(() => {
       resultOpener.current?.focus({ preventScroll: true });
-      window.scrollTo({ top: listScroll.current, behavior: "instant" });
+      if (!embedded) window.scrollTo({ top: listScroll.current, behavior: "instant" });
     });
   }
 
@@ -265,11 +272,13 @@ export function PrecedentResearch({ caseId }: { caseId: string }) {
     result?.summaryRevision === context?.summaryRevision;
   return (
     <section className="workspace precedent-workspace" aria-label="관련 판례 탐색">
-      <CaseNavigation
-        caseId={caseId}
-        title={access.ready && context ? context.caseTitle : "관련 판례"}
-        active="precedents"
-      />
+      {!embedded && (
+        <CaseNavigation
+          caseId={caseId}
+          title={access.ready && context ? context.caseTitle : "관련 판례"}
+          active="precedents"
+        />
+      )}
       <header className="workspace-section-heading" hidden={selected !== null}>
         <div>
           <h2>사건과 비슷한 판례 찾기</h2>

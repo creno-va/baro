@@ -1,6 +1,9 @@
 # ADR-0021: 사건 작업대와 웹 디자인 시스템 교체
 
 - Status: Accepted
+- 2026-11-10 후속 사용자 지시 [#795](https://github.com/creno-va/baro/issues/795):
+  랜딩·로그인·새 사건 입력 레이아웃을 유지하고 사건 상세만 첨부 Codex 구조의 대화·우측 자료/판례와
+  별도 리포트로 재구성한다. 사건 웹 DS 정본은 [CASE-WORKBENCH](../design/CASE-WORKBENCH.md)다.
 - 2026-11-10 partial supersession: 사용자 직접 지시 [#792](https://github.com/creno-va/baro/issues/792)로
   전면 교체한 랜딩·네 작업 통합 레이아웃·웹 DS 적용은 철회하고 PR778 직전 UI를 복구한다.
   변호사 컨택 미지원·공통 계정·데이터/권한·Workers·비용 정책은 유지한다.

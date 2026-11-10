@@ -249,9 +249,9 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
         );
       })
       .toBeLessThan(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+      .toBeLessThanOrEqual(0);
     await page.screenshot({
       path: `.wrangler/precedent-feedback-list-${width}.png`,
       fullPage: true,

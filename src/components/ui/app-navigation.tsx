@@ -1,4 +1,5 @@
 import {
+  Bell,
   BriefcaseBusiness,
   CircleHelp,
   FileText,
@@ -11,6 +12,7 @@ import {
   PanelLeftOpen,
   Pencil,
   Plus,
+  Search,
   Settings,
   ShieldCheck,
   Trash2,
@@ -68,12 +70,17 @@ export function AppNavigation({
   pathname = "/",
   availableRoutes,
   showLogin = false,
+  appearance = "default",
 }: {
   role?: NavigationRole;
   pathname?: string;
   availableRoutes: readonly string[];
   showLogin?: boolean;
+  appearance?: "default" | "workbench";
 }) {
+  const [utility, setUtility] = useState<"search" | "attention" | null>(null);
+  const [query, setQuery] = useState("");
+  const utilityReturn = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -97,7 +104,10 @@ export function AppNavigation({
           ? lastNavigationFocus.current
           : document.activeElement;
       if (desktop.matches) {
-        menuReturn.current = collapseButton.current;
+        menuReturn.current =
+          appearance === "workbench"
+            ? (navigationRoot.current?.querySelector<HTMLElement>(".brand") ?? null)
+            : collapseButton.current;
         setOpen(false);
       } else if (menuReturn.current && !menuReturn.current.getClientRects().length) {
         menuReturn.current = mobileMenuButton.current;
@@ -107,7 +117,12 @@ export function AppNavigation({
         navigationRoot.current?.contains(focused) &&
         !focused.getClientRects().length
       )
-        (desktop.matches ? collapseButton.current : mobileMenuButton.current)?.focus();
+        (desktop.matches
+          ? appearance === "workbench"
+            ? navigationRoot.current?.querySelector<HTMLElement>(".brand")
+            : collapseButton.current
+          : mobileMenuButton.current
+        )?.focus();
     };
     const clearPointerFocus = (event: PointerEvent) => {
       if (event.target instanceof Node && !navigationRoot.current?.contains(event.target))
@@ -121,7 +136,7 @@ export function AppNavigation({
       desktop.removeEventListener("change", updateNavigationFocus);
       mobile.removeEventListener("change", updateNavigationFocus);
     };
-  }, []);
+  }, [appearance]);
   useEffect(() => {
     const frame = navigationRoot.current?.closest<HTMLElement>("[data-app-workspace]");
     if (frame) frame.dataset.sidebarCollapsed = String(collapsed);
@@ -169,6 +184,8 @@ export function AppNavigation({
         const next = await api.session.get();
         if (!current()) return;
         if (owner !== next.user?.id || next.needsConsent || !next.user) {
+          setQuery("");
+          setUtility(null);
           setRecent([]);
           setRecentState("loading");
           setDeletion(null);
@@ -361,7 +378,9 @@ export function AppNavigation({
     (resolvedRole === "user" || resolvedRole === "lawyer") &&
     !session?.needsConsent && (
       <div className="sidebar-recent">
-        <h2 className="sr-only">최근 사건</h2>
+        <h2 className={appearance === "workbench" ? "sidebar-recent__heading" : "sr-only"}>
+          최근 사건
+        </h2>
         <section
           className="sidebar-recent__list"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users must be able to scroll the bounded recent list.
@@ -447,6 +466,34 @@ export function AppNavigation({
         </section>
       </div>
     );
+  const renderUtilities = () => (
+    <div className="sidebar-utilities">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="확인할 일"
+        title="확인할 일"
+        onClick={(event) => {
+          utilityReturn.current = event.currentTarget;
+          setUtility("attention");
+        }}
+      >
+        <Bell size={18} aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="최근 사건 검색"
+        title="최근 사건 검색"
+        onClick={(event) => {
+          utilityReturn.current = event.currentTarget;
+          setUtility("search");
+        }}
+      >
+        <Search size={18} aria-hidden="true" />
+      </Button>
+    </div>
+  );
   const renderAccount = () => (
     <div className="sidebar-account">
       <a
@@ -537,6 +584,7 @@ export function AppNavigation({
       >
         <div className="app-header__inner">
           <Brand href={session?.user ? roleStart(session) : "/"} />
+          {appearance === "workbench" && renderUtilities()}
           <Button
             ref={collapseButton}
             className="sidebar-collapse"
@@ -590,6 +638,61 @@ export function AppNavigation({
           {renderAccount()}
         </div>
       </header>
+      <Dialog
+        open={utility !== null}
+        onOpenChange={(value) => {
+          if (!value) setUtility(null);
+        }}
+        title={utility === "search" ? "최근 사건 검색" : "확인할 일"}
+        description={
+          utility === "search"
+            ? "불러온 내 사건의 제목으로 검색해요."
+            : "입력이나 요약 확인을 마치지 않은 사건을 이어서 준비하세요."
+        }
+        returnFocusRef={utilityReturn}
+      >
+        {utility === "search" && (
+          <input
+            className="workbench-search"
+            aria-label="사건 제목 검색"
+            placeholder="사건 제목을 입력하세요"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        )}
+        <div className="workbench-search-results" aria-live="polite">
+          {recentState === "loading" ? (
+            <p>사건을 불러오는 중이에요.</p>
+          ) : recentState === "error" ? (
+            <p>사건 목록을 불러오지 못했어요. 사이드바에서 다시 불러와 주세요.</p>
+          ) : (
+            (() => {
+              const matches = recent.filter((item) =>
+                utility === "search"
+                  ? item.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+                  : !["active", "archived"].includes(item.stage),
+              );
+              return matches.length ? (
+                matches.map((item) => (
+                  <a key={item.id} href={caseLink(item)}>
+                    <FileText size={18} aria-hidden="true" />
+                    <span>
+                      {item.title}
+                      <small>{utility === "attention" ? "이어서 준비하기" : "사건 열기"}</small>
+                    </span>
+                  </a>
+                ))
+              ) : (
+                <p>
+                  {utility === "search"
+                    ? "검색 결과가 없어요."
+                    : "이어서 입력하거나 확인할 사건이 없어요."}
+                </p>
+              );
+            })()
+          )}
+        </div>
+      </Dialog>
       <Sheet
         open={open}
         onOpenChange={setOpen}
@@ -598,6 +701,7 @@ export function AppNavigation({
         returnFocusRef={menuReturn}
       >
         <Brand href={session?.user ? roleStart(session) : "/"} />
+        {appearance === "workbench" && renderUtilities()}
         <nav className="app-nav app-nav--mobile" aria-label="모바일 주 메뉴">
           {renderLinks()}
         </nav>

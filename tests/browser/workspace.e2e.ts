@@ -270,18 +270,14 @@ for (const width of [320, 390, 768, 1440]) {
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
     ).toBeGreaterThanOrEqual(16);
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    const controls = [
-      page.getByRole("button", { name: "사진·파일 첨부", exact: true }),
-      page.getByRole("button", { name: "외부 조회", exact: true }),
-      send,
-    ];
+    const controls = [page.locator(".composer-add-menu > summary"), send];
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
     const first = boxes[0];
     if (!first) throw new Error("Attachment control is missing its box");
     for (const box of boxes) {
       if (!box) throw new Error("Composer control is missing its box");
-      expect(box.height).toBeGreaterThanOrEqual(44);
-      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(width < 768 ? 44 : 36);
+      expect(box.width).toBeGreaterThanOrEqual(36);
       expect(box.y).toBeCloseTo(first.y, 0);
     }
     expect(

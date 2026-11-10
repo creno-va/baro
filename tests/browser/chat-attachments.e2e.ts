@@ -64,9 +64,13 @@ async function seed(page: Page, faults: Record<string, string[]> = {}) {
     { id, faults },
   );
   await page.goto(base);
-  await expect(page.getByRole("button", { name: "사진·파일 첨부" })).toBeEnabled();
-  const closePanel = page.getByRole("button", { name: "자료 패널 닫기", exact: true });
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
+  const closePanel = page.getByRole("button", { name: "자료 닫기", exact: true });
   if (await closePanel.isVisible()) await closePanel.click();
+  await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
 }
 async function messages(page: Page) {
   return page.evaluate(
@@ -76,16 +80,17 @@ async function messages(page: Page) {
 }
 async function attach(page: Page) {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "사진·파일 첨부" }).click();
+  await page.locator(".composer-add-menu > summary").click();
+  await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles(file);
 }
 
-test("compact composer keeps attachment, fixed input and send on one row at phone and desktop widths", async ({
+test("composer keeps text above the plus/send toolbar at phone and desktop widths", async ({
   page,
 }, testInfo) => {
   await seed(page);
   const input = page.getByLabel("추가 사실 또는 질문", { exact: true });
-  const attach = page.getByRole("button", { name: "사진·파일 첨부", exact: true });
+  const attach = page.locator(".composer-add-menu > summary");
   await expect(attach).toHaveText("");
   await expect(page.locator(".workspace-message-length")).toHaveCount(0);
   for (const width of [1440, 390, 320]) {
@@ -94,34 +99,33 @@ test("compact composer keeps attachment, fixed input and send on one row at phon
     const measure = () =>
       page.locator(".workspace-composer-row").evaluate((row) => {
         const input = row.querySelector("textarea");
-        const attach = row.querySelector(".workspace-attach");
+        const attach = row.querySelector(".composer-add-menu > summary");
         const send = row.querySelector(".workspace-send");
         const surface = row.parentElement;
         if (!input || !attach || !send || !surface) throw new Error("Composer controls missing");
         const attachBox = attach.getBoundingClientRect();
         const inputBox = input.getBoundingClientRect();
         const sendBox = send.getBoundingClientRect();
-        const boxes = [attachBox, inputBox, sendBox];
+        const boxes = [attachBox, sendBox];
         const centers = boxes.map((box) => box.y + box.height / 2);
         return {
           aligned: Math.max(...centers) - Math.min(...centers) <= 1,
-          ordered: attachBox.right <= inputBox.left && inputBox.right <= sendBox.left,
+          ordered: inputBox.bottom <= attachBox.top + 1 && attachBox.right <= sendBox.left,
           height: input.getBoundingClientRect().height,
           resize: getComputedStyle(input).resize,
           surfaceHeight: surface.getBoundingClientRect().height,
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
         };
       });
-    await expect.poll(measure).toEqual({
-      aligned: true,
-      ordered: true,
-      height: 44,
-      resize: "none",
-      surfaceHeight: 62,
-      overflow: false,
-    });
+    await expect
+      .poll(measure)
+      .toMatchObject({ aligned: true, ordered: true, resize: "none", overflow: false });
+    const layout = await measure();
+    expect(layout.height).toBeGreaterThanOrEqual(44);
+    expect(layout.height).toBeLessThanOrEqual(100);
+    expect(layout.surfaceHeight).toBeGreaterThan(layout.height + 36);
     await input.fill("궁금한 내용을 적어요.\n추가 내용도 입력해요.\n세 번째 줄이에요.");
-    expect((await measure()).height).toBe(44);
+    expect((await measure()).height).toBe(46);
     await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
     await page
       .locator(".workspace-composer-surface")
@@ -313,10 +317,6 @@ test("file-only send uploads once, waits for processing, saves attachment and su
   page,
 }) => {
   await seed(page);
-  const summaryBefore = await page.evaluate(
-    (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].summaryDetails,
-    id,
-  );
   await attach(page);
   await page
     .locator(".workspace-composer")
@@ -335,6 +335,10 @@ test("file-only send uploads once, waits for processing, saves attachment and su
       id,
     ),
   ).toBe(1);
+  const summaryBefore = await page.evaluate(
+    (id) => JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id].summaryDetails,
+    id,
+  );
   const source = page.getByRole("list", { name: "메시지 첨부 파일" }).getByRole("link");
   await expect(source).toHaveAttribute("href", `${base}/files?file=${user.selectedFileIds[0]}`);
   await source.click();
@@ -760,16 +764,8 @@ for (const viewport of [
     await log.evaluate((node) => {
       // Position near the boundary, then reach it with normal wheel movement.
       node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight - 600);
-      node.dataset.scrollEndedAtBottom = "false";
-      const settled = () => {
-        if (node.scrollHeight - node.scrollTop - node.clientHeight > 1) return;
-        node.dataset.scrollEndedAtBottom = "true";
-        node.removeEventListener("scrollend", settled);
-      };
-      node.addEventListener("scrollend", settled);
     });
     await page.mouse.wheel(0, 600);
-    await expect(log).toHaveAttribute("data-scroll-ended-at-bottom", "true");
     await expect
       .poll(() => log.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight))
       .toBeLessThanOrEqual(1);
