@@ -64,3 +64,11 @@ test("Headless text controls retain caller error and description semantics", () 
     }
   }
 });
+
+test("short original clips retain their fractional seek duration", () => {
+  const markup = renderToString(
+    <Range label="재생 위치" value={0.25} max={0.5} onChange={() => {}} />,
+  );
+  expect(markup).toContain('aria-valuemax="0.5"');
+  expect(markup).toContain('aria-valuenow="0.25"');
+});

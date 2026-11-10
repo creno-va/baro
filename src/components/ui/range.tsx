@@ -23,7 +23,7 @@ export function Range({
   className?: string;
 }) {
   const fill = useRef<HTMLSpanElement>(null);
-  const limit = Math.max(1, max);
+  const limit = Number.isFinite(max) && max > 0 ? max : 1;
   const current = Math.max(0, Math.min(limit, value));
   useEffect(() => {
     fill.current?.style.setProperty("width", String((current / limit) * 100) + "%");
