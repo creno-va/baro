@@ -10,6 +10,7 @@ import {
   type ComponentProps,
   type ReactNode,
   type RefObject,
+  useEffect,
   useLayoutEffect,
   useRef,
 } from "react";
@@ -22,6 +23,14 @@ export interface ModalProps extends Omit<ComponentProps<"div">, "title" | "onClo
   title?: string;
   returnFocusRef?: RefObject<HTMLElement | null> | undefined;
   variant?: "dialog" | "sheet";
+}
+function restoreFocus(destination: HTMLElement | null | undefined) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (destination?.isConnected && !destination.closest("[inert], [hidden]"))
+        destination.focus({ preventScroll: true });
+    });
+  });
 }
 export function Modal({
   open,
@@ -36,18 +45,22 @@ export function Modal({
 }: ModalProps) {
   const previous = useRef(false);
   const origin = useRef<HTMLElement | null>(null);
+  const explicitOrigin = useRef(returnFocusRef);
+  explicitOrigin.current = returnFocusRef;
   useLayoutEffect(() => {
     if (open && !previous.current && document.activeElement instanceof HTMLElement)
       origin.current = document.activeElement;
     if (previous.current && !open) {
-      const destination = returnFocusRef?.current ?? origin.current;
-      requestAnimationFrame(() => {
-        if (destination?.isConnected && !destination.closest("[inert], [hidden]"))
-          destination.focus({ preventScroll: true });
-      });
+      restoreFocus(returnFocusRef?.current ?? origin.current);
     }
     previous.current = open;
   }, [open, returnFocusRef]);
+  useEffect(
+    () => () => {
+      if (previous.current) restoreFocus(explicitOrigin.current?.current ?? origin.current);
+    },
+    [],
+  );
   return (
     <HeadlessDialog
       static

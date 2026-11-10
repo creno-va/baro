@@ -712,3 +712,19 @@
   min-height: 44px;
   padding: 8px;
 }
+:root[data-baro-ui] .case-tools__menu {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  width: 220px;
+  min-width: 0;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 80px);
+  overflow: auto;
+}
+@media (max-width: 1023px) {
+  :root[data-baro-ui] .case-tools__menu {
+    top: 120px;
+    max-height: calc(100% - 136px);
+  }
+}

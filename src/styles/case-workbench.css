@@ -1,4 +1,4 @@
-/* One light workspace for /new and case details; public/login layouts opt out. */
+/* Shared workspace geometry; semantic theme tokens own its light/dark colors. */
 .app-frame.baro-workbench {
   color: var(--foreground);
   background: var(--wb-canvas);
@@ -330,31 +330,6 @@
   display: none;
 }
 .baro-workbench .case-tools > [data-disclosure-button]:hover {
-  background: var(--muted);
-}
-.baro-workbench .case-tools__menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 30;
-  min-width: 220px;
-  border: 1px solid var(--border);
-  background: var(--popover);
-  padding: 6px;
-  border-radius: 12px;
-  box-shadow: 0 12px 32px #0f172a1a;
-}
-.baro-workbench .case-tools__menu a {
-  min-height: 44px;
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 10px;
-  color: inherit;
-  border-radius: 6px;
-  font-size: 14px;
-}
-.baro-workbench .case-tools__menu a:hover {
   background: var(--muted);
 }
 .baro-workbench .case-workspace {

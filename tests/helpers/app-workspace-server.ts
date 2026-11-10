@@ -26,10 +26,7 @@ const names = [
   "app-focus",
   "cases",
   "workspace",
-  "product",
-  "app-experience",
-  "product-refresh",
-  "app-workspace",
+  "case-workbench",
 ];
 const css =
   (await Promise.all(names.map((name) => Bun.file(`${root}/src/styles/${name}.css`).text())))

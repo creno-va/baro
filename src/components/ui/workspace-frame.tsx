@@ -31,6 +31,7 @@ export function CaseWorkspaceFrame({
   const root = useRef<HTMLDivElement>(null);
   const panelNode = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   const previousOpen = useRef(panelOpen);
   const initialFocus = useRef<HTMLElement | null>(null);
   const [sheet, setSheet] = useState(false);
@@ -46,6 +47,7 @@ export function CaseWorkspaceFrame({
   }, [panelOpen]);
   useEffect(() => {
     const query = matchMedia("(max-width: 1199px)");
+    let deferred = false;
     const update = () => {
       const own = panelNode.current?.closest('[role="dialog"]');
       // Activating a parent modal while a separate review owns focus would
@@ -54,16 +56,23 @@ export function CaseWorkspaceFrame({
         Array.from(
           document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]'),
         ).some((node) => node !== own && !node.hasAttribute("hidden"))
-      )
+      ) {
+        deferred = true;
         return;
+      }
+      deferred = false;
       const active = document.activeElement;
       initialFocus.current =
-        active instanceof HTMLElement && panelNode.current?.contains(active) ? active : null;
+        active instanceof HTMLElement && panelNode.current?.contains(active)
+          ? active
+          : closeButton.current;
       setSheet(query.matches);
     };
     update();
     query.addEventListener("change", update);
-    const observer = new MutationObserver(update);
+    const observer = new MutationObserver(() => {
+      if (deferred) update();
+    });
     observer.observe(document.body, {
       subtree: true,
       childList: true,
@@ -143,7 +152,7 @@ export function CaseWorkspaceFrame({
           static
           open={sheet && panelOpen}
           onClose={() => onPanelOpenChange?.(false)}
-          initialFocus={initialFocus}
+          initialFocus={initialFocus.current ? initialFocus : closeButton}
           className="ds-responsive-panel baro-workbench"
           data-mode={sheet ? "sheet" : "inline"}
           data-panel-visible={panelOpen ? "true" : "false"}
@@ -161,6 +170,7 @@ export function CaseWorkspaceFrame({
                 {panelLabel}
               </DialogTitle>
               <Button
+                ref={closeButton}
                 variant="ghost"
                 size="icon"
                 aria-label={panelLabel + " 패널 닫기"}

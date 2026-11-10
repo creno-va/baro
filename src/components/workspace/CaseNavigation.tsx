@@ -50,13 +50,7 @@ export function CaseNavigation({
           >
             <Ellipsis size={19} aria-hidden="true" />
           </PopoverButton>
-          <PopoverPanel
-            as="nav"
-            anchor={{ to: "bottom end", gap: 8, padding: 12 }}
-            portal
-            className="case-tools__menu ui-menu"
-            aria-label="사건 도구"
-          >
+          <PopoverPanel as="nav" portal className="case-tools__menu ui-menu" aria-label="사건 도구">
             {tools.map(({ id, label, path }) => (
               <a
                 className="ui-menu__item"

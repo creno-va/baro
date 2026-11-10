@@ -71,14 +71,15 @@ function Fixture() {
   const conditional = new URLSearchParams(location.search).has("conditional");
   const longReview = new URLSearchParams(location.search).has("longReview");
   return (
-    <div className="app-frame app-frame--product" data-product-ui="refresh" data-app-workspace>
+    <div className="app-frame baro-workbench" data-workbench data-app-workspace>
       <AppNavigation
         role={"user" as const}
         pathname="/cases/shell-case"
-        availableRoutes={["/new", "/lawyers", "/settings"]}
+        availableRoutes={["/new", "/settings"]}
+        appearance="workbench"
       />
       <div className="app-surface">
-        <main id="main-content" tabIndex={-1}>
+        <main id="main-content" className="case-shell" tabIndex={-1}>
           <CaseWorkspaceFrame
             header={
               <CaseNavigation
