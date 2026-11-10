@@ -1,6 +1,7 @@
 import type { FileView } from "../../client/api/types";
 import type { V2ConversationState, V2Fact, V2LegalAnalysisSnapshot } from "../../contracts/v2";
 import { Button } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { positionLabel } from "./source-label";
 
 const statusLabels: Record<V2ConversationState["analysis"]["status"], string> = {
@@ -157,8 +158,8 @@ function SnapshotDetails({
   return (
     <>
       {snapshot.issues.length > 0 && (
-        <details open>
-          <summary>법 조항·요건과 사건 근거</summary>
+        <Disclosure open>
+          <DisclosureSummary>법 조항·요건과 사건 근거</DisclosureSummary>
           {snapshot.issues.map((issue) => (
             <section key={issue.id}>
               <h4>{issue.title}</h4>
@@ -212,11 +213,11 @@ function SnapshotDetails({
               ))}
             </section>
           ))}
-        </details>
+        </Disclosure>
       )}
       {snapshot.precedents.length > 0 && (
-        <details open>
-          <summary>관련 판례와 우리 사건 비교</summary>
+        <Disclosure open>
+          <DisclosureSummary>관련 판례와 우리 사건 비교</DisclosureSummary>
           {snapshot.precedents.map((precedent) => (
             <section key={precedent.citationId}>
               <h4>
@@ -235,8 +236,8 @@ function SnapshotDetails({
                 ))}
               </ul>
               <p>{precedent.preparationMeaning}</p>
-              <details>
-                <summary>비교에 사용한 공식 근거</summary>
+              <Disclosure>
+                <DisclosureSummary>비교에 사용한 공식 근거</DisclosureSummary>
                 {factList(
                   [
                     ...new Set(
@@ -254,10 +255,10 @@ function SnapshotDetails({
                     ),
                   ),
                 ].map(claim)}
-              </details>
+              </Disclosure>
             </section>
           ))}
-        </details>
+        </Disclosure>
       )}
       {[
         ["현재 우리 쪽 약점", snapshot.perspective.weaknesses],
@@ -279,8 +280,8 @@ function SnapshotDetails({
           ),
       )}
       {snapshot.perspective.responsePoints.length > 0 && (
-        <details open>
-          <summary>상대방 주장과 대응 검토</summary>
+        <Disclosure open>
+          <DisclosureSummary>상대방 주장과 대응 검토</DisclosureSummary>
           {snapshot.perspective.responsePoints.map((point) => (
             <section key={JSON.stringify(point)}>
               <h4>{point.opponentPosition}</h4>
@@ -296,7 +297,7 @@ function SnapshotDetails({
               )}
             </section>
           ))}
-        </details>
+        </Disclosure>
       )}
     </>
   );

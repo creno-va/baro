@@ -3,6 +3,7 @@ import { z } from "zod";
 import { browserSessionScope } from "../../client/api/context";
 import { apiRequest } from "../../client/api/core";
 import { type V2ToolResult, v2ToolResultsSchema } from "../../contracts/v2";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 
 const replySchema = z.strictObject({ schemaVersion: z.literal("2"), results: v2ToolResultsSchema });
 const statusLabel: Record<V2ToolResult["status"], string> = {
@@ -96,12 +97,12 @@ export function ToolResults({ caseId, messageId }: { caseId: string; messageId: 
     };
   }, [open, caseId, messageId]);
   return (
-    <details
+    <Disclosure
       className="workspace-tool-details"
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>공공·외부 조회 내역</summary>
+      <DisclosureSummary>공공·외부 조회 내역</DisclosureSummary>
       {open &&
         (failed ? (
           <p role="status">조회 내역을 불러오지 못했어요. 닫았다 다시 열어 주세요.</p>
@@ -112,6 +113,6 @@ export function ToolResults({ caseId, messageId }: { caseId: string; messageId: 
         ) : (
           <p>이 답변에 기록된 외부 조회가 없어요.</p>
         ))}
-    </details>
+    </Disclosure>
   );
 }

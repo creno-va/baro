@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { openAccountDeletion } from "../helpers/account-deletion";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
 import { openReportEditor } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
@@ -520,7 +521,7 @@ for (const placement of ["inline", "legacy"] as const)
       const section = page.locator(".report-reading-section").filter({
         has: page.getByRole("heading", { name: "증거 자료", exact: true }),
       });
-      await section.getByRole("combobox").selectOption("file-demo");
+      await chooseOption(selectControl(section), "file-demo");
       await section.getByRole("button", { name: "사진 넣기", exact: true }).click();
       await expect(section.getByRole("textbox")).toHaveValue(/baro-photo:file-demo/);
       const positiveDownload = page.waitForEvent("download");

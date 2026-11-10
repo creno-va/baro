@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { WorkspaceView } from "../../src/client/api/types";
 import { Button } from "../../src/components/ui/button";
+import { Textarea as ControlTextarea, Label as FieldLabel } from "../../src/components/ui/form";
 import {
   ConversationAgent,
   type ConversationClient,
@@ -281,9 +282,9 @@ export function ConversationAgentFixture() {
                       합성 비동기 작업
                     </Button>
                   )}
-                  <label>
+                  <FieldLabel>
                     검토 중인 입력
-                    <textarea
+                    <ControlTextarea
                       disabled={props.disabled}
                       value={text}
                       onFocus={() => {
@@ -301,7 +302,7 @@ export function ConversationAgentFixture() {
                         props.onDirtyChange(true);
                       }}
                     />
-                  </label>
+                  </FieldLabel>
                   <Button
                     disabled={props.disabled}
                     onClick={() => {
@@ -317,8 +318,8 @@ export function ConversationAgentFixture() {
         </div>
         {queuedWork && <Button onClick={() => setQueuedWork(false)}>전송 대기 취소</Button>}
         <form className="workspace-composer" onSubmit={(event) => event.preventDefault()}>
-          <label htmlFor="workspace-message">추가 사실 또는 질문</label>
-          <textarea id="workspace-message" disabled={busy} />
+          <FieldLabel htmlFor="workspace-message">추가 사실 또는 질문</FieldLabel>
+          <ControlTextarea id="workspace-message" disabled={busy} />
         </form>
       </div>
     </div>

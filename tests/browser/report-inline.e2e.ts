@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
 import { openReportEditor } from "../helpers/report-controls";
 
 test("report edits Markdown and photos inline, saves placement and uses one equal-width document on desktop/mobile", async ({
@@ -74,7 +75,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   await expect(page.getByRole("button", { name: "불릿 목록", exact: true })).toHaveCount(0);
   const checkPhotoInput = async () => {
     const text = await field.boundingBox();
-    const select = await section.getByRole("combobox").boundingBox();
+    const select = await selectControl(section).boundingBox();
     const insert = await section.getByRole("button", { name: "사진 넣기" }).boundingBox();
     if (!text || !select || !insert) throw new Error("Missing synthetic report controls");
     expect(select.x).toBe(text.x);
@@ -89,7 +90,7 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     const position = input.value.indexOf("사진 뒤에");
     input.setSelectionRange(position, position);
   });
-  await section.getByRole("combobox").selectOption("synthetic-inline-photo");
+  await chooseOption(selectControl(section), "synthetic-inline-photo");
   await section.getByRole("button", { name: "사진 넣기" }).click();
   await expect(field).toHaveValue(/baro-photo:synthetic-inline-photo/);
   const edited = await field.inputValue();

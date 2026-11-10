@@ -24,7 +24,9 @@ import { api, apiMode, roleStart } from "../../client/api";
 import { Brand } from "./brand";
 import { Button } from "./button";
 import { Dialog, Sheet } from "./dialog";
+import { Input as ControlInput, Label as FieldLabel } from "./form";
 import { LoadingContent, Spinner } from "./loading";
+import { ThemeToggle } from "./theme-toggle";
 
 export type NavigationRole = "visitor" | "user" | "lawyer" | "moderator";
 export interface NavigationItem {
@@ -579,6 +581,7 @@ export function AppNavigation({
         <div className="app-header__inner">
           <Brand href={session?.user ? roleStart(session) : "/"} />
           {appearance === "workbench" && renderUtilities()}
+          <ThemeToggle />
           <Button
             ref={collapseButton}
             className="sidebar-collapse"
@@ -646,7 +649,7 @@ export function AppNavigation({
         returnFocusRef={utilityReturn}
       >
         {utility === "search" && (
-          <input
+          <ControlInput
             className="workbench-search"
             aria-label="사건 제목 검색"
             placeholder="사건 제목을 입력하세요"
@@ -696,6 +699,7 @@ export function AppNavigation({
       >
         <Brand href={session?.user ? roleStart(session) : "/"} />
         {appearance === "workbench" && renderUtilities()}
+        <ThemeToggle />
         <nav className="app-nav app-nav--mobile" aria-label="모바일 주 메뉴">
           {renderLinks()}
         </nav>
@@ -710,14 +714,15 @@ export function AppNavigation({
         title="사건 제목 수정"
       >
         <form
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void renameRecent();
           }}
         >
-          <label className="sidebar-title-field">
+          <FieldLabel className="sidebar-title-field">
             제목
-            <input
+            <ControlInput
               autoFocus
               value={caseTitle}
               maxLength={40}
@@ -725,7 +730,7 @@ export function AppNavigation({
               disabled={renaming}
               onChange={(event) => setCaseTitle(event.target.value)}
             />
-          </label>
+          </FieldLabel>
           {renameError && (
             <p className="sidebar-title-error" role="alert">
               {renameError}

@@ -1,40 +1,5 @@
 /* One light workspace for /new and case details; public/login layouts opt out. */
 .app-frame.baro-workbench {
-  color-scheme: light;
-  --background: #f6f7f9;
-  --foreground: #0f172a;
-  --card: #fff;
-  --card-foreground: #0f172a;
-  --popover: #fff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
-  --primary-foreground: #fff;
-  --secondary: #fff;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #667085;
-  --border: #e2e8f0;
-  --input: #cbd5e1;
-  --ring: #2563eb;
-  --accent: #fff;
-  --accent-foreground: #0f172a;
-  --destructive: #a42f38;
-  --success: #166534;
-  --warning: #854d0e;
-  --wb-sidebar: #fff;
-  --wb-canvas: #f6f7f9;
-  --wb-raised: #fff;
-  --wb-hover: #eef1f5;
-  --wb-radius: 10px;
-  --wb-reading: 920px;
-  --wb-sidebar-width: clamp(248px, 19.3vw, 356px);
-  --wb-panel-width: clamp(330px, 24vw, 388px);
-  --app-reading-width: var(--wb-reading);
-  --app-line: var(--border);
-  --app-text: var(--foreground);
-  --app-secondary-text: var(--muted-foreground);
-  --app-surface: var(--wb-canvas);
-  --app-topbar-height: 0px;
   color: var(--foreground);
   background: var(--wb-canvas);
   min-height: 100dvh;
@@ -45,14 +10,14 @@
 .baro-workbench :where(h1, h2, h3, h4, p) {
   color: inherit;
 }
-.baro-workbench :where(button, a, input, textarea, summary):focus-visible {
+.baro-workbench :where(button, a, input, textarea, [data-disclosure-button]):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
-.baro-workbench :where(button, a, summary) {
+.baro-workbench :where(button, a, [data-disclosure-button]) {
   -webkit-tap-highlight-color: transparent;
 }
-.baro-workbench :where(button, a, summary, textarea) {
+.baro-workbench :where(button, a, [data-disclosure-button], textarea) {
   transition:
     background 120ms ease,
     border-color 120ms ease;
@@ -189,7 +154,7 @@
   min-height: 38px;
   padding: 7px 12px;
   border-radius: 8px;
-  color: #475569;
+  color: var(--foreground);
 }
 .baro-workbench .sidebar-story__copy {
   min-width: 0;
@@ -244,8 +209,8 @@
 .baro-workbench .sidebar-avatar {
   width: 30px;
   height: 30px;
-  background: #244c9a;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-size: 12px;
 }
 .baro-workbench .sidebar-profile strong {
@@ -311,7 +276,7 @@
 }
 .baro-workbench .case-header__identity > svg {
   flex-shrink: 0;
-  color: #667085;
+  color: var(--muted-foreground);
 }
 .baro-workbench .case-header h1 {
   font-size: 16px;
@@ -348,7 +313,7 @@
 .baro-workbench .case-tools {
   position: relative;
 }
-.baro-workbench .case-tools > summary {
+.baro-workbench .case-tools > [data-disclosure-button] {
   min-width: 44px;
   min-height: 44px;
   list-style: none;
@@ -361,10 +326,10 @@
   border-radius: 8px;
   color: var(--muted-foreground);
 }
-.baro-workbench summary::-webkit-details-marker {
+.baro-workbench [data-disclosure-button]::-webkit-details-marker {
   display: none;
 }
-.baro-workbench .case-tools > summary:hover {
+.baro-workbench .case-tools > [data-disclosure-button]:hover {
   background: var(--muted);
 }
 .baro-workbench .case-tools__menu {
@@ -442,45 +407,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-.baro-workbench .case-workspace__panel {
-  position: static;
-  inset: auto;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-left: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--wb-sidebar);
-  color: var(--foreground);
-  overflow: hidden;
-}
-.baro-workbench .case-workspace__panel[open] {
-  display: flex;
-  flex-direction: column;
-}
-.baro-workbench .case-workspace__panel-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px 0 16px;
-}
-.baro-workbench .case-workspace__panel-heading h2 {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  font-weight: 500;
-}
-.baro-workbench .case-workspace__panel-content {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
 .baro-workbench .case-shell:has(.case-workspace--conversation) {
   height: var(--app-viewport-height, 100dvh);
@@ -641,14 +567,14 @@
   flex-direction: column;
   padding: 14px;
   background: var(--wb-raised);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 24px;
   box-shadow: none;
 }
 .baro-workbench .workspace .workspace-composer-row {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 8px;
 }
 .baro-workbench .workspace .workspace-composer textarea {
@@ -668,13 +594,13 @@
   border-radius: 4px;
 }
 .baro-workbench .workspace-composer textarea::placeholder {
-  color: #667085;
+  color: var(--muted-foreground);
 }
 .baro-workbench .workspace-composer textarea:focus {
   outline: none;
 }
 .baro-workbench .workspace-composer-surface:focus-within {
-  border-color: #94a3b8;
+  border-color: var(--border);
 }
 .baro-workbench .workspace .workspace-send {
   grid-column: 3;
@@ -687,8 +613,8 @@
   color: var(--primary-foreground);
 }
 .app-frame.baro-workbench .workspace-send.ui-button:disabled {
-  background: #e2e8f0;
-  color: #667085;
+  background: var(--background);
+  color: var(--muted-foreground);
   opacity: 1;
 }
 .baro-workbench .conversation-agent-actions > .ui-button {
@@ -717,7 +643,7 @@
   grid-column: 1;
   grid-row: 2;
 }
-.baro-workbench .composer-add-menu > summary {
+.baro-workbench .composer-add-menu > [data-disclosure-button] {
   list-style: none;
   display: grid;
   place-items: center;
@@ -726,9 +652,9 @@
   border-radius: 50%;
   cursor: pointer;
 }
-.baro-workbench .composer-add-menu > summary:hover,
-.baro-workbench .composer-add-menu[open] > summary {
-  background: #eef1f5;
+.baro-workbench .composer-add-menu > [data-disclosure-button]:hover,
+.baro-workbench .composer-add-menu[data-open] > [data-disclosure-button] {
+  background: var(--background);
 }
 .baro-workbench .composer-add-menu__content {
   position: absolute;
@@ -739,7 +665,7 @@
   max-height: 45dvh;
   overflow: auto;
   padding: 6px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--popover);
   box-shadow: 0 12px 40px #0f172a1a;
@@ -790,7 +716,7 @@
   gap: 6px;
   max-width: 100%;
   padding: 4px 8px;
-  background: #e8efff;
+  background: var(--accent);
   border-radius: 6px;
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -854,7 +780,7 @@
 .baro-workbench .case-context__tabs i {
   width: 5px;
   height: 5px;
-  background: #2563eb;
+  background: var(--primary);
   border-radius: 50%;
 }
 .baro-workbench .case-context__pane {
@@ -895,7 +821,7 @@
   text-decoration: none;
 }
 .baro-workbench .context-task:hover {
-  background: #f1f5f9;
+  background: var(--accent);
 }
 .baro-workbench .context-task > svg {
   flex-shrink: 0;
@@ -931,7 +857,7 @@
 .baro-workbench .context-status-dot {
   width: 6px;
   height: 6px;
-  background: #854d0e;
+  background: var(--warning);
   border-radius: 50%;
   margin-top: 8px;
   flex-shrink: 0;
@@ -963,7 +889,7 @@
 .baro-workbench .workspace-upload-target {
   color: var(--foreground);
   width: 100%;
-  min-height: 40px;
+  min-height: 80px;
   padding: 8px 12px;
   justify-content: flex-start;
   border: 1px dashed var(--input);
@@ -979,7 +905,7 @@
   height: 16px;
 }
 .baro-workbench .workspace-status--ready {
-  color: #244b91;
+  color: var(--primary);
 }
 .baro-workbench .workspace-upload-title {
   font-size: 13px;
@@ -1108,28 +1034,6 @@
   .baro-workbench .case-workspace[data-panel-open] .case-workspace__body {
     grid-template-columns: minmax(0, 1fr);
   }
-  .baro-workbench .case-workspace__panel:modal {
-    position: fixed;
-    inset: 8px 8px 8px auto;
-    width: min(440px, calc(100vw - 24px));
-    height: calc(100dvh - 16px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: 0 24px 80px #0f172a26;
-  }
-  .baro-workbench .case-workspace__panel::backdrop {
-    background: #0008;
-  }
-  .baro-workbench .case-workspace__panel:modal .case-workspace__panel-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px 8px 16px;
-    border-bottom: 1px solid var(--border);
-  }
-  .baro-workbench .case-workspace__panel-heading h2 {
-    font-size: 14px;
-  }
 }
 @media (max-width: 767px) {
   .baro-workbench .ui-button {
@@ -1141,7 +1045,7 @@
   .baro-workbench .workspace .workspace-composer-row {
     grid-template-columns: 44px minmax(0, 1fr) auto;
   }
-  .baro-workbench .composer-add-menu > summary {
+  .baro-workbench .composer-add-menu > [data-disclosure-button] {
     width: 44px;
     height: 44px;
   }
@@ -1151,7 +1055,6 @@
   .app-frame.baro-workbench {
     padding-left: 0;
     padding-top: 52px;
-    --app-topbar-height: 52px;
   }
   .baro-workbench .app-header {
     width: 100%;
@@ -1239,23 +1142,8 @@
 
 /* Reports remain a distinct white document surface. */
 .baro-workbench .report-review {
-  color-scheme: light;
-  --foreground: #191f28;
-  --card: #fff;
-  --card-foreground: #191f28;
-  --background: #fff;
-  --border: #e5e7eb;
-  --input: #b8c0cc;
-  --muted: #f3f4f6;
-  --muted-foreground: #596273;
-  --secondary: #eff4ff;
-  --secondary-foreground: #244b91;
-  --popover: #fff;
-  --popover-foreground: #191f28;
-  --success: #166534;
-  --warning: #854d0e;
-  background: #fff;
-  color: #191f28;
+  background: var(--card);
+  color: var(--foreground);
   padding: clamp(20px, 4vw, 40px);
   border-radius: 16px;
   max-width: 1040px;
@@ -1281,23 +1169,23 @@
 }
 .baro-workbench .precedent-workspace button.precedent-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--primary-foreground);
 }
-.baro-workbench .precedent-topic:has(:checked) {
-  background: #eff4ff;
-  color: #244b91;
-  border-color: #2563eb;
+.baro-workbench .precedent-topic:has([data-checked]) {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .baro-workbench .precedent-topic small {
-  color: #244b91;
+  color: var(--primary);
 }
 .baro-workbench .precedent-workspace button.precedent-card:hover:not(:disabled) {
   background: var(--muted);
-  border-color: #94a3b8;
+  border-color: var(--border);
 }
 .baro-workbench .precedent-card-topics > span {
-  background: #eff4ff;
-  color: #244b91;
+  background: var(--accent);
+  color: var(--primary);
 }
 .baro-workbench .case-context .precedent-workspace button.precedent-card {
   padding: 14px;
@@ -1322,7 +1210,7 @@
   justify-content: flex-end;
 }
 
-.baro-workbench .workspace-context summary > span {
+.baro-workbench .workspace-context [data-disclosure-button] > span {
   color: var(--muted-foreground);
 }
 
@@ -1333,7 +1221,15 @@
 }
 :root[data-focus-input="keyboard"]
   .baro-workbench
-  :is(button, a[href], input, textarea, select, summary, [role="tab"]):focus-visible {
+  :is(
+    button,
+    a[href],
+    input,
+    textarea,
+    select,
+    [data-disclosure-button],
+    [role="tab"]
+  ):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   box-shadow: none;
@@ -1360,10 +1256,8 @@
   border-color: var(--input);
 }
 .baro-workbench {
-  --wb-error-text: #a42f38;
 }
 .baro-workbench .report-review {
-  --wb-error-text: #a42f38;
 }
 .baro-workbench :is(.workspace-status--failed, .workspace-message-failed, .form-error) {
   color: var(--wb-error-text);
@@ -1404,42 +1298,41 @@ body:has(.baro-workbench .case-workspace--conversation) {
 
 /* Comparison states stay legible on the shared light surfaces. */
 .baro-workbench .precedent-workspace .comparison-summary {
-  --muted-foreground: #475569;
 }
 .baro-workbench .precedent-workspace .precedent-more > button {
   background: transparent;
 }
 .baro-workbench .precedent-workspace .comparison-indicator--yes {
-  background: #eff4ff;
-  border-color: #b7cdfb;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .baro-workbench .comparison-indicator--yes strong {
-  color: #244b91;
+  color: var(--primary);
 }
 .baro-workbench .precedent-workspace .comparison-indicator--no {
-  background: #fff7e6;
-  border-color: #edce91;
+  background: var(--warning-soft);
+  border-color: var(--warning);
 }
 .baro-workbench .comparison-indicator--no strong {
-  color: #854d0e;
+  color: var(--warning);
 }
 .baro-workbench .precedent-workspace .comparison-indicator--unknown {
   background: var(--muted);
 }
 .baro-workbench .comparison-verdict--yes {
-  background: #eff4ff;
-  color: #244b91;
+  background: var(--accent);
+  color: var(--primary);
 }
 .baro-workbench .comparison-verdict--no {
-  background: #fff7e6;
-  color: #854d0e;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .baro-workbench .precedent-workspace .comparison-highlight {
-  background: #eff4ff;
-  color: #244b91;
+  background: var(--accent);
+  color: var(--primary);
 }
 .baro-workbench .precedent-workspace .comparison-highlight:hover {
-  background: #dbe8ff;
+  background: var(--accent);
 }
 
 /* Preserve the original new-case composition inside the shared sidebar shell. */
@@ -1457,9 +1350,9 @@ body:has(.baro-workbench .case-workspace--conversation) {
   opacity: 0.65;
   background: radial-gradient(
     ellipse 44% 38% at 49% 47%,
-    #dcecff 0%,
-    #edf5ff 46%,
-    #f9fbff 78%,
+    var(--accent) 0%,
+    var(--accent) 46%,
+    var(--accent) 78%,
     var(--card) 100%
   );
 }
@@ -1493,4 +1386,8 @@ body:has(.baro-workbench .case-workspace--conversation) {
   .baro-workbench .app-surface main.conversation-main {
     padding-inline: 18px;
   }
+}
+
+.baro-workbench .case-context .workspace-upload-target {
+  min-height: 40px;
 }

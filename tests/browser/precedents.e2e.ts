@@ -50,7 +50,7 @@ test("desktop and mobile complete topic, result and original flow without overfl
   page,
 }) => {
   await seed(page);
-  const tools = page.locator(".case-tools > summary");
+  const tools = page.locator(".case-tools > [data-popover-button]");
   await tools.click();
   const currentTool = page
     .getByRole("navigation", { name: "사건 도구", exact: true })

@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
+import { chooseOption } from "../helpers/headless-controls";
 import { closeWorkspaceMaterials, openCaseTool } from "../helpers/workspace-navigation";
 
 // This isolated C contract suite also runs before A's shared facade is available.
@@ -252,7 +253,7 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await closeWorkspaceMaterials(page);
-    await page.locator(".case-tools > summary").click();
+    await page.locator(".case-tools > [data-popover-button]").click();
     const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const links = navigation.getByRole("link");
     await expect(links).toHaveCount(6);
@@ -264,13 +265,13 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
-    await page.locator(".case-tools > summary").click();
+    await page.locator(".case-tools > [data-popover-button]").click();
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
     ).toBeGreaterThanOrEqual(16);
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    const controls = [page.locator(".composer-add-menu > summary"), send];
+    const controls = [page.locator(".composer-add-menu > [data-disclosure-button]"), send];
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
     const first = boxes[0];
     if (!first) throw new Error("Attachment control is missing its box");
@@ -2259,7 +2260,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.getByLabel("상세 내용").fill("원본 메시지를 검토할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await page.getByRole("button", { name: "편집", exact: true }).click();
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
@@ -2267,7 +2268,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
-  await page.locator(".case-tools > summary").click();
+  await page.locator(".case-tools > [data-popover-button]").click();
   await expect(
     page
       .getByRole("navigation", { name: "사건 도구", exact: true })
@@ -2312,7 +2313,7 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.locator(".workspace-dialog").locator("details p").filter({ hasText: text }),
+    page.locator(".workspace-dialog").locator("[data-disclosure] p").filter({ hasText: text }),
   ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
@@ -2403,7 +2404,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await closeWorkspaceMaterials(page);
-  await page.locator(".case-tools > summary").click();
+  await page.locator(".case-tools > [data-popover-button]").click();
   const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
   await expect(navigation.getByRole("link")).toHaveCount(6);
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
@@ -2419,7 +2420,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
       "href",
       `${base}${path}`,
     );
-  await page.locator(".case-tools > summary").click();
+  await page.locator(".case-tools > [data-popover-button]").click();
   await captureCaseViewports(page, "chat-welcome");
   await page
     .getByLabel("추가 사실 또는 질문")
@@ -2440,7 +2441,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 메시지를 받음");
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();

@@ -230,7 +230,7 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
     }),
   );
   await page.keyboard.press("Escape");
-  await expect(page.locator('dialog[data-native-closed="true"]')).toHaveCount(1);
+  await expect(page.locator('[role="dialog"][data-native-closed="true"]')).toHaveCount(1);
   await expect(nested).not.toBeVisible();
   await expect(panel).toBeVisible();
   await expect(nestedOpener).toBeFocused();
@@ -249,7 +249,7 @@ test("case tools replace six tabs and retain every existing route", async ({ pag
   await seed(page);
   await page.goto("/");
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
-  const trigger = page.locator(".case-tools > summary");
+  const trigger = page.locator(".case-tools > [data-popover-button]");
   await trigger.focus();
   await page.keyboard.press("Enter");
   const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
@@ -363,7 +363,7 @@ test("200% zoom and keyboard focus keep compact navigation reachable", async ({ 
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  await page.locator(".case-tools > summary").press("Enter");
+  await page.locator(".case-tools > [data-popover-button]").press("Enter");
   const link = page
     .getByRole("navigation", { name: "사건 도구", exact: true })
     .getByRole("link", { name: "리포트 보기", exact: true });
@@ -517,7 +517,7 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         await expect(panel).toBeVisible();
         expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(to < 1200);
         await expect(opener).toBeFocused();
-        await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+        await panel.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
         await expect(panel).not.toBeVisible();
         await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
         const selector = topology === "sibling" ? "#sibling-review" : "#nested-review";
@@ -568,7 +568,7 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
       (node) => node.getBoundingClientRect().bottom <= (visualViewport?.height ?? innerHeight) + 1,
     ),
   ).toBe(true);
-  await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await panel.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
   });

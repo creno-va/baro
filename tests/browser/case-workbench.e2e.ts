@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { answerDiscard } from "../helpers/headless-controls";
 import {
   countMaterialsRequests,
   materialsCasePath,
@@ -202,13 +203,13 @@ test("plus menu mentions real material IDs without executing work, preserves inp
   await expect(input).toBeEnabled();
   await input.fill("전송하지 않은 합성 초안");
   await countMaterialsRequests(page);
-  const plus = page.locator(".composer-add-menu > summary");
+  const plus = page.locator(".composer-add-menu > [data-disclosure-button]");
   await plus.click();
   await page.locator(".composer-add-menu").getByRole("checkbox").first().check();
   await plus.press("Escape");
   await expect(page.getByRole("region", { name: "멘션한 자료" })).toContainText("반환 약속");
   await expect(plus).toBeFocused();
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await page.getByRole("button", { name: "자료 닫기", exact: true }).click();
   for (const width of [1024, 390, 320, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(input).toHaveValue("전송하지 않은 합성 초안");
@@ -246,8 +247,9 @@ test("inline material correction survives pane switching and mobile sheet conver
   await expect(correction).toHaveValue(/합성 교정/);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(correction).toHaveValue(/합성 교정/);
-  page.once("dialog", (dialog) => dialog.dismiss());
+  const keepEditing = answerDiscard(page, false);
   await correction.press("Escape");
+  await keepEditing;
   await expect(correction).toHaveValue(/합성 교정/);
   await page.screenshot({ path: ".wrangler/ui795/workbench-mobile-review.png" });
   await review.getByRole("button", { name: "교정 내용 저장", exact: true }).click();

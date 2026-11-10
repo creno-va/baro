@@ -83,7 +83,7 @@ async function stableForeground(locator: Locator) {
     opacity: getComputedStyle(element).opacity,
     filter: getComputedStyle(element).filter,
     running: element.getAnimations().filter((a) => a.playState === "running").length,
-    openDialogs: document.querySelectorAll("dialog[open]").length,
+    openDialogs: document.querySelectorAll('[role="[role="dialog"]"]').length,
   }));
 }
 async function conversationFocus(page: Page) {
@@ -100,7 +100,7 @@ async function conversationFocus(page: Page) {
       isConversationScroll: active?.matches(".workspace-messages") ?? false,
       containsPane: !!active?.querySelector(".conversation-panel"),
       body: active === document.body,
-      dialogs: document.querySelectorAll("dialog[open]").length,
+      dialogs: document.querySelectorAll('[role="[role="dialog"]"]').length,
     };
   });
 }
@@ -890,7 +890,7 @@ test("the report's own prepare button recovers an actual committed response loss
     const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
     const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
     await expect(preparation).toBeVisible();
-    if (!(await prepare.isVisible())) await preparation.locator("summary").click();
+    if (!(await prepare.isVisible())) await preparation.locator("[data-disclosure-button]").click();
     await prepare.click();
     const ready = page.getByRole("heading", {
       name: "이해한 내용을 다음 준비로 이어가요",

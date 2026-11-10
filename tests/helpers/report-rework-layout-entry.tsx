@@ -1,3 +1,4 @@
+import "./headless-experience";
 import { createRoot } from "react-dom/client";
 import { createReportMarkup } from "../../src/components/reports/document";
 import { ReportReading } from "../../src/components/reports/ReportReading";

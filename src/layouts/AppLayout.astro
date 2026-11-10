@@ -3,10 +3,7 @@
 import { AppNavigation, type NavigationRole } from "../components/ui/app-navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro reads the layout.
 import BaseLayout from "./BaseLayout.astro";
-import "../styles/product.css";
-import "../styles/app-experience.css";
-import "../styles/product-refresh.css";
-import "../styles/app-workspace.css";
+import "../styles/case-workbench.css";
 
 interface Props {
   title: string;
@@ -20,8 +17,8 @@ interface Props {
 const { title, description, role, availableRoutes, contentClass = "app-main" } = Astro.props;
 ---
 <BaseLayout title={title} description={description}>
-  <div data-app-workspace data-product-ui="refresh" class:list={["app-frame", { "app-frame--product": contentClass !== "conversation-main" }]}>
-    <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} client:load />
+  <div data-app-workspace data-product-ui="refresh" class:list={["app-frame", "baro-workbench", { "app-frame--product": contentClass !== "conversation-main" }]}>
+    <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} appearance="workbench" client:load />
     <div class="app-surface">
       <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
     </div>

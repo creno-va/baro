@@ -44,7 +44,7 @@
   min-width: 0;
   gap: 16px;
   padding: 28px;
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 20px;
 }
@@ -53,7 +53,7 @@
   border-radius: 12px;
   cursor: pointer;
 }
-.consent-form label:has(input:checked) {
+.consent-form label:has([data-checked]) {
   border-color: var(--primary);
   background: var(--secondary);
 }
@@ -140,7 +140,7 @@
   border-radius: 12px;
   font-size: 16px;
 }
-.consent-form input[type="checkbox"] {
+.consent-form [role="checkbox"] {
   width: 20px;
   height: 20px;
   flex-shrink: 0;

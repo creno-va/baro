@@ -1,5 +1,6 @@
 import { ChevronLeft, Ellipsis, FileChartColumn, FolderClosed } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
+import { Popover, PopoverButton, PopoverPanel } from "../ui/popover";
 
 const tools = [
   { id: "summary", label: "요약 보기 · 재확인", path: "/summary" },
@@ -9,8 +10,6 @@ const tools = [
   { id: "files", label: "자료", path: "/files" },
   { id: "reports", label: "리포트 보기", path: "/reports" },
 ] as const;
-
-/** Route navigation only. Business state and the materials toggle belong to the caller. */
 export function CaseNavigation({
   caseId,
   title,
@@ -24,27 +23,12 @@ export function CaseNavigation({
   fileCount?: number | undefined;
   actions?: ReactNode;
 }) {
-  const base = `/cases/${encodeURIComponent(caseId)}`;
-  const disclosure = useRef<HTMLDetailsElement>(null);
-  const trigger = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !disclosure.current?.contains(event.target))
-        disclosure.current?.removeAttribute("open");
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
-  }, []);
+  const base = "/cases/" + encodeURIComponent(caseId);
   return (
     <header className="case-navigation case-header">
       <div className="case-header__identity">
         {active !== "chat" && (
-          <a
-            className="case-header__back"
-            href={base}
-            aria-label="대화로 돌아가기"
-            title="대화로 돌아가기"
-          >
+          <a className="case-header__back" href={base} aria-label="대화로 돌아가기">
             <ChevronLeft size={18} aria-hidden="true" />
           </a>
         )}
@@ -53,34 +37,39 @@ export function CaseNavigation({
       </div>
       <div className="case-header__actions">
         {active !== "reports" && (
-          <a className="case-report-link" href={`${base}/reports?mode=conversation`}>
+          <a className="case-report-link" href={base + "/reports?mode=conversation"}>
             <FileChartColumn size={17} aria-hidden="true" /> 리포트
           </a>
         )}
         {actions}
-        <details
-          ref={disclosure}
-          className="case-tools"
-          onKeyDown={(event) => {
-            if (event.key !== "Escape" || !event.currentTarget.open) return;
-            event.preventDefault();
-            event.stopPropagation();
-            event.currentTarget.open = false;
-            trigger.current?.focus();
-          }}
-        >
-          <summary ref={trigger} aria-label="사건 도구" title="사건 도구">
+        <Popover className="case-tools">
+          <PopoverButton
+            className="ui-control case-tools__trigger"
+            data-popover-button=""
+            aria-label="사건 도구"
+          >
             <Ellipsis size={19} aria-hidden="true" />
-          </summary>
-          <nav className="case-tools__menu" aria-label="사건 도구">
+          </PopoverButton>
+          <PopoverPanel
+            as="nav"
+            anchor={{ to: "bottom end", gap: 8, padding: 12 }}
+            portal
+            className="case-tools__menu ui-menu"
+            aria-label="사건 도구"
+          >
             {tools.map(({ id, label, path }) => (
-              <a key={id} href={`${base}${path}`} aria-current={active === id ? "page" : undefined}>
+              <a
+                className="ui-menu__item"
+                key={id}
+                href={base + path}
+                aria-current={active === id ? "page" : undefined}
+              >
                 <span>{label}</span>
                 {id === "files" && fileCount !== undefined && <small>{fileCount}</small>}
               </a>
             ))}
-          </nav>
-        </details>
+          </PopoverPanel>
+        </Popover>
       </div>
     </header>
   );

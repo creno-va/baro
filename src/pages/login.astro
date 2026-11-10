@@ -3,6 +3,8 @@
 import { AuthButtons } from "../components/AuthButtons";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { ThemeToggle } from "../components/ui/theme-toggle";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import BaseLayout from "../layouts/BaseLayout.astro";
 import "../styles/login.css";
@@ -30,7 +32,7 @@ const errorMessage = oauthErrors.includes("account_not_linked")
           <path d="m12 5-7 7 7 7M5 12h15" />
         </svg>
       </a>
-      <span>로그인 · 회원가입</span>
+      <span>로그인 · 회원가입</span><ThemeToggle client:load />
     </nav>
     <div class="login-content">
       <header class="login-intro">

@@ -1,6 +1,8 @@
 ---
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the component.
 import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { ThemeToggle } from "../components/ui/theme-toggle";
 // biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
 import BaseLayout from "./BaseLayout.astro";
 import "../styles/public-compat.css";
@@ -17,7 +19,7 @@ const { title, description, showStart = true } = Astro.props;
   <div class="public-layout">
     <header class="public-header">
       <Brand />
-      <nav aria-label="서비스 안내">
+      <nav aria-label="서비스 안내"><ThemeToggle client:load />
         <a class="ui-link" href="/help">도움말</a>
         {showStart && <a class="ui-button ui-button--primary" href="/new">사건 준비 시작</a>}
       </nav>

@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+[ADR-0022](./0022-headless-web-ui-and-themes.md)가 랜딩 제외 전체 웹의 실제 Headless UI와 라이트/다크 테마를 확정한다. 이전 native primitive·로그인 제외·라이트 고정 결정을 해당 범위에서 대체한다.
+
 [ADR-0021](./0021-case-workbench-and-web-design-system.md)은 사용자 요청한 전면 웹 DS 교체와
 대화·자료·리포트·초안의 사건 작업대를 확정한다. 원문/권한/비용 계약과 Proposed 저장 제안은 구분한다.
 
@@ -29,6 +31,7 @@ Accepted 내용을 바꿀 때 새 ADR을 만들고 대체 범위를 명시한다
 
 | 번호 | 제목 | 상태 |
 | --- | --- | --- |
+| [0022](./0022-headless-web-ui-and-themes.md) | Headless 웹 UI와 테마 | Accepted; 구현/인수 진행 중 |
 | [0021](./0021-case-workbench-and-web-design-system.md) | 사건 작업대와 웹 디자인 시스템 교체 | Accepted; 제품 인수 진행 중 |
 | [0001](./0001-mvp-system-boundaries-and-ai-pipeline.md) | MVP 시스템 경계와 AI 응답 파이프라인 | Accepted; 안전/모듈 유지 |
 | [0002](./0002-web-stack-and-cloudflare-runtime.md) | 웹 스택과 Cloudflare 런타임 | Accepted; web/API Workers 유지 |

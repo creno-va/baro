@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
 import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 test.beforeEach(async ({ page }) => {
@@ -41,14 +42,14 @@ test("directory searches names and offices case-insensitively while retaining re
   await query.fill("delta_100%");
   await search.click();
   await expect(page.getByRole("link", { name: "합성 Busan Lawyer", exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "seoul");
   await search.click();
   await expect(page.getByRole("link", { name: "합성 Busan Lawyer", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "합성 Alpha Lawyer", exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("criminal");
+  await chooseOption(selectControl(page, { name: "분야", exact: true }), "criminal");
   await search.click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("civil");
+  await chooseOption(selectControl(page, { name: "분야", exact: true }), "civil");
   await query.fill("deltaX100");
   await search.click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.", { exact: true })).toBeVisible();
@@ -98,7 +99,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.getByLabel("사무실 이름").fill("합성 시연 사무실");
   await page.getByLabel("소개", { exact: true }).fill("API 예시 응답으로 확인하는 프로필입니다.");
   await page.getByLabel("민사", { exact: true }).check();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "seoul");
   await page.getByLabel("사무실 주소").fill("서울 서초구 합성로 1");
   await page.getByLabel("이메일", { exact: true }).fill("demo@example.invalid");
   const png = await page.evaluate(() => {
@@ -135,8 +136,8 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await page.goto("/lawyers");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByLabel("이름 또는 사무실", { exact: true }).fill("E 통합 시연 변호사");
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
-  await page.getByRole("combobox", { name: "분야", exact: true }).selectOption("civil");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "seoul");
+  await chooseOption(selectControl(page, { name: "분야", exact: true }), "civil");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(page.locator("a.directory-profile")).toHaveCount(1);
   await page.locator("a.directory-profile").click();

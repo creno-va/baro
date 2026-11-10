@@ -8,6 +8,7 @@ import {
 } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { Input as ControlInput, Select as ControlSelect, Label as FieldLabel } from "../ui/form";
 
 type Tool = V2LookupRequest["tool"];
 const recipients = {
@@ -97,6 +98,7 @@ export function LookupDialog({
         <p role="status">아직 연결된 조회 서비스가 없어요.</p>
       ) : (
         <form
+          noValidate
           className="workspace-lookup"
           onSubmit={(event) => {
             event.preventDefault();
@@ -144,8 +146,8 @@ export function LookupDialog({
               });
           }}
         >
-          <label htmlFor={`${prefix}-tool`}>조회 서비스</label>
-          <select
+          <FieldLabel htmlFor={`${prefix}-tool`}>조회 서비스</FieldLabel>
+          <ControlSelect
             id={`${prefix}-tool`}
             value={tool}
             disabled={locked}
@@ -161,12 +163,12 @@ export function LookupDialog({
                 {entry.title}
               </option>
             ))}
-          </select>
+          </ControlSelect>
           <p className="workspace-lookup__hint">{definition?.description}</p>
           {tool === "thecheat" && (
             <>
-              <label htmlFor={`${prefix}-kind`}>조회할 정보 종류</label>
-              <select
+              <FieldLabel htmlFor={`${prefix}-kind`}>조회할 정보 종류</FieldLabel>
+              <ControlSelect
                 id={`${prefix}-kind`}
                 value={kind}
                 disabled={locked}
@@ -178,14 +180,14 @@ export function LookupDialog({
               >
                 <option value="phone">전화번호</option>
                 <option value="account">계좌번호</option>
-              </select>
+              </ControlSelect>
             </>
           )}
           {tool &&
             fields[tool].map(([name, label, max]) => (
               <div key={name} className="workspace-lookup__field">
-                <label htmlFor={`${prefix}-${name}`}>{label}</label>
-                <input
+                <FieldLabel htmlFor={`${prefix}-${name}`}>{label}</FieldLabel>
+                <ControlInput
                   id={`${prefix}-${name}`}
                   type="text"
                   inputMode={name === "address" ? "text" : "numeric"}
@@ -217,15 +219,15 @@ export function LookupDialog({
                 입력한 {fields[tool].map(([, label]) => label).join(", ")}를 해당 서비스에 전송해요.
                 결과는 이 사건에 저장되며, 거래 안전이나 권리관계를 확정하지 않아요.
               </p>
-              <label>
-                <input
+              <FieldLabel>
+                <ControlInput
                   type="checkbox"
                   checked={consent}
                   disabled={locked}
                   onChange={(event) => setConsent(event.target.checked)}
                 />{" "}
                 위 조회 대상의 외부 전송에 동의합니다.
-              </label>
+              </FieldLabel>
             </div>
           )}
           {error && <p role="alert">{error}</p>}

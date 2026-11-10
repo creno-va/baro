@@ -80,7 +80,7 @@ async function messages(page: Page) {
 }
 async function attach(page: Page) {
   const chooser = page.waitForEvent("filechooser");
-  await page.locator(".composer-add-menu > summary").click();
+  await page.locator(".composer-add-menu > [data-disclosure-button]").click();
   await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles(file);
 }
@@ -90,7 +90,7 @@ test("composer keeps text above the plus/send toolbar at phone and desktop width
 }, testInfo) => {
   await seed(page);
   const input = page.getByLabel("추가 사실 또는 질문", { exact: true });
-  const attach = page.locator(".composer-add-menu > summary");
+  const attach = page.locator(".composer-add-menu > [data-disclosure-button]");
   await expect(attach).toHaveText("");
   await expect(page.locator(".workspace-message-length")).toHaveCount(0);
   for (const width of [1440, 390, 320]) {
@@ -99,7 +99,7 @@ test("composer keeps text above the plus/send toolbar at phone and desktop width
     const measure = () =>
       page.locator(".workspace-composer-row").evaluate((row) => {
         const input = row.querySelector("textarea");
-        const attach = row.querySelector(".composer-add-menu > summary");
+        const attach = row.querySelector(".composer-add-menu > [data-disclosure-button]");
         const send = row.querySelector(".workspace-send");
         const surface = row.parentElement;
         if (!input || !attach || !send || !surface) throw new Error("Composer controls missing");
@@ -161,7 +161,7 @@ test("case header keeps a compact title and accessible tools while deletion stay
       .toBe(true);
     const layout = await nav.evaluate((node) => {
       const heading = node.querySelector("h1");
-      const tools = node.querySelector("summary");
+      const tools = node.querySelector("[data-popover-button]");
       if (!tools || !heading) throw new Error("Case heading/tools missing");
       return {
         size: parseFloat(getComputedStyle(heading).fontSize),
@@ -202,9 +202,9 @@ test("legacy materials keep one compact upload area, coverage, context and retri
   await expect(page.locator(".workspace-upload-types")).toHaveCount(0);
   await expect(target).toContainText("문서·이미지 100 MB");
   const context = page.locator(".workspace-context");
-  const disclosure = context.locator(":scope > summary");
+  const disclosure = context.locator(":scope > [data-disclosure-button]");
   const summaryLink = context.getByRole("link", { name: "요약 검토하기" });
-  await expect(context).not.toHaveAttribute("open");
+  await expect(context).not.toHaveAttribute("data-open");
   await expect(summaryLink).not.toBeVisible();
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "전체 첨부 파일", exact: true })).toHaveCount(0);
@@ -238,13 +238,13 @@ test("legacy materials keep one compact upload area, coverage, context and retri
       await page.screenshot({ path: `.wrangler/materials-empty-${width}.png`, fullPage: true });
     await disclosure.focus();
     await disclosure.press("Enter");
-    await expect(context).toHaveAttribute("open");
+    await expect(context).toHaveAttribute("data-open");
     await expect(summaryLink).toBeVisible();
     await expect(summaryLink).toHaveAttribute("href", `${base}/summary?from=files`);
     if (width === 390 || width === 1440)
       await page.screenshot({ path: `.wrangler/materials-context-${width}.png`, fullPage: true });
     await disclosure.press("Enter");
-    await expect(context).not.toHaveAttribute("open");
+    await expect(context).not.toHaveAttribute("data-open");
   }
   const chooser = page.waitForEvent("filechooser");
   await target.click();
@@ -508,7 +508,7 @@ test("materials retain every attachment and mark actual evidence without filter 
     (await messages(page)).find((message: { role: string }) => message.role === "assistant")
       .references,
   ).toHaveLength(5);
-  await page.locator(".case-tools > summary").click();
+  await page.locator(".case-tools > [data-popover-button]").click();
   await page
     .getByRole("navigation", { name: "사건 도구", exact: true })
     .getByRole("link", { name: "자료 2", exact: true })
@@ -776,9 +776,9 @@ for (const viewport of [
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
     await page.setViewportSize({ width: 390, height: 844 });
-    const materialsClose = page.getByRole("button", { name: "자료 패널 닫기", exact: true });
+    const materialsClose = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
     if (await materialsClose.isVisible()) await materialsClose.click();
-    await page.locator(".case-tools > summary").click();
+    await page.locator(".case-tools > [data-popover-button]").click();
     await page
       .getByRole("navigation", { name: "사건 도구", exact: true })
       .getByRole("link", { name: /타임라인/ })
@@ -788,7 +788,7 @@ for (const viewport of [
       await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY),
     ).not.toBe("hidden");
     await page.getByRole("link", { name: "대화로 돌아가기", exact: true }).click();
-    const closePanel = page.getByRole("button", { name: "자료 패널 닫기", exact: true });
+    const closePanel = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
     if (await closePanel.isVisible()) await closePanel.click();
     await expect(log.locator("article")).toHaveCount(24);
     await expect(page.locator(".case-options")).toHaveCount(0);

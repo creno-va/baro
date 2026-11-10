@@ -1,3 +1,5 @@
+import { ActionButton as ControlButton } from "../../src/components/ui/button";
+import "./headless-experience";
 import { createReworkClient, responseError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
 import { useState } from "react";
@@ -102,13 +104,13 @@ function Host() {
   return (
     <main>
       <nav>
-        <button
+        <ControlButton
           type="button"
           onClick={() => setSurface(surface === "report" ? "chat" : "report")}
           disabled={dirty || busy}
         >
           대화·리포트 보기 전환
-        </button>
+        </ControlButton>
         <span>{surface === "report" ? "합성 리포트" : "합성 대화"}</span>
       </nav>
       <FollowUpResolution

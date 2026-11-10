@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { chooseOption } from "../helpers/headless-controls";
 
 async function openInteractiveFixture(
   page: Page,
@@ -90,7 +91,7 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveCount(0);
   accountType = "lawyer";
-  await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
+  await chooseOption(page.getByLabel("메뉴 예시 역할"), "lawyer");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toHaveCount(0);
@@ -99,7 +100,7 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
     "/settings",
   );
   accountType = null;
-  await page.getByLabel("메뉴 예시 역할").selectOption("moderator");
+  await chooseOption(page.getByLabel("메뉴 예시 역할"), "moderator");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "계정 설정" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "검토 대기" })).toHaveCount(0);

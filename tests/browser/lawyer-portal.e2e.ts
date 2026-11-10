@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { validateSelfPhoto } from "../../src/server/modules/lawyers/self-profile";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
 import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 function readyProfile(id: string, name = "합성 변호사") {
@@ -199,7 +200,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
   await page.getByLabel("사무실 이름").fill("예시 사무실");
   await page.getByLabel("소개", { exact: true }).fill("사실관계 정리를 돕는 합성 소개");
   await page.getByLabel("민사", { exact: true }).check();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "seoul");
   await page.getByLabel("사무실 주소").fill("서울 서초구 합성로 1");
   await page.getByLabel("이메일", { exact: true }).fill("lawyer@example.invalid");
   await page.getByLabel("전화번호").fill("02-000-0000");

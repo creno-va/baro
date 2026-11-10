@@ -106,7 +106,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await expect(
     page
       .getByRole("dialog", { name: "자료 확인", exact: true })
-      .locator("details p")
+      .locator("[data-disclosure] p")
       .filter({ hasText: "공통 저장소의 합성 원본 자료입니다." }),
   ).toBeVisible();
   await page
@@ -216,7 +216,9 @@ test("uploaded long mock material can be reviewed, edited and excluded after rel
     review.getByRole("checkbox", { name: "사건 정리와 새 리포트에 포함" }).nth(1),
   ).not.toBeChecked();
   await review.getByText("원본 추출 내용", { exact: true }).nth(0).click();
-  await expect(review.locator("fieldset").nth(0).locator("details p")).toHaveText("a".repeat(5000));
+  await expect(review.locator("fieldset").nth(0).locator("[data-disclosure] p")).toHaveText(
+    "a".repeat(5000),
+  );
   await page.goto("/cases/synthetic-material-case/reports");
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);

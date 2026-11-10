@@ -1,7 +1,12 @@
+import {
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+  Dialog as HeadlessDialog,
+} from "@headlessui/react";
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "./button";
-
 export interface CaseWorkspaceFrameProps {
   header: ReactNode;
   children: ReactNode;
@@ -12,8 +17,7 @@ export interface CaseWorkspaceFrameProps {
   panelId?: string;
   kind?: "conversation" | "document" | "compare";
 }
-
-/** A single mounted panel becomes a native modal below 1200px; no API or shared island state. */
+/** A stable portal keeps the same material/editor DOM through inline and sheet modes. */
 export function CaseWorkspaceFrame({
   header,
   children,
@@ -25,118 +29,55 @@ export function CaseWorkspaceFrame({
   kind = "conversation",
 }: CaseWorkspaceFrameProps) {
   const root = useRef<HTMLDivElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const panelNode = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const panelPresent = panel !== undefined && panel !== null;
-  // Read latest controlled state from queued native close events, including a mode change.
-  const current = useRef({ panelOpen, onPanelOpenChange });
-  current.current = { panelOpen, onPanelOpenChange };
+  const initialFocus = useRef<HTMLElement | null>(null);
+  const [sheet, setSheet] = useState(false);
+  const present = panel !== undefined && panel !== null;
+  useEffect(() => {
+    const query = matchMedia("(max-width: 1199px)");
+    const update = () => {
+      const active = document.activeElement;
+      initialFocus.current =
+        active instanceof HTMLElement && panelNode.current?.contains(active) ? active : null;
+      setSheet(query.matches);
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const frame = root.current?.closest<HTMLElement>("[data-app-workspace]");
     if (!frame || kind !== "conversation") return;
     const viewport = window.visualViewport;
     const update = () => {
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-      const height = `${(viewport?.height ?? window.innerHeight) / zoom}px`;
-      if (frame.style.getPropertyValue("--app-viewport-height") !== height)
-        frame.style.setProperty("--app-viewport-height", height);
+      panelNode.current?.style.setProperty(
+        "--app-viewport-height",
+        String((viewport?.height ?? innerHeight) / zoom) + "px",
+      );
+      frame.style.setProperty(
+        "--app-viewport-height",
+        String((viewport?.height ?? innerHeight) / zoom) + "px",
+      );
     };
     update();
     viewport?.addEventListener("resize", update);
     window.addEventListener("resize", update);
-    // CSS zoom can change without resizing the browser's visual viewport.
     const resize = new ResizeObserver(update);
     resize.observe(document.documentElement);
-    const style = new MutationObserver(update);
-    style.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["style", "class"],
-    });
     return () => {
       viewport?.removeEventListener("resize", update);
       window.removeEventListener("resize", update);
       resize.disconnect();
-      style.disconnect();
       frame.style.removeProperty("--app-viewport-height");
     };
   }, [kind]);
-  useEffect(() => {
-    const node = dialog.current;
-    if (!node) return;
-    const query = window.matchMedia("(min-width: 1200px)");
-    const waiting = new Set<HTMLDialogElement>();
-    const afterReviewClose = (event: Event) => {
-      if (event.currentTarget instanceof HTMLDialogElement) waiting.delete(event.currentTarget);
-      syncPanel();
-    };
-    const clearWaiting = () => {
-      for (const modal of waiting) modal.removeEventListener("close", afterReviewClose);
-      waiting.clear();
-    };
-    const syncPanel = () => {
-      if (!node.isConnected) return;
-      // SSR markup stays identical. First opening uses the real viewport mode.
-      const inline = query.matches;
-      if (panelOpen && panelPresent && node.open && node.matches(":modal") === !inline) {
-        clearWaiting();
-        return;
-      }
-      // A review may be a sibling of this frame, not a React descendant. Never
-      // reopen the panel above another active native modal during a resize.
-      const otherModals = [...document.querySelectorAll<HTMLDialogElement>("dialog:modal")].filter(
-        (modal) => modal !== node,
-      );
-      if (panelOpen && otherModals.length) {
-        for (const modal of otherModals) {
-          if (waiting.has(modal)) continue;
-          waiting.add(modal);
-          // Conditional consumers close during unmount. Their queued native
-          // close still reaches this direct listener after DOM removal.
-          modal.addEventListener("close", afterReviewClose, { once: true });
-        }
-        return;
-      }
-      clearWaiting();
-      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const inside = focused && node.contains(focused);
-      if (node.open) node.close();
-      if (panelOpen && panelPresent) {
-        if (!inside && focused !== document.body && focused !== document.documentElement)
-          previousFocus.current = focused;
-        if (inline) node.show();
-        else node.showModal();
-        // Mode changes preserve the current field/selection, not the first control.
-        if (inside) focused.focus({ preventScroll: true });
-        else if (inline && focused?.isConnected) focused.focus({ preventScroll: true });
-      } else if (inside) {
-        const opener = previousFocus.current;
-        const destination =
-          opener?.isConnected && opener.getClientRects().length ? opener : toggle.current;
-        destination?.focus({ preventScroll: true });
-      }
-    };
-    syncPanel();
-    query.addEventListener("change", syncPanel);
-    return () => {
-      query.removeEventListener("change", syncPanel);
-      clearWaiting();
-    };
-  }, [panelOpen, panelPresent]);
-  useEffect(() => {
-    const node = dialog.current;
-    return () => {
-      if (!node?.open) return;
-      node.close();
-      const opener = previousFocus.current;
-      if (opener?.isConnected && !document.querySelector("dialog:modal")) opener.focus();
-    };
-  }, []);
   return (
     <div
       ref={root}
-      className={`case-workspace case-workspace--${kind}`}
-      data-panel-open={panelPresent && panelOpen}
+      className={"case-workspace case-workspace--" + kind}
+      data-panel-open={present && panelOpen}
     >
       <section
         className="case-workspace__header"
@@ -144,20 +85,16 @@ export function CaseWorkspaceFrame({
         tabIndex={kind === "conversation" ? 0 : undefined}
       >
         <div className="case-workspace__heading">{header}</div>
-        {panelPresent && (
+        {present && (
           <Button
             ref={toggle}
             className="case-workspace__toggle"
             variant="ghost"
             aria-controls={panelId}
             aria-expanded={panelOpen}
-            aria-label={`${panelLabel} ${panelOpen ? "닫기" : "열기"}`}
+            aria-label={panelLabel + (panelOpen ? " 닫기" : " 열기")}
             disabled={!onPanelOpenChange}
-            onClick={(event) => {
-              event.currentTarget.focus();
-              previousFocus.current = event.currentTarget;
-              onPanelOpenChange?.(!panelOpen);
-            }}
+            onClick={() => onPanelOpenChange?.(!panelOpen)}
           >
             {panelOpen ? (
               <PanelRightClose size={18} aria-hidden="true" />
@@ -170,79 +107,43 @@ export function CaseWorkspaceFrame({
       </section>
       <div className="case-workspace__body">
         <div className="case-workspace__content">{children}</div>
-        {panelPresent && (
-          <dialog
-            ref={dialog}
+        {present && <div className="case-workspace__panel-space" aria-hidden="true" />}
+      </div>
+      {present && (
+        <HeadlessDialog
+          static
+          open={sheet && panelOpen}
+          onClose={() => onPanelOpenChange?.(false)}
+          initialFocus={initialFocus}
+          className="ds-responsive-panel baro-workbench"
+          data-mode={sheet ? "sheet" : "inline"}
+          data-panel-visible={panelOpen ? "true" : "false"}
+        >
+          {sheet && <DialogBackdrop className="ds-modal__backdrop" />}
+          <DialogPanel
+            ref={panelNode}
             id={panelId}
             className="case-workspace__panel"
-            aria-labelledby={`${panelId}-title`}
-            onCancel={(event) => {
-              if (event.target !== event.currentTarget) return;
-              event.preventDefault();
-              event.stopPropagation();
-              onPanelOpenChange?.(false);
-            }}
-            onClose={(event) => {
-              if (event.currentTarget.open || current.current.panelOpen) return;
-              current.current.onPanelOpenChange?.(false);
-              const opener = previousFocus.current;
-              if (
-                opener?.isConnected &&
-                opener.getClientRects().length &&
-                !document.querySelector("dialog:modal")
-              )
-                opener.focus({ preventScroll: true });
-            }}
-            onKeyDown={(event) => {
-              if (!event.currentTarget.matches(":modal") || event.key !== "Tab") return;
-              const node = event.currentTarget;
-              if (!(event.target instanceof Element) || event.target.closest("dialog") !== node)
-                return;
-              const controls = [
-                ...node.querySelectorAll<HTMLElement>(
-                  'button:not(:disabled),a[href],input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])',
-                ),
-              ].filter(
-                (element) => element.closest("dialog") === node && element.getClientRects().length,
-              );
-              const first = controls[0];
-              const last = controls.at(-1);
-              if (event.shiftKey && document.activeElement === first && last) {
-                event.preventDefault();
-                last.focus();
-              } else if (!event.shiftKey && document.activeElement === last && first) {
-                event.preventDefault();
-                first.focus();
-              }
-            }}
-            onClick={(event) => {
-              if (!event.currentTarget.matches(":modal") || event.target !== event.currentTarget)
-                return;
-              const rect = event.currentTarget.getBoundingClientRect();
-              if (
-                event.clientX < rect.left ||
-                event.clientX > rect.right ||
-                event.clientY < rect.top ||
-                event.clientY > rect.bottom
-              )
-                onPanelOpenChange?.(false);
-            }}
+            data-dialog=""
+            hidden={!panelOpen}
           >
             <div className="case-workspace__panel-heading">
-              <h2 id={`${panelId}-title`}>{panelLabel}</h2>
+              <DialogTitle as="h2" id={panelId + "-title"}>
+                {panelLabel}
+              </DialogTitle>
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={`${panelLabel} 패널 닫기`}
+                aria-label={panelLabel + " 패널 닫기"}
                 onClick={() => onPanelOpenChange?.(false)}
               >
                 <X size={18} aria-hidden="true" />
               </Button>
             </div>
             <div className="case-workspace__panel-content">{panel}</div>
-          </dialog>
-        )}
-      </div>
+          </DialogPanel>
+        </HeadlessDialog>
+      )}
     </div>
   );
 }

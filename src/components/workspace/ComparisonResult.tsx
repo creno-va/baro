@@ -3,7 +3,10 @@ import {
   PRECEDENT_COMPARISON_CRITERIA,
   type V2PrecedentComparison,
 } from "../../contracts/v2/precedent-comparison";
+import { ActionButton as ControlButton } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import { Progress } from "../ui/progress";
 import { PrecedentDocument } from "./PrecedentDocument";
 
 const verdictLabels = {
@@ -32,7 +35,7 @@ export function ComparisonResult({
             <p>8개 지표 중 {comparison.matchedCount}개 일치</p>
           </div>
         </div>
-        <progress value={comparison.percentage} max={100} aria-label="사실관계 유사도" />
+        <Progress value={comparison.percentage} max={100} aria-label="사실관계 유사도" />
         <p className="comparison-caption">
           유사 {comparison.matchedCount} · 차이 {comparison.knownCount - comparison.matchedCount} ·
           확인 불가 {8 - comparison.knownCount}
@@ -46,7 +49,7 @@ export function ComparisonResult({
       <fieldset className="comparison-indicators">
         <legend className="sr-only">유사도 산정 지표</legend>
         {comparison.metrics.map((metric, index) => (
-          <button
+          <ControlButton
             type="button"
             key={metric.criterion}
             className={`comparison-indicator comparison-indicator--${metric.verdict}`}
@@ -54,16 +57,16 @@ export function ComparisonResult({
           >
             <span>{PRECEDENT_COMPARISON_CRITERIA[metric.criterion]}</span>
             <strong>{verdictLabels[metric.verdict]}</strong>
-          </button>
+          </ControlButton>
         ))}
       </fieldset>
-      <details className="comparison-method">
-        <summary>유사도 산정 기준</summary>
+      <Disclosure className="comparison-method">
+        <DisclosureSummary>유사도 산정 기준</DisclosureSummary>
         <p>
           8개 지표 중 양쪽 근거와 함께 일치한 항목마다 12.5점씩 더해요. 차이가 있거나 확인할 수 없는
           항목은 0점이며, 백분율은 반올림해 표시해요.
         </p>
-      </details>
+      </Disclosure>
       <section className="comparison-excerpt" aria-label="유사한 판례 원문">
         <div className="comparison-section-heading">
           <h4>{comparison.matchedCount ? "판례에서 유사한 부분" : "비교한 판결문"}</h4>

@@ -528,7 +528,8 @@ async function prepareReport(page: Page) {
     .toBe(true);
   if (await preparation.isVisible()) {
     const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
-    if (!(await prepare.isVisible())) await preparation.locator("details > summary").click();
+    if (!(await prepare.isVisible()))
+      await preparation.locator("[data-disclosure] > [data-disclosure-button]").click();
     await prepare.click();
   }
   await expect(reading).toBeVisible();

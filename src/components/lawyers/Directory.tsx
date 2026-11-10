@@ -4,6 +4,7 @@ import { api, LawyerApiError, lawyerErrorMessage } from "../../client/api/lawyer
 import type { DirectoryItem } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Input as ControlInput, Select as ControlSelect, Label as FieldLabel } from "../ui/form";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
@@ -141,6 +142,7 @@ export function Directory() {
       <Card className="directory-search">
         <CardContent>
           <form
+            noValidate
             aria-label="변호사 검색"
             className="directory-search__form"
             onSubmit={(event) => {
@@ -158,11 +160,11 @@ export function Directory() {
               void load(params);
             }}
           >
-            <label className="directory-search__field">
+            <FieldLabel className="directory-search__field">
               <span>이름 또는 사무실</span>
               <span className="directory-search__input">
                 <Search size={19} aria-hidden="true" />
-                <input
+                <ControlInput
                   placeholder="이름 또는 사무실명 입력"
                   maxLength={100}
                   disabled={!ready}
@@ -170,12 +172,12 @@ export function Directory() {
                   onChange={(event) => setFilters({ ...filters, name: event.target.value })}
                 />
               </span>
-            </label>
+            </FieldLabel>
             <div className="directory-search__filters">
-              <label className="directory-search__field">
+              <FieldLabel className="directory-search__field">
                 <span>지역</span>
                 <span className="directory-search__select">
-                  <select
+                  <ControlSelect
                     disabled={!ready}
                     value={filters.region}
                     onChange={(event) => setFilters({ ...filters, region: event.target.value })}
@@ -186,14 +188,14 @@ export function Directory() {
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </ControlSelect>
                   <ChevronDown size={18} aria-hidden="true" />
                 </span>
-              </label>
-              <label className="directory-search__field">
+              </FieldLabel>
+              <FieldLabel className="directory-search__field">
                 <span>분야</span>
                 <span className="directory-search__select">
-                  <select
+                  <ControlSelect
                     disabled={!ready}
                     value={filters.legalField}
                     onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
@@ -204,10 +206,10 @@ export function Directory() {
                         {label}
                       </option>
                     ))}
-                  </select>
+                  </ControlSelect>
                   <ChevronDown size={18} aria-hidden="true" />
                 </span>
-              </label>
+              </FieldLabel>
             </div>
             <div className="directory-search__submit">
               <Button

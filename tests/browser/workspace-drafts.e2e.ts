@@ -7,6 +7,7 @@ import {
   userMessage,
   workspace,
 } from "../fixtures/contracts/v2";
+import { chooseOption } from "../helpers/headless-controls";
 
 const id = "synthetic-draft-case";
 const base = `/cases/${id}`;
@@ -118,10 +119,10 @@ test("date precision and long valid timeline titles remain editable", async ({ p
   await title.press("Backspace");
   await expect(title).toHaveValue("가".repeat(399));
   expect(await title.evaluate((input: HTMLInputElement) => input.validity.tooLong)).toBe(false);
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-06");
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("month");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "month");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("2026-10");
   await title.fill("😀".repeat(1999));
   await page.getByLabel("상세 내용").fill("내용");
@@ -203,7 +204,7 @@ test("chat attachment chooser keeps the unsent message in the conversation", asy
   await page.goto(base);
   await page.getByLabel("추가 사실 또는 질문").fill("미전송 합성 초안");
   const chooser = page.waitForEvent("filechooser");
-  await page.locator(".composer-add-menu > summary").click();
+  await page.locator(".composer-add-menu > [data-disclosure-button]").click();
   await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles({
     name: "합성.txt",

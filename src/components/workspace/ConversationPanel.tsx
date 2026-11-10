@@ -85,7 +85,9 @@ export function ConversationPanel({
       const visible =
         focusable && target.isConnected && target.getClientRects().length > 0
           ? target
-          : target?.closest("details")?.querySelector<HTMLElement>("summary");
+          : target
+              ?.closest("[data-disclosure]")
+              ?.querySelector<HTMLElement>("[data-disclosure-button]");
       (
         visible ?? document.querySelector<HTMLTextAreaElement>("#workspace-message:not(:disabled)")
       )?.focus({ preventScroll: true });

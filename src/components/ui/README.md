@@ -1,41 +1,23 @@
-# Shared UI
+# Shared BARO UI
 
-Source-owned shadcn/ui conventions (MIT license in `LICENSE.shadcn`): semantic
-CSS tokens, `data-slot`, `cn`, CVA button variants, cards and native form controls.
-Components use React 19 and Tailwind 4 without a framework migration.
+The current web design contract is docs/design/HEADLESS-WEB-UI.md and ADR-0022 (#799).
+@headlessui/react 2.2.10 supplies the actual interaction primitives. UI modules own presentation,
+keyboard/focus behavior and compatibility adapters; domain owners retain API/session/epoch/CAS state.
 
-`Dialog`/`Sheet` use the native dialog backend for modal focus containment,
-Escape, focus restoration and scroll locking with static classes. They do not
-inject style tags or weaken the built Worker CSP. `Tabs` uses manual keyboard
-activation. Interactive Astro imports require `client:load`.
+design-system.css owns semantic themes and common controls. Case workbench CSS owns spatial layout.
+AppLayout and CaseWorkbenchLayout use the same sidebar system. Non-landing BaseLayout initializes
+light/dark/system before first paint using the existing hash CSP mechanism. Root theme tokens also
+cover Headless portals. The landing, native app and exported documents remain separate.
 
-`AppNavigation` accepts a trusted role, current pathname and an explicit list of
-available routes. The component grants no role and performs no authentication;
-unavailable future routes are omitted. All logo usages point to `/brand/logo.svg`.
-Decorative Lucide icons are hidden from assistive technology; icon buttons have
-an accessible label. StatePanel supports loading/empty/error/limit/permission/pending.
+Use Button/ActionButton, Input/Textarea/Select (Listbox), RadioGroup, Dialog/Sheet/Modal,
+Disclosure/DisclosureSummary, Tabs, ThemeToggle and Progress. Never add a visible native select,
+dialog/details, progress or checkbox/radio, nor window.confirm. Hidden file access and platform
+page-unload protection retain their browser security boundary. Labels remain semantic HTML.
 
-For tests only, `BARO_UI_TEST_FIXTURE=true` injects a synthetic showcase. This
-flag must not be set for deployment. Ordinary builds have no showcase route.
+Headless UI owns modal inertness, Escape, focus lock and restoration. Domain callbacks can refuse
+dismissal. Responsive material panels keep the same editor DOM and preserve controlled input.
+Discard confirmation cancels on session invalidation/path changes/source removal and the caller
+must recheck its existing epoch/owner before continuing. No UI transition starts paid work.
 
-`Spinner` is decorative and accompanies an operation label. `LoadingContent`
-reserves list, directory, detail or usage structure; set `announce={false}` when
-the screen already announces the same operation. `Button loading` disables
-mutations while showing progress. Replaceable read-only searches use `aria-busy`
-and a spinner instead. Reduced motion stops animation and keeps the status text.
-
-The canonical shared rules are `global.css` (tokens/reset/components/reading) and
-AppLayout's `product.css` (navigation/frame). Previous experience/refresh/workspace
-overrides are removed from AppLayout. Desktop navigation pins the account and
-scrolls the recent list. Native Escape requests `onOpenChange`, allowing a pending
-operation owner to refuse dismissal. Nested cancellation stays inside the top dialog.
-
-The [foundation contract](../../../docs/design/FOUNDATION.md) documents Section,
-ReadingContent, TableScroll, SourceReference, InlineNotice, Select, TextLink,
-ActionGroup and PublicLayout. StatePanel also supports `partial` and `success`.
-`Dialog showCloseButton={false}` keeps an acknowledgement flow to one action,
-without changing Escape or focus restoration. Existing component defaults remain.
-
-`/__design-foundation` is the test-only representative reading/comparison/editing
-preview. `tests/helpers/foundation.playwright.config.ts` verifies task retention,
-dialog/panel focus, six widths, 200% zoom, contrast and sidebar preferences.
+Keep branding and states accessible in both themes; use reduced motion. Never relax CSP for a widget.
+Evidence, exact SHA and preview/full status are recorded on #799; fixture success is not real OAuth.

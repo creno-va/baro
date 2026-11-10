@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { answerDiscard } from "../helpers/headless-controls";
 import {
   countMaterialsRequests,
   materialsCasePath,
@@ -36,7 +37,7 @@ test("the mounted materials panel preserves the composer and selection without n
   await choice.check();
   await countMaterialsRequests(page);
   for (const width of [1024, 768, 390, 320, 1440]) {
-    await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+    await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
     await expect(panel(page)).not.toBeVisible();
     await page.setViewportSize({ width, height: 900 });
     await expect(input(page)).toHaveValue(/합성 초안$/);
@@ -102,8 +103,9 @@ test("review selection is separate from conversation selection and dirty correct
   await correction.fill("합성 교정: 반환 날짜는 아직 확인되지 않았습니다.");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(correction).toHaveValue("합성 교정: 반환 날짜는 아직 확인되지 않았습니다.");
-  page.once("dialog", (dialog) => dialog.dismiss());
+  const keepEditing = answerDiscard(page, false);
   await correction.press("Escape");
+  await keepEditing;
   await expect(review).toBeVisible();
   await expect(correction).toHaveValue("합성 교정: 반환 날짜는 아직 확인되지 않았습니다.");
   await expect(review.getByRole("button", { name: "자료 내용 반영하기" })).toBeDisabled();
@@ -129,7 +131,7 @@ test("local attachments and consent stay local across panel changes before one e
     buffer: Buffer.from("합성 원본. 실제 사건 정보가 없습니다."),
   });
   await openMaterials(page);
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
   await page.setViewportSize({ width: 320, height: 844 });
   await expect(input(page)).toHaveValue("첨부와 함께 보내는 합성 입력");
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
@@ -179,7 +181,7 @@ test("local attachments and consent stay local across panel changes before one e
     .toBe(true);
   await openMaterials(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
   await expect(input(page)).toHaveValue("첨부와 함께 보내는 합성 입력");
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
   expect(
@@ -210,7 +212,7 @@ test("reading earlier messages does not jump to the newest reply when panel widt
   });
   const before = await log.evaluate((node) => node.scrollTop);
   await openMaterials(page);
-  await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
   const after = await log.evaluate((node) => ({
     top: node.scrollTop,
     bottom: node.scrollHeight - node.clientHeight - node.scrollTop,
@@ -282,7 +284,7 @@ test("materials and composer remain readable and accessible at phone, tablet, de
       path: testInfo.outputPath(`materials-${width}.png`),
       animations: "disabled",
     });
-    await page.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+    await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
     await expect(input(page)).toBeInViewport();
     await page.screenshot({
       path: testInfo.outputPath(`conversation-${width}.png`),

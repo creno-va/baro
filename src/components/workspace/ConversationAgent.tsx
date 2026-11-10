@@ -2,6 +2,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { WorkspaceView } from "../../client/api/types";
+import { confirmAction } from "../../client/confirm";
 import { startForegroundPolling } from "../../client/foreground-poll";
 import type {
   V2ConversationActionRequest,
@@ -11,6 +12,8 @@ import type {
   V2ConversationState,
 } from "../../contracts/v2";
 import { Button, ButtonLink } from "../ui/button";
+import type { DisclosureHandle } from "../ui/disclosure";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { ConversationAnalysis } from "./ConversationAnalysis";
 import { ConversationPanel } from "./ConversationPanel";
 import { observeReportContinuation, type ReportConfirmation } from "./conversation-progress";
@@ -173,7 +176,7 @@ export function ConversationAgent({
   const processed = useRef(new Set<string>());
   const origin = useRef<HTMLElement | null>(null);
   const paneEpoch = useRef(ticket());
-  const menu = useRef<HTMLDetailsElement>(null);
+  const menu = useRef<DisclosureHandle>(null);
   const attempt = useRef<{ identity: string; input: V2ConversationActionRequest } | null>(null);
   const callbacks = useRef({ onChanged, onBusyChange, onOpenMaterials });
   callbacks.current = { onChanged, onBusyChange, onOpenMaterials };
@@ -403,32 +406,38 @@ export function ConversationAgent({
     }
     return null;
   }, [load, ticket, current]);
-  const close = useCallback(() => {
+  const close = useCallback(async () => {
+    const confirmEpoch = ticket();
     if (locked.current || paneLocked.current) return;
     if (
       dirty.current &&
-      !window.confirm("저장하지 않은 입력이 있어요. 내용을 버리고 대화로 돌아갈까요?")
+      !(await confirmAction("저장하지 않은 입력이 있어요. 내용을 버리고 대화로 돌아갈까요?"))
     )
       return;
+    if (!current(confirmEpoch) || !mounted.current) return;
     dirty.current = false;
     setHasDraft(false);
     setReportRequested(false);
     setPane(null);
     setResult(null);
-  }, []);
+  }, [ticket, current]);
   const execute = useCallback(
     async (action: V2ConversationIntent, requestId?: string) => {
       if (disabled || !stateIsCurrent || locked.current || paneLocked.current) return;
+      const epoch = ticket();
       if (
         dirty.current &&
-        !window.confirm("저장하지 않은 입력이 있어요. 내용을 버리고 다른 작업을 열까요?")
+        !(await confirmAction("저장하지 않은 입력이 있어요. 내용을 버리고 다른 작업을 열까요?"))
       )
         return;
-      const epoch = ticket();
+      if (!current(epoch) || !mounted.current || locked.current || paneLocked.current) return;
       const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      origin.current = active?.closest("details")?.querySelector<HTMLElement>("summary") ?? active;
+      origin.current =
+        active
+          ?.closest("[data-disclosure]")
+          ?.querySelector<HTMLElement>("[data-disclosure-button]") ?? active;
       paneEpoch.current = epoch;
-      if (menu.current) menu.current.open = false;
+      if (menu.current) menu.current.close();
       locked.current = true;
       setBusy(true);
       setError("");
@@ -723,8 +732,8 @@ export function ConversationAgent({
                 {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
               </Button>
             )}
-            <details ref={menu}>
-              <summary>다른 작업</summary>
+            <Disclosure ref={menu}>
+              <DisclosureSummary>다른 작업</DisclosureSummary>
               <fieldset
                 className="conversation-agent-menu"
                 disabled={disabled || !stateIsCurrent || busy || paneBusy}
@@ -757,7 +766,7 @@ export function ConversationAgent({
                     ),
                   )}
               </fieldset>
-            </details>
+            </Disclosure>
           </fieldset>
         </>
       )}

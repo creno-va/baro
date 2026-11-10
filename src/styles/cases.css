@@ -16,7 +16,6 @@
   margin: 24px 0;
   overflow-wrap: anywhere;
 }
-.case-shell :where(button:not(.ui-button):not([role="tab"])),
 .case-shell .button-link {
   font: inherit;
   min-height: 44px;
@@ -64,8 +63,8 @@
   max-width: 100%;
   overflow-wrap: anywhere;
 }
-.case-shell input[type="radio"],
-.case-shell input[type="checkbox"] {
+.case-shell [role="radio"],
+.case-shell [role="checkbox"] {
   margin-right: 8px;
   accent-color: var(--primary);
 }

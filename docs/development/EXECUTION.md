@@ -1,5 +1,11 @@
 # 에이전트 실행 기준
 
+## 2026-11-10 랜딩 제외 전체 Headless UI와 테마 (#799)
+
+사용자는 랜딩을 제외한 모든 웹 UI를 실제 Headless UI DS로 교체하고 라이트/다크 모드를 지원하도록 직접 지시했다. [ADR-0022](../adr/0022-headless-web-ui-and-themes.md)와 [UI 계약](../design/HEADLESS-WEB-UI.md)을 따른다. 이전 로그인 제외·라이트 고정·native primitive 결정을 해당 범위에서 갱신한다.
+시작 main `9afa8c1eb313030b6273521a3dc3beb01974cc48`, 브랜치 `codex/799-headless-theme-system`. 선행 PR #798/main CI 성공을 확인했다. 랜딩·native 앱·출력 문서는 독립이며 API/DB·owner·저장/CAS·AI200/일·질문2×3·비용 관측 전용 계약은 유지한다.
+검증·실패 수정·정확 SHA·PR/CI·수동 full/preview 실제 결과는 [#799](https://github.com/creno-va/baro/issues/799)에 기록한다. #797/#795/#792 미완료 인수를 통과로 바꾸지 않는다. production 제외.
+
 ## 2026-11-10 밝은 공통 워크스페이스와 /new (#797)
 
 사용자는 사건 상세 레이아웃을 유지하면서 원래 새 사건 화면의 밝은 색상을 공통으로 적용하고,

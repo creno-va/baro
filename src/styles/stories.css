@@ -71,7 +71,7 @@
   border-color: transparent;
 }
 .intake-list .ui-button--outline:hover {
-  background: #ebedf0;
+  background: var(--background);
 }
 .intake-list .intake-case-grid {
   gap: 20px;
@@ -91,7 +91,7 @@
     transform 0.2s;
 }
 .intake-list .intake-case-card:hover {
-  border-color: #b9cff9;
+  border-color: var(--accent);
   box-shadow: 0 8px 28px rgb(35 100 232 / 6%);
   transform: translateY(-2px);
 }
@@ -114,11 +114,11 @@
   font-size: 12px;
   font-weight: 550;
   background: var(--secondary);
-  color: #235cb9;
+  color: var(--primary);
 }
 .intake-list .stories-stage--summary {
-  color: #946200;
-  background: #fff6dd;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 .intake-list .stories-stage--archived {
   color: var(--muted-foreground);

@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { answerDiscard, chooseOption } from "../helpers/headless-controls";
 
 const base = "/cases/completion-case";
 const storage = "baro-api-mock-v1:";
@@ -171,7 +172,7 @@ test("year, month, day and unknown precision survive actual editor reconnect", a
   ]) {
     await page.goto(`${base}/timeline`);
     await page.getByRole("button", { name: "일정 추가" }).click();
-    await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption(precision ?? "unknown");
+    await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), precision ?? "unknown");
     if (date) await page.getByLabel("날짜 (모르면 비워 두세요)").fill(date);
     await page.getByLabel("어떤 일이 있었나요?").fill(`정밀도 ${precision}`);
     await page.getByRole("button", { name: "타임라인 저장" }).click();
@@ -291,8 +292,9 @@ test("summary explanations and file corrections retain their base revision acros
   const panel = page.getByRole("region", { name: "자료 내용 검토" });
   await expect(panel.getByRole("alert")).toBeVisible();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("저장하지 않은 자료 교정 초안");
-  page.once("dialog", (confirmation) => confirmation.accept());
+  const discardChanges = answerDiscard(page, true);
   await panel.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await discardChanges;
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("다른 탭의 자료 교정");
 });
 
