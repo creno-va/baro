@@ -433,7 +433,7 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 0;
+  padding: 4px;
   scroll-padding: 20px;
 }
 .ui-dialog__actions {

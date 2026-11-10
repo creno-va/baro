@@ -28,7 +28,7 @@ export function ConversationPanel({
       busy ||
       !heading.current?.isConnected ||
       document.activeElement !== document.body ||
-      document.querySelector("dialog[open]") ||
+      document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') ||
       (restore.current && !restore.current())
     )
       return;
@@ -45,7 +45,7 @@ export function ConversationPanel({
         event.key !== "Escape" ||
         event.defaultPrevented ||
         busy ||
-        document.querySelector("dialog[open]") ||
+        document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') ||
         (restore.current && !restore.current())
       )
         return;
@@ -99,7 +99,8 @@ export function ConversationPanel({
       aria-labelledby={id}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented || busy) return;
-        if ((event.target as Element).closest("dialog[open]")) return;
+        if ((event.target as Element).closest('dialog[open], [role="dialog"][aria-modal="true"]'))
+          return;
         event.preventDefault();
         onClose();
       }}

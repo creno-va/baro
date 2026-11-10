@@ -31,9 +31,19 @@ export function CaseWorkspaceFrame({
   const root = useRef<HTMLDivElement>(null);
   const panelNode = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
+  const previousOpen = useRef(panelOpen);
   const initialFocus = useRef<HTMLElement | null>(null);
   const [sheet, setSheet] = useState(false);
   const present = panel !== undefined && panel !== null;
+  useEffect(() => {
+    const closed = previousOpen.current && !panelOpen;
+    previousOpen.current = panelOpen;
+    if (!closed) return;
+    const frame = requestAnimationFrame(() => {
+      if (toggle.current?.isConnected) toggle.current.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panelOpen]);
   useEffect(() => {
     const query = matchMedia("(max-width: 1199px)");
     const update = () => {
