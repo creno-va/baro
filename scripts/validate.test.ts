@@ -6,6 +6,7 @@ test("quick validation never builds, starts browsers, containers, remote calls o
   const commands = validationCommands("quick");
   expect(commands).toContainEqual(["bun", "run", "typecheck"]);
   expect(commands).toContainEqual(["bun", "test", "tests/headless-ui-ssr.test.tsx"]);
+  expect(commands).toContainEqual(["bun", "test", "tests/theme-palette.test.ts"]);
   expect(commands).toContainEqual(["bun", "run", "lint"]);
   expect(commands.some((command) => command.includes("tests/native-auth-codes.test.ts"))).toBe(
     true,

@@ -89,6 +89,19 @@ async function storedReport(page: import("@playwright/test").Page, reportId?: st
 }
 
 const evidence = process.env.BARO_REPORT_EVIDENCE_DIR;
+test("report review applies the system dark palette to its content and editing surfaces", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/cases/case-demo/reports");
+  await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".report-review")).toHaveCSS("color", "rgb(237, 241, 248)");
+  await openReportEditor(page);
+  const field = page.locator(".report-reading-section").first().getByRole("textbox");
+  await expect(field).toHaveCSS("color", "rgb(237, 241, 248)");
+  await expect(field).toHaveCSS("background-color", "rgb(25, 29, 37)");
+});
 test("report review saves before a compact desktop and full-width mobile PDF download", async ({
   page,
 }) => {

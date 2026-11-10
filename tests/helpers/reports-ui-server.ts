@@ -44,8 +44,9 @@ const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
   .replace(/@theme inline\s*\{[^}]*\}/s, "");
 const css =
   globalCss +
+  (await Bun.file(`${root}/src/styles/shell.css`).text()) +
+  (await Bun.file(`${root}/src/styles/app-focus.css`).text()) +
   (await Bun.file(`${root}/src/styles/design-system.css`).text()) +
-  (await Bun.file(`${root}/src/styles/app-workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
   (await Bun.file(`${root}/src/styles/evidence.css`).text()) +

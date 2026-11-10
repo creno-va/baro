@@ -7,7 +7,8 @@
   --card-foreground: var(--foreground);
   --popover: #fff;
   --popover-foreground: var(--foreground);
-  --primary: #2563eb;
+  --primary: #2364e8;
+  --primary-hover: #1d4ed8;
   --primary-foreground: #fff;
   --secondary: #edf3ff;
   --secondary-foreground: #244b91;
@@ -20,12 +21,24 @@
   --ring: #2563eb;
   --destructive: #b42318;
   --destructive-surface: #b42318;
+  --destructive-hover: #93211a;
   --destructive-foreground: #fff;
   --danger-soft: #fff0f1;
   --success: #166534;
   --success-soft: #eaf8ef;
   --warning: #854d0e;
   --warning-soft: #fff6df;
+  --accent-border: color-mix(in srgb, var(--primary) 28%, var(--card));
+  --success-border: color-mix(in srgb, var(--success) 35%, var(--card));
+  --warning-border: color-mix(in srgb, var(--warning) 35%, var(--card));
+  --danger-border: color-mix(in srgb, var(--destructive) 35%, var(--card));
+  --radius-control: 10px;
+  --brand-kakao-background: #fee500;
+  --brand-kakao-foreground: #191919;
+  --brand-naver-background: #03c75a;
+  --brand-naver-foreground: #fff;
+  --shadow-soft-color: rgb(15 23 42 / 5%);
+  --shadow-color: rgb(15 23 42 / 12%);
   --surface-subtle: var(--background);
   --line-subtle: var(--border);
   --wb-error-text: var(--destructive);
@@ -60,6 +73,7 @@
   --popover: #222731;
   --popover-foreground: var(--foreground);
   --primary: #8db5ff;
+  --primary-hover: #abcaff;
   --primary-foreground: #102044;
   --secondary: #24334d;
   --secondary-foreground: #ccddff;
@@ -72,11 +86,14 @@
   --ring: #8db5ff;
   --destructive: #ffacb7;
   --destructive-surface: #a62b3e;
+  --destructive-hover: #bd3045;
   --danger-soft: #40232c;
   --success: #a4dfba;
   --success-soft: #1b372b;
   --warning: #f0cf86;
   --warning-soft: #3e331f;
+  --shadow-soft-color: rgb(0 0 0 / 22%);
+  --shadow-color: rgb(0 0 0 / 32%);
   --ds-shadow: 0 16px 40px rgb(0 0 0 / 32%);
   --ds-backdrop: rgb(0 0 0 / 65%);
 }
@@ -136,6 +153,10 @@
   background: var(--primary);
   color: var(--primary-foreground);
 }
+:root[data-baro-ui] :is(.ui-button--primary, .primary-action):hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--primary-foreground);
+}
 :root[data-baro-ui] .ui-button--secondary {
   background: var(--secondary);
   color: var(--secondary-foreground);
@@ -152,6 +173,53 @@
 :root[data-baro-ui] .ui-button--destructive {
   background: var(--destructive-surface);
   color: var(--destructive-foreground);
+}
+:root[data-baro-ui] .ui-button--destructive:hover:not(:disabled) {
+  background: var(--destructive-hover);
+  color: var(--destructive-foreground);
+}
+:root[data-baro-ui] .skip-link {
+  color: var(--primary-foreground);
+}
+:root[data-baro-ui] .ui-badge--primary {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent-border);
+}
+:root[data-baro-ui] .ui-badge--success {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+:root[data-baro-ui] .ui-badge--warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+}
+:root[data-baro-ui] .ui-badge--danger {
+  color: var(--destructive);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+:root[data-baro-ui] .ui-state--error .ui-state__icon {
+  color: var(--destructive);
+  background: var(--danger-soft);
+}
+:root[data-baro-ui] :is(.ui-state--limit, .ui-state--partial) .ui-state__icon {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+:root[data-baro-ui] .ui-state--success .ui-state__icon {
+  color: var(--success);
+  background: var(--success-soft);
+}
+:root[data-baro-ui] .api-mode-notice {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent-border);
+}
+:root[data-baro-ui] .notice {
+  border-color: var(--accent-border);
 }
 :root[data-baro-ui] :is(.ui-button--outline, .ui-button--ghost):hover:not(:disabled) {
   background: var(--muted);
@@ -539,12 +607,6 @@
   background: var(--background);
   color: var(--foreground);
 }
-:root[data-baro-ui] .login-panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 32px;
-}
 :root[data-baro-ui][data-theme="dark"] .login-page {
   background: var(--background);
 }
@@ -642,14 +704,26 @@
   background: var(--muted);
 }
 :root[data-baro-ui] .login-provider--naver .login-provider__circle {
-  background: #03c75a;
-  color: #fff;
+  background: var(--brand-naver-background);
+  color: var(--brand-naver-foreground);
   border-radius: 5px;
 }
 :root[data-baro-ui] .login-provider--kakao .login-provider__circle {
-  background: #fee500;
-  color: #191919;
+  background: var(--brand-kakao-background);
+  color: var(--brand-kakao-foreground);
   border-radius: 5px;
+}
+:root[data-baro-ui] .settings-provider--naver > svg:first-child {
+  background: var(--brand-naver-background);
+  color: var(--brand-naver-foreground);
+  padding: 2px;
+  border-radius: 4px;
+}
+:root[data-baro-ui] .settings-provider--kakao > svg:first-child {
+  background: var(--brand-kakao-background);
+  color: var(--brand-kakao-foreground);
+  padding: 2px;
+  border-radius: 4px;
 }
 :root[data-baro-ui] .consent-navigation {
   display: flex;

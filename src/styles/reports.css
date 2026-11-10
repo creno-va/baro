@@ -584,7 +584,7 @@
   border-radius: 12px;
   background: var(--card);
   color: var(--foreground);
-  box-shadow: 0 20px 60px #0f172a30;
+  box-shadow: 0 20px 60px var(--shadow-color);
 }
 .report-modal::backdrop {
   background: color-mix(in srgb, var(--primary) 38%, transparent);
@@ -721,6 +721,16 @@
 
 /* Same scoped presentation as document.ts; HTML preview never injects response styles. */
 .baro-report {
+  /* A saved document keeps its paper palette inside either application theme. */
+  --foreground: #191f28;
+  --background: #f4f6f9;
+  --card: #fff;
+  --primary: #2364e8;
+  --muted-foreground: #647084;
+  --border: #e3e8ef;
+  --accent: #edf3fe;
+  --warning: #785425;
+  --warning-soft: #fff8e9;
   color-scheme: light;
   font-family: "Pretendard Variable", sans-serif;
   color: var(--foreground);

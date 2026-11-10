@@ -1,5 +1,17 @@
 # 에이전트 실행 기준
 
+## 2026-11-10 테마 색상 감사와 전체 검증 후속 (#799)
+
+사용자는 전체 수동 검증이 끝날 때까지 실패를 수정하고 preview에 다시 반영하며, 특히
+다크모드의 잘못된 컬러 토큰을 모두 점검하도록 직접 지시했다. 시작 main은
+`8a7646e40061e993597279ea573cf7f199735ffe`, 브랜치는 `codex/799-theme-audit`다.
+입력·선택·상태 배지·실패/한도 아이콘·소셜 재인증·키보드 focus·그림자·저장 문서의
+종이 팔레트를 점검한다. 리포트 검증 harness의 폐기된 라이트 전용 CSS도 실제 DS 구성에
+맞춘다. 랜딩, 출력 파일 내용, API/DB·권한·비용 정책은 유지한다.
+실제 SHA와 전체 core/browser/native/join, preview 및 제한 smoke의 최종 결과는
+[#799](https://github.com/creno-va/baro/issues/799)에 기록한다. 이전 실패·미완료 증거는
+보존하며, 전체 검증이 진행 중인 상태를 완료로 표현하지 않는다. production 제외.
+
 ## 2026-11-10 랜딩 제외 전체 Headless UI와 테마 (#799)
 
 사용자는 랜딩을 제외한 모든 웹 UI를 실제 Headless UI DS로 교체하고 라이트/다크 모드를 지원하도록 직접 지시했다. [ADR-0022](../adr/0022-headless-web-ui-and-themes.md)와 [UI 계약](../design/HEADLESS-WEB-UI.md)을 따른다. 이전 로그인 제외·라이트 고정·native primitive 결정을 해당 범위에서 갱신한다.
