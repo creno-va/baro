@@ -244,7 +244,10 @@ async function chooseMaterial(page: Page, camera = false) {
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(name);
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
-  await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+  await page
+    .locator(".workspace-composer")
+    .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
+    .check();
   return { materials, name };
 }
 async function addMaterial(
