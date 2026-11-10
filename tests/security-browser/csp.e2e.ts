@@ -65,7 +65,7 @@ for (const viewport of [
       "리포트는 준비하는 동안 다시 확인할 수 있어요",
     );
     await expect(page.locator('a[href^="/lawyer"]')).toHaveCount(0);
-    const logo = page.getByRole("link", { name: "BARO 홈", exact: true }).locator("img");
+    const logo = page.getByRole("link", { name: "BARO 홈", exact: true }).first().locator("img");
     await expect
       .poll(() =>
         logo.evaluate(
