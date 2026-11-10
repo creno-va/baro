@@ -77,7 +77,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
   const rules: [RegExp, RegExp][] = [
     [
       /^src\/(?:styles\/design-system\.css|client\/(?:theme|confirm)\.ts|components\/ui\/|layouts\/)/,
-      /\/headless-ui\.e2e\.ts$/,
+      /\/(?:headless-ui|theme-palette)\.e2e\.ts$/,
     ],
     [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
     // Shared session notifications and return paths affect every signed-in area.

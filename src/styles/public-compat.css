@@ -195,17 +195,17 @@
   .ui-state--partial,
   .ui-state--limit {
     border-left-color: var(--warning);
-    background: var(--warning-surface);
+    background: var(--warning-soft);
   }
   .ui-notice[data-tone="danger"],
   .ui-state--error {
     border-left-color: var(--destructive);
-    background: var(--danger-surface);
+    background: var(--danger-soft);
   }
   .ui-notice[data-tone="success"],
   .ui-state--success {
     border-left-color: var(--success);
-    background: var(--success-surface);
+    background: var(--success-soft);
   }
   :where(
     .ui-notice[data-tone="warning"] > svg,

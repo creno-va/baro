@@ -6,6 +6,7 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${process.env.BARO_REPORT_TEST_PORT ?? "4343"}`,
     browserName: "chromium",
+    colorScheme: "dark",
     trace: "off",
   },
 });

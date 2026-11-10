@@ -52,6 +52,12 @@ const states: Array<{ variant: StateVariant; title: string; description: string 
     title: "공개 심사를 기다리고 있어요",
     description: "심사가 완료되기 전에는 공개 완료로 표시하지 않아요.",
   },
+  {
+    variant: "partial",
+    title: "일부 자료를 확인했어요",
+    description: "아직 확인할 자료가 남아 있어요.",
+  },
+  { variant: "success", title: "검토 내용을 저장했어요", description: "합성 저장 상태입니다." },
 ];
 export function DesignSystemFixture() {
   const [role, setRole] = useState<NavigationRole>("user");
@@ -112,6 +118,8 @@ export function DesignSystemFixture() {
             <div className="actions">
               <Button onClick={() => setOpen(true)}>검토 안내 열기</Button>
               <Button variant="outline">보조 버튼 예시</Button>
+              <Button variant="secondary">보조 강조 예시</Button>
+              <Button variant="destructive">삭제 동작 예시</Button>
               <Button disabled>처리 중 예시</Button>
             </div>
             <Separator />

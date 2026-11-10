@@ -26,6 +26,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
     ["bun", "run", "lint"],
     ["bun", "run", "typecheck"],
     ["bun", "test", "tests/headless-ui-ssr.test.tsx"],
+    ["bun", "test", "tests/theme-palette.test.ts"],
     ["bun", "run", "mobile:check"],
     // Bounded rework domains; prefix filters automatically retain each later
     // adapter regression without promoting all tests into the quick profile.

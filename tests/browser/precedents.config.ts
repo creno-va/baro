@@ -1,3 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import integration from "./integration.config";
-export default defineConfig({ ...integration, testMatch: "precedents.e2e.ts" });
+export default defineConfig({
+  ...integration,
+  testMatch: "precedents.e2e.ts",
+  use: { ...integration.use, colorScheme: "dark" },
+});

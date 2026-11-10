@@ -643,7 +643,7 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--popover);
-  box-shadow: 0 12px 40px #0f172a1a;
+  box-shadow: 0 12px 40px var(--shadow-soft-color);
 }
 .baro-workbench .composer-add-menu__content > .ui-button {
   width: 100%;
@@ -1148,14 +1148,6 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
-}
-.baro-workbench .precedent-workspace button {
-  background: var(--card);
-  color: var(--foreground);
-}
-.baro-workbench .precedent-workspace button.precedent-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
 }
 .baro-workbench .precedent-topic:has([data-checked]) {
   background: var(--accent);
