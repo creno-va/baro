@@ -1403,6 +1403,9 @@ body:has(.baro-workbench .case-workspace--conversation) {
 }
 
 /* Comparison states stay legible on the shared light surfaces. */
+.baro-workbench .precedent-workspace .comparison-summary {
+  --muted-foreground: #475569;
+}
 .baro-workbench .precedent-workspace .precedent-more > button {
   background: transparent;
 }
