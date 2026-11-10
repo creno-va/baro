@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, FolderClosed } from "lucide-react";
+import { ChevronLeft, Ellipsis, FileChartColumn, FolderClosed } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
 const tools = [
@@ -52,6 +52,11 @@ export function CaseNavigation({
         <h1 title={title}>{title}</h1>
       </div>
       <div className="case-header__actions">
+        {active !== "reports" && (
+          <a className="case-report-link" href={`${base}/reports?mode=conversation`}>
+            <FileChartColumn size={17} aria-hidden="true" /> 리포트
+          </a>
+        )}
         {actions}
         <details
           ref={disclosure}
@@ -64,8 +69,8 @@ export function CaseNavigation({
             trigger.current?.focus();
           }}
         >
-          <summary ref={trigger}>
-            사건 도구 <ChevronDown size={16} aria-hidden="true" />
+          <summary ref={trigger} aria-label="사건 도구" title="사건 도구">
+            <Ellipsis size={19} aria-hidden="true" />
           </summary>
           <nav className="case-tools__menu" aria-label="사건 도구">
             {tools.map(({ id, label, path }) => (

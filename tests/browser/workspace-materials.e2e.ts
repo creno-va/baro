@@ -15,6 +15,8 @@ async function openMaterials(page: Page) {
   const open = page.getByRole("button", { name: "자료 열기", exact: true });
   if (await open.isVisible()) await open.click();
   await expect(panel(page)).toBeVisible();
+  const materialsTab = page.getByRole("tab", { name: /^자료/ });
+  if (await materialsTab.isVisible()) await materialsTab.click();
 }
 async function openScenario(page: Page, options = {}) {
   await seedMaterialsScenario(page, options);

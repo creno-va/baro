@@ -1,6 +1,6 @@
 # 앱 공통 shell 사용
 
-통합 정본은 `docs/development/APP-WORKSPACE-REWORK.md`(00 소유)이다. 이 파일은 #752의 실제 export와 소비 방법만 기록한다.
+현재 사건 UI 정본은 `docs/design/CASE-WORKBENCH.md`와 #795다. 공개/새 사건 화면은 기존 AppLayout을 유지하고, 사건 화면은 CaseWorkbenchLayout을 사용한다.
 
 `AppLayout.astro`는 기존 props를 유지하고 `[data-app-workspace]` 아래에서만 새 토큰을 적용한다.
 AppNavigation island는 세션·최근 사건·역할·이름 변경/삭제·로그아웃을 독립적으로 소유한다.
@@ -44,16 +44,17 @@ panel mode 전환은 해당 modal의 native close가 끝날 때까지 보류한�
 전환해 닫는 경우에는 보이는 사이드바 버튼으로 돌아간다.
 
 `CaseNavigation`은 기존 `caseId,title,active,fileCount?`와 `actions?: ReactNode`를 받는다.
-API는 호출하지 않는다. 실제 title/snapshot은 소비자가 전달한다. `activeTask?: CaseTask`와 `onNavigate?: (task: CaseTask) => void`로 네 작업을 같은 트리에서 전환할 수 있다.
-대화·자료·리포트·문서 초안은 상시 링크이며 사건 도구는 요약/타임라인/다음 행동/판례를 보존한다.
-초안은 기존 reports#document-drafts 주소를 사용한다. frame의 패널은 선택적 근거 확인에 사용한다. 보조 화면은 대화 복귀 링크를 자동 제공한다.
+API는 호출하지 않는다. 실제 title/snapshot은 소비자가 전달한다. 상단 리포트는 별도 페이지로 연결하고,
+사건 도구는 요약/타임라인/다음 행동/판례/자료/리포트 링크를 보존한다. 대화의 우측 패널은
+CaseContextPanel이 실제 상태를 바탕으로 지금 확인/자료/판례를 제공하며 교정 뷰어는 같은 owner에 남는다.
 
 ## 크기·스크롤 적용
 
-- Desktop >=1200: sidebar232px(접힘64px), 근거344px, 중앙 minmax(0,1fr).
-- Tablet768–1199: rail64px + 왼쪽 메뉴 drawer, 자료 overlay.
-- Mobile<768: 상단56px + 메뉴 drawer, 중앙 우선, 자료 overlay.
-- `--app-reading-width:48rem`, `--app-panel-width:344px`, 비교76rem. portable primary#2364e8. 모든 새 CSS는 앱 루트 아래다.
+- Desktop >=1200: sidebar248~356px, 우측330~388px, 중앙 minmax(0,1fr).
+- Tablet768–1199: 왼쪽 사건 목록 유지, 우측은 modal overlay.
+- Mobile<768: 상단52px + 메뉴 drawer, 중앙 우선, 자료 overlay.
+- 사건 DS는 `--wb-reading:920px`, `--wb-panel-width:330~388px`, primary#2364e8을 쓴다.
+  `CaseWorkbenchLayout`의 `.baro-workbench` 아래에서만 적용하고 AppLayout 기본값과 native 토큰은 보존한다.
 - `case-workspace__header`: 작은 헤더와 toggle; 메뉴가 본문 위에 그려진다.
 - `case-workspace__body`: 중앙/패널 grid; min-width/min-height0.
 - `case-workspace__content`: conversation에서 overflow hidden. 소비자가 높이100%인 grid를 만들고

@@ -77,9 +77,9 @@ export function ProgressiveReply({
   const typing = animate && shown < graphemes.length;
   return (
     <>
-      <MessageContent text={graphemes.slice(0, shown).join("")} revealing={typing} />
       {typing && (
         <Button
+          className="workspace-reply-skip"
           size="sm"
           variant="ghost"
           onClick={() => {
@@ -89,6 +89,7 @@ export function ProgressiveReply({
           답변 전체 바로 보기
         </Button>
       )}
+      <MessageContent text={graphemes.slice(0, shown).join("")} revealing={typing} />
     </>
   );
 }

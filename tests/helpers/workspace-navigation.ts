@@ -10,6 +10,8 @@ export async function openWorkspaceMaterials(page: Page) {
   if (await open.isVisible()) await open.click();
   const panel = page.locator("#case-materials-panel");
   await expect(panel).toBeVisible();
+  const materialsTab = page.getByRole("tab", { name: /^자료/ });
+  if (await materialsTab.isVisible()) await materialsTab.click();
   return panel;
 }
 
