@@ -56,7 +56,7 @@ test("a queued native close preserves a newly selected submit target for Enter",
       "close",
       (event) => {
         const submit = document.querySelector<HTMLButtonElement>(
-          '.case-entry button[type="submit"]',
+          '.conversation-entry button[type="submit"]',
         );
         if (!submit) throw new Error("Synthetic submit target missing");
         // Reproduce explicit focus chosen before the queued close handler, without
