@@ -7,6 +7,7 @@ import {
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "./button";
+import { useClientReady } from "./utils";
 export interface CaseWorkspaceFrameProps {
   header: ReactNode;
   children: ReactNode;
@@ -28,6 +29,7 @@ export function CaseWorkspaceFrame({
   panelId = "case-materials-panel",
   kind = "conversation",
 }: CaseWorkspaceFrameProps) {
+  const clientReady = useClientReady();
   const root = useRef<HTMLDivElement>(null);
   const panelNode = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -147,7 +149,7 @@ export function CaseWorkspaceFrame({
         <div className="case-workspace__content">{children}</div>
         {present && <div className="case-workspace__panel-space" aria-hidden="true" />}
       </div>
-      {present && (
+      {present && clientReady && (
         <HeadlessDialog
           static
           open={sheet && panelOpen}

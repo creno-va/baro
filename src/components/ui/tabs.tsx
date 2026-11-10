@@ -1,6 +1,10 @@
-import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
-import { type ReactNode, useState } from "react";
-import { cn } from "./utils";
+import { TabGroup as HeadlessTabGroup, Tab, TabList, TabPanel, TabPanels } from "@headlessui/react";
+import { type ComponentProps, type ReactNode, useState } from "react";
+import { cn, useClientReady } from "./utils";
+export function TabGroup(props: ComponentProps<typeof HeadlessTabGroup>) {
+  const ready = useClientReady();
+  return ready ? <HeadlessTabGroup {...props} /> : null;
+}
 export interface TabItem {
   value: string;
   label: string;
@@ -51,4 +55,4 @@ export function Tabs({
   );
 }
 
-export { Tab, TabGroup, TabList, TabPanel, TabPanels };
+export { Tab, TabList, TabPanel, TabPanels };

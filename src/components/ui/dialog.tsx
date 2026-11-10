@@ -15,7 +15,7 @@ import {
   useRef,
 } from "react";
 import { Button } from "./button";
-import { cn } from "./utils";
+import { cn, useClientReady } from "./utils";
 export interface ModalProps extends Omit<ComponentProps<"div">, "title" | "onClose"> {
   open: boolean;
   onClose: () => void;
@@ -43,6 +43,7 @@ export function Modal({
   ref,
   ...props
 }: ModalProps) {
+  const clientReady = useClientReady();
   const previous = useRef(false);
   const origin = useRef<HTMLElement | null>(null);
   const explicitOrigin = useRef(returnFocusRef);
@@ -61,6 +62,7 @@ export function Modal({
     },
     [],
   );
+  if (!clientReady) return null;
   return (
     <HeadlessDialog
       static

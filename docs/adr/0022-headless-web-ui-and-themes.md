@@ -31,6 +31,9 @@
    파일 추가/선택 UI는 커스텀 컴포넌트다. 기본 브라우저 폼 appearance와 확인창은 사용하지 않는다.
 7. 랜딩의 마크업·기능·스타일과 native 앱, 내보낸 PDF/HTML/TXT 문서는 독립이다.
    UI 테마가 기존 문서 내용·출력·저장·마스킹·CAS·provider·quota·비용 정책을 바꾸지 않는다.
+8. Dialog/Popover/TabGroup의 Headless SSR 보조 요소는 inline style을 출력하므로 같은
+   hydration snapshot에서 client-ready 뒤 마운트한다. 기존 hash CSP와 style-src-attr 제한을
+   유지하며 새 inline 허용이나 정책 우회를 추가하지 않는다. 이후 DOM과 편집 상태는 유지한다.
 
 ## 대안
 
