@@ -40,6 +40,8 @@ export function Modal({
   }, [open, returnFocusRef]);
   return (
     <HeadlessDialog
+      static
+      hidden={!open}
       open={open}
       onClose={onClose}
       className={cn("ds-modal", variant === "sheet" && "ds-modal--sheet")}

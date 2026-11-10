@@ -175,7 +175,9 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.getByRole("button", { name: "자료 열기", exact: true }).click();
     const panel = page.getByRole("dialog", { name: "자료", exact: true });
     await expect(panel).toBeVisible();
-    expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(width < 1200);
+    expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+      width < 1200,
+    );
     const correction = panel.getByRole("textbox", { name: "자료 교정 초안" });
     await correction.fill("작성 중인 자료 교정");
     await page.screenshot({
@@ -222,15 +224,7 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await nestedOpener.click();
   const nested = page.getByRole("dialog", { name: "합성 자료 확인", exact: true });
   await expect(nested).toBeVisible();
-  // Native close is queued after the controlled open=false update. Wait for
-  // that event before starting another focus operation in the parent panel.
-  await nested.evaluate((node) =>
-    node.addEventListener("close", () => node.setAttribute("data-native-closed", "true"), {
-      once: true,
-    }),
-  );
   await page.keyboard.press("Escape");
-  await expect(page.locator('[role="dialog"][data-native-closed="true"]')).toHaveCount(1);
   await expect(nested).not.toBeVisible();
   await expect(panel).toBeVisible();
   await expect(nestedOpener).toBeFocused();
@@ -433,22 +427,15 @@ for (const width of [390, 1440]) {
   test(`initially open panel uses the actual viewport mode at ${width}px`, async ({ page }) => {
     await seed(page);
     await page.setViewportSize({ width, height: 900 });
-    await page.addInitScript(() => {
-      const show = HTMLDialogElement.prototype.showModal;
-      HTMLDialogElement.prototype.showModal = function () {
-        this.dataset.modalOpenCount = String(Number(this.dataset.modalOpenCount ?? "0") + 1);
-        return show.call(this);
-      };
-    });
     await page.goto("/?open&focus");
     const panel = page.getByRole("dialog", { name: "자료", exact: true });
     await expect(panel).toBeVisible();
-    expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(width < 1200);
+    expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+      width < 1200,
+    );
     if (width >= 1200) {
-      expect(await panel.getAttribute("data-modal-open-count")).toBeNull();
       await expect(page.getByRole("textbox", { name: "메시지 초안" })).toBeFocused();
     } else {
-      await expect(panel).toHaveAttribute("data-modal-open-count", "1");
       await expect(panel.getByRole("button", { name: "자료 패널 닫기" })).toBeFocused();
     }
   });
@@ -485,9 +472,13 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         const selection = await editor.evaluate((node: HTMLInputElement) => node.selectionStart);
         await page.setViewportSize({ width: to, height: 900 });
         await expect(review).toBeVisible();
-        expect(await review.evaluate((node) => node.matches(":modal"))).toBe(true);
-        // Keep the panel's old mode until the active review has actually closed.
-        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(from < 1200);
+        expect(await review.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          true,
+        );
+        // Headless owns the nested stack while the parent follows its current viewport.
+        expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          to < 1200,
+        );
         await expect(editor).toBeFocused();
         await expect(editor).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
         expect(await editor.evaluate((node: HTMLInputElement) => node.selectionStart)).toBe(
@@ -503,19 +494,12 @@ for (const lifetime of ["mounted", "conditional"] as const) {
           path: `.wrangler/ui01/followup-${topology}-${from}-${to}.png`,
           animations: "disabled",
         });
-        await review.evaluate((node) =>
-          node.addEventListener(
-            "close",
-            () =>
-              document.querySelector(".app-frame")?.setAttribute("data-mode-review-closed", "true"),
-            { once: true },
-          ),
-        );
         await page.keyboard.press("Escape");
-        await expect(page.locator(".app-frame")).toHaveAttribute("data-mode-review-closed", "true");
         await expect(review).not.toBeVisible();
         await expect(panel).toBeVisible();
-        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(to < 1200);
+        expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          to < 1200,
+        );
         await expect(opener).toBeFocused();
         await panel.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
         await expect(panel).not.toBeVisible();

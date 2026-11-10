@@ -412,6 +412,12 @@
   padding: 0 0 20px;
   border: 0;
 }
+:root[data-baro-ui] .ds-modal .ui-button {
+  min-height: 44px;
+}
+:root[data-baro-ui] .ds-modal .ui-button--icon {
+  width: 44px;
+}
 .ds-modal .ui-dialog__header h2 {
   margin: 0;
   font-size: 20px;
