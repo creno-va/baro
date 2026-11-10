@@ -136,11 +136,11 @@
   font-size: 0.85rem;
   font-weight: 550;
   margin: 0;
-  color: #647084;
+  color: var(--muted-foreground);
 }
 .workspace-chat-heading > span {
   font-size: 0.72rem;
-  color: #526176;
+  color: var(--muted-foreground);
 }
 .workspace-sidebar {
   width: 100%;
@@ -150,29 +150,29 @@
 .workspace-context {
   border-block: 1px solid var(--border);
 }
-.workspace-context > summary {
+.workspace-context > [data-disclosure-button] {
   display: flex;
   align-items: center;
   gap: 9px;
   min-height: 56px;
   padding: 12px 0;
-  color: #647084;
+  color: var(--muted-foreground);
   font-size: 0.8rem;
   cursor: pointer;
   list-style: none;
 }
-.workspace-context > summary::-webkit-details-marker,
-.workspace-evidence > summary::-webkit-details-marker {
+.workspace-context > [data-disclosure-button]::-webkit-details-marker,
+.workspace-evidence > [data-disclosure-button]::-webkit-details-marker {
   display: none;
 }
-.workspace-context > summary > svg:first-child {
-  color: #8193aa;
+.workspace-context > [data-disclosure-button] > svg:first-child {
+  color: var(--muted-foreground);
 }
-.workspace-context > summary > svg:last-child {
+.workspace-context > [data-disclosure-button] > svg:last-child {
   margin-left: auto;
   transition: transform 160ms;
 }
-.workspace-context[open] > summary > svg:last-child {
+.workspace-context[data-open] > [data-disclosure-button] > svg:last-child {
   transform: rotate(180deg);
 }
 .workspace-context-content {
@@ -221,7 +221,7 @@
   line-height: 1.8;
 }
 .workspace-sidebar a:not(.ui-button) {
-  color: #356cab;
+  color: var(--primary);
   font-size: 0.8rem;
   display: flex;
   align-items: center;
@@ -230,7 +230,7 @@
   min-height: 44px;
 }
 .workspace-sidebar :where(a) span {
-  color: #526176;
+  color: var(--muted-foreground);
 }
 .workspace-preparation-badges {
   display: flex;
@@ -271,12 +271,12 @@
   align-items: center;
   gap: 5px;
   margin: 0;
-  color: #526176;
+  color: var(--muted-foreground);
   font-size: 0.67rem;
 }
 .workspace-saved svg {
   flex-shrink: 0;
-  color: #8397af;
+  color: var(--muted-foreground);
 }
 .workspace-context-footer > a {
   flex-shrink: 0;
@@ -305,7 +305,7 @@
   max-width: 82%;
   align-self: flex-end;
   padding: 16px 22px;
-  background: #eff4fb;
+  background: var(--accent);
   border-radius: 24px 24px 6px 24px;
 }
 .workspace .workspace-message--assistant {
@@ -333,7 +333,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  color: #475569;
+  color: var(--foreground);
   font-size: 0.78rem;
   font-weight: 600;
 }
@@ -343,12 +343,12 @@
   gap: 9px;
 }
 .workspace-message-label time {
-  color: #526176;
+  color: var(--muted-foreground);
   font-size: 0.65rem;
   font-weight: 400;
 }
 .workspace-message--user .workspace-message-label {
-  color: #5c6b80;
+  color: var(--muted-foreground);
 }
 .workspace-message > p {
   white-space: pre-wrap;
@@ -379,7 +379,7 @@
 .workspace-chat-welcome > p {
   font-size: 0.88rem;
   line-height: 1.9;
-  color: #526176;
+  color: var(--muted-foreground);
   margin: 10px 0 20px;
 }
 .workspace-suggestions {
@@ -409,29 +409,34 @@
   border-radius: 12px;
   background: var(--muted);
   font-size: 0.75rem;
-  color: #586981;
+  color: var(--muted-foreground);
   white-space: normal;
 }
 .workspace-suggestions :where(.ui-button) svg {
   flex-shrink: 0;
-  color: #829ab6;
+  color: var(--muted-foreground);
 }
 .workspace-composer {
   position: sticky;
   bottom: 0;
   z-index: 2;
   padding: 12px 0 max(10px, env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, #ffffff00, #fff 14px, #fff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card) 0%, transparent),
+    var(--card) 14px,
+    var(--card)
+  );
 }
-.workspace-composer:has(.workspace-evidence[open]),
-.workspace:has(.workspace-tool-details[open]) .workspace-composer {
+.workspace-composer:has(.workspace-evidence[data-open]),
+.workspace:has(.workspace-tool-details[data-open]) .workspace-composer {
   position: static;
 }
 .workspace-composer-surface {
   padding: 8px;
-  border: 1px solid #e3eaf5;
+  border: 1px solid var(--accent);
   border-radius: 20px;
-  background: #fff;
+  background: var(--card);
   box-shadow:
     0 6px 30px #2a57970b,
     0 1px 4px #2a579705;
@@ -440,7 +445,7 @@
     box-shadow 160ms;
 }
 .workspace-composer-surface:focus-within {
-  border-color: #3182f6;
+  border-color: var(--primary);
   box-shadow:
     0 6px 32px #3182f60d,
     0 0 0 3px #3182f608;
@@ -457,13 +462,13 @@
   background: transparent;
   font-size: max(1rem, 16px);
   line-height: 24px;
-  color: #202838;
+  color: var(--foreground);
   outline: 0;
   box-shadow: none;
   resize: none;
 }
 .workspace-composer textarea::placeholder {
-  color: #5c6b80;
+  color: var(--muted-foreground);
 }
 .workspace-composer-row {
   display: flex;
@@ -473,7 +478,7 @@
 .workspace-composer-row > .workspace-lookup-open {
   min-width: 44px;
   min-height: 44px;
-  color: #526176;
+  color: var(--muted-foreground);
   font-size: 0.78rem;
   padding: 8px;
 }
@@ -488,7 +493,7 @@
   min-height: 44px;
   padding: 0;
   border-radius: 10px;
-  color: #526176;
+  color: var(--muted-foreground);
   font-size: 0.78rem;
 }
 .workspace-lookup {
@@ -505,16 +510,16 @@
   min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid #c8d2df;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--card);
   font-size: 16px;
 }
 .workspace-lookup__hint,
 .workspace-lookup__consent p {
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #526176;
+  color: var(--muted-foreground);
 }
 .workspace-lookup__consent {
   display: grid;
@@ -522,7 +527,7 @@
   margin: 8px 0;
   padding: 16px;
   border-radius: 12px;
-  background: #f3f6fa;
+  background: var(--accent);
 }
 .workspace-lookup__consent label {
   display: flex;
@@ -535,7 +540,7 @@
   margin-top: 5px;
 }
 .workspace-attach:hover {
-  background: #f3f6fa;
+  background: var(--accent);
 }
 .workspace-send.ui-button {
   min-height: 44px;
@@ -545,15 +550,15 @@
   gap: 7px;
 }
 .app-frame .workspace-send.ui-button:disabled {
-  background: #eef2f7;
-  color: #5c6b80;
+  background: var(--background);
+  color: var(--muted-foreground);
   border-color: transparent;
   opacity: 1;
 }
 .workspace-evidence {
   margin: 0 2px 7px;
 }
-.workspace-evidence summary {
+.workspace-evidence [data-disclosure-button] {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -562,26 +567,26 @@
   gap: 6px;
   min-height: 44px;
   width: fit-content;
-  color: #526176;
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: 0.74rem;
   list-style: none;
 }
-.workspace-evidence summary span {
+.workspace-evidence [data-disclosure-button] span {
   padding: 1px 6px;
   border-radius: 6px;
-  background: #edf4ff;
-  color: #2568c6;
+  background: var(--accent);
+  color: var(--primary);
 }
 .workspace-composer fieldset {
   margin: 8px 0 10px;
   padding: 10px 12px;
-  background: #f8faff;
-  border: 1px solid #e7edf5;
+  background: var(--accent);
+  border: 1px solid var(--accent);
   border-radius: 12px;
 }
 .workspace-composer legend {
-  color: #526176;
+  color: var(--muted-foreground);
   font-size: 0.72rem;
 }
 .workspace-file-choices {
@@ -598,11 +603,11 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
-.workspace input[type="checkbox"] {
+.workspace [role="checkbox"] {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  accent-color: #3182f6;
+  accent-color: var(--primary);
 }
 .workspace .workspace-sr-only {
   position: absolute;
@@ -710,7 +715,7 @@
   gap: 10px;
   width: 100%;
   min-height: 280px;
-  border: 1px dashed #cbd8eb;
+  border: 1px dashed var(--accent);
   border-radius: 20px;
   padding: 48px 20px;
   background: var(--card);
@@ -720,7 +725,7 @@
 }
 .workspace-upload-target:hover:not(:disabled) {
   border-color: var(--primary);
-  background: #f2f7ff;
+  background: var(--accent);
 }
 .workspace-upload-target:disabled {
   cursor: default;
@@ -804,7 +809,7 @@
 }
 .workspace-message > .workspace-status {
   margin-top: 14px;
-  color: #526176;
+  color: var(--muted-foreground);
 }
 .workspace-status--ready {
   color: var(--primary);
@@ -881,7 +886,7 @@
   color: var(--muted-foreground);
   font-size: 0.78rem;
 }
-.timeline-evidence-sources > summary {
+.timeline-evidence-sources > [data-disclosure-button] {
   width: fit-content;
   min-height: 44px;
   padding-block: 10px;
@@ -947,7 +952,7 @@
   margin: 0;
   cursor: pointer;
 }
-.workspace-action-list > li > label > input[type="checkbox"] {
+.workspace-action-list > li > label > [role="checkbox"] {
   width: 20px;
   height: 20px;
   margin: 3px 0 0;
@@ -1082,7 +1087,7 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-spin,
   .workspace-tabs a,
-  .workspace-context > summary > svg:last-child,
+  .workspace-context > [data-disclosure-button] > svg:last-child,
   .workspace-composer-surface {
     animation: none;
     transition: none;
@@ -1120,7 +1125,7 @@
     font-size: 0.8rem;
     gap: 3px;
   }
-  .workspace-context > summary {
+  .workspace-context > [data-disclosure-button] {
     font-size: 0.75rem;
     padding-inline: 0;
   }
@@ -1341,9 +1346,9 @@
 
 .workspace-material-apply {
   padding: 16px;
-  border: 1px solid #c8dcfa;
+  border: 1px solid var(--accent);
   border-radius: 12px;
-  background: #f3f7fe;
+  background: var(--accent);
   margin-top: 16px;
 }
 .workspace-preview .file-review-item {
@@ -1360,7 +1365,7 @@
 .workspace-preview .file-review-item label {
   margin-top: 8px;
 }
-.workspace-preview .file-review-item details {
+.workspace-preview .file-review-item [data-disclosure] {
   font-size: 0.8rem;
   color: var(--muted-foreground);
 }
@@ -1479,7 +1484,7 @@
 .workspace-tool-details {
   margin-block: 12px;
 }
-.workspace-tool-details summary {
+.workspace-tool-details [data-disclosure-button] {
   cursor: pointer;
   font-weight: 600;
 }
@@ -1579,7 +1584,7 @@
   color: var(--muted-foreground);
   font-size: 11px;
 }
-.fact-answer__sources summary {
+.fact-answer__sources [data-disclosure-button] {
   cursor: pointer;
 }
 .fact-answer__sources p {
@@ -1643,11 +1648,11 @@
   border: 0;
   margin: 0;
 }
-.conversation-agent-actions > details {
+.conversation-agent-actions > [data-disclosure] {
   flex: 1 1 130px;
 }
-.conversation-agent-actions summary,
-.conversation-analysis summary {
+.conversation-agent-actions [data-disclosure-button],
+.conversation-analysis [data-disclosure-button] {
   display: flex;
   align-items: center;
   min-height: 44px;

@@ -11,6 +11,9 @@ import type {
 } from "../../contracts/v2/precedent-research";
 import { PRECEDENT_TOPIC_LABELS } from "../../contracts/v2/precedent-topics";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
+import { ActionButton as ControlButton } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import { Input as ControlInput, Label as FieldLabel } from "../ui/form";
 import { Spinner } from "../ui/loading";
 import { CaseNavigation } from "./CaseNavigation";
 import { PrecedentComparisonPanel } from "./PrecedentComparisonPanel";
@@ -246,8 +249,8 @@ export function PrecedentResearch({
     ...new Set([...(context?.recommendedTopics ?? []), ...allTopics.slice(0, 8)]),
   ];
   const topicOption = (topic: V2PrecedentTopic) => (
-    <label key={topic} className="precedent-topic">
-      <input
+    <FieldLabel key={topic} className="precedent-topic">
+      <ControlInput
         type="checkbox"
         checked={topics.includes(topic)}
         disabled={busy || (!topics.includes(topic) && topics.length >= 2)}
@@ -261,7 +264,7 @@ export function PrecedentResearch({
       />
       <span>{PRECEDENT_TOPIC_LABELS[topic]}</span>
       {context?.recommendedTopics.includes(topic) && <small>추천</small>}
-    </label>
+    </FieldLabel>
   );
   const chosen = result?.items.find((item) => item.id === selected);
   const sourceCurrent =
@@ -296,7 +299,7 @@ export function PrecedentResearch({
               : errorMessage(error)}
           </p>
           <div className="precedent-links">
-            <button
+            <ControlButton
               type="button"
               onClick={() => {
                 setReload((n) => n + 1);
@@ -304,7 +307,7 @@ export function PrecedentResearch({
               }}
             >
               다시 불러오기
-            </button>
+            </ControlButton>
             {error instanceof ApiError && error.code === "CONFLICT" && (
               <a href={`/cases/${encodeURIComponent(caseId)}/summary?from=precedents`}>
                 사건 요약 확인
@@ -334,6 +337,7 @@ export function PrecedentResearch({
         <>
           <div className="precedent-list-view" hidden={selected !== null}>
             <form
+              noValidate
               className="precedent-search"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -345,19 +349,19 @@ export function PrecedentResearch({
                   검색 주제 <span>최대 2개 · {topics.length}개 선택</span>
                 </legend>
                 <div className="precedent-topics">{visibleTopics.map(topicOption)}</div>
-                <details>
-                  <summary>다른 주제 선택</summary>
+                <Disclosure>
+                  <DisclosureSummary>다른 주제 선택</DisclosureSummary>
                   <div className="precedent-topics">
                     {allTopics.filter((topic) => !visibleTopics.includes(topic)).map(topicOption)}
                   </div>
-                </details>
+                </Disclosure>
               </fieldset>
               <div className="precedent-search-footer">
                 <p>
                   외부에는 선택한 법률 주제만 전달돼요. 사건 진술과 개인정보는 검색어로 보내지
                   않아요.
                 </p>
-                <button
+                <ControlButton
                   className="precedent-primary"
                   type="submit"
                   disabled={!topics.length || busy}
@@ -365,7 +369,7 @@ export function PrecedentResearch({
                 >
                   {busy ? <Spinner /> : <Search size={17} aria-hidden="true" />}
                   {busy ? "공식 원문 확인 중…" : "판례 찾기"}
-                </button>
+                </ControlButton>
               </div>
             </form>
             {result && (
@@ -389,7 +393,7 @@ export function PrecedentResearch({
                   <ul className="precedent-list" aria-label="관련 판례 목록">
                     {result.items.map((item) => (
                       <li key={item.id}>
-                        <button
+                        <ControlButton
                           type="button"
                           className="precedent-card"
                           disabled={!sourceCurrent}
@@ -410,14 +414,14 @@ export function PrecedentResearch({
                               <span key={topic}>{PRECEDENT_TOPIC_LABELS[topic]}</span>
                             ))}
                           </div>
-                        </button>
+                        </ControlButton>
                       </li>
                     ))}
                   </ul>
                 )}
                 {result.nextCursor && (
                   <div className="precedent-more">
-                    <button
+                    <ControlButton
                       type="button"
                       disabled={busy || !sourceCurrent}
                       aria-busy={busy || undefined}
@@ -425,7 +429,7 @@ export function PrecedentResearch({
                     >
                       {busy ? <Spinner /> : <ChevronDown size={17} aria-hidden="true" />}
                       {busy ? "불러오는 중…" : "더보기"}
-                    </button>
+                    </ControlButton>
                   </div>
                 )}
               </>
@@ -439,10 +443,10 @@ export function PrecedentResearch({
               aria-label="선택한 판례"
             >
               <h2 className="sr-only">판례 상세</h2>
-              <button className="precedent-back" type="button" onClick={backToResults}>
+              <ControlButton className="precedent-back" type="button" onClick={backToResults}>
                 <ArrowLeft size={18} aria-hidden="true" />
                 검색 결과로
-              </button>
+              </ControlButton>
               <PrecedentComparisonPanel
                 caseId={caseId}
                 context={context}
@@ -475,7 +479,7 @@ export function PrecedentResearch({
                       <div role="alert">
                         <p>판례를 다시 확인하지 못했어요. 잠시 후 다시 확인하거나 검색해 주세요.</p>
                         {chosen && (
-                          <button
+                          <ControlButton
                             type="button"
                             onClick={() =>
                               void (readError instanceof ApiError && readError.code === "NOT_FOUND"
@@ -486,7 +490,7 @@ export function PrecedentResearch({
                             {readError instanceof ApiError && readError.code === "NOT_FOUND"
                               ? "다시 검색"
                               : "다시 확인"}
-                          </button>
+                          </ControlButton>
                         )}
                       </div>
                     )}

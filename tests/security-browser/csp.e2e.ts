@@ -12,21 +12,24 @@ test("built service focus feedback works under hash CSP", async ({ page }) => {
       ).recordFocusCspViolation(event.violatedDirective);
     }),
   );
+  await page.addInitScript(() => localStorage.setItem("baro-theme", "dark"));
   for (const path of ["/login", "/help"]) {
     const response = await page.goto(path);
     expect(response?.headers()["content-security-policy"]).toContain("sha256-");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
     await page.keyboard.press("Tab");
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "keyboard");
     if (path === "/help") {
-      const summary = page.locator(".help-document summary").first();
+      const summary = page.locator(".help-document [data-disclosure-button]").first();
       await summary.focus();
-      await expect(summary).toHaveCSS("outline-style", "none");
-      await expect(summary).toHaveCSS("text-decoration-line", "underline");
+      await expect(summary).toHaveCSS("outline-style", "solid");
       await summary.click();
-      await expect(summary).toHaveCSS("outline-style", "none");
       await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
     }
+    await page.getByRole("button", { name: "화면 테마 변경", exact: true }).first().click();
+    await page.getByRole("menuitem", { name: "라이트 모드", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   }
   expect(violations).toEqual([]);
 });
@@ -57,12 +60,12 @@ for (const viewport of [
     expect(response?.status()).toBe(200);
     expect(policy).toContain("sha256-");
     expect(policy).not.toMatch(/unsafe-inline|unsafe-eval/);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "내 사건을 이해하고, 다음 준비를 차근차근",
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("막막했던 법률 문제");
+    await expect(page.getByRole("main")).toContainText(
+      "리포트는 준비하는 동안 다시 확인할 수 있어요",
     );
-    await expect(page.getByRole("main")).toContainText("리포트로 다시 확인해요");
     await expect(page.locator('a[href^="/lawyer"]')).toHaveCount(0);
-    const logo = page.getByRole("link", { name: "BARO 홈", exact: true }).locator("img");
+    const logo = page.getByRole("link", { name: "BARO 홈", exact: true }).first().locator("img");
     await expect
       .poll(() =>
         logo.evaluate(
@@ -77,11 +80,11 @@ for (const viewport of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    const policies = page.getByRole("navigation", { name: "서비스 정책" });
+    const policies = page.getByRole("navigation", { name: "하단 메뉴" });
     for (const [name, path] of [
       ["이용약관", "terms"],
       ["개인정보 처리방침", "privacy"],
-      ["AI 이용 고지", "ai"],
+      ["AI 이용 안내", "ai"],
     ] as const) {
       const link = policies.getByRole("link", { name, exact: true });
       await expect(link).toHaveAttribute("href", `/policies/${path}`);
@@ -259,7 +262,10 @@ test("built Worker mobile menu, brand, local font and error state work without C
     "/new",
   );
   await page.screenshot({ path: ".wrangler/built-ui-menu-320.png" });
-  await expect(dialog.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await expect
+    .poll(() => dialog.evaluate((node) => node.contains(document.activeElement)))
+    .toBe(true);
+  await dialog.getByRole("button", { name: "닫기", exact: true }).focus();
   await page.keyboard.press("Shift+Tab");
   await expect(dialog.getByRole("button", { name: "로그아웃", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");

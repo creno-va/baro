@@ -96,7 +96,7 @@ test("help and policy keep account settings available without restoring lawyer p
       window.dispatchEvent(new Event("baro-session-changed"));
     });
     await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
-    await expect(page.locator('a[href="/settings"]').first()).toBeVisible();
+    await expect(page.locator('.sidebar-desktop .sidebar-profile[href="/settings"]')).toBeVisible();
     expect(
       await page.evaluate(
         () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
@@ -153,7 +153,7 @@ test("an example only fills the composer and home remains usable at enlarged tex
   const example = page.getByRole("button", { name: "빌려준 돈을 못 받았어요" });
   await expect(example).toBeEnabled();
   const targetHeights = await page
-    .locator(".conversation-home button, .conversation-context label")
+    .locator(".conversation-home button:not([role=radio]), .conversation-context label")
     .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
   expect(targetHeights.every((height) => height >= 44)).toBe(true);
   await example.click();

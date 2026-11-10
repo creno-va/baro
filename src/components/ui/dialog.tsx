@@ -1,14 +1,92 @@
+import {
+  Description,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+  Dialog as HeadlessDialog,
+} from "@headlessui/react";
 import { X } from "lucide-react";
-import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { Button } from "./button";
-import { cn } from "./utils";
-
-function restoreFocus(opener: HTMLElement | null) {
-  const activeModal = document.querySelector("dialog:modal");
-  if (opener?.isConnected && (!activeModal || activeModal.contains(opener))) opener.focus();
+import { cn, useClientReady } from "./utils";
+export interface ModalProps extends Omit<ComponentProps<"div">, "title" | "onClose"> {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  title?: string;
+  returnFocusRef?: RefObject<HTMLElement | null> | undefined;
+  variant?: "dialog" | "sheet";
 }
-
-/** shadcn-style modal backed by native dialog: no inline CSS or runtime style injection. */
+function restoreFocus(destination: HTMLElement | null | undefined) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (destination?.isConnected && !destination.closest("[inert], [hidden]"))
+        destination.focus({ preventScroll: true });
+    });
+  });
+}
+export function Modal({
+  open,
+  onClose,
+  children,
+  className,
+  title,
+  variant = "dialog",
+  returnFocusRef,
+  ref,
+  ...props
+}: ModalProps) {
+  const clientReady = useClientReady();
+  const previous = useRef(false);
+  const origin = useRef<HTMLElement | null>(null);
+  const explicitOrigin = useRef(returnFocusRef);
+  explicitOrigin.current = returnFocusRef;
+  useLayoutEffect(() => {
+    if (open && !previous.current && document.activeElement instanceof HTMLElement)
+      origin.current = document.activeElement;
+    if (previous.current && !open) {
+      restoreFocus(returnFocusRef?.current ?? origin.current);
+    }
+    previous.current = open;
+  }, [open, returnFocusRef]);
+  useEffect(
+    () => () => {
+      if (previous.current) restoreFocus(explicitOrigin.current?.current ?? origin.current);
+    },
+    [],
+  );
+  if (!clientReady) return null;
+  return (
+    <HeadlessDialog
+      static
+      hidden={!open}
+      open={open}
+      onClose={onClose}
+      className={cn("ds-modal", variant === "sheet" && "ds-modal--sheet")}
+    >
+      <DialogBackdrop className="ds-modal__backdrop" />
+      <div className="ds-modal__position">
+        <DialogPanel
+          {...props}
+          ref={ref ?? null}
+          className={className}
+          data-dialog=""
+          data-open={open || undefined}
+        >
+          {title && <DialogTitle className="sr-only">{title}</DialogTitle>}
+          {children}
+        </DialogPanel>
+      </div>
+    </HeadlessDialog>
+  );
+}
 export function Dialog({
   open,
   onOpenChange,
@@ -22,109 +100,37 @@ export function Dialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description?: string;
+  description?: string | undefined;
   children: ReactNode;
   variant?: "dialog" | "sheet";
-  /** Validation flows may return to the invalid field instead of the opener. */
-  returnFocusRef?: RefObject<HTMLElement | null>;
-  /** Single acknowledgement flows can use their visible action as the only button. */
+  returnFocusRef?: RefObject<HTMLElement | null> | undefined;
   showCloseButton?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const titleId = useId();
-  const descriptionId = useId();
-  useEffect(() => {
-    // Capture the element before React clears its ref during unmount.
-    const dialog = ref.current;
-    return () => {
-      if (!dialog?.open) return;
-      dialog.close();
-      restoreFocus(returnFocusRef?.current ?? previousFocus.current);
-    };
-  }, [returnFocusRef]);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      previousFocus.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-      // Return once at the controlled close, before later input can choose a new target.
-      restoreFocus(returnFocusRef?.current ?? previousFocus.current);
-    }
-  }, [open, returnFocusRef]);
   return (
-    <dialog
-      ref={ref}
-      data-slot={variant}
+    <Modal
+      open={open}
+      onClose={() => onOpenChange(false)}
+      variant={variant}
+      returnFocusRef={returnFocusRef}
       className={cn("ui-dialog", variant === "sheet" && "ui-sheet")}
-      aria-labelledby={titleId}
-      aria-describedby={description ? descriptionId : undefined}
-      onCancel={(event) => {
-        // Keep native Escape consistent with the controlled close button. The
-        // owner may refuse dismissal while a mutation is still being accepted.
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenChange(false);
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
-        const dialog = event.currentTarget;
-        if (!(event.target instanceof Element) || event.target.closest("dialog") !== dialog) return;
-        const focusable = [
-          ...dialog.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-          ),
-        ].filter(
-          (element) => element.closest("dialog") === dialog && element.getClientRects().length > 0,
-        );
-        const first = focusable[0];
-        const last = focusable.at(-1);
-        if (event.shiftKey && document.activeElement === first && last) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last && first) {
-          event.preventDefault();
-          first.focus();
-        }
-      }}
-      onClose={(event) => {
-        // A queued close event can arrive after a keyboard user has reopened the dialog.
-        if (event.currentTarget.open) return;
-        // Native close delivery is queued; it must not steal a newer explicit focus.
-        onOpenChange(false);
-      }}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget) return;
-        const bounds = event.currentTarget.getBoundingClientRect();
-        if (
-          event.clientX < bounds.left ||
-          event.clientX > bounds.right ||
-          event.clientY < bounds.top ||
-          event.clientY > bounds.bottom
-        )
-          onOpenChange(false);
-      }}
     >
       <div className="ui-dialog__header">
         <div>
-          <h2 id={titleId}>{title}</h2>
-          {description && <p id={descriptionId}>{description}</p>}
+          <DialogTitle as="h2">{title}</DialogTitle>
+          {description && (
+            <Description className="ui-dialog__description">{description}</Description>
+          )}
         </div>
         {showCloseButton && (
           <Button variant="ghost" size="icon" aria-label="닫기" onClick={() => onOpenChange(false)}>
-            <X aria-hidden="true" size={20} />
+            <X size={20} aria-hidden="true" />
           </Button>
         )}
       </div>
       <div className="ui-dialog__content">{children}</div>
-    </dialog>
+    </Modal>
   );
 }
-
 export function Sheet(props: Omit<Parameters<typeof Dialog>[0], "variant">) {
   return <Dialog {...props} variant="sheet" />;
 }

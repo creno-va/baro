@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
 import { guidance, outOfScope, questions, urgentRedirect } from "../fixtures/contracts";
+import { chooseOption } from "../helpers/headless-controls";
 
 const caseId = "11111111-1111-4111-8111-111111111111",
   analysisId = "22222222-2222-4222-8222-222222222222";
@@ -90,12 +91,12 @@ test("questions duplicate/error/replay and stale revision restore server state, 
   });
   await page.goto(`/cases/${caseId}`);
   await expect(page.getByText("2 / 최대 5개", { exact: false })).toBeVisible();
-  await page.getByLabel("1번 답변 방식").selectOption("unknown");
-  await page.getByLabel("2번 답변 방식").selectOption("skipped");
+  await chooseOption(page.getByLabel("1번 답변 방식"), "unknown");
+  await chooseOption(page.getByLabel("2번 답변 방식"), "skipped");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByLabel("1번 답변 방식")).toBeVisible();
-  await expect(page.getByLabel("1번 답변 방식")).toHaveValue("unknown");
-  await expect(page.getByLabel("2번 답변 방식")).toHaveValue("skipped");
+  await expect(page.getByLabel("1번 답변 방식")).toHaveAttribute("data-value", "unknown");
+  await expect(page.getByLabel("2번 답변 방식")).toHaveAttribute("data-value", "skipped");
   const submit = page.getByRole("button", { name: "답변 보내기" });
   await submit.focus();
   await page.keyboard.press("Enter");
@@ -335,7 +336,7 @@ test("failed read retries, stale/late answers recover the latest revision and ex
   await page.getByRole("button", { name: "최신 상태 다시 확인" }).click();
   await expect(page.getByRole("heading", { name: "확인이 필요한 내용" })).toBeVisible();
   for (const label of ["1번 답변 방식", "2번 답변 방식"])
-    await page.getByLabel(label).selectOption("unknown");
+    await chooseOption(page.getByLabel(label), "unknown");
   await page.getByRole("button", { name: "답변 보내기" }).click();
   await expect(page.getByRole("heading", { name: "분석 대기" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "확인이 필요한 내용" })).toHaveCount(0);
@@ -343,7 +344,7 @@ test("failed read retries, stale/late answers recover the latest revision and ex
   expired = true;
   await page.reload();
   for (const label of ["1번 답변 방식", "2번 답변 방식"])
-    await page.getByLabel(label).selectOption("skipped");
+    await chooseOption(page.getByLabel(label), "skipped");
   await page.getByRole("button", { name: "답변 보내기" }).click();
   await expect(page.getByRole("main").getByRole("link", { name: "새 사건 입력" })).toBeVisible();
   await expect(page.getByText("질문 대기 시간이 지나", { exact: false })).toBeVisible();
@@ -422,8 +423,8 @@ test("real signed session/API/SQL legacy admission → questions → validated o
     expect(admission.status).toBe(201);
     await page.goto(`/cases/${admission.body.caseId}`);
     await expect(page.getByRole("heading", { name: "확인이 필요한 내용" })).toBeVisible();
-    await page.getByLabel("1번 답변 방식").selectOption("unknown");
-    await page.getByLabel("2번 답변 방식").selectOption("skipped");
+    await chooseOption(page.getByLabel("1번 답변 방식"), "unknown");
+    await chooseOption(page.getByLabel("2번 답변 방식"), "skipped");
     await page.getByRole("button", { name: "답변 보내기" }).click();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole("link", { name: /민법 제598조 공식 원문/ })).toBeVisible();

@@ -1,8 +1,9 @@
+import { Button as HeadlessButton } from "@headlessui/react";
 // Adapted from shadcn/ui (MIT), with native button semantics for Astro islands.
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 import { Spinner } from "./loading";
-import { cn } from "./utils";
+import { cn, definedProps } from "./utils";
 
 export const buttonVariants = cva("ui-button", {
   variants: {
@@ -28,17 +29,17 @@ export function Button({
   ...props
 }: ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { loading?: boolean }) {
   return (
-    <button
+    <HeadlessButton
       data-slot="button"
       type={type}
       className={cn(buttonVariants({ variant, size }), className)}
-      {...props}
-      disabled={props.disabled || loading}
+      {...definedProps(props)}
+      disabled={Boolean(props.disabled || loading)}
       aria-busy={loading || props["aria-busy"] || undefined}
     >
       {loading && <Spinner />}
       {children}
-    </button>
+    </HeadlessButton>
   );
 }
 
@@ -49,6 +50,14 @@ export function ButtonLink({
   ...props
 }: ComponentProps<"a"> & VariantProps<typeof buttonVariants>) {
   return (
-    <a data-slot="button" className={cn(buttonVariants({ variant, size }), className)} {...props} />
+    <a
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size }), className)}
+      {...definedProps(props)}
+    />
   );
+}
+
+export function ActionButton({ className, ...props }: ComponentProps<"button">) {
+  return <HeadlessButton {...definedProps(props)} className={cn("ui-control", className)} />;
 }

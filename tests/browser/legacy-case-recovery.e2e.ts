@@ -1,6 +1,7 @@
 import { expect, type Page, type Route, test } from "@playwright/test";
 import { syntheticConsentStatus } from "../fixtures/consent-status";
 import { guidance } from "../fixtures/contracts";
+import { chooseOption } from "../helpers/headless-controls";
 
 const caseId = "11111111-1111-4111-8111-111111111111";
 const analysisId = "22222222-2222-4222-8222-222222222222";
@@ -279,7 +280,7 @@ test("legacy answers preserve Unicode and reject over-limit drafts without sendi
     return true;
   });
   await page.goto(casePath);
-  await page.getByLabel("1번 답변 방식").selectOption("answered");
+  await chooseOption(page.getByLabel("1번 답변 방식"), "answered");
   const input = page.getByLabel("1번 답변", { exact: true }),
     send = page.getByRole("button", { name: "답변 보내기", exact: true });
   await input.focus();

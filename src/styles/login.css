@@ -130,7 +130,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.login-account-type label:has(input:checked) {
+.login-account-type label:has([data-checked]) {
   border-color: var(--border);
   background: var(--card);
   color: var(--primary);
@@ -181,16 +181,16 @@
   cursor: pointer;
 }
 .login-provider--kakao {
-  color: #191919;
-  background: #fee500;
+  color: var(--foreground);
+  background: var(--warning);
 }
 .login-provider--naver {
-  color: #fff;
-  background: #00843a;
+  color: var(--primary-foreground);
+  background: var(--success);
 }
 .login-provider--google {
   color: var(--foreground);
-  background: #fff;
+  background: var(--card);
   border-color: var(--border);
 }
 .login-provider__circle {

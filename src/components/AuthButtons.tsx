@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, apiMode, errorMessage } from "../client/api";
-
 import { sessionDestination } from "../client/return-path";
+import { ActionButton as ControlButton } from "./ui/button";
 
 type Provider = "google" | "naver" | "kakao";
 
@@ -78,7 +78,7 @@ export function AuthButtons() {
         <legend>소셜 계정으로 계속하기</legend>
         <div className="login-provider-list">
           {providers.map((provider) => (
-            <button
+            <ControlButton
               className={`login-provider login-provider--${provider.id}`}
               disabled={!ready || pendingProvider !== null}
               aria-label={pendingProvider === provider.id ? "연결 중…" : provider.label}
@@ -99,7 +99,7 @@ export function AuthButtons() {
               <span className="login-provider__name" aria-hidden="true">
                 {provider.name}
               </span>
-            </button>
+            </ControlButton>
           ))}
         </div>
       </fieldset>

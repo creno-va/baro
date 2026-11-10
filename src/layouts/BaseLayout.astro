@@ -2,6 +2,9 @@
 import "../styles/global.css";
 import "../styles/shell.css";
 import "../styles/app-focus.css";
+import "../styles/design-system.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { Experience } from "../components/ui/experience";
 
 interface Props {
   title: string;
@@ -16,7 +19,13 @@ const validationBootstrap = "Object.assign(globalThis, { __zod_globalConfig: { j
 // Clear a saved chapter before fragment restoration; later in-page links stay native.
 const landingEntryBootstrap = `history.scrollRestoration="manual";if(location.hash)history.replaceState(history.state,"",location.pathname+location.search);window.addEventListener("pageshow",()=>window.scrollTo({top:0,left:0,behavior:"instant"}));`;
 // Register one exact bootstrap before the streamed response commits its CSP header.
-const pageBootstrap = validationBootstrap + (startAtTop ? landingEntryBootstrap : "");
+const productUI = Astro.url.pathname !== "/";
+const themeBootstrap =
+  "try{var p=localStorage.getItem('baro-theme');var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}";
+const pageBootstrap =
+  validationBootstrap +
+  (startAtTop ? landingEntryBootstrap : "") +
+  (productUI ? themeBootstrap : "");
 const bootstrapDigest = await crypto.subtle.digest(
   "SHA-256",
   new TextEncoder().encode(pageBootstrap),
@@ -27,7 +36,7 @@ Astro.csp?.insertScriptHash(
 ---
 
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-baro-ui={productUI ? "" : undefined} data-theme={productUI ? "light" : undefined}>
   <head>
     <meta charset="UTF-8" />
     <!-- Configure validation before island modules construct schemas under the hash CSP. -->
@@ -40,6 +49,7 @@ Astro.csp?.insertScriptHash(
   <body>
     <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <slot />
+    {productUI && <div data-baro-experience><Experience client:load /></div>}
   </body>
 </html>
 

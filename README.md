@@ -1,5 +1,7 @@
 # BARO
 
+> **2026-11-10 최신 UI 지시 (#799):** 랜딩 제외 전체 웹에 실제 Headless UI와 라이트/다크/시스템 테마를 적용합니다. [ADR-0022](./docs/adr/0022-headless-web-ui-and-themes.md)와 [웹 UI 계약](./docs/design/HEADLESS-WEB-UI.md)이 아래 과거 UI 보존·native·단일 테마 지시보다 우선합니다. 업무/권한/저장/비용 계약과 랜딩은 유지합니다.
+
 > **2026-11-10 복구 지시:** 원래 랜딩과 대화 중심 앱 UI를 PR778 직전 기준으로 복구합니다.
 > 변호사 컨택 미지원·공통 로그인·기존 계정과 자료 접근·API/DB/비용 계약은 유지합니다.
 > [현재 실행 기준](./docs/development/EXECUTION.md)의 #792가 아래 전면 리디자인 UI 설명보다
@@ -82,7 +84,7 @@ BARO는 민사 준비·대응, 형사 고소 준비·대응에서 사용자가 �
 | --- | --- |
 | Toolchain | Bun |
 | Web | Astro 7, React islands, Tailwind CSS |
-| Design system | canonical semantic tokens·공통 읽기/목록/작업대 컴포넌트, Lucide·Pretendard·shared SVG |
+| Design system | Headless UI 2.2.10·공통 semantic light/dark tokens·Lucide·Pretendard·shared SVG |
 | API | Hono, Zod, Hono RPC |
 | Runtime | Cloudflare Workers; 격리된 heavy file processor만 Containers |
 | Database / jobs | D1·Drizzle, Workflows |

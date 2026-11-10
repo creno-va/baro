@@ -4,6 +4,7 @@ import { accessHref } from "../../client/return-path";
 import type { V2Fact } from "../../contracts/v2";
 import { ErrorPanel } from "../intake/common";
 import { Button } from "../ui/button";
+import { Input as ControlInput, Label as FieldLabel } from "../ui/form";
 import { ChatAttachments } from "./ChatAttachments";
 import { EvidencePicker } from "./EvidencePicker";
 import { materialState, materialStateLabels } from "./evidence-state";
@@ -138,15 +139,15 @@ function EvidenceUploadEditor({
       />
       {upload.selecting && <p role="status">선택한 자료를 확인하고 있어요.</p>}
       {upload.local.length > 0 && (
-        <label className="evidence-consent">
-          <input
+        <FieldLabel className="evidence-consent">
+          <ControlInput
             type="checkbox"
             checked={upload.consent}
             disabled={busy || !upload.writable}
             onChange={(event) => upload.setConsent(event.target.checked)}
           />
           추가한 자료의 자동 처리에 동의합니다.
-        </label>
+        </FieldLabel>
       )}
       <p className="evidence-hint">
         불필요한 주민번호·연락처는 포함하지 마세요. 원본은 비공개로 보관하며 분석에 외부 AI·파일

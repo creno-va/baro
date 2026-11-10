@@ -163,7 +163,7 @@
 .lawyer-editor .ui-card,
 .lawyer-directory .ui-card,
 .lawyer-profile .ui-card {
-  border-color: #dce5f1;
+  border-color: var(--accent);
   border-radius: 1.25rem;
   box-shadow: 0 5px 24px #204d8706;
 }
@@ -261,10 +261,10 @@
   width: 94px;
   height: 102px;
   place-items: center;
-  border: 1px solid #e4eafb;
+  border: 1px solid var(--accent);
   border-radius: 25px;
   background: var(--card);
-  color: #83a9ef;
+  color: var(--primary);
   box-shadow: 0 8px 18px #2364e80a;
   transform: rotate(-8deg);
 }
@@ -327,7 +327,7 @@
 .directory-search__select > svg {
   position: absolute;
   top: 50%;
-  color: #8b95a1;
+  color: var(--muted-foreground);
   pointer-events: none;
   transform: translateY(-50%);
 }
@@ -363,7 +363,7 @@
   color: var(--muted-foreground);
 }
 .lawyer-directory .directory-search :is(input, select):hover:not(:disabled) {
-  background: #eef1f5;
+  background: var(--background);
 }
 .lawyer-directory .directory-search :is(input, select):focus-visible {
   border-color: var(--input);
@@ -379,7 +379,7 @@
   box-shadow: none;
 }
 .lawyer-directory .directory-search__button:hover:not(:disabled) {
-  background: #1b55ce;
+  background: var(--primary);
 }
 .directory-results-heading {
   display: flex;
@@ -420,7 +420,7 @@
     box-shadow 0.2s;
 }
 .lawyer-directory .directory-profile:hover {
-  border-color: #d4e2fb;
+  border-color: var(--accent);
   box-shadow: 0 8px 26px #191f2805;
 }
 .directory-profile .directory-profile__header {
@@ -444,8 +444,8 @@
   width: 64px;
   height: 64px;
   border-radius: 21px;
-  background: #f2f5fa;
-  color: #a4b5d0;
+  background: var(--accent);
+  color: var(--muted-foreground);
 }
 .directory-profile .lawyer-avatar {
   padding: 15px;
@@ -699,7 +699,7 @@
 }
 .lawyer-visibility--public {
   background: color-mix(in srgb, var(--primary) 8%, transparent);
-  color: #1858b5;
+  color: var(--primary);
 }
 .lawyer-public-link {
   color: var(--muted-foreground);
@@ -752,7 +752,7 @@
   border-color: var(--border);
   border-radius: 12px;
   padding: 13px 15px;
-  background: #f5f6f8;
+  background: var(--background);
   font-weight: 400;
   font-size: 15px;
   line-height: 1.6;
@@ -818,12 +818,12 @@
   gap: 8px;
   cursor: pointer;
 }
-.lawyer-editor .lawyer-checkboxes label:has(input:checked) {
+.lawyer-editor .lawyer-checkboxes label:has([data-checked]) {
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
   background: color-mix(in srgb, var(--primary) 6%, var(--card));
 }
-.lawyer-editor input[type="checkbox"] {
+.lawyer-editor [role="checkbox"] {
   flex: 0 0 18px;
   width: 18px;
   height: 18px;
@@ -993,8 +993,8 @@
 }
 .lawyer-photo-surface .lawyer-avatar {
   padding: 16px;
-  background: #f5f6f8;
-  color: #687385;
+  background: var(--background);
+  color: var(--muted-foreground);
 }
 .app-frame.app-frame--product .lawyer-editor .profile-edit-section {
   display: block;
@@ -1027,7 +1027,7 @@
   line-height: 1.7;
 }
 .profile-required {
-  color: #c53535;
+  color: var(--destructive);
 }
 .lawyer-editor .lawyer-fields--three {
   display: grid;

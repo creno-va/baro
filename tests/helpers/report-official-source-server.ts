@@ -11,6 +11,7 @@ const css =
   (await Bun.file("src/styles/global.css").text())
     .replace(/^@import .*;$/gm, "")
     .replace(/@theme inline\s*\{[^}]*\}/s, "") +
+  (await Bun.file("src/styles/design-system.css").text()) +
   (await Bun.file("src/styles/reports.css").text()) +
   "body{padding:16px}h1{font-size:24px}";
 Bun.serve({

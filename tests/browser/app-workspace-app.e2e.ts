@@ -62,7 +62,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       });
     }
     await page.goto(`/cases/${caseId}`);
-    await page.locator(".case-tools > summary").click();
+    await page.locator(".case-tools > [data-popover-button]").click();
     const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const link = tools.getByRole("link", { name: "유사 판례", exact: true });
     const point = await link.evaluate((node) => {

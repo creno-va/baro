@@ -8,9 +8,9 @@ import {
 import type { V2ResolutionState } from "../../src/contracts/v2/resolution";
 
 async function openPreparation(page: Page) {
-  const detail = page.locator(".report-preparation > details");
+  const detail = page.locator(".report-preparation > [data-disclosure]");
   if ((await detail.count()) && (await detail.getAttribute("open")) === null)
-    await detail.locator("summary").click();
+    await detail.locator("[data-disclosure-button]").click();
 }
 
 const basis = {

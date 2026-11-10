@@ -166,13 +166,13 @@ async function focusAudit(page: Page, keyboard: boolean) {
     const failures: string[] = [];
     let count = 0;
     for (const node of scope.querySelectorAll(
-      "a[href],button,input,textarea,select,summary,[tabindex]",
+      "a[href],button,input,textarea,select,[data-disclosure-button],[tabindex]",
     )) {
       if (
         !(node instanceof HTMLElement) ||
         node.matches(":disabled") ||
         !node.getClientRects().length ||
-        node.closest("dialog:not([open]),[hidden]")
+        node.closest('[role="dialog"]:not([open]),[hidden]')
       )
         continue;
       const style = getComputedStyle(node);
@@ -245,7 +245,7 @@ test("focus feedback keeps accordion keyboard operation without a container outl
   await page.goto(base);
   await hydrated(page);
   const disclosure = page.locator(".workspace-context");
-  const trigger = disclosure.locator("summary");
+  const trigger = disclosure.locator("[data-disclosure-button]");
   await page.keyboard.press("Tab");
   await trigger.focus();
   await expect(trigger).toHaveCSS("outline-style", "none");
@@ -253,7 +253,7 @@ test("focus feedback keeps accordion keyboard operation without a container outl
   await page.keyboard.press("Enter");
   await expect(disclosure).toHaveAttribute("open", "");
   await page.keyboard.press("Space");
-  await expect(disclosure).not.toHaveAttribute("open");
+  await expect(disclosure).not.toHaveAttribute("data-open");
   await trigger.click();
   await expect(disclosure).toHaveAttribute("open", "");
   await expect(trigger).toHaveCSS("outline-style", "none");
@@ -290,7 +290,9 @@ for (const width of [1440, 390]) {
         await openReportEditor(page);
       }
       if (route === `${base}/precedents`) {
-        await page.locator(".precedent-search details > summary").click();
+        await page
+          .locator(".precedent-search [data-disclosure] > [data-disclosure-button]")
+          .click();
         for (const keyboard of [false, true]) {
           const result = await focusAudit(page, keyboard);
           expect
@@ -392,7 +394,7 @@ test("focus feedback handles touch and automatic focus from the mobile menu", as
     await seed(page, true);
     await page.goto(base);
     await hydrated(page);
-    const summary = page.locator(".workspace-context > summary");
+    const summary = page.locator(".workspace-context > [data-disclosure-button]");
     await summary.tap();
     await expect(summary).toHaveCSS("outline-style", "none");
     const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
@@ -455,7 +457,7 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await expect(page.locator("#settings-danger-title")).toBeVisible();
   await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
   const disclosure = page.locator(".settings-usage-guide");
-  const summary = disclosure.locator("summary");
+  const summary = disclosure.locator("[data-disclosure-button]");
   const content = disclosure.locator("p");
   const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });
   for (const width of [1440, 390]) {
@@ -467,7 +469,7 @@ test("settings usage disclosure stacks content below its summary and toggles acc
     // Clicking/expanding can move the document through scroll anchoring. Read
     // all rectangles in one frame so their viewport origin is identical.
     const geometry = await disclosure.evaluate((node) => {
-      const heading = node.querySelector("summary")?.getBoundingClientRect();
+      const heading = node.querySelector("[data-disclosure-button]")?.getBoundingClientRect();
       const body = node.querySelector("p")?.getBoundingClientRect();
       const link = node.querySelector("a")?.getBoundingClientRect();
       if (!heading || !body || !link) throw new Error("Synthetic usage disclosure missing");
@@ -681,14 +683,14 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
-  await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await expect(page.locator(".case-tools > [data-popover-button]")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(menu.getByRole("link").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
-  await expect(page.locator(".case-tools > summary")).toBeFocused();
+  await expect(page.locator(".case-tools > [data-popover-button]")).toBeFocused();
   await returnToCaseConversation(page);
   await expect(page).toHaveURL(base);
   await expect(page.locator(".case-options")).toHaveCount(0);
@@ -742,15 +744,15 @@ test("chat frame keeps its header and composer fixed when preparation expands an
     const messages = page.locator(".workspace-messages");
     const context = page.locator(".workspace-context");
     await expect(messages.locator(".workspace-context")).toHaveCount(1);
-    await context.locator("summary").click();
+    await context.locator("[data-disclosure-button]").click();
     await expect(context).toHaveAttribute("open", "");
     await context.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
     await expect.poll(geometry).toEqual(initial);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect(send).toBeInViewport({ ratio: 1 });
-    await context.locator("summary").click();
-    await expect(context).not.toHaveAttribute("open");
+    await context.locator("[data-disclosure-button]").click();
+    await expect(context).not.toHaveAttribute("data-open");
     await expect.poll(geometry).toEqual(initial);
     await expect(send).toBeInViewport({ ratio: 1 });
   }
@@ -986,7 +988,7 @@ test("purpose choices change examples and persist without owner-category UI", as
   const caseId = page.url().split("/")[4];
   await page.goto(`/cases/${caseId}`);
   await expect(page.locator(".case-subject-context")).toHaveCount(0);
-  await page.locator(".workspace-context > summary").click();
+  await page.locator(".workspace-context > [data-disclosure-button]").click();
   await expect(
     page.getByText("대화와 자료를 바탕으로 사건의 흐름", { exact: false }),
   ).toBeVisible();

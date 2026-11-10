@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { DirectoryItem, DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
 import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 const directoryLawyer: DirectoryItem = {
@@ -93,8 +94,14 @@ test("profile round trip retains applied search filters after reload and ignores
     await expect(page.getByLabel("이름 또는 사무실", { exact: true })).toHaveValue(
       directoryLawyer.name,
     );
-    await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("seoul");
-    await expect(page.getByRole("combobox", { name: "분야", exact: true })).toHaveValue("company");
+    await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+      "data-value",
+      "seoul",
+    );
+    await expect(selectControl(page, { name: "분야", exact: true })).toHaveAttribute(
+      "data-value",
+      "company",
+    );
   }
   await page.goto(
     `/lawyers/${directoryLawyer.id}?region=seoul&returnTo=https://example.com&unknown=secret&legalField=invalid`,
@@ -140,14 +147,17 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await expect(page.getByRole("heading", { name: "변호사 찾기", exact: true })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await expect(page.locator("a.directory-profile")).toBeVisible();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("jeju");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "jeju");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("jeju");
+  await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+    "data-value",
+    "jeju",
+  );
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await page.locator("a.directory-profile").click({ position: { x: 12, y: 12 } });
   await expect(
@@ -244,7 +254,10 @@ test("URL restores before input; a slow initial response cannot erase fast edits
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await page.goBack();
   await expect(name).toHaveValue("URL 초기 조건");
-  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("busan");
+  await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+    "data-value",
+    "busan",
+  );
   await page.goForward();
   await expect(name).toHaveValue("빠른 입력 유지");
   await page.getByRole("button", { name: "조건 초기화" }).focus();

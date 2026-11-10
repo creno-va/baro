@@ -8,7 +8,13 @@ import { isExplicitSignOut } from "../../client/session-events";
 import type { V2ConversationActionRequest, V2ConversationState, V2Fact } from "../../contracts/v2";
 import { reportPhotoIds } from "../../utils/report-markdown";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
-import { Button } from "../ui/button";
+import { Button, ActionButton as ControlButton } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import {
+  Input as ControlInput,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { CaseNavigation } from "../workspace/CaseNavigation";
@@ -764,7 +770,7 @@ export function ReportReview({
             <fieldset className="report-heading-actions" aria-label="리포트 작업">
               {editing && (
                 <>
-                  <button
+                  <ControlButton
                     type="button"
                     disabled={editingBlocked}
                     onClick={() => {
@@ -773,8 +779,8 @@ export function ReportReview({
                     }}
                   >
                     편집 취소
-                  </button>
-                  <button
+                  </ControlButton>
+                  <ControlButton
                     type="button"
                     className="primary"
                     disabled={editingBlocked || !dirty || report.stale}
@@ -787,11 +793,11 @@ export function ReportReview({
                   >
                     <Save size={16} aria-hidden="true" />
                     수정 내용 저장
-                  </button>
+                  </ControlButton>
                 </>
               )}
               {!editing && (
-                <button
+                <ControlButton
                   type="button"
                   className="report-edit-toggle"
                   disabled={
@@ -810,10 +816,10 @@ export function ReportReview({
                 >
                   <Pencil size={16} aria-hidden="true" />
                   수정하기
-                </button>
+                </ControlButton>
               )}
               {(!editing || report.stale) && (
-                <button
+                <ControlButton
                   type="button"
                   className="report-regenerate primary"
                   disabled={
@@ -830,7 +836,7 @@ export function ReportReview({
                   onClick={() => setRegenerate(true)}
                 >
                   새 버전 만들기
-                </button>
+                </ControlButton>
               )}
             </fieldset>
           )}
@@ -854,8 +860,8 @@ export function ReportReview({
               aria-label="리포트 준비 상태"
               aria-live="polite"
             >
-              <details open={!report || Boolean(pendingJob)}>
-                <summary>
+              <Disclosure open={!report || Boolean(pendingJob)}>
+                <DisclosureSummary>
                   <h3>
                     {preparation.report.status === "pending"
                       ? "리포트를 준비하고 있어요"
@@ -873,7 +879,7 @@ export function ReportReview({
                             stale: "사건과 자료 변경을 반영해야 해요",
                           }[preparation.analysis.status]}
                   </h3>
-                </summary>
+                </DisclosureSummary>
                 <p>최신 사건과 자료를 확인한 뒤 리포트를 만들어요.</p>
                 {preparation.report.failure && (
                   <p>리포트 준비 실패 · {preparationFailureText(preparation.report.failure)}</p>
@@ -893,7 +899,7 @@ export function ReportReview({
                 )}
                 {pollPaused && <p>처리가 계속되고 있을 수 있어요. 상태를 다시 확인해 주세요.</p>}
                 <div className="report-preparation-actions">
-                  <button
+                  <ControlButton
                     type="button"
                     className="primary"
                     disabled={
@@ -913,16 +919,16 @@ export function ReportReview({
                     }
                   >
                     리포트 준비
-                  </button>
-                  <button
+                  </ControlButton>
+                  <ControlButton
                     type="button"
                     disabled={Boolean(busy) || accessChecking}
                     onClick={() => refreshStatus.current()}
                   >
                     상태 확인
-                  </button>
+                  </ControlButton>
                 </div>
-              </details>
+              </Disclosure>
             </section>
           )}
         {newReportAvailable && (
@@ -932,7 +938,7 @@ export function ReportReview({
                 ? "새 리포트가 준비됐어요. 저장하지 않은 편집 내용을 확인한 뒤 전환하세요."
                 : "새 리포트가 준비됐어요. 새 버전을 열어 내용을 확인하세요."}
             </p>
-            <button
+            <ControlButton
               type="button"
               disabled={
                 Boolean(busy) ||
@@ -945,13 +951,13 @@ export function ReportReview({
               onClick={() => (dirty ? setReloadConfirm(true) : void load())}
             >
               새 리포트 열기
-            </button>
+            </ControlButton>
           </section>
         )}
         {error && !regenerate && !reloadConfirm && (
           <div className="report-error" role="alert">
             <p>{error}</p>
-            <button
+            <ControlButton
               type="button"
               disabled={
                 Boolean(busy) || evidenceBusy || evidenceDirty || resolutionBusy || resolutionDirty
@@ -963,7 +969,7 @@ export function ReportReview({
               }}
             >
               다시 확인
-            </button>
+            </ControlButton>
             <a href="/login">로그인</a>
           </div>
         )}
@@ -972,17 +978,17 @@ export function ReportReview({
             <h2>자료를 줄여 첫 리포트를 만들어요</h2>
             <p>리포트에서 제외할 자료를 선택하세요. 원본은 그대로 보관돼요.</p>
             {files.map((file) => (
-              <label key={file.id} className="report-check">
-                <input
+              <FieldLabel key={file.id} className="report-check">
+                <ControlInput
                   type="checkbox"
                   checked={excluded.includes(file.id)}
                   disabled={Boolean(busy) || needsConsent}
                   onChange={() => setExcluded(toggle(excluded, file.id))}
                 />
                 {file.name} · 리포트에서 제외
-              </label>
+              </FieldLabel>
             ))}
-            <button
+            <ControlButton
               type="button"
               disabled={Boolean(busy) || needsConsent || !excluded.length}
               onClick={() =>
@@ -995,7 +1001,7 @@ export function ReportReview({
               }
             >
               선택 자료를 제외하고 생성
-            </button>
+            </ControlButton>
           </section>
         )}
         {report && (
@@ -1035,8 +1041,10 @@ export function ReportReview({
                 {!dirty &&
                   ` · ${new Date(report.updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}`}
               </span>
-              <details className="report-basis-details">
-                <summary>작성 기준{report.stale ? " · 현재 사건과 다름" : ""}</summary>
+              <Disclosure className="report-basis-details">
+                <DisclosureSummary>
+                  작성 기준{report.stale ? " · 현재 사건과 다름" : ""}
+                </DisclosureSummary>
                 <p>
                   {report.basis
                     ? `요약 ${report.basis.summaryRevision} · 사건 ${report.basis.workspaceRevision} · `
@@ -1052,14 +1060,14 @@ export function ReportReview({
                     새 버전을 만들어 주세요.
                   </p>
                 )}
-              </details>
+              </Disclosure>
             </section>
-            <details
+            <Disclosure
               className="report-current-tools-menu"
               open={toolsOpen}
               onToggle={(event) => setToolsOpen(event.currentTarget.open)}
             >
-              <summary>현재 사건에서 더 준비하기</summary>
+              <DisclosureSummary>현재 사건에서 더 준비하기</DisclosureSummary>
               <nav className="report-current-tools" aria-label="현재 사건에서 더 준비하기">
                 <p>
                   현재 사건에서 더 준비하기 <span>변경한 내용은 새 리포트에서 반영해요.</span>
@@ -1069,16 +1077,20 @@ export function ReportReview({
                 <a href={`/cases/${encodeURIComponent(caseId)}/timeline`}>현재 경위 정리</a>
                 <a href={`/cases/${encodeURIComponent(caseId)}/precedents`}>현재 판례 탐색</a>
               </nav>
-            </details>
+            </Disclosure>
             {preservedEdit && (
-              <details className="report-preserved-edit">
-                <summary>새 버전을 만들기 전의 편집 내용 보관</summary>
+              <Disclosure className="report-preserved-edit">
+                <DisclosureSummary>새 버전을 만들기 전의 편집 내용 보관</DisclosureSummary>
                 <p>
                   저장하지 않았던 내용을 이 화면에 보관했어요. 필요한 내용을 새 리포트에 옮겨
                   주세요.
                 </p>
-                <textarea aria-label="보관한 리포트 편집 내용" readOnly value={preservedEdit} />
-                <button
+                <ControlTextarea
+                  aria-label="보관한 리포트 편집 내용"
+                  readOnly
+                  value={preservedEdit}
+                />
+                <ControlButton
                   type="button"
                   onClick={() => {
                     downloadBlob(
@@ -1089,41 +1101,41 @@ export function ReportReview({
                   }}
                 >
                   보관한 편집 내용 저장
-                </button>
-              </details>
+                </ControlButton>
+              </Disclosure>
             )}
             {(rework || report.analysisReview) && (
-              <details className="report-scope">
-                <summary>포함할 자료와 식별정보 가림</summary>
+              <Disclosure className="report-scope">
+                <DisclosureSummary>포함할 자료와 식별정보 가림</DisclosureSummary>
                 <p>
                   본문 수정을 먼저 저장한 뒤 범위를 바꾸세요. 제외 자료에 의존하는 법률 분석과 판례
                   비교도 새 리포트에서 다시 검토합니다.
                 </p>
-                <label className="report-check">
-                  <input
+                <FieldLabel className="report-check">
+                  <ControlInput
                     type="checkbox"
                     checked={maskIdentifiers}
                     disabled={needsConsent || report.stale || content !== report.content}
                     onChange={(event) => setMaskIdentifiers(event.target.checked)}
                   />
                   식별정보 가리기
-                </label>
+                </FieldLabel>
                 <p>
                   전화번호·이메일·주민등록번호 형태의 식별정보를 가립니다. 이름·주소와 원본은 직접
                   확인해 주세요. 가림을 켜면 선택 사진을 통째로 제외합니다.
                 </p>
                 {files.map((file) => (
-                  <label className="report-check" key={file.id}>
-                    <input
+                  <FieldLabel className="report-check" key={file.id}>
+                    <ControlInput
                       type="checkbox"
                       checked={excluded.includes(file.id)}
                       disabled={needsConsent || report.stale || content !== report.content}
                       onChange={() => setExcluded(toggle(excluded, file.id))}
                     />
                     {file.name} · 리포트에서 제외
-                  </label>
+                  </FieldLabel>
                 ))}
-                <button
+                <ControlButton
                   type="button"
                   disabled={
                     Boolean(busy) ||
@@ -1140,8 +1152,8 @@ export function ReportReview({
                   }
                 >
                   선택 범위 저장
-                </button>
-              </details>
+                </ControlButton>
+              </Disclosure>
             )}
             <section className="report-read-content" aria-label="리포트 검토 본문">
               <div id="report-edit-fields">
@@ -1171,7 +1183,7 @@ export function ReportReview({
               {exportExhausted && (
                 <div className="report-callout">
                   <p>다운로드 재시도를 모두 사용했어요. 새 버전으로 다시 준비해 주세요.</p>
-                  <button
+                  <ControlButton
                     type="button"
                     disabled={Boolean(busy) || needsConsent || report.stale || !content.trim()}
                     onClick={() =>
@@ -1181,11 +1193,11 @@ export function ReportReview({
                     }
                   >
                     새 버전으로 다시 준비
-                  </button>
+                  </ControlButton>
                 </div>
               )}
               <div className="report-actions">
-                <button
+                <ControlButton
                   type="button"
                   className="primary"
                   title={
@@ -1207,7 +1219,7 @@ export function ReportReview({
                 >
                   {exportingPdf ? <Spinner /> : <Download size={16} aria-hidden="true" />}
                   {exportingPdf ? "PDF 만드는 중…" : "PDF 다운로드"}
-                </button>
+                </ControlButton>
               </div>
             </section>
           </fieldset>
@@ -1240,8 +1252,8 @@ export function ReportReview({
           />
         )}
         {rework && owner.current && (
-          <details className="report-evidence-entry">
-            <summary>자료 추가와 사건 반영</summary>
+          <Disclosure className="report-evidence-entry">
+            <DisclosureSummary>자료 추가와 사건 반영</DisclosureSummary>
             <EvidenceUpload
               caseId={caseId}
               disabled={
@@ -1268,7 +1280,7 @@ export function ReportReview({
               새 증거의 업로드 접수, 처리·관찰 검토, 사건 반영과 재분석은 각각 다른 단계예요. 기존
               리포트는 바뀌지 않으며 최신 분석으로 새 버전을 만들어 주세요.
             </p>
-          </details>
+          </Disclosure>
         )}
         {regenerate && report && (
           <ConfirmDialog
@@ -1367,10 +1379,10 @@ export function ReportReview({
             onCancel={() => setReloadConfirm(false)}
           >
             <p>저장하지 않은 편집 내용은 사라져요. 현재 편집 내용을 보관하려면 취소해 주세요.</p>
-            <button type="button" onClick={() => setReloadConfirm(false)}>
+            <ControlButton type="button" onClick={() => setReloadConfirm(false)}>
               취소
-            </button>
-            <button
+            </ControlButton>
+            <ControlButton
               type="button"
               disabled={Boolean(busy)}
               onClick={() => {
@@ -1379,7 +1391,7 @@ export function ReportReview({
               }}
             >
               편집을 버리고 다시 불러오기
-            </button>
+            </ControlButton>
           </ConfirmDialog>
         )}
       </div>

@@ -2,6 +2,7 @@ import { Camera, Paperclip } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { validateUpload } from "../../client/api/files";
 import { Button } from "../ui/button";
+import { Input as ControlInput } from "../ui/form";
 import "../../styles/evidence.css";
 
 const acceptedFiles =
@@ -78,7 +79,7 @@ export function EvidencePicker({
   };
   return (
     <div className={`evidence-picker${compact ? " evidence-picker--compact" : ""}`}>
-      <input
+      <ControlInput
         ref={fileInput}
         type="file"
         hidden
@@ -88,7 +89,7 @@ export function EvidencePicker({
         disabled={disabled}
         onChange={(event) => void select(event.currentTarget)}
       />
-      <input
+      <ControlInput
         ref={cameraInput}
         type="file"
         hidden

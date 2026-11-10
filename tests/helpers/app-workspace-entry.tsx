@@ -1,4 +1,10 @@
 /* biome-ignore-all lint/suspicious/noArrayIndexKey: Static numbered fixture rows never reorder. */
+import {
+  Input as ControlInput,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../../src/components/ui/form";
+import "./headless-experience";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { installAppFocus } from "../../src/client/app-focus";
@@ -19,8 +25,8 @@ function MaterialsFixture({
   return (
     <div className="shell-fixture-materials">
       <p>합성 자료 패널 · 기능 데이터는 소비자가 제공합니다.</p>
-      <label htmlFor="correction">자료 교정 초안</label>
-      <input id="correction" defaultValue="" />
+      <FieldLabel htmlFor="correction">자료 교정 초안</FieldLabel>
+      <ControlInput id="correction" defaultValue="" />
       <Button
         variant="outline"
         onClick={(event) => {
@@ -50,8 +56,8 @@ function MaterialsFixture({
       {(!conditional || nested) && (
         <Dialog open={nested} onOpenChange={setNested} title="합성 자료 확인">
           <p>안쪽 확인창을 닫아도 자료 패널은 유지됩니다.</p>
-          <label htmlFor="nested-review">안쪽 교정 내용</label>
-          <input id="nested-review" defaultValue="" />
+          <FieldLabel htmlFor="nested-review">안쪽 교정 내용</FieldLabel>
+          <ControlInput id="nested-review" defaultValue="" />
         </Dialog>
       )}
     </div>
@@ -65,14 +71,15 @@ function Fixture() {
   const conditional = new URLSearchParams(location.search).has("conditional");
   const longReview = new URLSearchParams(location.search).has("longReview");
   return (
-    <div className="app-frame app-frame--product" data-product-ui="refresh" data-app-workspace>
+    <div className="app-frame baro-workbench" data-workbench data-app-workspace>
       <AppNavigation
         role={"user" as const}
         pathname="/cases/shell-case"
-        availableRoutes={["/new", "/lawyers", "/settings"]}
+        availableRoutes={["/new", "/settings"]}
+        appearance="workbench"
       />
       <div className="app-surface">
-        <main id="main-content" tabIndex={-1}>
+        <main id="main-content" className="case-shell" tabIndex={-1}>
           <CaseWorkspaceFrame
             header={
               <CaseNavigation
@@ -120,21 +127,21 @@ function Fixture() {
                     </p>
                   ))}
                 </section>
-                <label className="shell-fixture-composer">
+                <FieldLabel className="shell-fixture-composer">
                   메시지 초안
-                  <textarea
+                  <ControlTextarea
                     defaultValue=""
                     // biome-ignore lint/a11y/noAutofocus: This opt-in fixture reproduces a consumer's initial composer focus.
                     autoFocus={new URLSearchParams(location.search).has("focus")}
                   />
-                </label>
+                </FieldLabel>
               </div>
             )}
           </CaseWorkspaceFrame>
           {(!conditional || siblingReview) && (
             <Dialog open={siblingReview} onOpenChange={setSiblingReview} title="독립 자료 검토">
-              <label htmlFor="sibling-review">별도 교정 내용</label>
-              <input id="sibling-review" defaultValue="" />
+              <FieldLabel htmlFor="sibling-review">별도 교정 내용</FieldLabel>
+              <ControlInput id="sibling-review" defaultValue="" />
               {longReview && (
                 <>
                   {Array.from({ length: 28 }, (_, index) => (

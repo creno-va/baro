@@ -16,7 +16,7 @@ export async function openWorkspaceMaterials(page: Page) {
 }
 
 export async function openCaseTool(page: Page, name: string | RegExp) {
-  const summary = page.locator(".case-tools > summary");
+  const summary = page.locator(".case-tools > [data-popover-button]");
   const menu = page.getByRole("navigation", { name: "사건 도구", exact: true });
   if (!(await menu.isVisible())) await summary.click();
   await menu.getByRole("link", { name, exact: typeof name === "string" }).click();

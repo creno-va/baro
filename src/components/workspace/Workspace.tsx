@@ -31,6 +31,7 @@ import type {
   WorkspaceView,
 } from "../../client/api/types";
 import type { CustomerWorkspaceView } from "../../client/api/workspace";
+import { confirmAction } from "../../client/confirm";
 import { startForegroundPolling } from "../../client/foreground-poll";
 import { accessHref } from "../../client/return-path";
 import {
@@ -45,7 +46,17 @@ import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
-import { Button, ButtonLink } from "../ui/button";
+import { Button, ButtonLink, ActionButton as ControlButton } from "../ui/button";
+import { Modal } from "../ui/dialog";
+import type { DisclosureHandle } from "../ui/disclosure";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
+import { Progress } from "../ui/progress";
 import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { CaseContextPanel } from "./CaseContextPanel";
 import { CaseMaterials } from "./CaseMaterials";
@@ -150,11 +161,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
-  const composerMenu = useRef<HTMLDetailsElement>(null);
+  const composerMenu = useRef<DisclosureHandle>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !composerMenu.current?.contains(event.target))
-        composerMenu.current?.removeAttribute("open");
+        composerMenu.current?.close();
     };
     document.addEventListener("pointerdown", closeOutside);
     return () => document.removeEventListener("pointerdown", closeOutside);
@@ -207,7 +218,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   const linkedFile = useRef("");
   const uploadInput = useRef<HTMLInputElement>(null);
   const uploadChooserScope = useRef<string | null>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
   const reviewDirty = useRef(false);
   const reviewBusy = useRef(false);
   const [reviewState, setReviewState] = useState({ dirty: false, busy: false });
@@ -272,7 +283,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setError(null);
     lock.current = false;
     if (uploadInput.current) uploadInput.current.value = "";
-    dialog.current?.close();
   }, []);
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
   const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
@@ -443,11 +453,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     if (tab !== "chat" || !latestMessageContent) return;
     followReply();
   }, [latestMessageContent, tab, followReply]);
-  useEffect(() => {
-    const open = !!((preview && tab !== "chat") || deleteFile || entry);
-    if (open && !dialog.current?.open) dialog.current?.showModal();
-    if (!open && dialog.current?.open) dialog.current?.close();
-  }, [preview, deleteFile, entry, tab]);
 
   useEffect(() => {
     const modal = dialog.current;
@@ -845,7 +850,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     chooseAttachments(files);
     draftInput.current?.focus();
   }
-  function openConversationFile(fileId: string, origin?: HTMLElement) {
+  async function openConversationFile(fileId: string, origin?: HTMLElement) {
+    const confirmEpoch = ticket();
     const file = view?.files.find((file) => file.id === fileId);
     if (!file) {
       showError({ code: "NOT_FOUND", message: "자료가 삭제됐거나 현재 확인할 수 없어요." }, true);
@@ -855,9 +861,12 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       reviewBusy.current ||
       (preview?.id !== file.id &&
         reviewDirty.current &&
-        !window.confirm("저장하지 않은 교정 내용이 있어요. 내용을 버리고 다른 자료를 열까요?"))
+        !(await confirmAction(
+          "저장하지 않은 교정 내용이 있어요. 내용을 버리고 다른 자료를 열까요?",
+        )))
     )
       return;
+    if (!current(confirmEpoch) || !mounted.current) return;
     origin?.focus();
     reviewOrigin.current = origin ?? null;
     void run("file-preview", async () => {
@@ -1185,13 +1194,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       if (next && current(epoch)) begin(next.case.revision);
     });
   }
-  function closeDialog() {
+  async function closeDialog() {
+    const confirmEpoch = ticket();
     if (busy || reviewBusy.current) return false;
     if (
       reviewDirty.current &&
-      !window.confirm("저장하지 않은 교정 내용이 있어요. 내용을 버리고 닫을까요?")
+      !(await confirmAction("저장하지 않은 교정 내용이 있어요. 내용을 버리고 닫을까요?"))
     )
       return false;
+    if (!current(confirmEpoch) || !mounted.current) return false;
     reviewDirty.current = false;
     setTimelineRecovery(false);
     setPreview(null);
@@ -1285,17 +1296,17 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       : [];
   const contextSummary = view ? (
     <aside className="workspace-sidebar" aria-label="사건 요약 및 준비 현황" {...privateContent}>
-      <details
+      <Disclosure
         className="workspace-context"
         onToggle={(event) => {
           if (event.currentTarget.open && tab === "files") setContextRequested(true);
         }}
       >
-        <summary>
+        <DisclosureSummary>
           <FileText size={17} />
           <span>사건 요약과 준비 현황</span>
           <ChevronDown size={16} />
-        </summary>
+        </DisclosureSummary>
         <div className="workspace-context-content">
           {tab === "files" && !contextLoaded ? (
             <p className="workspace-context-notices" role="status">
@@ -1376,7 +1387,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             </>
           )}
         </div>
-      </details>
+      </Disclosure>
     </aside>
   ) : null;
   const errorFeedback = error ? (
@@ -1650,15 +1661,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         />
         {!!localAttachments.length && (
           <>
-            <label className="workspace-consent">
-              <input
+            <FieldLabel className="workspace-consent">
+              <ControlInput
                 type="checkbox"
                 checked={uploadConsent}
                 disabled={readonly || !!busy}
                 onChange={(event) => setUploadConsent(event.target.checked)}
               />
               첨부한 파일의 자동 처리에 동의합니다.
-            </label>
+            </FieldLabel>
             <Button
               disabled={readonly || !!busy || !uploadConsent || retryUploads.length > 0}
               onClick={() => void upload(localAttachments, false)}
@@ -1668,7 +1679,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           </>
         )}
         {!view.files.length && <h3 className="sr-only">아직 자료가 없어요</h3>}
-        <button
+        <ControlButton
           type="button"
           className="workspace-upload-target"
           aria-label={view.files.length ? "파일 추가" : "파일 선택"}
@@ -1693,7 +1704,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             문서·이미지 {V2_LIMITS.documentImageBytes / 1_000_000} MB · 음성·영상{" "}
             {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
           </span>
-        </button>
+        </ControlButton>
         {busy === "upload" && (
           <div className="workspace-upload-progress" role="status">
             <p>
@@ -1724,7 +1735,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
     >
       {/* Keep the chooser's original node attached during temporary access checks. */}
-      <input
+      <ControlInput
         ref={uploadInput}
         id="workspace-upload"
         aria-label={tab === "chat" ? "사진 또는 파일 첨부" : "업로드할 파일 선택"}
@@ -1794,8 +1805,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                 />
               ),
               panelOpen: materialsOpen,
-              onPanelOpenChange: (open: boolean) => {
-                if (!open && preview && !closeDialog()) return;
+              onPanelOpenChange: async (open: boolean) => {
+                if (!open && preview && !(await closeDialog())) return;
                 setMaterialsOpen(open);
               },
             }
@@ -2095,6 +2106,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       )}
                     </div>
                     <form
+                      noValidate
                       className="workspace-composer"
                       onSubmit={(event) => void send(event)}
                       onDragOver={(event) => {
@@ -2127,15 +2139,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                           }
                         />
                         {!!localAttachments.length && (
-                          <label className="workspace-consent">
-                            <input
+                          <FieldLabel className="workspace-consent">
+                            <ControlInput
                               type="checkbox"
                               checked={uploadConsent}
                               disabled={!!busy || readonly || queuedSend}
                               onChange={(event) => setUploadConsent(event.target.checked)}
                             />
                             첨부한 파일의 자동 처리에 동의합니다.
-                          </label>
+                          </FieldLabel>
                         )}
                         {(busy === "upload" || queuedSend) && (
                           <div className="workspace-chat-upload-status" role="status">
@@ -2186,7 +2198,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                 <span key={file.id}>
                                   <FileText size={14} />
                                   {file.name}
-                                  <button
+                                  <ControlButton
                                     type="button"
                                     aria-label={`${file.name} 멘션 해제`}
                                     disabled={!!busy || readonly || queuedSend}
@@ -2195,39 +2207,48 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                     }
                                   >
                                     <X size={13} />
-                                  </button>
+                                  </ControlButton>
                                 </span>
                               ))}
                           </section>
                         )}
                         <div className="workspace-composer-row">
-                          <details
+                          <Disclosure
                             ref={composerMenu}
                             className="composer-add-menu"
                             onKeyDown={(event) => {
                               if (event.key === "Escape") {
                                 event.preventDefault();
-                                event.currentTarget.open = false;
-                                event.currentTarget.querySelector("summary")?.focus();
+                                event.currentTarget.dispatchEvent(
+                                  new CustomEvent("baro-disclosure-close"),
+                                );
+                                event.currentTarget
+                                  .querySelector<HTMLElement>("[data-disclosure-button]")
+                                  ?.focus();
                               } else if (event.key === "Tab") {
                                 requestAnimationFrame(() => {
                                   const menu = composerMenu.current;
-                                  if (menu && !menu.contains(document.activeElement))
-                                    menu.open = false;
+                                  if (menu && !menu.contains(document.activeElement)) menu.close();
                                 });
                               }
                             }}
                           >
-                            <summary aria-label="자료 추가 및 멘션" title="자료 추가 및 멘션">
+                            <DisclosureSummary
+                              variant="icon"
+                              aria-label="자료 추가 및 멘션"
+                              title="자료 추가 및 멘션"
+                            >
                               <Plus size={20} />
-                            </summary>
+                            </DisclosureSummary>
                             <div className="composer-add-menu__content">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 disabled={!!busy || readonly || queuedSend}
                                 onClick={(event) => {
-                                  event.currentTarget.closest("details")?.removeAttribute("open");
+                                  event.currentTarget
+                                    .closest("[data-disclosure]")
+                                    ?.dispatchEvent(new CustomEvent("baro-disclosure-close"));
                                   openUploadChooser();
                                 }}
                               >
@@ -2241,8 +2262,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                 </legend>
                                 {readyFiles.length ? (
                                   readyFiles.map((file) => (
-                                    <label key={file.id}>
-                                      <input
+                                    <FieldLabel key={file.id}>
+                                      <ControlInput
                                         type="checkbox"
                                         checked={selected.includes(file.id)}
                                         onChange={(event) =>
@@ -2254,7 +2275,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                         }
                                       />
                                       <span>{file.name}</span>
-                                    </label>
+                                    </FieldLabel>
                                   ))
                                 ) : (
                                   <p>처리가 완료된 자료를 대화에 연결할 수 있어요.</p>
@@ -2279,11 +2300,11 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                 </Button>
                               )}
                             </div>
-                          </details>
-                          <label className="workspace-sr-only" htmlFor="workspace-message">
+                          </Disclosure>
+                          <FieldLabel className="workspace-sr-only" htmlFor="workspace-message">
                             추가 사실 또는 질문
-                          </label>
-                          <textarea
+                          </FieldLabel>
+                          <ControlTextarea
                             ref={draftInput}
                             id="workspace-message"
                             rows={1}
@@ -2463,7 +2484,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                           {view.actions.filter((action) => action.done).length} /{" "}
                           {view.actions.length} 완료
                         </span>
-                        <progress
+                        <Progress
                           className="workspace-action-progress"
                           aria-label="다음 행동 완료 현황"
                           max={view.actions.length}
@@ -2485,8 +2506,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                     <ul className="workspace-action-list" aria-busy={!!pendingResponse}>
                       {view.actions.map((action) => (
                         <li key={action.id} className={action.done ? "is-done" : ""}>
-                          <label>
-                            <input
+                          <FieldLabel>
+                            <ControlInput
                               type="checkbox"
                               checked={action.done}
                               disabled={!!busy || readonly || !!pendingResponse}
@@ -2501,7 +2522,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                 <small role="status">완료 표시를 저장하고 있어요…</small>
                               )}
                             </span>
-                          </label>
+                          </FieldLabel>
                         </li>
                       ))}
                     </ul>
@@ -2532,14 +2553,22 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           onSubmit={sendLookup}
         />
       )}
-      <dialog
+      <Modal
         ref={dialog}
-        className={`workspace-dialog${preview ? " workspace-dialog--material" : ""}`}
-        onCancel={(event) => {
-          event.preventDefault();
-          closeDialog();
+        open={!!((preview && tab !== "chat") || deleteFile || entry)}
+        onClose={() => {
+          void closeDialog();
         }}
-        aria-labelledby="workspace-dialog-title"
+        title={
+          deleteFile
+            ? "자료 삭제"
+            : entry
+              ? entry.id
+                ? "타임라인 편집"
+                : "타임라인 추가"
+              : "자료 확인"
+        }
+        className={"workspace-dialog" + (preview ? " workspace-dialog--material" : "")}
       >
         <div className="workspace-dialog-header">
           <h2 id="workspace-dialog-title">
@@ -2601,9 +2630,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
           </>
         )}
         {entry && ready && (
-          <form onSubmit={(event) => void saveEntry(event)}>
-            <label htmlFor="timeline-precision">날짜를 얼마나 기억하시나요?</label>
-            <select
+          <form noValidate onSubmit={(event) => void saveEntry(event)}>
+            <FieldLabel htmlFor="timeline-precision">날짜를 얼마나 기억하시나요?</FieldLabel>
+            <ControlSelect
               id="timeline-precision"
               value={entry.datePrecision ?? (entry.date ? "day" : "unknown")}
               disabled={readonly || !!busy}
@@ -2620,9 +2649,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               <option value="month">연·월 (일 미상)</option>
               <option value="year">연도 (월·일 미상)</option>
               <option value="unknown">날짜 미상</option>
-            </select>
-            <label htmlFor="timeline-date">날짜 (모르면 비워 두세요)</label>
-            <input
+            </ControlSelect>
+            <FieldLabel htmlFor="timeline-date">날짜 (모르면 비워 두세요)</FieldLabel>
+            <ControlInput
               id="timeline-date"
               name="date"
               type={
@@ -2644,8 +2673,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               }
               onChange={(event) => setEntry({ ...entry, date: event.target.value })}
             />
-            <label htmlFor="timeline-title">어떤 일이 있었나요?</label>
-            <input
+            <FieldLabel htmlFor="timeline-title">어떤 일이 있었나요?</FieldLabel>
+            <ControlInput
               id="timeline-title"
               name="title"
               required
@@ -2653,8 +2682,8 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
               value={entry.title ?? ""}
               onChange={(event) => setEntry({ ...entry, title: event.target.value })}
             />
-            <label htmlFor="timeline-detail">상세 내용</label>
-            <textarea
+            <FieldLabel htmlFor="timeline-detail">상세 내용</FieldLabel>
+            <ControlTextarea
               id="timeline-detail"
               name="detail"
               rows={4}
@@ -2683,7 +2712,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             )}
           </form>
         )}
-      </dialog>
+      </Modal>
     </div>
   );
 }

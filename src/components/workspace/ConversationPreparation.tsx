@@ -2,6 +2,8 @@ import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkspaceView } from "../../client/api/types";
 import { Button } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import { Input as ControlInput, Label as FieldLabel } from "../ui/form";
 import { timelineDateLabel } from "./source-label";
 import { TimelineEvidence } from "./TimelineEvidence";
 
@@ -23,8 +25,8 @@ export function ConversationPreparation({
 }) {
   return (
     <div className="conversation-preparation">
-      <details open>
-        <summary>사건의 흐름 · {view.timeline.length}개</summary>
+      <Disclosure open>
+        <DisclosureSummary>사건의 흐름 · {view.timeline.length}개</DisclosureSummary>
         {!view.timeline.length && (
           <p>아직 저장된 일정이 없어요. 날짜가 모호하면 미확인으로 정리할 수 있어요.</p>
         )}
@@ -55,20 +57,20 @@ export function ConversationPreparation({
         <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onRefresh("timeline")}>
           <RefreshCw size={15} /> 최신 자료로 흐름 정리
         </Button>
-      </details>
-      <details open>
-        <summary>
+      </Disclosure>
+      <Disclosure open>
+        <DisclosureSummary>
           다음 행동 · {view.actions.filter((action) => action.done).length}/{view.actions.length}{" "}
           완료
-        </summary>
+        </DisclosureSummary>
         {!view.actions.length && (
           <p>아직 저장된 행동이 없어요. 현재 사실과 자료에서 필요한 준비를 정리할 수 있어요.</p>
         )}
         <ul className="workspace-action-list">
           {view.actions.map((action) => (
             <li key={action.id} className={action.done ? "is-done" : ""}>
-              <label>
-                <input
+              <FieldLabel>
+                <ControlInput
                   type="checkbox"
                   checked={action.done}
                   disabled={disabled}
@@ -78,7 +80,7 @@ export function ConversationPreparation({
                   <strong>{action.title}</strong>
                   <small>{action.detail}</small>
                 </span>
-              </label>
+              </FieldLabel>
             </li>
           ))}
         </ul>
@@ -89,7 +91,7 @@ export function ConversationPreparation({
         <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onRefresh("actions")}>
           <RefreshCw size={15} /> 최신 자료로 행동 정리
         </Button>
-      </details>
+      </Disclosure>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import "./headless-experience";
 import { createRoot } from "react-dom/client";
 import { AccountSettings } from "../../src/components/AccountSettings";
 import { CaseDeleteDialog } from "../../src/components/intake/CaseDeleteDialog";

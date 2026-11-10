@@ -215,7 +215,7 @@ test("shared landing navigation supports desktop chapters and a keyboard-operate
   const trigger = page.locator("[data-landing-menu-trigger]");
   await expect(trigger).toHaveAccessibleName("페이지 메뉴");
   const menu = page.getByRole("dialog", { name: "BARO 전체 메뉴", exact: true });
-  await expect(page.locator("details[data-landing-menu]")).toBeHidden();
+  await expect(page.locator("[data-disclosure][data-landing-menu]")).toBeHidden();
   await trigger.focus();
   await page.keyboard.press("Enter");
   await expect(menu).toHaveAttribute("open", "");
@@ -259,11 +259,11 @@ test("enhancing an already open fallback menu releases its page lock", async ({ 
     if (route.request().resourceType() === "script") await scriptsReady;
     await route.continue();
   });
-  const fallback = page.locator("details[data-landing-menu]");
+  const fallback = page.locator("[data-disclosure][data-landing-menu]");
   try {
     // Keep the native menu usable while external enhancement modules are still loading.
     await page.goto("/", { waitUntil: "commit" });
-    await fallback.locator("summary").click();
+    await fallback.locator("[data-disclosure-button]").click();
     await expect(fallback).toHaveAttribute("open", "");
   } finally {
     releaseScripts();
@@ -433,8 +433,8 @@ test("landing supports keyboard disclosures and remains accessible with reduced 
   await expect(page.getByRole("link", { name: "본문으로 건너뛰기" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator(".landing-main")).toBeFocused();
-  const disclosure = page.locator("#faq details").first();
-  const summary = disclosure.locator("summary");
+  const disclosure = page.locator("#faq [data-disclosure]").first();
+  const summary = disclosure.locator("[data-disclosure-button]");
   await summary.focus();
   await page.keyboard.press("Enter");
   await expect(disclosure).toHaveAttribute("open", "");
@@ -1379,9 +1379,17 @@ test("the demo connects the chosen scenario, materials and timeline and requires
   await expect(demo.locator("[data-demo-file-count]")).toContainText("2개");
   await demo.locator('[data-demo-panel="files"] [data-demo-next="timeline"]').click();
   await expect(demo.locator('[data-demo-date="0"]')).toHaveAttribute("datetime", "2024-07-01");
-  await demo.locator(".demo-timeline details").first().locator("summary").click();
+  await demo
+    .locator(".demo-timeline [data-disclosure]")
+    .first()
+    .locator("[data-disclosure-button]")
+    .click();
   await expect(demo.locator('[data-demo-event-source="0"]')).toContainText("보증금 이체 내역.pdf");
-  await demo.locator(".demo-timeline details").last().locator("summary").click();
+  await demo
+    .locator(".demo-timeline [data-disclosure]")
+    .last()
+    .locator("[data-disclosure-button]")
+    .click();
   await expect(demo.locator('[data-demo-event-source="2"]')).toContainText(
     "자료를 선택하지 않았어요",
   );
@@ -1787,8 +1795,8 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
       await expect(toggle).toBeHidden();
     for (const film of await page.locator("video[data-film]").all())
       await expect(film).not.toHaveAttribute("src");
-    const disclosure = page.locator("#faq details").first();
-    await disclosure.locator("summary").click();
+    const disclosure = page.locator("#faq [data-disclosure]").first();
+    await disclosure.locator("[data-disclosure-button]").click();
     await expect(disclosure).toHaveAttribute("open", "");
     await page.setViewportSize({ width: 390, height: 844 });
     for (const chapter of await page.locator("[data-ceo-chapter]").all()) {
@@ -1801,11 +1809,11 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
       }
     }
     const menu = page.locator("[data-landing-menu]");
-    await menu.locator("summary").click();
+    await menu.locator("[data-disclosure-button]").click();
     await expect(menu).toHaveAttribute("open", "");
     await menu.getByRole("link", { name: "앱 둘러보기", exact: true }).click();
     await expect(page).toHaveURL(/#blue-app-reveal$/);
-    await menu.locator("summary").click();
+    await menu.locator("[data-disclosure-button]").click();
     await expect(menu).not.toHaveAttribute("open", "");
     await page
       .getByRole("navigation", { name: "메인 메뉴", exact: true })

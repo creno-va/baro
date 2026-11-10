@@ -75,6 +75,10 @@ export function browserTargets(files: string[], available: string[]): string[] {
   const reportFlows =
     /\/(reports?(?:-[^/]+)?|rework-(?:conversation|shared-mock)|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
   const rules: [RegExp, RegExp][] = [
+    [
+      /^src\/(?:styles\/design-system\.css|client\/(?:theme|confirm)\.ts|components\/ui\/|layouts\/)/,
+      /\/headless-ui\.e2e\.ts$/,
+    ],
     [/^(?:src\/contracts\/|tests\/fixtures\/contracts\/)/, /\.e2e\.ts$/],
     // Shared session notifications and return paths affect every signed-in area.
     [/^src\/client\/(?:session-events|return-path|api\/mock\/session)\.ts$/, /\.e2e\.ts$/],

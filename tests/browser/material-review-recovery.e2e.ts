@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { answerDiscard } from "../helpers/headless-controls";
 
 async function fixture(page: Page, processing = false) {
   const state = { ready: !processing, revision: 1, reads: 0, writes: 0 };
@@ -179,12 +180,12 @@ for (const pressEscape of [true, false])
       field = dialog.getByLabel("확인·교정한 내용").first();
     await field.fill("저장하지 않은 교정");
     let warnings = 0;
-    page.on("dialog", async (confirmation) => {
+    const discardDecision = answerDiscard(page, false).then(() => {
       warnings++;
-      await confirmation.dismiss();
     });
     if (pressEscape) await field.press("Escape");
     else await dialog.getByRole("button", { name: "닫기", exact: true }).first().click();
+    await discardDecision;
     await expect(dialog).toBeVisible();
     await expect(field).toHaveValue("저장하지 않은 교정");
     expect(warnings).toBe(1);

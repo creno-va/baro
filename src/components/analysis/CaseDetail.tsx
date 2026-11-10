@@ -11,6 +11,13 @@ import {
 } from "../../contracts";
 import { observeResult, trackCase } from "../../server/modules/analytics/browser";
 import { statusLabels } from "../intake/CaseList";
+import { ActionButton as ControlButton } from "../ui/button";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
 import { Feedback } from "./Feedback";
 
 const terminal = new Set(["completed", "out_of_scope", "urgent_redirect", "failed"]);
@@ -75,15 +82,15 @@ function Questions({
       <h2>확인이 필요한 내용</h2>
       <p>{questions.length} / 최대 5개 · 질문은 한 묶음만 제공돼요.</p>
       <p>질문이 생성된 뒤 24시간 안에 답해 주세요. 시간이 지나면 새 사건을 입력할 수 있어요.</p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form noValidate onSubmit={(event) => void submit(event)}>
         {questions.map((question, index) => (
           <fieldset key={question.id} disabled={busy} aria-describedby="question-error">
             <legend>
               {index + 1}. {question.prompt}
             </legend>
-            <label>
+            <FieldLabel>
               답변 방식
-              <select
+              <ControlSelect
                 aria-label={`${index + 1}번 답변 방식`}
                 value={answers[question.id]?.status ?? ""}
                 onChange={(event) => {
@@ -96,13 +103,13 @@ function Questions({
                 <option value="answered">답변하기</option>
                 <option value="unknown">모름</option>
                 <option value="skipped">건너뛰기</option>
-              </select>
-            </label>
+              </ControlSelect>
+            </FieldLabel>
             {answers[question.id]?.status === "answered" &&
               (question.answerType === "choice" ? (
-                <label>
+                <FieldLabel>
                   답변
-                  <select
+                  <ControlSelect
                     aria-label={`${index + 1}번 답변`}
                     value={value(question.id)}
                     onChange={(event) => choose(question.id, "answered", event.target.value)}
@@ -113,12 +120,12 @@ function Questions({
                         {option}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </ControlSelect>
+                </FieldLabel>
               ) : (
-                <label>
+                <FieldLabel>
                   답변
-                  <textarea
+                  <ControlTextarea
                     aria-label={`${index + 1}번 답변`}
                     aria-describedby={`answer-length-${question.id}`}
                     aria-invalid={[...value(question.id).trim()].length > 1000}
@@ -128,16 +135,16 @@ function Questions({
                   <span id={`answer-length-${question.id}`}>
                     {[...value(question.id).trim()].length.toLocaleString()} / 1,000자
                   </span>
-                </label>
+                </FieldLabel>
               ))}
           </fieldset>
         ))}
         <p id="question-error" role="alert">
           {error}
         </p>
-        <button className="primary" disabled={busy} type="submit">
+        <ControlButton className="primary" disabled={busy} type="submit">
           {busy ? "답변 저장 중" : "답변 보내기"}
-        </button>
+        </ControlButton>
       </form>
     </section>
   );
@@ -245,8 +252,8 @@ function ResultView({
         <h2>자료 체크리스트</h2>
         <p>체크는 이 화면에서만 유지되며 법적 완료를 뜻하지 않아요.</p>
         {result.evidenceChecklist.map((item, index) => (
-          <label className="evidence-choice" key={item.id}>
-            <input
+          <FieldLabel className="evidence-choice" key={item.id}>
+            <ControlInput
               type="checkbox"
               checked={!!checked[item.id]}
               onChange={(event) => {
@@ -266,7 +273,7 @@ function ResultView({
                   : "확인 필요"}
               <small>{item.why}</small>
             </span>
-          </label>
+          </FieldLabel>
         ))}
       </section>
       <section className="case-panel">
@@ -538,9 +545,9 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           {consent ? (
             <a href={accessHref("consent", `/cases/${caseId}`)}>필수 동의 확인</a>
           ) : (
-            <button type="button" onClick={() => refreshSignal.current?.()}>
+            <ControlButton type="button" onClick={() => refreshSignal.current?.()}>
               최신 상태 다시 확인
-            </button>
+            </ControlButton>
           )}
         </section>
       )}
@@ -579,19 +586,23 @@ export function CaseDetail({ caseId }: { caseId: string }) {
               : detail.error?.message}
           </p>
           {detail.error?.retryable ? (
-            <button
+            <ControlButton
               className="primary"
               type="button"
               disabled={busy}
               onClick={() => void mutate("retry", { inputRevision: detail.inputRevision })}
             >
               분석 다시 시도
-            </button>
+            </ControlButton>
           ) : (
             <div className="actions">
-              <button type="button" disabled={busy} onClick={() => refreshSignal.current?.()}>
+              <ControlButton
+                type="button"
+                disabled={busy}
+                onClick={() => refreshSignal.current?.()}
+              >
                 분석 상태 다시 확인
-              </button>
+              </ControlButton>
               <a href="/cases/new">새 사건 입력</a>
             </div>
           )}
@@ -603,17 +614,17 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           {confirmDelete ? (
             <>
               <p>사건 입력과 관련 분석·결과를 삭제해요. 되돌릴 수 없어요.</p>
-              <button type="button" disabled={busy} onClick={() => void mutate("delete")}>
+              <ControlButton type="button" disabled={busy} onClick={() => void mutate("delete")}>
                 사건 삭제 확인
-              </button>
-              <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>
+              </ControlButton>
+              <ControlButton type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>
                 취소
-              </button>
+              </ControlButton>
             </>
           ) : (
-            <button type="button" disabled={busy} onClick={() => setConfirmDelete(true)}>
+            <ControlButton type="button" disabled={busy} onClick={() => setConfirmDelete(true)}>
               사건 삭제
-            </button>
+            </ControlButton>
           )}
         </section>
       )}

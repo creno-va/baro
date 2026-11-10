@@ -62,7 +62,7 @@
 .account-settings button:hover:not(:disabled) {
   background: var(--muted);
   color: var(--foreground);
-  border-color: #cfd7e2;
+  border-color: var(--border);
 }
 .account-settings button:disabled {
   opacity: 0.45;
@@ -72,7 +72,7 @@
   flex-shrink: 0;
   margin-bottom: 3px;
   border-color: transparent;
-  background: #edf1f6;
+  background: var(--background);
 }
 .settings-loading {
   display: flex;
@@ -124,8 +124,8 @@
   color: var(--muted-foreground);
 }
 .settings-section-icon-danger {
-  background: #fff1f0;
-  color: #c84b45;
+  background: var(--danger-soft);
+  color: var(--destructive);
 }
 .settings-card h2 {
   margin: 0 0 5px;
@@ -173,7 +173,7 @@
 }
 .usage-item-label svg {
   flex-shrink: 0;
-  color: #7c8ea8;
+  color: var(--muted-foreground);
 }
 .usage-item-label strong {
   color: var(--muted-foreground);
@@ -210,13 +210,13 @@
   overflow: hidden;
   border: 0;
   border-radius: 20px;
-  background: #e5eaf2;
+  background: var(--background);
   color: var(--primary);
   accent-color: var(--primary);
 }
 .usage-item progress::-webkit-progress-bar {
   border-radius: 20px;
-  background: #e5eaf2;
+  background: var(--background);
 }
 .usage-item progress::-webkit-progress-value {
   border-radius: 20px;
@@ -265,7 +265,7 @@
   flex-shrink: 0;
 }
 .settings-text-link:hover {
-  color: #1752ca;
+  color: var(--primary);
   text-decoration: underline;
 }
 .settings-details-grid {
@@ -313,7 +313,7 @@
   margin-top: 1px;
   border-radius: 11px;
   background: var(--muted);
-  color: #8b98a9;
+  color: var(--muted-foreground);
 }
 .settings-case-info {
   min-width: 0;
@@ -360,8 +360,8 @@
 }
 .account-settings .settings-case-delete:hover:not(:disabled) {
   border-color: transparent;
-  background: #fff1f0;
-  color: #b93838;
+  background: var(--danger-soft);
+  color: var(--destructive);
 }
 .settings-case-note,
 .settings-policy-note {
@@ -377,7 +377,7 @@
   flex-direction: column;
   align-items: center;
   padding: 26px 12px 34px;
-  color: #a0adbc;
+  color: var(--muted-foreground);
 }
 .settings-empty p {
   margin: 16px 0 3px;
@@ -409,7 +409,7 @@
 }
 .settings-links svg {
   flex-shrink: 0;
-  color: #a0aab7;
+  color: var(--muted-foreground);
 }
 .settings-danger {
   display: flex;
@@ -450,7 +450,7 @@
   margin-top: 3px;
 }
 .settings-danger-content .settings-reauth-complete {
-  color: #267356;
+  color: var(--success);
   margin-bottom: 18px;
 }
 .settings-actions {
@@ -489,42 +489,42 @@
   color: var(--muted-foreground);
 }
 .account-settings .settings-provider--kakao {
-  background: #fee500;
-  border-color: #fee500;
-  color: #191919;
+  background: var(--warning);
+  border-color: var(--warning);
+  color: var(--foreground);
 }
 .account-settings .settings-provider--naver {
-  background: #03c75a;
-  border-color: #03c75a;
-  color: #fff;
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--primary-foreground);
 }
 .account-settings .settings-provider:hover:not(:disabled) {
   filter: brightness(0.97);
 }
 .account-settings .danger-button {
   border-color: transparent;
-  background: #fff0ef;
-  color: #b93838;
+  background: var(--danger-soft);
+  color: var(--destructive);
 }
 .account-settings .danger-button:hover:not(:disabled) {
   border-color: transparent;
-  background: #ffe3e1;
-  color: #a52a2a;
+  background: var(--danger-soft);
+  color: var(--destructive);
 }
 .account-settings .report-modal .danger-button {
-  background: #c13c3c;
+  background: var(--destructive-surface);
   color: var(--card);
 }
 .account-settings .report-modal .danger-button:hover:not(:disabled) {
-  background: #aa3030;
+  background: var(--destructive-surface);
   color: var(--card);
 }
 .settings-error,
 .settings-usage-notes .settings-error {
   padding: 14px 16px;
   border-radius: 12px;
-  background: #fff1f0;
-  color: #a62d39;
+  background: var(--danger-soft);
+  color: var(--destructive);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -535,8 +535,8 @@
 .settings-success {
   padding: 16px 20px;
   border-radius: 12px;
-  background: #eaf8f1;
-  color: #22684c;
+  background: var(--success-soft);
+  color: var(--success);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -570,7 +570,7 @@
   box-shadow: 0 24px 80px #172b4d26;
 }
 .account-settings .report-modal::backdrop {
-  background: #101e3866;
+  background: color-mix(in srgb, var(--primary) 40%, transparent);
   backdrop-filter: blur(3px);
 }
 .account-settings .report-modal h2 {
@@ -607,7 +607,7 @@
   font-size: 14px;
 }
 .settings-primary-link:hover {
-  background: #1752ca;
+  background: var(--primary);
 }
 @container account-settings (max-width: 900px) {
   .settings-details-grid {

@@ -10,7 +10,13 @@ import {
   CardTitle,
 } from "../../src/components/ui/card";
 import { Dialog } from "../../src/components/ui/dialog";
-import { FieldDescription, Input, Label, Textarea } from "../../src/components/ui/form";
+import {
+  Select as ControlSelect,
+  FieldDescription,
+  Input,
+  Label,
+  Textarea,
+} from "../../src/components/ui/form";
 import { PageHeader } from "../../src/components/ui/page-header";
 import { StatePanel, type StateVariant } from "../../src/components/ui/state-panel";
 import { Tabs } from "../../src/components/ui/tabs";
@@ -73,7 +79,7 @@ export function DesignSystemFixture() {
           </CardHeader>
           <CardContent>
             <Label htmlFor="fixture-role">메뉴 예시 역할</Label>
-            <select
+            <ControlSelect
               id="fixture-role"
               className="ui-input"
               value={role}
@@ -83,7 +89,7 @@ export function DesignSystemFixture() {
               <option value="lawyer">변호사</option>
               <option value="moderator">운영 검토자</option>
               <option value="visitor">방문자</option>
-            </select>
+            </ControlSelect>
           </CardContent>
         </Card>
         <Card>

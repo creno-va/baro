@@ -17,6 +17,12 @@ import {
 } from "../../server/modules/lawyers/self-profile-contract";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
 import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
@@ -629,6 +635,7 @@ export function Editor() {
             </>
           ) : (
             <form
+              noValidate
               id="lawyer-profile-form"
               onSubmit={(e) => {
                 e.preventDefault();
@@ -651,10 +658,10 @@ export function Editor() {
                       <p>JPEG·PNG·WebP · 최대 10MB</p>
                     </div>
                     <div className="lawyer-photo-actions">
-                      <label className="lawyer-photo-upload">
+                      <FieldLabel className="lawyer-photo-upload">
                         <ArrowUpFromLine size={16} aria-hidden="true" />
                         사진 변경
-                        <input
+                        <ControlInput
                           aria-label="프로필 사진"
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
@@ -665,7 +672,7 @@ export function Editor() {
                             await upload(file, "profile_photo");
                           }}
                         />
-                      </label>
+                      </FieldLabel>
                       {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
                         <Button
                           variant="ghost"
@@ -689,14 +696,14 @@ export function Editor() {
                     <h2 id="profile-basic-heading">1. 기본 정보</h2>
                   </header>
                   <div className="lawyer-fields lawyer-fields--three">
-                    <label className="lawyer-field">
+                    <FieldLabel className="lawyer-field">
                       <span>
                         이름{" "}
                         <span aria-hidden="true" className="profile-required">
                           *
                         </span>
                       </span>
-                      <input
+                      <ControlInput
                         required
                         aria-label="이름"
                         value={draft.name}
@@ -704,15 +711,15 @@ export function Editor() {
                         onChange={(e) => patch("name", e.target.value)}
                         autoComplete="name"
                       />
-                    </label>
-                    <label className="lawyer-field">
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
                       <span>
                         사무실 이름{" "}
                         <span aria-hidden="true" className="profile-required">
                           *
                         </span>
                       </span>
-                      <input
+                      <ControlInput
                         required
                         aria-label="사무실 이름"
                         value={draft.officeName}
@@ -720,8 +727,8 @@ export function Editor() {
                         onChange={(e) => patch("officeName", e.target.value)}
                         autoComplete="organization"
                       />
-                    </label>
-                    <label className="lawyer-field">
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
                       <span>
                         지역{" "}
                         <span aria-hidden="true" className="profile-required">
@@ -729,7 +736,7 @@ export function Editor() {
                         </span>
                       </span>
                       <span className="lawyer-select">
-                        <select
+                        <ControlSelect
                           required
                           aria-label="지역"
                           value={draft.region}
@@ -741,10 +748,10 @@ export function Editor() {
                               {label}
                             </option>
                           ))}
-                        </select>
+                        </ControlSelect>
                         <ChevronDown size={18} aria-hidden="true" />
                       </span>
-                    </label>
+                    </FieldLabel>
                   </div>
                 </section>
                 <section className="profile-edit-section" aria-labelledby="profile-intro-heading">
@@ -756,9 +763,9 @@ export function Editor() {
                       </span>
                     </h2>
                   </header>
-                  <label className="lawyer-field">
+                  <FieldLabel className="lawyer-field">
                     <span className="sr-only">소개</span>
-                    <textarea
+                    <ControlTextarea
                       required
                       value={draft.introduction}
                       maxLength={5000}
@@ -766,7 +773,7 @@ export function Editor() {
                       placeholder="상담을 준비하는 의뢰인에게 활동과 경험을 소개해 주세요."
                       onChange={(e) => patch("introduction", e.target.value)}
                     />
-                  </label>
+                  </FieldLabel>
                 </section>
                 <section className="profile-edit-section" aria-labelledby="profile-fields-heading">
                   <header>
@@ -782,8 +789,8 @@ export function Editor() {
                     <legend className="sr-only">분야 (복수 선택)</legend>
                     <div className="lawyer-checkboxes">
                       {Object.entries(FIELD_LABELS).map(([value, label]) => (
-                        <label key={value}>
-                          <input
+                        <FieldLabel key={value}>
+                          <ControlInput
                             type="checkbox"
                             checked={draft.practiceAreas.includes(value)}
                             onChange={(e) =>
@@ -796,7 +803,7 @@ export function Editor() {
                             }
                           />
                           <span>{label}</span>
-                        </label>
+                        </FieldLabel>
                       ))}
                     </div>
                   </fieldset>
@@ -806,14 +813,14 @@ export function Editor() {
                     <h2 id="profile-contact-heading">4. 사무실과 연락처</h2>
                     <p>연락받을 수단을 하나 이상 입력하세요.</p>
                   </header>
-                  <label className="lawyer-field">
+                  <FieldLabel className="lawyer-field">
                     <span>
                       사무실 주소{" "}
                       <span aria-hidden="true" className="profile-required">
                         *
                       </span>
                     </span>
-                    <input
+                    <ControlInput
                       required
                       aria-label="사무실 주소"
                       value={draft.address}
@@ -821,38 +828,38 @@ export function Editor() {
                       onChange={(e) => patch("address", e.target.value)}
                       autoComplete="street-address"
                     />
-                  </label>
+                  </FieldLabel>
                   <div className="lawyer-fields lawyer-fields--three">
-                    <label className="lawyer-field">
+                    <FieldLabel className="lawyer-field">
                       전화번호
-                      <input
+                      <ControlInput
                         type="tel"
                         value={draft.phone}
                         maxLength={30}
                         onChange={(e) => patch("phone", e.target.value)}
                         autoComplete="tel"
                       />
-                    </label>
-                    <label className="lawyer-field">
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
                       이메일
-                      <input
+                      <ControlInput
                         type="email"
                         value={draft.email}
                         maxLength={254}
                         onChange={(e) => patch("email", e.target.value)}
                         autoComplete="email"
                       />
-                    </label>
-                    <label className="lawyer-field">
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
                       웹사이트 / 외부 상담 URL
-                      <input
+                      <ControlInput
                         type="url"
                         placeholder="https://"
                         value={draft.website}
                         maxLength={2000}
                         onChange={(e) => patch("website", e.target.value)}
                       />
-                    </label>
+                    </FieldLabel>
                   </div>
                 </section>
                 <Card className="profile-edit-section">
@@ -864,14 +871,14 @@ export function Editor() {
                   </CardHeader>
                   <CardContent>
                     <div className="lawyer-portfolio-input">
-                      <label className="lawyer-portfolio-upload">
+                      <FieldLabel className="lawyer-portfolio-upload">
                         <ArrowUpFromLine size={22} aria-hidden="true" />
                         <span>
                           {portfolioUpload
                             ? `${portfolioUpload.name} · 처리 중…`
                             : draft.portfolio[0]?.title || "포트폴리오 파일 (이미지·PDF)"}
                         </span>
-                        <input
+                        <ControlInput
                           type="file"
                           aria-label="포트폴리오 파일"
                           accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -882,7 +889,7 @@ export function Editor() {
                             if (file) await upload(file, "portfolio");
                           }}
                         />
-                      </label>
+                      </FieldLabel>
                       {(draft.portfolio.length > 0 || portfolioUpload) && (
                         <Button
                           variant="ghost"

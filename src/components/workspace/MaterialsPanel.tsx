@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { FileView } from "../../client/api/types";
 import type { V2ConversationState } from "../../contracts/v2";
 import { Button, ButtonLink } from "../ui/button";
+import { Input as ControlInput, Label as FieldLabel } from "../ui/form";
 import { ElapsedTime } from "./ElapsedTime";
 import { fileFailureLabel, fileProcessingLabel } from "./processing-progress";
 
@@ -130,15 +131,18 @@ export function MaterialsPanel({
                 </p>
               )}
               {file.status === "ready" && onSelect && (
-                <label className="materials-panel__selection" {...privateContent}>
-                  <input
+                <FieldLabel className="materials-panel__selection" {...privateContent}>
+                  <ControlInput
                     type="checkbox"
                     checked={selected.includes(file.id)}
                     disabled={!!busy || readonly || selectionDisabled}
                     onChange={(event) => onSelect(file.id, event.target.checked)}
                   />
-                  <span>대화에 사용할 {file.name}</span>
-                </label>
+                  <span>
+                    <span aria-hidden="true">대화에 함께 사용</span>
+                    <span className="sr-only">대화에 사용할 {file.name}</span>
+                  </span>
+                </FieldLabel>
               )}
               <div className="workspace-buttons">
                 {((file.status === "failed" && file.canRetry) || file.canStartProcessing) && (

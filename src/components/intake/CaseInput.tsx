@@ -8,7 +8,7 @@ import { isExplicitSignOut } from "../../client/session-events";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
 import { Dialog } from "../ui/dialog";
-import { Textarea } from "../ui/form";
+import { Input as ControlInput, Label as FieldLabel, RadioGroup, Textarea } from "../ui/form";
 import { ErrorPanel } from "./common";
 
 // A web entry requirement; saved narratives and installed clients keep their read contracts.
@@ -247,10 +247,14 @@ export function CaseInput({
           </div>
         ) : (
           <>
-            <form className="conversation-entry" onSubmit={(event) => void create(event)}>
-              <label className="conversation-field-label" htmlFor="narrative">
+            <form
+              noValidate
+              className="conversation-entry"
+              onSubmit={(event) => void create(event)}
+            >
+              <FieldLabel className="conversation-field-label" htmlFor="narrative">
                 지금까지 있었던 일
-              </label>
+              </FieldLabel>
               <div className="conversation-composer" aria-busy={busy || loading}>
                 <Textarea
                   ref={narrativeRef}
@@ -267,19 +271,27 @@ export function CaseInput({
                   }
                 />
                 <div className="conversation-composer-toolbar">
-                  <fieldset
+                  <RadioGroup
+                    as="fieldset"
+                    value={casePurpose}
+                    onChange={(next) => {
+                      if (next === "prepare_claim" || next === "respond_to_claim")
+                        setCasePurpose(next);
+                    }}
                     className="conversation-context"
                     disabled={busy || loading || !canCreate}
                   >
                     <legend className="sr-only">사건을 정리하는 목적</legend>
                     {(["prepare_claim", "respond_to_claim"] as const).map((purpose) => (
-                      <label key={purpose} className={casePurpose === purpose ? "selected" : ""}>
-                        <input
+                      <FieldLabel
+                        key={purpose}
+                        className={casePurpose === purpose ? "selected" : ""}
+                      >
+                        <ControlInput
                           type="radio"
                           name="case-purpose"
                           value={purpose}
                           checked={!loading && !sessionError && casePurpose === purpose}
-                          onChange={() => setCasePurpose(purpose)}
                         />
                         {purpose === "prepare_claim" ? (
                           <FileText size={16} aria-hidden="true" />
@@ -287,9 +299,9 @@ export function CaseInput({
                           <ShieldCheck size={16} aria-hidden="true" />
                         )}
                         <span>{purpose === "prepare_claim" ? "고소 준비" : "주장 대응"}</span>
-                      </label>
+                      </FieldLabel>
                     ))}
-                  </fieldset>
+                  </RadioGroup>
                   <span className="conversation-context-hint" id="narrative-minimum">
                     {APP_NARRATIVE_MIN_LENGTH}자 이상 입력해주세요
                   </span>

@@ -17,6 +17,12 @@ import {
 import { downloadBlob } from "../reports/download";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
 import { draftReviewState } from "./draft-review";
 import {
   createResolutionSelectionFailureTracker,
@@ -524,8 +530,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       <legend>사용할 자료와 가림 범위</legend>
       {files.length ? (
         files.map((file, index) => (
-          <label key={file.id}>
-            <input
+          <FieldLabel key={file.id}>
+            <ControlInput
               type="checkbox"
               checked={ids.includes(file.id)}
               onChange={(event) => {
@@ -537,13 +543,13 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
               }}
             />
             {mask ? `선택 자료 ${index + 1}` : file.name}
-          </label>
+          </FieldLabel>
         ))
       ) : (
         <p>선택한 자료가 없어요. 사건 사실만 사용할 수 있어요.</p>
       )}
-      <label>
-        <input
+      <FieldLabel>
+        <ControlInput
           type="checkbox"
           checked={mask}
           disabled={!!report?.maskIdentifiers}
@@ -554,7 +560,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           }}
         />
         식별정보 가리기
-      </label>
+      </FieldLabel>
       <p>가림 후에도 이름·주소·내용을 직접 확인해 주세요. 원본은 첨부하거나 전송하지 않아요.</p>
       {contentDirty && <p>수정한 초안을 먼저 저장한 뒤 자료 범위를 바꿔 주세요.</p>}
       {scopeDirty && (
@@ -739,9 +745,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           )}
           {scope}
           <div className="resolution-draft-controls">
-            <label>
+            <FieldLabel>
               문서 종류
-              <select
+              <ControlSelect
                 value={kind}
                 disabled={busy || blocked}
                 onChange={(event) => setKind(event.target.value as V2ResolutionDocumentKind)}
@@ -751,21 +757,21 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                     {resolutionDocumentLabels[value]}
                   </option>
                 ))}
-              </select>
-            </label>
+              </ControlSelect>
+            </FieldLabel>
             <p>
               절차·서식의 공식 근거가 없으면 사실 정리 초안만 제공해요. 방어 선택만으로 항소를
               권하지 않아요.
             </p>
-            <label className="resolution-checkbox">
-              <input
+            <FieldLabel className="resolution-checkbox">
+              <ControlInput
                 type="checkbox"
                 checked={factsConfirmed}
                 onChange={(event) => setFactsConfirmed(event.target.checked)}
                 disabled={busy || blocked}
               />
               현재 리포트의 사실과 사용할 자료를 확인했어요.
-            </label>
+            </FieldLabel>
             <Button
               variant="outline"
               disabled={
@@ -814,9 +820,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                 </p>
               ) : (
                 <>
-                  <label>
+                  <FieldLabel>
                     초안 검토·수정
-                    <textarea
+                    <ControlTextarea
                       value={content}
                       maxLength={20000}
                       disabled={busy || blocked || state.status === "paused"}
@@ -825,17 +831,17 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                         setReviewed(false);
                       }}
                     />
-                  </label>
+                  </FieldLabel>
                   <p>미입력 항목: {state.draft.missingFields.join(" · ")}</p>
-                  <label className="resolution-checkbox">
-                    <input
+                  <FieldLabel className="resolution-checkbox">
+                    <ControlInput
                       type="checkbox"
                       checked={reviewed}
                       disabled={busy || blocked}
                       onChange={(event) => setReviewed(event.target.checked)}
                     />
                     사실·증거·미입력 항목과 수정한 내용을 검토했어요.
-                  </label>
+                  </FieldLabel>
                   <div className="resolution-actions">
                     <Button
                       variant="outline"

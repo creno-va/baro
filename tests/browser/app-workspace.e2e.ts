@@ -31,6 +31,17 @@ async function seed(page: Page, role: "customer" | "lawyer" = "customer", empty 
   );
 }
 
+async function closeMaterials(page: Page) {
+  const sheet = await page.evaluate(() => matchMedia("(max-width: 1199px)").matches);
+  await expect(page.locator(".ds-responsive-panel")).toHaveAttribute(
+    "data-mode",
+    sheet ? "sheet" : "inline",
+  );
+  await page
+    .getByRole("button", { name: sheet ? "자료 패널 닫기" : "자료 닫기", exact: true })
+    .click();
+}
+
 test("long review sheets scroll internally, keep 44px controls and return focus through each close path", async ({
   page,
 }) => {
@@ -175,7 +186,9 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.getByRole("button", { name: "자료 열기", exact: true }).click();
     const panel = page.getByRole("dialog", { name: "자료", exact: true });
     await expect(panel).toBeVisible();
-    expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(width < 1200);
+    expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+      width < 1200,
+    );
     const correction = panel.getByRole("textbox", { name: "자료 교정 초안" });
     await correction.fill("작성 중인 자료 교정");
     await page.screenshot({
@@ -191,7 +204,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       selection,
     );
     await page.setViewportSize({ width, height: 900 });
-    await panel.getByRole("button", { name: "자료 패널 닫기" }).click();
+    await closeMaterials(page);
     await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
     await expect(composer).toHaveValue("한글로 쓰던 메시지와 첨부 선택은 소비자가 보존합니다.");
     await page.getByRole("button", { name: "자료 열기", exact: true }).click();
@@ -200,7 +213,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await correction.press("Escape");
       await expect(panel).not.toBeVisible();
       await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
-    } else await panel.getByRole("button", { name: "자료 패널 닫기" }).click();
+    } else await closeMaterials(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
@@ -222,19 +235,11 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await nestedOpener.click();
   const nested = page.getByRole("dialog", { name: "합성 자료 확인", exact: true });
   await expect(nested).toBeVisible();
-  // Native close is queued after the controlled open=false update. Wait for
-  // that event before starting another focus operation in the parent panel.
-  await nested.evaluate((node) =>
-    node.addEventListener("close", () => node.setAttribute("data-native-closed", "true"), {
-      once: true,
-    }),
-  );
   await page.keyboard.press("Escape");
-  await expect(page.locator('dialog[data-native-closed="true"]')).toHaveCount(1);
   await expect(nested).not.toBeVisible();
   await expect(panel).toBeVisible();
   await expect(nestedOpener).toBeFocused();
-  const close = panel.getByRole("button", { name: "자료 패널 닫기" });
+  const close = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
   await close.focus();
   await page.keyboard.press("Shift+Tab");
   await expect(panel.getByRole("link", { name: "리포트 열기" })).toBeFocused();
@@ -249,7 +254,7 @@ test("case tools replace six tabs and retain every existing route", async ({ pag
   await seed(page);
   await page.goto("/");
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
-  const trigger = page.locator(".case-tools > summary");
+  const trigger = page.locator(".case-tools > [data-popover-button]");
   await trigger.focus();
   await page.keyboard.press("Enter");
   const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
@@ -271,38 +276,30 @@ test("case tools replace six tabs and retain every existing route", async ({ pag
   await expect(trigger).toBeFocused();
 });
 
-test("sidebar collapse keeps role navigation, recent management and resize focus", async ({
+test("legacy lawyer accounts keep the normal sidebar and profile across the mobile menu", async ({
   page,
 }) => {
   await seed(page, "lawyer");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   const sidebar = page.locator(".sidebar-desktop");
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "설정", exact: true })).toBeVisible();
+  await expect(sidebar.locator('.sidebar-profile[href="/settings"]')).toBeVisible();
+  await expect(
+    sidebar.getByRole("link", { name: /변호사 프로필|변호사 찾기|내 사건/ }),
+  ).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-story")).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: "사이드바 접기" }).click();
-  await expect(page.locator(".app-header")).toHaveCSS("width", "64px");
-  await sidebar.getByRole("button", { name: "최근 사건 열기" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const menu = page.getByRole("button", { name: "메뉴 열기", exact: true });
+  await menu.click();
   const drawer = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(drawer.locator(".sidebar-story")).toBeVisible();
+  await expect(drawer.locator('.sidebar-profile[href="/settings"]')).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(sidebar.getByRole("button", { name: "최근 사건 열기" })).toBeFocused();
-  await page.reload();
-  await expect(page.locator(".app-header")).toHaveCSS("width", "64px");
-  await page.getByRole("button", { name: "사이드바 펼치기" }).focus();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("button", { name: "메뉴 열기" })).toBeFocused();
-  await expect(page.locator(".app-frame")).toHaveCSS("padding-left", "0px");
-  const menu = page.getByRole("button", { name: "메뉴 열기" });
-  await menu.click();
-  await expect(drawer).toBeVisible();
-  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(drawer).not.toBeVisible();
-  await expect(page.getByRole("button", { name: "사이드바 펼치기" })).toBeFocused();
+  await expect(menu).toBeFocused();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(sidebar.locator('.sidebar-profile[href="/settings"]')).toBeVisible();
 });
-
 test("rename, deletion cancellation and owner change preserve session guards", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -363,7 +360,7 @@ test("200% zoom and keyboard focus keep compact navigation reachable", async ({ 
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  await page.locator(".case-tools > summary").press("Enter");
+  await page.locator(".case-tools > [data-popover-button]").press("Enter");
   const link = page
     .getByRole("navigation", { name: "사건 도구", exact: true })
     .getByRole("link", { name: "리포트 보기", exact: true });
@@ -433,23 +430,16 @@ for (const width of [390, 1440]) {
   test(`initially open panel uses the actual viewport mode at ${width}px`, async ({ page }) => {
     await seed(page);
     await page.setViewportSize({ width, height: 900 });
-    await page.addInitScript(() => {
-      const show = HTMLDialogElement.prototype.showModal;
-      HTMLDialogElement.prototype.showModal = function () {
-        this.dataset.modalOpenCount = String(Number(this.dataset.modalOpenCount ?? "0") + 1);
-        return show.call(this);
-      };
-    });
     await page.goto("/?open&focus");
     const panel = page.getByRole("dialog", { name: "자료", exact: true });
     await expect(panel).toBeVisible();
-    expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(width < 1200);
+    expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+      width < 1200,
+    );
     if (width >= 1200) {
-      expect(await panel.getAttribute("data-modal-open-count")).toBeNull();
       await expect(page.getByRole("textbox", { name: "메시지 초안" })).toBeFocused();
     } else {
-      await expect(panel).toHaveAttribute("data-modal-open-count", "1");
-      await expect(panel.getByRole("button", { name: "자료 패널 닫기" })).toBeFocused();
+      await expect(page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ })).toBeFocused();
     }
   });
 }
@@ -466,7 +456,7 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         await seed(page);
         await page.setViewportSize({ width: from, height: 900 });
         await page.goto(`/?open${lifetime === "conditional" ? "&conditional" : ""}`);
-        const panel = page.getByRole("dialog", { name: "자료", exact: true });
+        const panel = page.locator(".ds-responsive-panel");
         const opener = panel.getByRole("button", {
           name: topology === "sibling" ? "독립 자료 검토창" : "자료 확인창",
           exact: true,
@@ -485,9 +475,13 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         const selection = await editor.evaluate((node: HTMLInputElement) => node.selectionStart);
         await page.setViewportSize({ width: to, height: 900 });
         await expect(review).toBeVisible();
-        expect(await review.evaluate((node) => node.matches(":modal"))).toBe(true);
-        // Keep the panel's old mode until the active review has actually closed.
-        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(from < 1200);
+        expect(await review.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          true,
+        );
+        // Preserve the active review's modal ownership until that review closes.
+        expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          from < 1200,
+        );
         await expect(editor).toBeFocused();
         await expect(editor).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
         expect(await editor.evaluate((node: HTMLInputElement) => node.selectionStart)).toBe(
@@ -503,21 +497,14 @@ for (const lifetime of ["mounted", "conditional"] as const) {
           path: `.wrangler/ui01/followup-${topology}-${from}-${to}.png`,
           animations: "disabled",
         });
-        await review.evaluate((node) =>
-          node.addEventListener(
-            "close",
-            () =>
-              document.querySelector(".app-frame")?.setAttribute("data-mode-review-closed", "true"),
-            { once: true },
-          ),
-        );
         await page.keyboard.press("Escape");
-        await expect(page.locator(".app-frame")).toHaveAttribute("data-mode-review-closed", "true");
         await expect(review).not.toBeVisible();
         await expect(panel).toBeVisible();
-        expect(await panel.evaluate((node) => node.matches(":modal"))).toBe(to < 1200);
+        expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
+          to < 1200,
+        );
         await expect(opener).toBeFocused();
-        await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+        await closeMaterials(page);
         await expect(panel).not.toBeVisible();
         await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
         const selector = topology === "sibling" ? "#sibling-review" : "#nested-review";
@@ -562,13 +549,13 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     animations: "disabled",
   });
   await page.getByRole("button", { name: "자료 열기", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "자료", exact: true });
+  const panel = page.locator(".ds-responsive-panel");
   expect(
     await panel.evaluate(
       (node) => node.getBoundingClientRect().bottom <= (visualViewport?.height ?? innerHeight) + 1,
     ),
   ).toBe(true);
-  await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
+  await closeMaterials(page);
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
   });

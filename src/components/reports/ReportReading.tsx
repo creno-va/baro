@@ -35,7 +35,7 @@ function SectionEditor({
   onChange?: ((content: string) => void) | undefined;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
-  const choice = useRef<HTMLSelectElement>(null);
+  const [photoChoice, setPhotoChoice] = useState("");
   const insert = (addition: string) => {
     const field = input.current;
     if (!field || disabled) return;
@@ -70,8 +70,8 @@ function SectionEditor({
       />
       <div className="report-photo-insert">
         <Select
-          ref={choice}
-          defaultValue=""
+          value={photoChoice}
+          onChange={(event) => setPhotoChoice(event.target.value)}
           aria-label={`${reportSectionTitle(section.title)}에 넣을 사진`}
           disabled={disabled || !photos.length}
         >
@@ -87,10 +87,10 @@ function SectionEditor({
           type="button"
           disabled={disabled || !photos.length}
           onClick={() => {
-            const photo = photos.find((photo) => photo.id === choice.current?.value);
+            const photo = photos.find((photo) => photo.id === photoChoice);
             if (photo && !unavailable(photo)) {
               insert(`\n\n${reportPhotoToken(photo.id, photo.name)}\n\n`);
-              if (choice.current) choice.current.value = "";
+              setPhotoChoice("");
             }
           }}
         >

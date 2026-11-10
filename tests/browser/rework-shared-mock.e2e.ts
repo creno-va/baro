@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { answerDiscard, chooseOption, selectControl } from "../helpers/headless-controls";
 import { openReportEditor } from "../helpers/report-controls";
 import {
   closeWorkspaceMaterials,
@@ -96,55 +97,62 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await page.keyboard.press("Enter");
     const contextDialog = page.getByRole("dialog", { name: "입장과 절차 확인", exact: true });
     await expect(contextDialog).toBeVisible();
-    await expect(
-      contextDialog.getByRole("combobox", { name: "사건 입장", exact: true }),
-    ).toHaveValue(purpose.startsWith("고소") ? "prepare_claim" : "respond_to_claim");
-    await expect(
-      contextDialog.getByRole("combobox", { name: "사건 분야", exact: true }),
-    ).toHaveValue("unconfirmed");
-    await expect(
-      contextDialog.getByRole("combobox", { name: "진행 단계", exact: true }),
-    ).toHaveValue("unconfirmed");
+    await expect(selectControl(contextDialog, { name: "사건 입장", exact: true })).toHaveAttribute(
+      "data-value",
+      purpose.startsWith("고소") ? "prepare_claim" : "respond_to_claim",
+    );
+    await expect(selectControl(contextDialog, { name: "사건 분야", exact: true })).toHaveAttribute(
+      "data-value",
+      "unconfirmed",
+    );
+    await expect(selectControl(contextDialog, { name: "진행 단계", exact: true })).toHaveAttribute(
+      "data-value",
+      "unconfirmed",
+    );
     await contextDialog
       .getByRole("textbox", { name: "확인한 진행 상황 (선택)", exact: true })
       .fill("   ");
     await expect(
       contextDialog.getByRole("button", { name: "입장·절차 저장", exact: true }),
     ).toBeDisabled();
-    await contextDialog
-      .getByRole("combobox", { name: "진행 단계", exact: true })
-      .selectOption("first_instance");
-    await contextDialog
-      .getByRole("combobox", { name: "사건 분야", exact: true })
-      .selectOption("criminal");
-    await expect(
-      contextDialog.getByRole("combobox", { name: "진행 단계", exact: true }),
-    ).toHaveValue("first_instance");
-    await contextDialog
-      .getByRole("combobox", { name: "사건 분야", exact: true })
-      .selectOption("civil");
+    await chooseOption(
+      selectControl(contextDialog, { name: "진행 단계", exact: true }),
+      "first_instance",
+    );
+    await chooseOption(
+      selectControl(contextDialog, { name: "사건 분야", exact: true }),
+      "criminal",
+    );
+    await expect(selectControl(contextDialog, { name: "진행 단계", exact: true })).toHaveAttribute(
+      "data-value",
+      "first_instance",
+    );
+    await chooseOption(selectControl(contextDialog, { name: "사건 분야", exact: true }), "civil");
     await contextDialog
       .getByLabel("확인한 진행 상황 (선택)", { exact: true })
       .fill("사용자가 명시적으로 확인한 합성 진행 단계입니다.");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    const keepEditing = answerDiscard(page, false);
     await page.keyboard.press("Escape");
-    await expect(
-      contextDialog.getByRole("combobox", { name: "진행 단계", exact: true }),
-    ).toHaveValue("first_instance");
-    page.once("dialog", (dialog) => dialog.accept());
+    await keepEditing;
+    await expect(selectControl(contextDialog, { name: "진행 단계", exact: true })).toHaveAttribute(
+      "data-value",
+      "first_instance",
+    );
+    const discardChanges = answerDiscard(page, true);
     await page.keyboard.press("Escape");
+    await discardChanges;
     await expect(contextDialog).not.toBeVisible();
     await expect(contextOpener).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(
-      contextDialog.getByRole("combobox", { name: "진행 단계", exact: true }),
-    ).toHaveValue("unconfirmed");
-    await contextDialog
-      .getByRole("combobox", { name: "사건 분야", exact: true })
-      .selectOption("civil");
-    await contextDialog
-      .getByRole("combobox", { name: "진행 단계", exact: true })
-      .selectOption("first_instance");
+    await expect(selectControl(contextDialog, { name: "진행 단계", exact: true })).toHaveAttribute(
+      "data-value",
+      "unconfirmed",
+    );
+    await chooseOption(selectControl(contextDialog, { name: "사건 분야", exact: true }), "civil");
+    await chooseOption(
+      selectControl(contextDialog, { name: "진행 단계", exact: true }),
+      "first_instance",
+    );
     await contextDialog
       .getByRole("textbox", { name: "확인한 진행 상황 (선택)", exact: true })
       .fill("사용자가 명시적으로 확인한 합성 진행 단계입니다.");
@@ -227,7 +235,9 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
         .getByRole("button", { name: "수정 내용 저장", exact: true })
         .click();
       await expect(report.locator(".report-save-state")).toContainText("버전 3");
-      await expect(report.locator(".report-basis-details > summary")).toHaveText("작성 기준");
+      await expect(report.locator(".report-basis-details > [data-disclosure-button]")).toHaveText(
+        "작성 기준",
+      );
       const saved = await page.evaluate(async () => {
         const path = "/src/client/api/index.ts";
         const { api } = (await import(path)) as typeof import("../../src/client/api");
