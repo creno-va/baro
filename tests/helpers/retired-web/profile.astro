@@ -4,8 +4,8 @@ import { directoryReturnHref } from "../../../src/components/lawyers/navigation"
 import { Profile } from "../../../src/components/lawyers/Profile";
 import { opaqueIdSchema } from "../../../src/contracts";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
-import AppLayout from "./LegacyAppLayout.astro";
-import "./styles/index.css";
+import AppLayout from "../../../src/layouts/AppLayout.astro";
+import "../../../src/styles/lawyers.css";
 
 const parsed = opaqueIdSchema.safeParse(Astro.params.id);
 if (!parsed.success) return Astro.redirect("/lawyers");

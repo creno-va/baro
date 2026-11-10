@@ -143,8 +143,8 @@ test("portal saves one portfolio file without header actions or a sticky divider
     const actual = await page.locator("#lawyer-profile-form").evaluate((form) => {
       const name = form.querySelector('[aria-label="이름"]');
       const intro = form.querySelector("textarea");
-      const select = form.querySelector(".lawyer-select select");
-      const arrow = form.querySelector(".lawyer-select > svg");
+      const select = form.querySelector('.lawyer-select [data-slot="select"]');
+      const arrow = form.querySelector('.lawyer-select [data-slot="select"] > svg');
       if (!name || !intro || !select || !arrow) throw new Error("Missing synthetic profile inputs");
       const properties = [
         "background-color",
@@ -162,6 +162,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
         styles,
         appearance: getComputedStyle(select).appearance,
         paddingRight: getComputedStyle(select).paddingRight,
+        borderRight: getComputedStyle(select).borderRightWidth,
         rightGap: rect.right - icon.right,
         centerDelta: rect.top + rect.height / 2 - icon.top - icon.height / 2,
       };
@@ -169,8 +170,11 @@ test("portal saves one portfolio file without header actions or a sticky divider
     expect(actual.styles[0]).toEqual(actual.styles[1]);
     expect(actual.styles[2]).toEqual(actual.styles[1]);
     expect(actual.appearance).toBe("none");
-    expect(actual.paddingRight).toBe("48px");
-    expect(actual.rightGap).toBe(16);
+    expect(actual.paddingRight).toBe(actual.styles[0]?.[3]);
+    expect(actual.rightGap).toBeCloseTo(
+      parseFloat(actual.paddingRight) + parseFloat(actual.borderRight),
+      1,
+    );
     expect(Math.abs(actual.centerDelta)).toBeLessThan(1);
     const layout = await page.locator("#lawyer-profile-form").evaluate((form) => {
       const card = form.querySelector(".lawyer-editor-sections");

@@ -56,6 +56,8 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     await actions.getByText("다른 작업", { exact: true }).click();
     await actions.getByRole("button", { name: "자료 추가·검토", exact: true }).click();
     const materials = page.locator("#case-materials-panel");
+    await expect(materials).toBeVisible();
+    await materials.getByRole("tab", { name: /^자료/ }).click();
     const chooser = page.waitForEvent("filechooser");
     await materials.getByRole("button", { name: "파일 선택", exact: true }).click();
     await (await chooser).setFiles({
@@ -184,8 +186,12 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     ).toBeVisible();
     if (purpose.startsWith("고소")) {
       expect(
-        (await new AxeBuilder({ page }).include("dialog[open]").analyze()).violations.filter(
-          (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
+        (
+          await new AxeBuilder({ page })
+            .include('[role="dialog"][aria-modal="true"]:not([hidden])')
+            .analyze()
+        ).violations.filter((violation) =>
+          ["serious", "critical"].includes(violation.impact ?? ""),
         ),
       ).toEqual([]);
       const bounds = await contextDialog.boundingBox();

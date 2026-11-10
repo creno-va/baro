@@ -1,6 +1,7 @@
 export type ThemePreference = "system" | "light" | "dark";
 const key = "baro-theme";
 let memory: ThemePreference | null = null;
+let paletteChange = 0;
 export function themePreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
   try {
@@ -15,7 +16,18 @@ export function applyTheme(preference: ThemePreference) {
   const dark =
     preference === "dark" ||
     (preference === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const root = document.documentElement;
+  const theme = dark ? "dark" : "light";
+  if (root.dataset.theme !== theme) {
+    const change = ++paletteChange;
+    root.dataset.themeSwitching = "";
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (change === paletteChange) delete root.dataset.themeSwitching;
+      }),
+    );
+  }
+  root.dataset.theme = theme;
   document.documentElement.dataset.themePreference = preference;
   window.dispatchEvent(new Event("baro-theme-changed"));
 }

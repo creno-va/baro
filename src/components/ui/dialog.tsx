@@ -10,6 +10,7 @@ import {
   type ComponentProps,
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -26,11 +27,38 @@ export interface ModalProps extends Omit<ComponentProps<"div">, "title" | "onClo
 }
 function restoreFocus(destination: HTMLElement | null | undefined) {
   requestAnimationFrame(() => {
+    const settledFocus = document.activeElement;
     requestAnimationFrame(() => {
+      const current = document.activeElement;
+      if (
+        current !== settledFocus &&
+        current !== destination &&
+        current instanceof HTMLElement &&
+        current !== document.body &&
+        current !== document.documentElement &&
+        current.isConnected &&
+        !current.closest("[hidden], [inert]")
+      )
+        return;
       if (destination?.isConnected && !destination.closest("[inert], [hidden]"))
         destination.focus({ preventScroll: true });
     });
   });
+}
+function modalFocusTarget(panel: HTMLElement | null) {
+  const controls = panel
+    ? [
+        ...panel.querySelectorAll<HTMLElement>(
+          '[data-autofocus], button, input:not([type="hidden"]):not([type="file"]), textarea, a[href], [tabindex="0"]',
+        ),
+      ].filter(
+        (node) =>
+          !node.matches(":disabled, [aria-disabled=true]") &&
+          !node.closest("[hidden]") &&
+          (!node.isConnected || getComputedStyle(node).display !== "none"),
+      )
+    : [];
+  return controls.find((node) => node.hasAttribute("data-autofocus")) ?? controls[0] ?? null;
 }
 export function Modal({
   open,
@@ -46,6 +74,23 @@ export function Modal({
   const clientReady = useClientReady();
   const previous = useRef(false);
   const origin = useRef<HTMLElement | null>(null);
+  const initialFocus = useRef<HTMLElement | null>(null);
+  const panel = useRef<HTMLDivElement | null>(null);
+  const opened = useRef(open);
+  opened.current = open;
+  const capturePanel = useCallback(
+    (node: HTMLDivElement | null) => {
+      panel.current = node;
+      initialFocus.current = opened.current ? modalFocusTarget(node) : null;
+      if (typeof ref === "function") return ref(node);
+      if (ref) ref.current = node;
+    },
+    [ref],
+  );
+  // Headless keeps a stable merged ref when a closed static portal reopens.
+  useLayoutEffect(() => {
+    initialFocus.current = clientReady && open ? modalFocusTarget(panel.current) : null;
+  }, [open, clientReady]);
   const explicitOrigin = useRef(returnFocusRef);
   explicitOrigin.current = returnFocusRef;
   useLayoutEffect(() => {
@@ -68,6 +113,7 @@ export function Modal({
       static
       hidden={!open}
       open={open}
+      initialFocus={initialFocus}
       onClose={onClose}
       className={cn("ds-modal", variant === "sheet" && "ds-modal--sheet")}
     >
@@ -75,12 +121,16 @@ export function Modal({
       <div className="ds-modal__position">
         <DialogPanel
           {...props}
-          ref={ref ?? null}
+          ref={capturePanel}
           className={className}
           data-dialog=""
           data-open={open || undefined}
         >
-          {title && <DialogTitle className="sr-only">{title}</DialogTitle>}
+          {title && (
+            <DialogTitle as="span" className="sr-only">
+              {title}
+            </DialogTitle>
+          )}
           {children}
         </DialogPanel>
       </div>

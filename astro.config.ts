@@ -68,6 +68,19 @@ export default defineConfig({
                     new URL("./tests/helpers/foundation-page.astro", import.meta.url),
                   ),
                 });
+                injectRoute({
+                  pattern: "/__media-player",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/media-player-page.astro", import.meta.url),
+                  ),
+                });
+                for (const pattern of ["/__synthetic-audio.wav", "/__synthetic-media-control"])
+                  injectRoute({
+                    pattern,
+                    entrypoint: fileURLToPath(
+                      new URL("./tests/helpers/media-player-endpoint.ts", import.meta.url),
+                    ),
+                  });
                 // Existing ownership/asset recovery regressions remain test-only after retirement.
                 for (const [pattern, entrypoint] of [
                   ["/__legacy-lawyer", "lawyer"],

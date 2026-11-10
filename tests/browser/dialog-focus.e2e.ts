@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-async function openInvalidNarrative(page: Page) {
+async function openInvalidNarrative(page: Page, keepFieldFocus = false) {
   const session = {
     user: { id: "dialog-focus-owner", name: "합성 고객", accountType: "customer" },
     needsConsent: false,
@@ -17,6 +17,12 @@ async function openInvalidNarrative(page: Page) {
   const submit = page.getByRole("button", { name: "저장하고 계속", exact: true });
   await expect(field).toBeEnabled();
   await field.fill("😀".repeat(9));
+  if (keepFieldFocus) {
+    await field.focus();
+    await submit.evaluate((button) =>
+      button.addEventListener("mousedown", (event) => event.preventDefault(), { once: true }),
+    );
+  }
   await submit.click();
   const dialog = page.getByRole("dialog", {
     name: "이야기를 조금만 더 적어주세요",
@@ -27,54 +33,53 @@ async function openInvalidNarrative(page: Page) {
   return { field, submit, dialog };
 }
 
-test("a controlled validation close returns to the invalid field after its native close event", async ({
+test("Headless validation dismissal restores the field and retains the narrative", async ({
   page,
 }) => {
   const { field, dialog } = await openInvalidNarrative(page);
-  await dialog.evaluate((node) => {
-    node.addEventListener(
-      "close",
-      (event) => {
-        node.setAttribute("data-native-close", String(event.isTrusted));
+  await dialog.getByRole("button", { name: "계속 작성하기", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue("😀".repeat(9));
+  await expect(field).toHaveAttribute("aria-invalid", "false");
+  expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
+});
+
+test("late modal restoration respects a newly selected submit target", async ({ page }) => {
+  const { field, submit, dialog } = await openInvalidNarrative(page, true);
+  await dialog.getByRole("button", { name: "계속 작성하기", exact: true }).evaluate((button) => {
+    button.addEventListener(
+      "click",
+      () => {
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const action = document.querySelector<HTMLButtonElement>(
+              '.conversation-entry button[type="submit"]',
+            );
+            if (!action) throw new Error("Synthetic submit target missing");
+            action.focus();
+            document.documentElement.dataset.pickedSubmit = String(
+              document.activeElement === action,
+            );
+          }),
+        );
       },
       { once: true },
     );
   });
   await dialog.getByRole("button", { name: "계속 작성하기", exact: true }).click();
-  await expect(dialog).toHaveAttribute("data-native-close", "true");
-  expect(await field.evaluate((node) => document.activeElement === node)).toBe(true);
-  await expect(field).toHaveValue("😀".repeat(9));
-  expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
-});
-
-test("a queued native close preserves a newly selected submit target for Enter", async ({
-  page,
-}) => {
-  const { field, submit, dialog } = await openInvalidNarrative(page);
-  await dialog.evaluate((node) => {
-    node.addEventListener(
-      "close",
-      (event) => {
-        const submit = document.querySelector<HTMLButtonElement>(
-          '.conversation-entry button[type="submit"]',
-        );
-        if (!submit) throw new Error("Synthetic submit target missing");
-        // Reproduce explicit focus chosen before the queued close handler, without
-        // delaying or replacing the native close event or the product handlers.
-        submit.focus();
-        node.setAttribute("data-native-close", String(event.isTrusted));
-        node.setAttribute("data-selected-submit", String(document.activeElement === submit));
-      },
-      { once: true, capture: true },
-    );
-  });
-  await dialog.getByRole("button", { name: "계속 작성하기", exact: true }).click();
-  await expect(dialog).toHaveAttribute("data-native-close", "true");
-  await expect(dialog).toHaveAttribute("data-selected-submit", "true");
-  expect(await submit.evaluate((node) => document.activeElement === node)).toBe(true);
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("html")).toHaveAttribute("data-picked-submit", "true");
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect(submit).toBeFocused();
   const value = await field.inputValue();
   await page.keyboard.press("Enter");
   await expect(dialog).toBeVisible();
-  await expect(field).toHaveValue(value);
+  await expect(page.locator("#narrative")).toHaveValue(value);
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

@@ -154,6 +154,38 @@ test("saved document paper colors stay independent from the surrounding applicat
   }
 });
 
+test("report primary download keeps paired colors on hover in both themes", async ({ page }) => {
+  await seedMaterialsScenario(page);
+  await page.goto("/new");
+  await page
+    .getByRole("textbox", { name: "지금까지 있었던 일" })
+    .fill(
+      "리포트 색상 검증용 합성 사건입니다. 반환 약속과 자료를 정리하며 확인하지 못한 내용은 모른다고 남깁니다.",
+    );
+  await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "모름", exact: true }).click();
+  await page.getByRole("button", { name: "맞아요", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true })
+    .getByRole("button", { name: "확인하고 계속", exact: true })
+    .click();
+  await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
+  await page.goto(new URL(page.url()).pathname + "/reports");
+  await ready(page);
+  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  const prepare = page.getByRole("button", { name: "리포트 준비", exact: true });
+  if (await prepare.isVisible()) await prepare.click();
+  const download = page.getByRole("button", { name: "PDF 다운로드", exact: true });
+  await expect(download).toBeEnabled();
+  for (const mode of ["light", "dark"] as const) {
+    await theme(page, mode);
+    await download.hover();
+    await expect(download).toHaveCSS("background-color", await token(page, "--primary-hover"));
+    await expect(download).toHaveCSS("color", await token(page, "--primary-foreground"));
+    await contrast(page);
+  }
+});
+
 test("social login actions keep equal heights on narrow phones in both themes", async ({
   page,
 }) => {
@@ -173,6 +205,41 @@ test("social login actions keep equal heights on narrow phones in both themes", 
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
         .toBeLessThanOrEqual(0);
+    }
+  }
+});
+
+test("case navigation remains reachable across the tablet breakpoint in both themes", async ({
+  page,
+}) => {
+  await seedMaterialsScenario(page);
+  await page.goto("/new");
+  await ready(page);
+  for (const mode of ["light", "dark"] as const) {
+    await theme(page, mode);
+    for (const width of [767, 768, 844, 900, 901]) {
+      await page.setViewportSize({ width, height: 900 });
+      const menu = page.getByRole("button", { name: "메뉴 열기", exact: true });
+      const profile = page.locator(".sidebar-desktop .sidebar-profile");
+      if (width === 767) {
+        await expect(profile).toBeHidden();
+        await expect(menu).toBeVisible();
+        await menu.click();
+        await expect(
+          page.getByRole("dialog", { name: "메뉴", exact: true }).locator(".sidebar-profile"),
+        ).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(menu).toBeFocused();
+      } else {
+        await expect(menu).toBeHidden();
+        await expect(profile).toBeVisible();
+        await expect(
+          page.locator(".sidebar-desktop").getByRole("link", { name: "새 사건 입력", exact: true }),
+        ).toBeVisible();
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
     }
   }
 });

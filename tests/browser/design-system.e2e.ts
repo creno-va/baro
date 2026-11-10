@@ -26,7 +26,7 @@ async function openInteractiveFixture(
   await page.goto("/__design-system");
   await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
   // SSR buttons are visible before their React handlers are attached.
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
 }
 
 test("application, login and case screens share local brand and remain usable at 320px", async ({
@@ -75,7 +75,7 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(37, 99, 235)",
+    "rgb(35, 100, 232)",
   );
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
@@ -186,9 +186,7 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  expect(await opener.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
-    "none",
-  );
+  await expect(opener).toHaveCSS("box-shadow", /inset/);
 });
 
 for (const activation of ["pointer", "keyboard"] as const)

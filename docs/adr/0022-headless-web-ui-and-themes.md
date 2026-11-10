@@ -40,6 +40,8 @@
 모양만 비슷하게 덮는 접근은 서로 다른 키보드·모달·선택 동작을 남기므로 채택하지 않는다.
 Astro/React islands를 SPA로 전환하는 안은 업무 owner/저장 경계를 불필요하게 바꾸므로 제외한다.
 Headless UI가 제공하지 않는 progress는 공통 ARIA progressbar로 표현하며 실제 관측 값만 사용한다.
+원본 음성·영상은 디코딩용 audio/video 요소를 유지하되 기본 controls를 사용하지 않는다.
+재생·범위·음량·속도·전체 화면 조작은 공통 Headless 버튼/선택과 ARIA slider로 제공한다.
 
 ## 결과와 후속
 

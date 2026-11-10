@@ -70,7 +70,7 @@ test("mobile menu keyboard flow and 200% fixture fit the available scrollbar wid
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/__design-system");
   await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await reserveScrollbarGutter(page);
   await expectAvailableWidth(page);
   const opener = page.getByRole("button", { name: "메뉴 열기" });

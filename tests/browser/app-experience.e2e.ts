@@ -50,7 +50,7 @@ async function fits(page: Page) {
   ).toBe(true);
 }
 
-test("sidebar delete overlays a full-width title and stays centered on hover and focus", async ({
+test("sidebar actions stay beside the title and preserve keyboard delete and cancel", async ({
   page,
 }) => {
   await session(page);
@@ -61,94 +61,45 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
   const link = row.locator(".sidebar-story");
   const copy = row.locator("strong");
   const controls = row.locator(".sidebar-story-actions");
-  const remove = row.getByRole("button");
-  for (const product of [false, true]) {
-    await page
-      .locator(".app-frame")
-      .evaluate((node, product) => node.classList.toggle("app-frame--product", product), product);
-    await page.locator("main").focus();
-    await expect(page.locator("main")).toBeFocused();
-    await page.mouse.move(800, 400);
-    await expect(controls).toHaveCSS("opacity", "0");
-    await expect(controls).toHaveCSS("pointer-events", "none");
-    const rowBounds = await row.boundingBox();
-    const linkBounds = await link.boundingBox();
-    const copyBounds = await copy.boundingBox();
-    if (!rowBounds || !linkBounds || !copyBounds) throw new Error("Synthetic sidebar row missing");
-    const contentWidth = await link.evaluate((node) => {
-      const style = getComputedStyle(node);
-      return node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    });
-    expect(linkBounds.width).toBeCloseTo(rowBounds.width, 1);
-    expect(copyBounds.width).toBeCloseTo(contentWidth, 1);
-    await expect(link).toHaveAttribute("title", stories[0]?.title ?? "");
-    await expect(copy).toHaveCSS("text-overflow", "ellipsis");
-    if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-rest.png" });
-    await row.hover();
-    await expect(controls).toHaveCSS("opacity", "1");
-    const button = await remove.boundingBox();
-    const icon = await remove.locator("svg").boundingBox();
-    if (!button || !icon) throw new Error("Synthetic sidebar icon missing");
-    expect(
-      Math.abs(button.y + button.height / 2 - rowBounds.y - rowBounds.height / 2),
-    ).toBeLessThanOrEqual(0.5);
-    expect(Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2)).toBeLessThanOrEqual(
-      0.5,
-    );
-    expect(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2)).toBeLessThanOrEqual(
-      0.5,
-    );
-    expect((await copy.boundingBox())?.width).toBeCloseTo(copyBounds.width, 1);
-    if (product) await row.screenshot({ path: ".wrangler/sidebar-overlay-hover.png" });
-    await page.mouse.move(800, 400);
-    await page.keyboard.press("Tab");
-    await link.focus();
-    await expect(controls).toHaveCSS("opacity", "1");
-    await page.keyboard.press("Tab");
-    await expect(remove).toBeFocused();
-    await page.keyboard.press("Enter");
-    const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
-    await expect(dialog.getByRole("textbox")).toHaveCount(0);
-    await expect(dialog.getByText(stories[0]?.title ?? "", { exact: true })).toHaveCount(0);
-    const actions = dialog.locator(".deletion-dialog-actions");
-    await expect(actions.getByRole("button")).toHaveText(["사건 삭제", "취소"]);
-    const geometry = await actions.evaluate((node) => {
-      const buttons = node.querySelectorAll("button");
-      const remove = buttons[0]?.getBoundingClientRect();
-      const cancel = buttons[1]?.getBoundingClientRect();
-      if (!remove || !cancel) throw new Error("Deletion actions missing");
-      return {
-        remove: remove.x,
-        cancel: cancel.x,
-        right: node.getBoundingClientRect().right - cancel.right,
-      };
-    });
-    expect(geometry.remove).toBeLessThan(geometry.cancel);
-    expect(Math.abs(geometry.right)).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: `.wrangler/deletion-dialog-${product ? "product" : "app"}.png` });
-    // Native close is queued; wait for its focus restoration before the next
-    // iteration moves focus out of the sidebar again.
-    await dialog.evaluate((node) => {
-      node.dataset.closeSettled = "false";
-      node.addEventListener(
-        "close",
-        () => {
-          node.dataset.closeSettled = "true";
-        },
-        { once: true },
-      );
-    });
-    await dialog.getByRole("button", { name: "취소", exact: true }).click();
-    await expect(
-      page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true, includeHidden: true }),
-    ).toHaveAttribute("data-close-settled", "true");
-    await expect(dialog).not.toBeVisible();
-    await expect(remove).toBeFocused();
-  }
+  const remove = row.getByRole("button", { name: / 사건 삭제$/ });
+  await expect(controls).toBeVisible();
+  await expect(controls).toHaveCSS("opacity", "1");
+  await expect(copy).toHaveCSS("text-overflow", "ellipsis");
+  await expect(link).toHaveAttribute("title", stories[0]?.title ?? "");
+  const geometry = await row.evaluate((node) => {
+    const title = node.querySelector(".sidebar-story")?.getBoundingClientRect();
+    const actions = node.querySelector(".sidebar-story-actions")?.getBoundingClientRect();
+    if (!title || !actions) throw new Error("Sidebar title and actions missing");
+    return { titleRight: title.right, actionsLeft: actions.left };
+  });
+  expect(geometry.titleRight).toBeLessThanOrEqual(geometry.actionsLeft + 1);
+  const button = await remove.boundingBox(),
+    icon = await remove.locator("svg").boundingBox();
+  if (!button || !icon) throw new Error("Sidebar delete target missing");
+  expect(Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2)).toBeLessThanOrEqual(
+    0.5,
+  );
+  expect(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2)).toBeLessThanOrEqual(0.5);
+  await page.keyboard.press("Tab");
+  await link.focus();
+  await page.keyboard.press("Tab");
+  // Legacy stories have no rename action; their next action remains delete.
+  await expect(remove).toBeFocused();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "취소", exact: true })).toBeFocused();
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await expect(dialog.locator(".deletion-dialog-actions").getByRole("button")).toHaveText([
+    "사건 삭제",
+    "취소",
+  ]);
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(remove).toBeFocused();
+  await expect(link).toHaveAttribute("href", `/cases/${stories[0]?.id}`);
+  await row.screenshot({ path: ".wrangler/sidebar-visible-actions.png" });
 });
-
 test("touch sidebar retains a visible centered overlay delete control", async ({
   browser,
   baseURL,
@@ -250,7 +201,7 @@ test("recent stories scroll independently while account controls stay visible at
   }
 });
 
-test("dialogs settle inside the viewport as mobile sheets or centered dialogs and restore focus", async ({
+test("dialogs settle inside the viewport across responsive navigation and restore focus", async ({
   page,
 }) => {
   await session(page);
@@ -261,6 +212,8 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     [760, 520],
     [761, 520],
     [768, 900],
+    [900, 900],
+    [901, 900],
     [1024, 768],
     [1440, 900],
     [1920, 1080],
@@ -276,15 +229,16 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
     await expect(dialog).toBeVisible();
+    const panel = dialog.locator("[data-dialog]");
     await expect
       .poll(() =>
-        dialog.evaluate((node) =>
+        panel.evaluate((node) =>
           node.getAnimations().every((animation) => animation.playState === "finished"),
         ),
       )
       .toBe(true);
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
-    const bounds = await dialog.boundingBox();
+    const bounds = await panel.boundingBox();
     expect(bounds).not.toBeNull();
     expect(Math.abs((bounds?.x ?? 0) + (bounds?.width ?? 0) / 2 - (width ?? 0) / 2)).toBeLessThan(
       10,
@@ -294,10 +248,7 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
-    const verticalAnchor =
-      (width ?? 320) <= 760
-        ? bounds.y + bounds.height - (height ?? 480)
-        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    const verticalAnchor = bounds.y + bounds.height / 2 - (height ?? 480) / 2;
     expect(Math.abs(verticalAnchor)).toBeLessThan(2);
     for (const name of ["닫기", "취소", "사건 삭제"]) {
       const button = dialog.getByRole("button", { name, exact: true });
@@ -313,7 +264,7 @@ test("dialogs settle inside the viewport as mobile sheets or centered dialogs an
     expect(await page.locator("html").evaluate((node) => getComputedStyle(node).overflow)).toBe(
       "hidden",
     );
-    expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     await page.screenshot({ path: `.wrangler/ui522/dialog-${width}.png` });
     await page.keyboard.press("Escape");
     await expect(opener).toBeFocused();
@@ -342,13 +293,19 @@ test("pending list keeps structure, announces loading, stops motion on request a
   const loading = page.locator(".ui-sheet .ui-loading");
   await expect(loading).toHaveAttribute("role", "status");
   await expect(loading.locator('[data-slot="skeleton"]')).toHaveCount(12);
-  await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "app-spin");
+  await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "ui-spin");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(loading.locator(".ui-spinner")).toHaveCSS("animation-name", "none");
-  await expect(loading.locator('[data-slot="skeleton"]').first()).toHaveCSS(
-    "animation-name",
-    "none",
-  );
+  for (const motion of [
+    loading.locator(".ui-spinner"),
+    loading.locator('[data-slot="skeleton"]').first(),
+  ]) {
+    await expect
+      .poll(() =>
+        motion.evaluate((node) => Number.parseFloat(getComputedStyle(node).animationDuration)),
+      )
+      .toBeLessThan(0.01);
+    await expect(motion).toHaveCSS("animation-iteration-count", "1");
+  }
   await page.screenshot({ path: ".wrangler/ui522/loading-390.png" });
   release();
   await expect(loading).toHaveCount(0);
@@ -375,14 +332,15 @@ test("mobile menu, classic scrollbars, zoom and foreground contrast stay usable"
     await page.goto("/cases");
     await settled(page);
     const opener = page.getByRole("button", { name: "메뉴 열기" });
-    if (!(await opener.isVisible())) {
-      await expect(page.locator(".sidebar-desktop .sidebar-account")).toBeVisible();
-      await fits(page);
-      continue;
-    }
-    if (!(await page.getByRole("dialog", { name: "메뉴", exact: true }).isVisible()))
-      await opener.click();
     const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
+    if (!(await menu.isVisible())) {
+      if (!(await opener.isVisible())) {
+        await expect(page.locator(".sidebar-desktop .sidebar-account")).toBeVisible();
+        await fits(page);
+        continue;
+      }
+      await opener.click();
+    }
     await expect(menu.getByRole("button", { name: "닫기", exact: true })).toBeFocused();
     await menu.getByRole("link", { name: /합성 검증 계정/ }).scrollIntoViewIfNeeded();
     await expect(menu.getByRole("link", { name: /합성 검증 계정/ })).toBeInViewport({

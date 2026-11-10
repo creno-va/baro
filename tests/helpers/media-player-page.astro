@@ -1,0 +1,9 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro reads the layout.
+import AppLayout from "../../src/layouts/AppLayout.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro reads the fixture.
+import { MediaPlayerFixture } from "./media-player-fixture";
+---
+<AppLayout title="합성 원본 재생 · BARO" description="테스트 전용 원본 재생 UI" role="visitor" availableRoutes={["/"]}>
+  <MediaPlayerFixture client:load />
+</AppLayout>

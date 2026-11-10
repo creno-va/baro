@@ -2,8 +2,10 @@ import { expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { Dialog } from "../src/components/ui/dialog";
 import { Disclosure, DisclosureSummary } from "../src/components/ui/disclosure";
-import { Input, Select } from "../src/components/ui/form";
+import { Input, Select, Textarea } from "../src/components/ui/form";
+import { MediaPlayer } from "../src/components/ui/media-player";
 import { Popover, PopoverButton, PopoverPanel } from "../src/components/ui/popover";
+import { Range } from "../src/components/ui/range";
 import { Tabs } from "../src/components/ui/tabs";
 import { ThemeToggle } from "../src/components/ui/theme-toggle";
 import { CaseWorkspaceFrame } from "../src/components/ui/workspace-frame";
@@ -12,6 +14,8 @@ test("web controls preserve strict style-attribute CSP during server rendering",
   const markup = renderToString(
     <>
       <Input aria-label="사건 이름" defaultValue="합성 사건" />
+      <Range label="재생 위치" value={0} max={20} onChange={() => {}} />
+      <MediaPlayer kind="audio" src="/synthetic.wav" label="합성 녹음" />
       <Input type="checkbox" aria-label="확인" checked={false} onChange={() => {}} />
       <Select aria-label="자료 종류" value="text" onChange={() => {}}>
         <option value="text">텍스트</option>
@@ -39,4 +43,24 @@ test("web controls preserve strict style-attribute CSP during server rendering",
   expect(markup).toContain('role="checkbox"');
   expect(markup).toContain('aria-haspopup="listbox"');
   expect(markup).toContain("대화");
+  expect(markup).toContain('role="slider"');
+  expect(markup).not.toMatch(/<(?:audio|video)[^>]*\bcontrols(?:\s|=|>)/);
+});
+
+test("Headless text controls retain caller error and description semantics", () => {
+  for (const Control of [Input, Textarea]) {
+    for (const invalid of [true, false]) {
+      const markup = renderToString(
+        <Control
+          aria-labelledby="synthetic-label"
+          aria-describedby="synthetic-help synthetic-error"
+          aria-invalid={invalid}
+        />,
+      );
+      expect(markup).toContain('aria-labelledby="synthetic-label"');
+      expect(markup).toContain('aria-describedby="synthetic-help synthetic-error"');
+      expect(markup).toContain(`aria-invalid="${invalid}"`);
+      expect(markup).not.toMatch(/\sstyle=/i);
+    }
+  }
 });

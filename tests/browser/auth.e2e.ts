@@ -155,7 +155,7 @@ test("keyboard OAuth initiation blocks duplicates and restores focus on a networ
     await route.abort("failed");
   });
   await page.goto("/login");
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기" }).focus();
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeFocused();
   await page.keyboard.press("Enter");
@@ -241,7 +241,7 @@ test("provider errors are recoverable and a synthetic redirect reaches consent",
     route.fulfill({ json: syntheticConsentStatus(true) }),
   );
   await page.goto("/login");
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("button", { name: "Kakao로 계속하기" }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요.");
   await page.keyboard.press("Enter");

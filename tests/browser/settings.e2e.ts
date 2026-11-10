@@ -83,24 +83,22 @@ test("account deletion is inline with one entry and shows only linked SSO option
         .toBe(true);
       if (width === 1440) {
         const layout = await card.evaluate((node) => {
-          const heading = node
-            .querySelector(".ui-section__header > div:first-child")
-            ?.getBoundingClientRect();
+          const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
           const action = node.querySelector("button")?.getBoundingClientRect();
           if (!heading || !action) throw new Error("Account deletion controls missing");
           return {
             inline: action.left >= heading.right,
-            top: Math.abs(action.top - heading.top),
+            center: Math.abs(action.top + action.height / 2 - heading.top - heading.height / 2),
           };
         });
         expect(layout.inline).toBe(true);
-        expect(layout.top).toBeLessThanOrEqual(1);
+        expect(layout.center).toBeLessThanOrEqual(1);
       }
       if (linked.length === 2) {
         await card.screenshot({ path: `.wrangler/settings-danger-inline-${width}.png` });
         if (width === 1440)
           for (const section of ["usage", "help"])
-            await page.locator(`.settings-${section} .ui-section__header`).screenshot({
+            await page.locator(`.settings-${section} .settings-section-heading`).screenshot({
               path: `.wrangler/settings-${section}-heading.png`,
             });
       }
@@ -167,7 +165,15 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     });
     await page.goto("/settings");
     await openAccountDeletion(page);
+    const providerNavigation = page.waitForURL(
+      (url) => url.origin === "https://accounts.google.com",
+      { waitUntil: "commit" },
+    );
     await page.getByRole("button", { name: "Google로 재인증" }).click();
+    await providerNavigation;
+    await page.waitForURL((url) => url.origin === baseURL && url.pathname === "/settings", {
+      waitUntil: "load",
+    });
     const confirmation = page.getByLabel("삭제 확인 — DELETE 입력");
     await expect(confirmation).toBeEnabled();
     await confirmation.fill("DELETE");
@@ -226,6 +232,9 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await auth.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => stamp).not.toBeNull();
+  await page.waitForURL((url) => url.pathname === "/settings" && !url.searchParams.has("reauth"), {
+    waitUntil: "load",
+  });
   await expect(confirm).toBeEnabled();
   await expect(confirm).toBeFocused();
   await page.screenshot({ path: ".wrangler/settings-320.png", fullPage: true });

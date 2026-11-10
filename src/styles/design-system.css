@@ -1,6 +1,7 @@
 /* BARO web DS. Tokens are global only on non-landing pages, including Headless portals. */
 :root[data-baro-ui] {
   color-scheme: light;
+  scroll-padding-block-start: 16px;
   --background: #f6f7f9;
   --foreground: #172033;
   --card: #fff;
@@ -114,10 +115,6 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
-:root[data-baro-ui] :where(button, a, input, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
 :root[data-baro-ui] :where(button):disabled,
 :root[data-baro-ui] [data-disabled] {
   opacity: 0.5;
@@ -128,7 +125,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 9px 14px;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -149,11 +146,11 @@
 :where(:root[data-baro-ui]) .ui-control:hover:not(:disabled) {
   background: var(--muted);
 }
-:root[data-baro-ui] .ui-button--primary {
+:root[data-baro-ui] :is(.ui-button--primary, button.primary, .primary-action) {
   background: var(--primary);
   color: var(--primary-foreground);
 }
-:root[data-baro-ui] :is(.ui-button--primary, .primary-action):hover:not(:disabled) {
+:root[data-baro-ui] :is(.ui-button--primary, button.primary, .primary-action):hover:not(:disabled) {
   background: var(--primary-hover);
   color: var(--primary-foreground);
 }
@@ -235,8 +232,8 @@
   appearance: none;
   min-width: 0;
   max-width: 100%;
-  min-height: 42px;
-  padding: 10px 12px;
+  min-height: 44px;
+  padding: 9px 12px;
   border: 1px solid var(--input);
   border-radius: 10px;
   background: var(--card);
@@ -251,14 +248,11 @@
 }
 :root[data-baro-ui] .ui-input:focus {
   border-color: var(--ring);
-  outline: 2px solid color-mix(in srgb, var(--ring) 22%, transparent);
-  outline-offset: 0;
 }
 .ui-select-root {
   position: relative;
   min-width: 0;
-  display: inline-grid;
-  vertical-align: middle;
+  display: grid;
 }
 .ui-select-root:has(.ui-select) {
   width: 100%;
@@ -276,6 +270,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ui-select > svg {
+  flex-shrink: 0;
 }
 .ui-select-options,
 .ui-menu {
@@ -450,6 +447,10 @@
   padding: 24px;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.ds-modal .ui-button--icon {
+  width: 44px;
+  min-height: 44px;
 }
 .ds-modal .ui-dialog,
 .ds-modal .workspace-dialog,
@@ -666,11 +667,14 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-baro-ui] * {
-    scroll-behavior: auto;
-    transition: none;
-    animation-duration: 0.001ms;
-    animation-iteration-count: 1;
+  :root[data-baro-ui] *,
+  :root[data-baro-ui] *::before,
+  :root[data-baro-ui] *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -680,6 +684,7 @@
 @media (max-width: 767px) {
   :root[data-baro-ui] {
     --app-topbar-height: 52px;
+    scroll-padding-block-start: calc(var(--app-topbar-height) + 16px);
   }
 }
 .case-workspace[data-panel-open="false"] .case-workspace__body {
@@ -736,6 +741,11 @@
 
 :root[data-baro-ui] [hidden] {
   display: none !important;
+}
+:root[data-baro-ui][data-theme-switching] *,
+:root[data-baro-ui][data-theme-switching] *::before,
+:root[data-baro-ui][data-theme-switching] *::after {
+  transition: none !important;
 }
 
 .ui-control {
@@ -801,4 +811,114 @@
     top: 120px;
     max-height: calc(100% - 136px);
   }
+}
+
+/* Shared media chrome: the audio/video elements only decode the private source. */
+.ui-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+.ui-range__track {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 8px;
+  background: var(--muted);
+}
+.ui-range__fill {
+  display: block;
+  position: relative;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--primary);
+}
+.ui-range__fill::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.ui-media {
+  margin: 0;
+  min-inline-size: 0;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.ui-media video {
+  display: block;
+  width: 100%;
+  max-height: 50dvh;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--background);
+}
+.ui-media audio[hidden] {
+  display: none;
+}
+.ui-media__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+:root[data-baro-ui] .ui-media .ui-button--icon {
+  width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.ui-media__time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ui-media__volume {
+  display: flex;
+  align-items: center;
+  width: 142px;
+  min-width: 0;
+}
+.ui-media__speed {
+  width: 112px;
+  min-width: 0;
+}
+.ui-media__status {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.ui-media__error {
+  color: var(--destructive);
+  font-size: 13px;
+}
+.ui-media:fullscreen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+}
+.ui-media:fullscreen video {
+  max-height: calc(100dvh - 160px);
 }

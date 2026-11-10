@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openReportEditor } from "../helpers/report-controls";
+import { openReportEditor, openReportGeneration } from "../helpers/report-controls";
 import { preparationRead } from "../helpers/report-rework-reads";
 
 const progressReport = {
@@ -205,7 +205,7 @@ test("report generation shows the actual elapsed request inside its confirmation
       });
     },
   });
-  await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
+  await openReportGeneration(page);
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect.poll(() => generations).toBe(1);
   await page.clock.fastForward(48000);

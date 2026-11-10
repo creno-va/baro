@@ -40,11 +40,15 @@ export function AccountSettings() {
   const [notice, setNotice] = useState("");
   const [target, setTarget] = useState<"account" | null>(null);
   const [confirmation, setConfirmation] = useState("");
+  const confirmationField = useRef<HTMLInputElement | null>(null);
   const [deleted, setDeleted] = useState(false);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const owner = useRef<string | null>(null);
   const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    if (target && ready && !busy && !checking) confirmationField.current?.focus();
+  }, [target, ready, busy, checking]);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     lock.current = false;
@@ -526,6 +530,7 @@ export function AccountSettings() {
               <FieldLabel htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</FieldLabel>
               <ControlInput
                 id="delete-confirmation"
+                ref={confirmationField}
                 autoComplete="off"
                 value={confirmation}
                 disabled={Boolean(busy) || checking}
