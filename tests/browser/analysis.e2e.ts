@@ -449,7 +449,7 @@ test("real signed session/API/SQL legacy admission → questions → validated o
     const url = page.url();
     await page.reload();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
-    await page.goto("/app");
+    await page.goto("/new");
     await page.goBack();
     await expect(page.getByRole("heading", { name: "상황 정리" })).toBeVisible();
     expect(page.url()).toBe(url);

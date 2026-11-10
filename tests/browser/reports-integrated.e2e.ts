@@ -45,7 +45,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,
   );
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
     await page.getByRole("button", { name: "저장하고 계속" }).click();
@@ -155,7 +155,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
     .getByRole("button", { name: "사건 삭제", exact: true })
     .click();
-  await expect(page).toHaveURL("/app");
+  await expect(page).toHaveURL("/new");
   await expect(removeCase).toHaveCount(0);
   await page.reload();
   await expect(removeCase).toHaveCount(0);

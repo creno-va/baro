@@ -12,7 +12,7 @@ async function openInvalidNarrative(page: Page) {
   for (const path of ["**/api/cases?*", "**/api/v2/cases?*"])
     await page.route(path, (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/app");
+  await page.goto("/new");
   const field = page.getByRole("textbox", { name: "지금까지 있었던 일", exact: true });
   const submit = page.getByRole("button", { name: "저장하고 계속", exact: true });
   await expect(field).toBeEnabled();

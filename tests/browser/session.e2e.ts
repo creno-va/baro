@@ -74,7 +74,7 @@ test("signed SQL session completes the real consent API through the browser, the
     await expect(page.getByRole("checkbox")).toHaveCount(1);
     await page.getByRole("checkbox").nth(0).check();
     await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/new$/);
     const saved = await page.evaluate(async () => (await fetch("/api/me/consent")).json());
     expect(saved).toMatchObject({ needsConsent: false });
     const signedOut = await page.evaluate(
@@ -94,7 +94,7 @@ test("signed SQL session completes the real consent API through the browser, the
     });
     expect(replay.status()).toBe(401);
     await page.reload();
-    await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp(?:&error=session_expired)?$/);
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Fnew(?:&error=session_expired)?$/);
   } finally {
     child.stdin.end();
     child.kill();
@@ -138,10 +138,10 @@ test("persisted SQL role changes reauthorize peers while preserving common case 
     ).toBeEnabled();
     await expect(page.getByRole("radio", { name: "변호사", exact: true })).toHaveCount(0);
     await context.addCookies([seed.cookie]);
-    await page.goto("/app");
-    await expect(page).toHaveURL(/\/app$/);
+    await page.goto("/new");
+    await expect(page).toHaveURL(/\/new$/);
     peer = await context.newPage();
-    await peer.goto("/app");
+    await peer.goto("/new");
     const peerNav = peer.getByRole("navigation", { name: "주 메뉴", exact: true });
     await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
     await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
@@ -189,12 +189,9 @@ test("persisted SQL role changes reauthorize peers while preserving common case 
       /^[0-9a-f-]{36}$/,
     );
     await peer.reload();
-    await expect(peer).toHaveURL(/\/app$/);
+    await expect(peer).toHaveURL(/\/new$/);
     await expect(peerNav.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-    await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-      "href",
-      "/cases",
-    );
+    await expect(peerNav.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
     await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
     expect(
       await peer.evaluate(async () => {

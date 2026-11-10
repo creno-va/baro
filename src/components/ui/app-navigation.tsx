@@ -46,14 +46,8 @@ export const ROLE_NAVIGATION: Record<NavigationRole, readonly NavigationItem[]> 
     { href: "/", label: "서비스 소개", icon: "home" },
     { href: "/login", label: "이야기 시작하기", icon: "new" },
   ],
-  user: [
-    { href: "/app", label: "새 사건 입력", icon: "new" },
-    { href: "/cases", label: "내 사건", icon: "cases" },
-  ],
-  lawyer: [
-    { href: "/app", label: "새 사건 입력", icon: "new" },
-    { href: "/cases", label: "내 사건", icon: "cases" },
-  ],
+  user: [{ href: "/new", label: "새 사건 입력", icon: "new" }],
+  lawyer: [{ href: "/new", label: "새 사건 입력", icon: "new" }],
   moderator: [{ href: "/admin/reviews", label: "검토 대기", icon: "reviews" }],
 };
 export function availableNavigation(role: NavigationRole, availableRoutes: readonly string[]) {
@@ -254,7 +248,7 @@ export function AppNavigation({
   const items = availableNavigation(resolvedRole, [
     ...availableRoutes,
     "/",
-    "/app",
+    "/new",
     "/login",
     "/cases",
     "/cases/new",
@@ -300,7 +294,7 @@ export function AppNavigation({
       await sameOwner();
       setRecent((items) => items.filter((item) => item.id !== target.item.id));
       setDeletion(null);
-      window.location.assign("/app");
+      window.location.assign("/new");
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "삭제를 접수하지 못했어요. 다시 확인해 주세요.",
@@ -358,7 +352,7 @@ export function AppNavigation({
       const Icon = icons[item.icon];
       const active =
         pathname === item.href ||
-        (item.href === "/app" && pathname === "/cases/new") ||
+        (item.href === "/new" && pathname === "/cases/new") ||
         (item.href === "/cases" && pathname.startsWith("/cases/") && pathname !== "/cases/new");
       return (
         <a

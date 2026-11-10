@@ -7,7 +7,7 @@ export function safeReturnPath(
 ): string | null {
   if (!value || value.length > 500 || /[%\\\\\s?#]/.test(value)) return null;
   const customer =
-    /^\/(app|cases(?:\/(?:new|[A-Za-z0-9_-]+(?:\/(?:intake|summary|files|timeline|actions|precedents|reports))?))?)\/?$/.test(
+    /^\/(new|app|cases(?:\/(?:new|[A-Za-z0-9_-]+(?:\/(?:intake|summary|files|timeline|actions|precedents|reports))?))?)\/?$/.test(
       value,
     );
   const lawyer = value === "/lawyer" || value === "/lawyer/";
@@ -39,5 +39,5 @@ export function sessionDestination(
   const allowed = safeReturnPath(target, session.user?.accountType);
   if (!session.user) return accessHref("login", allowed ?? undefined);
   if (session.needsConsent) return accessHref("consent", allowed ?? undefined);
-  return allowed ?? "/app";
+  return allowed ?? "/new";
 }

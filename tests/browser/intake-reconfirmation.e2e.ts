@@ -213,7 +213,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const) {
     page,
   }) => {
     await seed(page);
-    await page.goto("/app");
+    await page.goto("/new");
     await page.getByRole("radio", { name: purpose, exact: true }).check();
     await page
       .getByLabel("지금까지 있었던 일")
@@ -729,7 +729,7 @@ test("320px case input keeps both purpose choices at 44px without owner-category
 }) => {
   await seed(page);
   await page.setViewportSize({ width: 320, height: 740 });
-  await page.goto("/app");
+  await page.goto("/new");
   await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
     "placeholder",

@@ -1,6 +1,6 @@
 # 앱 공통 shell 사용
 
-현재 사건 UI 정본은 `docs/design/CASE-WORKBENCH.md`와 #795다. 공개/새 사건 화면은 기존 AppLayout을 유지하고, 사건 화면은 CaseWorkbenchLayout을 사용한다.
+현재 UI 정본은 `docs/design/CASE-WORKBENCH.md`와 #795/#797이다. `/new`와 사건 화면은 같은 밝은 CaseWorkbenchLayout과 사이드바를 사용한다. 새 사건 본문 배치와 공개/로그인 시각 구성은 유지한다. `/app`은 인증·동의 경계를 거쳐 `/new`로 연결한다. 내 사건 목록 메뉴는 없으며 최근 개별 사건 링크는 유지한다.
 
 `AppLayout.astro`는 기존 props를 유지하고 `[data-app-workspace]` 아래에서만 새 토큰을 적용한다.
 AppNavigation island는 세션·최근 사건·역할·이름 변경/삭제·로그아웃을 독립적으로 소유한다.

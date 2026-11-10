@@ -186,7 +186,7 @@ test("customer login consent logout share the product shell without external API
   await expect(page.getByRole("checkbox")).toHaveCount(1);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
@@ -215,7 +215,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await page
     .getByLabel("지금까지 있었던 일")
     .fill("합성 시연 사건입니다. 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.");
@@ -357,7 +357,7 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
   ]) {
     await page.setViewportSize(viewport);
     for (const path of [
-      "/app",
+      "/new",
       "/cases",
       "/cases/new",
       "/lawyers",
@@ -367,7 +367,7 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
     ]) {
       await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-      if (path === "/app" || path === "/cases/new")
+      if (path === "/new" || path === "/cases/new")
         await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
       if (path === "/lawyers")
         await expect(page.getByRole("link", { name: "김예시", exact: true })).toBeVisible();
@@ -406,7 +406,7 @@ async function openCustomerHome(page: Page) {
     );
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
 }
 async function logoutFromMenu(page: Page) {
@@ -426,7 +426,7 @@ test("peer logout clears the draft and opens plain login in both tabs", async ({
   await draft.fill("로그아웃하면 사라져야 하는 합성 사건 초안입니다.");
   const peer = await context.newPage();
   await peer.setViewportSize({ width: 390, height: 844 });
-  await peer.goto("/app");
+  await peer.goto("/new");
   await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   await logoutFromMenu(peer);
   await expect(peer).toHaveURL(/\/login$/);
@@ -448,7 +448,7 @@ test("expired session retains the safe return path instead of explicit logout be
     const { notifySessionChanged } = await import(modulePath);
     notifySessionChanged();
   });
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fnew$/);
 });
 
 test("logout invalidates pending session reads before an old authenticated result resolves", async ({
@@ -499,7 +499,7 @@ test("failed logout keeps the session and draft without broadcasting a successfu
   });
   await logoutFromMenu(page);
   await expect(page.getByRole("alert")).toContainText("로그아웃하지 못했어요");
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await expect(draft).toHaveValue("로그아웃 실패 시 유지할 합성 사건 초안입니다.");
   expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toBeNull();
 });

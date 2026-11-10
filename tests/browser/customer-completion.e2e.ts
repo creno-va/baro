@@ -228,7 +228,7 @@ test("login preserves a permitted path and rejects an external return destinatio
   await expect(page).toHaveURL(`${base}/timeline`);
   await page.goto("/login?returnTo=https%3A%2F%2Fexample.com%2Fevil");
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
 });
 
 test("summary explanations and file corrections retain their base revision across a peer edit", async ({

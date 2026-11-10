@@ -1,30 +1,30 @@
-/* BARO case workbench. One scoped token system; public and new-case layouts opt out. */
+/* One light workspace for /new and case details; public/login layouts opt out. */
 .app-frame.baro-workbench {
-  color-scheme: dark;
-  --background: #191919;
-  --foreground: #ededed;
-  --card: #242424;
-  --card-foreground: #ededed;
-  --popover: #292929;
-  --popover-foreground: #ededed;
-  --primary: #2364e8;
+  color-scheme: light;
+  --background: #f6f7f9;
+  --foreground: #0f172a;
+  --card: #fff;
+  --card-foreground: #0f172a;
+  --popover: #fff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
   --primary-foreground: #fff;
-  --secondary: #303030;
-  --secondary-foreground: #ededed;
-  --muted: #2c2c2c;
-  --muted-foreground: #ababab;
-  --border: #363636;
-  --input: #494949;
-  --ring: #82aaff;
-  --accent: #303030;
-  --accent-foreground: #ededed;
+  --secondary: #fff;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #667085;
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #2563eb;
+  --accent: #fff;
+  --accent-foreground: #0f172a;
   --destructive: #a42f38;
-  --success: #8cdbab;
-  --warning: #edc67a;
-  --wb-sidebar: #1d1d1d;
-  --wb-canvas: #191919;
-  --wb-raised: #303030;
-  --wb-hover: #343434;
+  --success: #166534;
+  --warning: #854d0e;
+  --wb-sidebar: #fff;
+  --wb-canvas: #f6f7f9;
+  --wb-raised: #fff;
+  --wb-hover: #eef1f5;
   --wb-radius: 10px;
   --wb-reading: 920px;
   --wb-sidebar-width: clamp(248px, 19.3vw, 356px);
@@ -189,7 +189,7 @@
   min-height: 38px;
   padding: 7px 12px;
   border-radius: 8px;
-  color: #cecece;
+  color: #475569;
 }
 .baro-workbench .sidebar-story__copy {
   min-width: 0;
@@ -262,7 +262,8 @@
 .baro-workbench .api-mode-notice {
   margin: 5px 6px 0;
   font-size: 10px;
-  opacity: 0.65;
+  color: var(--muted-foreground);
+  opacity: 1;
 }
 .baro-workbench .workbench-search {
   width: 100%;
@@ -310,7 +311,7 @@
 }
 .baro-workbench .case-header__identity > svg {
   flex-shrink: 0;
-  color: #c6c6c6;
+  color: #667085;
 }
 .baro-workbench .case-header h1 {
   font-size: 16px;
@@ -376,7 +377,7 @@
   background: var(--popover);
   padding: 6px;
   border-radius: 12px;
-  box-shadow: 0 12px 32px #0005;
+  box-shadow: 0 12px 32px #0f172a1a;
 }
 .baro-workbench .case-tools__menu a {
   min-height: 44px;
@@ -640,7 +641,7 @@
   flex-direction: column;
   padding: 14px;
   background: var(--wb-raised);
-  border: 1px solid #404040;
+  border: 1px solid #e2e8f0;
   border-radius: 24px;
   box-shadow: none;
 }
@@ -667,13 +668,13 @@
   border-radius: 4px;
 }
 .baro-workbench .workspace-composer textarea::placeholder {
-  color: #a3a3a3;
+  color: #667085;
 }
 .baro-workbench .workspace-composer textarea:focus {
   outline: none;
 }
 .baro-workbench .workspace-composer-surface:focus-within {
-  border-color: #626262;
+  border-color: #94a3b8;
 }
 .baro-workbench .workspace .workspace-send {
   grid-column: 3;
@@ -686,8 +687,8 @@
   color: var(--primary-foreground);
 }
 .app-frame.baro-workbench .workspace-send.ui-button:disabled {
-  background: #414141;
-  color: #ababab;
+  background: #e2e8f0;
+  color: #667085;
   opacity: 1;
 }
 .baro-workbench .conversation-agent-actions > .ui-button {
@@ -727,7 +728,7 @@
 }
 .baro-workbench .composer-add-menu > summary:hover,
 .baro-workbench .composer-add-menu[open] > summary {
-  background: #484848;
+  background: #eef1f5;
 }
 .baro-workbench .composer-add-menu__content {
   position: absolute;
@@ -738,10 +739,10 @@
   max-height: 45dvh;
   overflow: auto;
   padding: 6px;
-  border: 1px solid #494949;
+  border: 1px solid #cbd5e1;
   border-radius: 14px;
   background: var(--popover);
-  box-shadow: 0 12px 40px #0005;
+  box-shadow: 0 12px 40px #0f172a1a;
 }
 .baro-workbench .composer-add-menu__content > .ui-button {
   width: 100%;
@@ -789,7 +790,7 @@
   gap: 6px;
   max-width: 100%;
   padding: 4px 8px;
-  background: #39465f;
+  background: #e8efff;
   border-radius: 6px;
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -853,7 +854,7 @@
 .baro-workbench .case-context__tabs i {
   width: 5px;
   height: 5px;
-  background: #82aaff;
+  background: #2563eb;
   border-radius: 50%;
 }
 .baro-workbench .case-context__pane {
@@ -894,7 +895,7 @@
   text-decoration: none;
 }
 .baro-workbench .context-task:hover {
-  background: #ffffff04;
+  background: #f1f5f9;
 }
 .baro-workbench .context-task > svg {
   flex-shrink: 0;
@@ -930,7 +931,7 @@
 .baro-workbench .context-status-dot {
   width: 6px;
   height: 6px;
-  background: #edc67a;
+  background: #854d0e;
   border-radius: 50%;
   margin-top: 8px;
   flex-shrink: 0;
@@ -978,7 +979,7 @@
   height: 16px;
 }
 .baro-workbench .workspace-status--ready {
-  color: #a8c5ff;
+  color: #244b91;
 }
 .baro-workbench .workspace-upload-title {
   font-size: 13px;
@@ -1114,7 +1115,7 @@
     height: calc(100dvh - 16px);
     border: 1px solid var(--border);
     border-radius: 16px;
-    box-shadow: 0 24px 80px #0006;
+    box-shadow: 0 24px 80px #0f172a26;
   }
   .baro-workbench .case-workspace__panel::backdrop {
     background: #0008;
@@ -1236,7 +1237,7 @@
   }
 }
 
-/* Readable paper is an explicit document surface inside the dark workbench. */
+/* Reports remain a distinct white document surface. */
 .baro-workbench .report-review {
   color-scheme: light;
   --foreground: #191f28;
@@ -1283,20 +1284,20 @@
   color: #fff;
 }
 .baro-workbench .precedent-topic:has(:checked) {
-  background: #26354f;
-  color: #d9e6ff;
-  border-color: #5689ed;
+  background: #eff4ff;
+  color: #244b91;
+  border-color: #2563eb;
 }
 .baro-workbench .precedent-topic small {
-  color: #a8c5ff;
+  color: #244b91;
 }
 .baro-workbench .precedent-workspace button.precedent-card:hover:not(:disabled) {
   background: var(--muted);
-  border-color: #626262;
+  border-color: #94a3b8;
 }
 .baro-workbench .precedent-card-topics > span {
-  background: #283751;
-  color: #bad0ff;
+  background: #eff4ff;
+  color: #244b91;
 }
 .baro-workbench .case-context .precedent-workspace button.precedent-card {
   padding: 14px;
@@ -1359,7 +1360,7 @@
   border-color: var(--input);
 }
 .baro-workbench {
-  --wb-error-text: #ffb4bc;
+  --wb-error-text: #a42f38;
 }
 .baro-workbench .report-review {
   --wb-error-text: #a42f38;
@@ -1401,39 +1402,95 @@ body:has(.baro-workbench .case-workspace--conversation) {
   overscroll-behavior: contain;
 }
 
-/* Comparison meaning uses the same dark semantic surfaces as the rest of the case. */
+/* Comparison states stay legible on the shared light surfaces. */
+.baro-workbench .precedent-workspace .comparison-summary {
+  --muted-foreground: #475569;
+}
 .baro-workbench .precedent-workspace .precedent-more > button {
   background: transparent;
 }
 .baro-workbench .precedent-workspace .comparison-indicator--yes {
-  background: #253650;
-  border-color: #426493;
+  background: #eff4ff;
+  border-color: #b7cdfb;
 }
 .baro-workbench .comparison-indicator--yes strong {
-  color: #c7d8ff;
+  color: #244b91;
 }
 .baro-workbench .precedent-workspace .comparison-indicator--no {
-  background: #3a3022;
-  border-color: #6a5435;
+  background: #fff7e6;
+  border-color: #edce91;
 }
 .baro-workbench .comparison-indicator--no strong {
-  color: #edc67a;
+  color: #854d0e;
 }
 .baro-workbench .precedent-workspace .comparison-indicator--unknown {
   background: var(--muted);
 }
 .baro-workbench .comparison-verdict--yes {
-  background: #253650;
-  color: #c7d8ff;
+  background: #eff4ff;
+  color: #244b91;
 }
 .baro-workbench .comparison-verdict--no {
-  background: #3a3022;
-  color: #edc67a;
+  background: #fff7e6;
+  color: #854d0e;
 }
 .baro-workbench .precedent-workspace .comparison-highlight {
-  background: #293c5c;
-  color: #dce7ff;
+  background: #eff4ff;
+  color: #244b91;
 }
 .baro-workbench .precedent-workspace .comparison-highlight:hover {
-  background: #354f77;
+  background: #dbe8ff;
+}
+
+/* Preserve the original new-case composition inside the shared sidebar shell. */
+.baro-workbench .app-surface main.conversation-main {
+  width: min(800px, calc(100% - 40px));
+  padding: clamp(36px, 8dvh, 80px) 40px 32px;
+  margin-inline: auto;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.baro-workbench .app-surface:has(.conversation-main)::before {
+  display: block;
+  height: 100dvh;
+  max-height: none;
+  opacity: 0.65;
+  background: radial-gradient(
+    ellipse 44% 38% at 49% 47%,
+    #dcecff 0%,
+    #edf5ff 46%,
+    #f9fbff 78%,
+    var(--card) 100%
+  );
+}
+.baro-workbench .conversation-greeting h1 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+.baro-workbench .conversation-emblem {
+  display: none;
+}
+.baro-workbench .conversation-composer {
+  border-radius: 16px;
+  box-shadow: none;
+}
+.app-frame.baro-workbench .conversation-primary-action > .ui-button {
+  min-height: 48px;
+  border-radius: 10px;
+}
+.baro-workbench
+  .conversation-main
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select) {
+  font-size: 16px;
+  line-height: 1.7;
+  border-radius: 8px;
+}
+@media (max-width: 1199px) {
+  .baro-workbench .app-surface main.conversation-main {
+    padding-inline: 24px;
+  }
+}
+@media (max-width: 767px) {
+  .baro-workbench .app-surface main.conversation-main {
+    padding-inline: 18px;
+  }
 }

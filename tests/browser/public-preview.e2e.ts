@@ -66,7 +66,7 @@ test.beforeEach(async ({ page }) => {
 
 test("app opens directly without launch notice on desktop and 320px", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   const modal = page.getByRole("dialog", { name: "BARO를 먼저 만나보세요" });
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   await expect(modal).toHaveCount(0);
@@ -97,7 +97,7 @@ test("intake opens the restored workspace and report controls without lawyer con
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.locator('a[href="/lawyers"], a[href="/lawyer"]')).toHaveCount(0);
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })

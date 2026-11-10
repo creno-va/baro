@@ -26,7 +26,11 @@ test("login and consent retain only allowed local case paths and the selected ro
   ).toBe(path);
   expect(
     sessionDestination({ user: { ...user, accountType: "lawyer" }, needsConsent: false }, null),
-  ).toBe("/app");
+  ).toBe("/new");
+  for (const entry of ["/new", "/new/", "/app", "/app/"]) {
+    expect(safeReturnPath(entry, "customer")).toBe(entry);
+    expect(accessHref("consent", entry)).toBe(`/consent?returnTo=${encodeURIComponent(entry)}`);
+  }
   expect(safeReturnPath("/lawyer", "customer")).toBeNull();
   for (const value of [
     "https://evil.test",
