@@ -259,7 +259,11 @@ test("manual browser partitions keep every same-SHA section mandatory and preser
   expect(browser.strategy["fail-fast"]).toBe(false);
   expect(browser.env.BARO_FULL_BROWSER_PART).toBe("${{ matrix.part }}");
   expect(browser.strategy.matrix.include).toEqual(
-    fullBrowserParts.map((part, index) => ({ part, name: expected[index]?.job })),
+    fullBrowserParts.map((part, index) => {
+      const section = expected[index];
+      if (!section) throw new Error("Missing expected browser part");
+      return { part, name: section.job };
+    }),
   );
   expect(workflow.jobs.validation.needs).toEqual(["core", "browser", "native"]);
 });
