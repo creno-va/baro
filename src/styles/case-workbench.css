@@ -870,6 +870,17 @@
 .baro-workbench .materials-panel__body {
   padding: 0;
 }
+.baro-workbench .materials-panel__selection {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+}
+.baro-workbench .materials-panel__selection .ui-choice {
+  margin-top: 2px;
+}
 .baro-workbench .materials-panel__report {
   border-top: 1px solid var(--border);
   margin-top: 24px;
@@ -1255,10 +1266,6 @@
   background: var(--muted);
   border-color: var(--input);
 }
-.baro-workbench {
-}
-.baro-workbench .report-review {
-}
 .baro-workbench :is(.workspace-status--failed, .workspace-message-failed, .form-error) {
   color: var(--wb-error-text);
 }
@@ -1294,10 +1301,6 @@ body:has(.baro-workbench .case-workspace--conversation) {
   max-height: min(18dvh, 120px);
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-/* Comparison states stay legible on the shared light surfaces. */
-.baro-workbench .precedent-workspace .comparison-summary {
 }
 .baro-workbench .precedent-workspace .precedent-more > button {
   background: transparent;

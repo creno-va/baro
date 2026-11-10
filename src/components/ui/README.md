@@ -10,7 +10,7 @@ light/dark/system before first paint using the existing hash CSP mechanism. Root
 cover Headless portals. The landing, native app and exported documents remain separate.
 
 Use Button/ActionButton, Input/Textarea/Select (Listbox), RadioGroup, Dialog/Sheet/Modal,
-Disclosure/DisclosureSummary, Tabs, ThemeToggle and Progress. Never add a visible native select,
+Disclosure/DisclosureSummary, Tabs, Popover, ThemeToggle and Progress. Never add a visible native select,
 dialog/details, progress or checkbox/radio, nor window.confirm. Hidden file access and platform
 page-unload protection retain their browser security boundary. Labels remain semantic HTML.
 

@@ -21,6 +21,7 @@ if (!bundle.success) throw new Error("Shell fixture bundle failed");
 const script = await bundle.outputs[0]?.text();
 const names = [
   "global",
+  "design-system",
   "shell",
   "app-focus",
   "cases",

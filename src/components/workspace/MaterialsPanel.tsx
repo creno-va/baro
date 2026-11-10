@@ -138,7 +138,10 @@ export function MaterialsPanel({
                     disabled={!!busy || readonly || selectionDisabled}
                     onChange={(event) => onSelect(file.id, event.target.checked)}
                   />
-                  <span>대화에 사용할 {file.name}</span>
+                  <span>
+                    <span aria-hidden="true">대화에 함께 사용</span>
+                    <span className="sr-only">대화에 사용할 {file.name}</span>
+                  </span>
                 </FieldLabel>
               )}
               <div className="workspace-buttons">

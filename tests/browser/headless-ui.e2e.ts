@@ -66,19 +66,16 @@ test("theme still changes when optional preference storage is blocked", async ({
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
 });
-test("all main surfaces use custom controls and remain accessible in both themes at phone and desktop widths", async ({
-  page,
-}) => {
-  test.setTimeout(90000);
-  await seedMaterialsScenario(page);
-  for (const path of [
-    "/new",
-    materialsCasePath,
-    "/settings",
-    "/help",
-    "/policies/terms",
-    materialsCasePath + "/reports",
-  ]) {
+for (const path of [
+  "/new",
+  materialsCasePath,
+  "/settings",
+  "/help",
+  "/policies/terms",
+  materialsCasePath + "/reports",
+]) {
+  test(`custom controls, both themes and responsive accessibility: ${path}`, async ({ page }) => {
+    await seedMaterialsScenario(page);
     await page.goto(path);
     await ready(page);
     for (const mode of ["light", "dark"] as const) {
@@ -96,8 +93,8 @@ test("all main surfaces use custom controls and remain accessible in both themes
       const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
       expect(scan.violations).toEqual([]);
     }
-  }
-});
+  });
+}
 test("listbox selection uses the shared portal and returns keyboard focus without native selects", async ({
   page,
 }) => {

@@ -9,7 +9,9 @@ const script = await build.outputs[0].text();
 const css =
   (await Bun.file("src/styles/global.css").text())
     .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "") + (await Bun.file("src/styles/reports.css").text());
+    .replace(/@theme inline\s*\{[^}]*\}/s, "") +
+  (await Bun.file("src/styles/design-system.css").text()) +
+  (await Bun.file("src/styles/reports.css").text());
 const photo = `data:image/jpeg;base64,${Buffer.from(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer()).toString("base64")}`;
 const portrait = await sharp("tests/fixtures/media/image-markers.jpg")
   .resize(700, 1000, { fit: "contain", background: "white" })

@@ -681,7 +681,7 @@ test("comparison survives foreground during admission, renders fixed indicators 
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(region.locator("progress")).toHaveAttribute("value", "25");
+  await expect(region.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
   await expect(region.locator(".precedent-body")).toHaveCount(1);
   await expect(region.getByRole("button", { name: /유사 · \+12.5점/ })).toHaveCount(2);
   await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);

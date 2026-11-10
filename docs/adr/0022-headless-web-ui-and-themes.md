@@ -14,7 +14,7 @@
 ## 결정
 
 1. @headlessui/react 2.2.10을 정확 버전으로 고정한다. Button/Input/Textarea, Checkbox/RadioGroup,
-   Listbox, Dialog, Disclosure, Tabs, Menu를 공통 UI 모듈에서 소비한다. 기본 브라우저 select,
+   Listbox, Dialog, Disclosure, Tabs, Menu, Popover를 공통 UI 모듈에서 소비한다. 기본 브라우저 select,
    dialog, details, progress, checkbox/radio와 window.confirm을 제품 위젯으로 사용하지 않는다.
 2. design-system.css가 비랜딩 페이지와 portal의 semantic color/interaction token 정본이다.
    업무 CSS는 구조·레이아웃을 소유하고 색은 같은 토큰을 소비한다. AppLayout의 이전 네 겹

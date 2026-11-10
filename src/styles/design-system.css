@@ -706,10 +706,3 @@
   min-height: 44px;
   padding: 8px;
 }
-@media (max-width: 767px) {
-  .case-tools__trigger {
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
-}

@@ -16,6 +16,7 @@
 - ui/dialog: Headless Dialog/Panel/Title/Description와 공통 sheet/stack.
 - ui/disclosure·tabs: 실제 Disclosure와 TabGroup, 닫힌 panel의 편집 상태 보존.
 - ui/theme-toggle: 실제 Menu와 light/dark/system 선택.
+- ui/popover: 사건 도구를 자료 패널 위에서 여는 실제 Popover/portal.
 - ui/experience + client/confirm: 공통 취소 우선 확인창, session/DOM/path 무효화.
 - workspace-frame: 동일 editor DOM을 유지하는 responsive portal.
 - ui/progress: 관측 값에 연결된 ARIA progressbar.
