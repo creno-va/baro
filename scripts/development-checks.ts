@@ -70,7 +70,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
   if (files.some((file) => /^scripts\/(development-checks|full-browser)\.ts$/.test(file)))
     for (const path of available) selected.add(path);
   const caseFlows =
-    /\/(cases|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-(?:home|agent)|rework-(?:conversation|shared-mock)|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
+    /\/(cases|case-workbench|analysis|legacy-case-recovery|workspace(?:-[^/]+)?|intake(?:103|-[^/]+)?|conversation-(?:home|agent)|rework-(?:conversation|shared-mock)|files|xss|customer-[^/]+|upload-[^/]+|material-[^/]+)\.e2e\.ts$/;
   const lawyerFlows = /\/(directory(?:-[^/]+)?|lawyers?(?:-[^/]+)?)\.e2e\.ts$/;
   const reportFlows =
     /\/(reports?(?:-[^/]+)?|rework-(?:conversation|shared-mock)|settings(?:-[^/]+)?|account(?:-[^/]+)?)\.e2e\.ts$/;
@@ -111,7 +111,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
       /\/(?:auth|session|cases|analysis|settings|reports|legacy-case-recovery)\.e2e\.ts$/,
     ],
     [
-      /src\/(worker\.|layouts\/|styles\/(global|shell|product)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(worker\.|layouts\/|styles\/(global|shell|product|case-workbench)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [

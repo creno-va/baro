@@ -537,3 +537,14 @@ test("mock review and session changes retain their browser consumers on either p
   }
   expect(browserTargets(["src/client/api/mock/unrelated.ts"], browserTests)).toEqual([]);
 });
+
+test("workbench styles retain the case regression and protected public layout checks", () => {
+  const selected = browserTargets(["src/styles/case-workbench.css"], browserTests);
+  expect(selected).toContain("tests/browser/case-workbench.e2e.ts");
+  expect(selected).toContain("tests/browser/workspace-materials.e2e.ts");
+  expect(selected).toContain("tests/browser/landing.e2e.ts");
+  expect(selected).not.toContain("tests/browser/evals.e2e.ts");
+  expect(browserTargets(["src/components/workspace/CaseContextPanel.tsx"], browserTests)).toContain(
+    "tests/browser/case-workbench.e2e.ts",
+  );
+});

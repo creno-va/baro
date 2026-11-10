@@ -1400,3 +1400,40 @@ body:has(.baro-workbench .case-workspace--conversation) {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* Comparison meaning uses the same dark semantic surfaces as the rest of the case. */
+.baro-workbench .precedent-workspace .precedent-more > button {
+  background: transparent;
+}
+.baro-workbench .precedent-workspace .comparison-indicator--yes {
+  background: #253650;
+  border-color: #426493;
+}
+.baro-workbench .comparison-indicator--yes strong {
+  color: #c7d8ff;
+}
+.baro-workbench .precedent-workspace .comparison-indicator--no {
+  background: #3a3022;
+  border-color: #6a5435;
+}
+.baro-workbench .comparison-indicator--no strong {
+  color: #edc67a;
+}
+.baro-workbench .precedent-workspace .comparison-indicator--unknown {
+  background: var(--muted);
+}
+.baro-workbench .comparison-verdict--yes {
+  background: #253650;
+  color: #c7d8ff;
+}
+.baro-workbench .comparison-verdict--no {
+  background: #3a3022;
+  color: #edc67a;
+}
+.baro-workbench .precedent-workspace .comparison-highlight {
+  background: #293c5c;
+  color: #dce7ff;
+}
+.baro-workbench .precedent-workspace .comparison-highlight:hover {
+  background: #354f77;
+}
