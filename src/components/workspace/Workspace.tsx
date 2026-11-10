@@ -162,7 +162,9 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [materialsOpen, setMaterialsOpen] = useState(false);
+  const [materialsRequest, setMaterialsRequest] = useState(0);
   const composerMenu = useRef<DisclosureHandle>(null);
+  const composerTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && !composerMenu.current?.contains(event.target))
@@ -173,7 +175,10 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
   }, []);
   const reviewOrigin = useRef<HTMLElement | null>(null);
   const [conversationState, setConversationState] = useState<V2ConversationState | null>(null);
-  const openMaterials = useCallback(() => setMaterialsOpen(true), []);
+  const openMaterials = useCallback(() => {
+    setMaterialsRequest((request) => request + 1);
+    setMaterialsOpen(true);
+  }, []);
   useEffect(() => {
     setMaterialsOpen(window.matchMedia("(min-width: 1200px)").matches);
   }, []);
@@ -258,6 +263,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
     setAgentBusy(false);
     setConversationState(null);
     setMaterialsOpen(false);
+    setMaterialsRequest(0);
     setView(null);
     setContextRequested(false);
     setContextLoaded(false);
@@ -1790,6 +1796,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                   materials={materialsPanel}
                   viewer={fileViewer}
                   viewingFileId={preview?.id}
+                  materialsRequest={materialsRequest}
                   needsEvidence={missingRequirements.length > 0}
                   feedback={
                     materialsOpen && (errorFeedback || uploadRecovery) ? (
@@ -2250,6 +2257,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                             }}
                           >
                             <DisclosureSummary
+                              ref={composerTrigger}
                               variant="icon"
                               aria-label="자료 추가 및 멘션"
                               title="자료 추가 및 멘션"
@@ -2307,6 +2315,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                                   title="외부 조회"
                                   disabled={!!busy || readonly || queuedSend || pendingResponse}
                                   onClick={() => {
+                                    composerMenu.current?.close();
                                     lookupAttempt.current = null;
                                     setLookupOpen(true);
                                   }}
@@ -2560,6 +2569,7 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       {lookupOpen && (
         <LookupDialog
           key={caseId}
+          returnFocusRef={composerTrigger}
           caseId={caseId}
           busy={busy === "lookup"}
           onClose={() => {

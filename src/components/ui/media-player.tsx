@@ -119,7 +119,10 @@ export function MediaPlayer({
   function seek(value: number) {
     const node = media.current;
     if (!node || !enabled || node.readyState === 0 || !Number.isFinite(node.duration)) return;
-    node.currentTime = Math.max(0, Math.min(node.duration, value));
+    // The last playable instant avoids paused EOF seeks remaining pending in
+    // WebKit/GStreamer. Keep even sub-second originals within their own duration.
+    const end = Math.max(0, node.duration - Math.min(0.001, node.duration / 100));
+    node.currentTime = Math.max(0, Math.min(end, value));
     sync();
   }
   function volume(value: number) {
@@ -139,6 +142,8 @@ export function MediaPlayer({
   }
   const Media = kind;
   const blocked = !enabled || Boolean(error);
+  const displayedTime =
+    state.duration > 0 && state.duration - state.time <= 0.0011 ? state.duration : state.time;
   return (
     <fieldset
       ref={root}
@@ -175,7 +180,7 @@ export function MediaPlayer({
           label="재생 위치"
           value={state.time}
           max={state.duration}
-          valueText={clock(state.time) + " / " + clock(state.duration)}
+          valueText={clock(displayedTime) + " / " + clock(state.duration)}
           onChange={seek}
           disabled={blocked || !state.ready}
         />
@@ -195,7 +200,7 @@ export function MediaPlayer({
           {state.playing ? <Pause size={18} /> : <Play size={18} />}
         </Button>
         <output className="ui-media__time" aria-label="재생 시간" aria-live="off">
-          {clock(state.time)} / {state.duration > 0 ? clock(state.duration) : "길이 미확인"}
+          {clock(displayedTime)} / {state.duration > 0 ? clock(state.duration) : "길이 미확인"}
         </output>
         <div className="ui-media__volume">
           <Button

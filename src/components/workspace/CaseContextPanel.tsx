@@ -34,6 +34,7 @@ export function CaseContextPanel({
   materials,
   viewer,
   viewingFileId,
+  materialsRequest = 0,
   onAdd,
   canAdd,
   onReview,
@@ -47,6 +48,7 @@ export function CaseContextPanel({
   materials: ReactNode;
   viewer: ReactNode;
   viewingFileId?: string | undefined;
+  materialsRequest?: number;
   onAdd: () => void;
   canAdd: boolean;
   onReview: (file: FileView, origin: HTMLButtonElement) => void;
@@ -70,6 +72,9 @@ export function CaseContextPanel({
   useEffect(() => {
     if (viewingFileId) setChosen(1);
   }, [viewingFileId]);
+  useEffect(() => {
+    if (materialsRequest > 0) setChosen(1);
+  }, [materialsRequest]);
   const select = (index: number) => {
     setChosen(index);
     if (index === 2) setResearchOpened(true);

@@ -149,9 +149,19 @@ test("common login and B intake flow through C workspace and D report with origi
   expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
     savedReport,
   );
+  const lawyerAction = page.getByRole("button", { name: /^변호사와 해결/ });
+  await lawyerAction.click();
+  const unsupported = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
+  await expect(unsupported).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");
+  await expect(unsupported.getByRole("link")).toHaveCount(0);
+  await unsupported.getByRole("button", { name: "확인", exact: true }).click();
+  await expect(unsupported).toBeHidden();
+  await expect(lawyerAction).toBeFocused();
+  expect(await preparedReport(page, decodeURIComponent(base.slice("/cases/".length)))).toEqual(
+    savedReport,
+  );
   await returnToWorkspace(page);
-  await page.getByRole("link", { name: "변호사 찾기", exact: true }).click();
-  await expect(page).toHaveURL(/\/lawyers$/);
+  await expect(page.getByRole("link", { name: /변호사 찾기|변호사 탐색/ })).toHaveCount(0);
   expect(actualProcessing).toEqual([]);
 });
 
