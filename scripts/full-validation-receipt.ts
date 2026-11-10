@@ -3,9 +3,14 @@ import { z } from "zod";
 
 export const fullValidationSections = {
   core: { job: "Full core validation", step: "Run full core validation" },
-  browser: { job: "Full browser validation", step: "Run full browser validation" },
+  browser: { job: "Full browser validation (screens 1)", step: "Run full browser validation" },
   native: { job: "Full native validation", step: "Run full native validation" },
 } as const;
+
+export const additionalFullBrowserJobs = [
+  { job: "Full browser validation (screens 2)", step: "Run full browser validation" },
+  { job: "Full browser validation (journeys)", step: "Run full browser validation" },
+] as const;
 
 export function verifyFullValidationSections(raw: string | undefined) {
   let value: unknown;
@@ -64,7 +69,7 @@ function validationJobs(rawRun: unknown, rawJobs: unknown) {
 
 export function verifyFullValidationJobs(rawRun: unknown, rawJobs: unknown) {
   const { run, jobs } = validationJobs(rawRun, rawJobs);
-  for (const section of Object.values(fullValidationSections)) {
+  for (const section of [...Object.values(fullValidationSections), ...additionalFullBrowserJobs]) {
     const matching = jobs.jobs.filter((job) => job.name === section.job);
     const job = matching.length === 1 ? matching[0] : undefined;
     if (

@@ -86,7 +86,9 @@ test("an open timeline retains its revision across peer refresh and repeated con
     ],
   };
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("heading", { name: "Peer correction" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Peer correction", includeHidden: true }),
+  ).toHaveText("Peer correction");
   await page.getByRole("button", { name: "타임라인 저장", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "타임라인 저장", exact: true }).click();

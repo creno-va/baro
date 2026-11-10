@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
+import { fullBrowserParts } from "../scripts/full-browser";
+import {
+  additionalFullBrowserJobs,
+  fullValidationSections,
+} from "../scripts/full-validation-receipt";
 
 const workflowSchema = z.object({
   on: z.record(z.string(), z.unknown()),
@@ -231,6 +236,36 @@ test("automatic CI runs only the fast source gate; heavy validation remains expl
     "bun run validate full-core",
     "bun run validate full-native",
   ]);
+});
+
+test("manual browser partitions keep every same-SHA section mandatory and preserve worker deadlines", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(".github/workflows/full-validation.yml").text(),
+  ) as {
+    jobs: {
+      browser: {
+        name: string;
+        "timeout-minutes": number;
+        env: Record<string, string>;
+        strategy: { "fail-fast": boolean; matrix: { include: { part: string; name: string }[] } };
+      };
+      validation: { needs: string[] };
+    };
+  };
+  const browser = workflow.jobs.browser;
+  const expected = [fullValidationSections.browser, ...additionalFullBrowserJobs];
+  expect(browser.name).toBe("${{ matrix.name }}");
+  expect(browser["timeout-minutes"]).toBe(60);
+  expect(browser.strategy["fail-fast"]).toBe(false);
+  expect(browser.env.BARO_FULL_BROWSER_PART).toBe("${{ matrix.part }}");
+  expect(browser.strategy.matrix.include).toEqual(
+    fullBrowserParts.map((part, index) => {
+      const section = expected[index];
+      if (!section) throw new Error("Missing expected browser part");
+      return { part, name: section.job };
+    }),
+  );
+  expect(workflow.jobs.validation.needs).toEqual(["core", "browser", "native"]);
 });
 
 interface DeploymentStep {

@@ -75,12 +75,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   browser:
-    name: Full browser validation
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: screens-1
+            name: Full browser validation (screens 1)
+          - part: screens-2
+            name: Full browser validation (screens 2)
+          - part: journeys
+            name: Full browser validation (journeys)
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
+      BARO_FULL_BROWSER_PART: ${{ matrix.part }}
     steps:
       - name: Validate explicit candidate input
         run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
@@ -117,7 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: rework-journeys-${{ inputs.target_sha }}
+          name: rework-journeys-${{ matrix.part }}-${{ inputs.target_sha }}
           path: |
             /tmp/baro-625-journeys/**/protocol.json
             /tmp/baro-625-journeys/**/report.pdf
@@ -138,7 +149,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: redesign-acceptance-${{ inputs.target_sha }}
+          name: redesign-acceptance-${{ matrix.part }}-${{ inputs.target_sha }}
           path: |
             .wrangler/redesign-results.json
             .wrangler/redesign-acceptance/**

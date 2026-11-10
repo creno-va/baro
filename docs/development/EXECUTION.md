@@ -1,5 +1,21 @@
 # 에이전트 실행 기준
 
+## 2026-11-11 전체 browser 인수 후속 (#799)
+
+PR #802/main `0fadbe69f7ffcd020aaf153bdafa91d86a9c054b`의 full 42838463915은
+core/native 성공, browser 60분 제한 cancelled, join skipped다. 이전 실패를 성공으로 바꾸지 않는다.
+후속 브랜치는 `codex/799-browser-acceptance`다. 재생 탐색과 후속 해결 메타데이터의 수동 복구,
+모달 뒤 배경 갱신·맞춤 선택 목록·자료 탭을 실제 조작하는 검사를 보완한다.
+워크벤치 CSS가 숨긴 촬영 추가를 복구하고 기존 일반 파일 선택 옆에서 중복 사진 선택 없이
+이용하게 한다. 통합 여정의 변호사 액션도 현재 미지원 모달과 무실행 경계를 확인한다.
+브라우저 검사는 화면 파일 두 묶음과 통합 여정 한 묶음으로 나눠 별도 checkout에서 실행한다.
+전체 파일의 합집합·중복 없음·필수 여정을 검사하고 각 worker 1/60분 한도를 유지한다.
+logical core/browser/native의 성공과 모든 browser 묶음의 동일 SHA/run/attempt 성공을
+receipt가 검증한다. 어느 묶음도 빠지거나 실패·취소·건너뛰면 완료되지 않는다.
+브라우저 실행 동안 workflow·검사 파일도 고정한다. Tailwind 스캔은 이 파일의 변경으로도
+스타일 HMR을 발생시킬 수 있다. 최종 main full와 같은 SHA preview·제한 smoke까지 미완료다.
+API/DB·owner/CAS·질문/AI 한도·비용 정책·랜딩·native 앱과 출력 문서 디자인은 유지한다.
+
 ## 2026-11-10 전체 browser 검증 실패 후속 (#799)
 
 main `8a7646e40061e993597279ea573cf7f199735ffe`의 full 42806156931은 core/native 성공,

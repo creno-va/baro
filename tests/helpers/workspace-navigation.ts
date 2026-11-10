@@ -3,12 +3,19 @@ import { expect, type Page } from "@playwright/test";
 export async function closeWorkspaceMaterials(page: Page) {
   const close = page.getByRole("button", { name: "자료 패널 닫기", exact: true });
   if (await close.isVisible()) await close.click();
+  else {
+    const desktop = page.getByRole("button", { name: "자료 닫기", exact: true });
+    if (await desktop.isVisible()) await desktop.click();
+  }
+  await expect(page.locator("#case-materials-panel")).toBeHidden();
 }
 
 export async function openWorkspaceMaterials(page: Page) {
-  const open = page.getByRole("button", { name: "자료 열기", exact: true });
-  if (await open.isVisible()) await open.click();
   const panel = page.locator("#case-materials-panel");
+  if (!(await panel.isVisible())) {
+    const open = page.getByRole("button", { name: "자료 열기", exact: true });
+    if (await open.isVisible()) await open.click();
+  }
   await expect(panel).toBeVisible();
   const materialsTab = page.getByRole("tab", { name: /^자료/ });
   if (await materialsTab.isVisible()) await materialsTab.click();

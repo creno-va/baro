@@ -150,6 +150,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     owner = useRef<string | null>(null),
     lock = useRef<number | null>(null);
   const hasState = useRef(false);
+  const loadFailed = useRef(false);
   const controller = useRef(new AbortController());
   const reloadRequested = useRef(false);
   const reload = useRef<() => void>(() => undefined);
@@ -202,6 +203,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     owner.current = null;
     setNeedsConsent(false);
     hasState.current = false;
+    loadFailed.current = false;
     setState(null);
     setSelected(null);
     setFiles([]);
@@ -263,6 +265,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   );
   const accept = useCallback((next: V2ResolutionState) => {
     hasState.current = true;
+    loadFailed.current = false;
     setLoadError("");
     setLoadDiagnostic(null);
     setActionDiagnostic(null);
@@ -298,6 +301,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     }
     const epoch = sequence.current;
     lock.current = epoch;
+    loadFailed.current = false;
     setBusy(true);
     setError("");
     setLoadError("");
@@ -322,6 +326,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       if (epoch === sequence.current) accept(next);
     } catch (e) {
       if (epoch === sequence.current) {
+        loadFailed.current = true;
         const code = (e as { code?: string })?.code;
         if (
           !hasState.current &&
@@ -365,7 +370,13 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         changed();
     };
     const focus = () => {
-      if (!dirtyRef.current && !reviewInProgress.current) void load();
+      if (
+        !dirtyRef.current &&
+        !reviewInProgress.current &&
+        lock.current === null &&
+        !loadFailed.current
+      )
+        void load();
       else void verify(sequence.current).catch(() => undefined);
     };
     window.addEventListener("baro-session-changed", changed);

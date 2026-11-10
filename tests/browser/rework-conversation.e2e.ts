@@ -223,6 +223,7 @@ async function chooseMaterial(page: Page, camera = false) {
   const name = camera ? photoName : "synthetic-conversation-contract.txt";
   const materials = page.locator("#case-materials-panel");
   await expect(materials).toBeVisible();
+  await materials.getByRole("tab", { name: /^자료/ }).click();
   const chooser = page.waitForEvent("filechooser");
   await materials
     .getByRole("button", { name: camera ? "촬영해서 추가" : "파일 선택", exact: true })
@@ -243,7 +244,10 @@ async function chooseMaterial(page: Page, camera = false) {
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(name);
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
-  await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
+  await page
+    .locator(".workspace-composer")
+    .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
+    .check();
   return { materials, name };
 }
 async function addMaterial(
@@ -1162,7 +1166,12 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         let beforeDraftDownload: Awaited<ReturnType<typeof conversationFocus>> | null = null;
         const pdfResponseIndex = f.pdfResponses.length;
-        await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
+        const beforeUnsupported = followup === "변호사와 해결" ? await counters(f) : null;
+        const beforeUnsupportedWrites = f.observations.filter((item) =>
+          ["POST", "PUT", "PATCH", "DELETE"].includes(String(item.method)),
+        ).length;
+        const followupButton = report.getByRole("button", { name: new RegExp(`^${followup}`) });
+        await followupButton.click();
         if (followup === "직접 해결") {
           await expect(
             report.getByRole("heading", { name: "준비 순서와 확인할 안내", exact: true }),
@@ -1200,11 +1209,19 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           expect(await readFile(file, "utf8")).toBe(reviewedText);
           await artifact.saveAs(join(directory, "reviewed-draft.txt"));
           await artifact.delete();
-        } else if (followup === "변호사와 해결")
-          await expect(
-            report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
-          ).toBeVisible();
-        else {
+        } else if (followup === "변호사와 해결") {
+          const dialog = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
+          await expect(dialog).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");
+          await expect(dialog.getByRole("link")).toHaveCount(0);
+          await dialog.getByRole("button", { name: "확인", exact: true }).click();
+          await expect(followupButton).toBeFocused();
+          expect(await counters(f)).toEqual(beforeUnsupported);
+          expect(
+            f.observations.filter((item) =>
+              ["POST", "PUT", "PATCH", "DELETE"].includes(String(item.method)),
+            ),
+          ).toHaveLength(beforeUnsupportedWrites);
+        } else {
           if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
           const artifact = await download;
           expect(artifact.suggestedFilename()).toMatch(/\.pdf$/i);

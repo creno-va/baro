@@ -874,7 +874,11 @@
   border: 0;
 }
 .baro-workbench .workspace-material-upload .evidence-picker {
-  display: none;
+  margin-top: 8px;
+}
+.baro-workbench .workspace-material-upload .evidence-picker-actions > .ui-button {
+  width: 100%;
+  justify-content: center;
 }
 .baro-workbench .workspace-upload-target {
   color: var(--foreground);
