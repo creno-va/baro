@@ -497,16 +497,9 @@
   gap: 8px;
   margin-top: 12px;
 }
-.report-photo-insert select {
-  min-height: 44px;
-  min-width: 0;
+.report-review .report-photo-insert .ui-select-root {
+  flex: 0 1 260px;
   max-width: min(260px, 100%);
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
-  font: inherit;
-  font-size: 13px;
 }
 .report-table {
   width: 100%;
@@ -686,7 +679,7 @@
   .report-reading-section {
     padding: 20px 0;
   }
-  .report-photo-insert select {
+  .report-photo-insert .ui-select-root {
     flex: 1;
   }
   .report-actions {

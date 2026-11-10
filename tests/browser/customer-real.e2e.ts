@@ -301,6 +301,10 @@ for (const viewport of [
       expect(timelineWrites[0]).toEqual(timelineWrites[1]);
       await page.goto(base);
       await page.getByLabel("추가 사실 또는 질문").fill("계정 전환 후 비워야 할 이전 초안");
+      const selectedContext = page.locator(".case-context").getByRole("tab", { selected: true });
+      const contextChoice = (await selectedContext.count())
+        ? await selectedContext.textContent()
+        : null;
       sessionUnavailable = true;
       await page.getByRole("button", { name: "보내기", exact: true }).click();
       // The agent can independently report a failed read at the same time.
@@ -310,6 +314,8 @@ for (const viewport of [
       });
       await expect(sendFailure).toHaveCount(1);
       await expect(sendFailure).toBeVisible();
+      await expect(sendFailure).toBeInViewport({ ratio: 0.99 });
+      if (contextChoice) await expect(selectedContext).toHaveText(contextChoice);
       await expect(sendFailure).toContainText("연결하지 못했어요.");
       await expect(sendFailure).toContainText("입력한 내용은 보존돼요.");
       await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue(

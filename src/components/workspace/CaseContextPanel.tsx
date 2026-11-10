@@ -39,6 +39,7 @@ export function CaseContextPanel({
   onReview,
   preparation,
   needsEvidence = false,
+  feedback,
 }: {
   caseId: string;
   files: FileView[];
@@ -51,6 +52,7 @@ export function CaseContextPanel({
   onReview: (file: FileView, origin: HTMLButtonElement) => void;
   preparation?: ReactNode;
   needsEvidence?: boolean;
+  feedback?: ReactNode;
 }) {
   const failed = files.filter((file) => file.status === "failed" || file.uploadRejection);
   const processing = files.filter((file) =>
@@ -83,6 +85,7 @@ export function CaseContextPanel({
           </Tab>
         ))}
       </TabList>
+      {feedback && <div className="case-context__feedback">{feedback}</div>}
       <TabPanels>
         <TabPanel as="section" unmount={false} className="case-context__pane">
           <div className="context-intro">

@@ -95,8 +95,9 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   await expect(field).toHaveValue(/baro-photo:synthetic-inline-photo/);
   const edited = await field.inputValue();
   expect(edited.indexOf("baro-photo:")).toBeLessThan(edited.indexOf("사진 뒤에"));
-  expect(await field.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
-    "rgb(243, 245, 248)",
+  await expect(field).toHaveCSS(
+    "background-color",
+    await selectControl(section).evaluate((node) => getComputedStyle(node).backgroundColor),
   );
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(section.locator("strong")).toHaveText("송금 확인");

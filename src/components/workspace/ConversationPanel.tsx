@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef } from "react";
 import { Button } from "../ui/button";
 
 /** One inline work area, with the conversation and composer kept in place. */
@@ -36,7 +36,8 @@ export function ConversationPanel({
     // reading target only if no other control or modal owns the user's focus.
     heading.current.focus({ preventScroll: true });
   }, [busy]);
-  useEffect(() => {
+  // Refresh the ancestor's key handler before idle controls become interactive.
+  useLayoutEffect(() => {
     const messages = heading.current?.closest<HTMLElement>(".workspace-messages");
     if (!messages) return;
     const handleScrollEscape = (event: KeyboardEvent) => {

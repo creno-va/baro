@@ -1,54 +1,7 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { goToCaseTool, returnToCaseConversation } from "../helpers/case-navigation";
 import { openReportEditor } from "../helpers/report-controls";
-
-const origin = "http://127.0.0.1:4362";
-test.use({ baseURL: origin });
-let server: ChildProcess;
-
-test.beforeAll(async () => {
-  test.setTimeout(120_000);
-  server = spawn(
-    "bun",
-    ["run", "dev", "--", "--ignore-lock", "--host", "127.0.0.1", "--port", "4362"],
-    {
-      cwd: fileURLToPath(new URL("../..", import.meta.url)),
-      env: {
-        ...process.env,
-        CLOUDFLARE_ENV: "",
-        BARO_UI_TEST_FIXTURE: "true",
-        PUBLIC_API_MODE: "mock",
-        ASTRO_TELEMETRY_DISABLED: "1",
-        WRANGLER_LOG_PATH: "/tmp/baro-public-preview-wrangler.log",
-      },
-      stdio: "ignore",
-    },
-  );
-  let failed = false;
-  server.once("error", () => {
-    failed = true;
-  });
-  await expect
-    .poll(
-      async () => {
-        if (failed || server.exitCode !== null) throw new Error("Public preview harness exited");
-        try {
-          return (await fetch(`${origin}/login`, { signal: AbortSignal.timeout(3000) })).status;
-        } catch {
-          return 0;
-        }
-      },
-      { timeout: 110_000, intervals: [250, 500, 1000] },
-    )
-    .toBe(200);
-});
-
-test.afterAll(() => {
-  server?.kill();
-});
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -137,7 +90,7 @@ test("intake opens the restored workspace and report controls without lawyer con
   await goToCaseTool(page, "actions");
   await expect(page).toHaveURL(`${casePath}/actions`);
   await expect(page.getByRole("heading", { name: "다음 행동", exact: true })).toBeVisible();
-  await expect(page.locator(".workspace-action-list input").first()).toBeEnabled();
+  await expect(page.locator('.workspace-action-list [role="checkbox"]').first()).toBeEnabled();
   await goToCaseTool(page, "reports");
   await expect(page).toHaveURL(`${casePath}/reports`);
   const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
@@ -146,6 +99,9 @@ test("intake opens the restored workspace and report controls without lawyer con
   await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeEnabled();
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toBeDisabled();
+  await editor.fill(`${await editor.inputValue()}\n합성 검토 내용을 보완합니다.`);
   await expect(page.getByRole("button", { name: "수정 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장" })).toHaveCount(0);
   await expect(page.getByLabel("내용·식별정보·선택한 사진을 확인했어요")).toHaveCount(0);

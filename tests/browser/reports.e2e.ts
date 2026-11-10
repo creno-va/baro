@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,36 +10,6 @@ import { openReportEditor } from "../helpers/report-controls";
 
 // Dedicated D port under either the main browser config or the standalone config.
 test.use({ baseURL: `http://127.0.0.1:${process.env.BARO_REPORT_TEST_PORT ?? 4343}` });
-let server: ChildProcess;
-test.beforeAll(async () => {
-  server = spawn("bun", ["tests/helpers/reports-ui-server.ts"], {
-    cwd: fileURLToPath(new URL("../..", import.meta.url)),
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  await new Promise<void>((done, reject) => {
-    const timeout = setTimeout(() => reject(new Error("D browser harness did not start")), 15000);
-    server.stdout?.on("data", (chunk) => {
-      if (String(chunk).includes("D product component harness:")) {
-        clearTimeout(timeout);
-        done();
-      }
-    });
-    server.once("error", () => {
-      clearTimeout(timeout);
-      reject(new Error("D browser harness startup failed"));
-    });
-    server.once("exit", (code) => {
-      if (code) {
-        clearTimeout(timeout);
-        reject(new Error("D browser harness exited"));
-      }
-    });
-  });
-});
-test.afterAll(() => {
-  server?.kill();
-});
-
 async function prepareSavedPdf(page: import("@playwright/test").Page) {
   // Seed a saved selection directly for the account-boundary scenarios below.
   await page.evaluate(async () => {

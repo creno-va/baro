@@ -51,9 +51,7 @@ test("existing lawyer account keeps case AI and history through general navigati
   await expect(menu.locator(".sidebar-story")).toHaveCount(2);
 });
 
-test("sidebar cancellation clears pointer hover without losing keyboard focus return", async ({
-  page,
-}) => {
+test("sidebar cancellation retains visible actions and keyboard focus return", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(base);
@@ -78,7 +76,7 @@ test("sidebar cancellation clears pointer hover without losing keyboard focus re
   const link = row.locator(".sidebar-story");
   const remove = row.locator(".sidebar-story-delete");
   await page.mouse.move(1000, 400);
-  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
+  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
   const rowColor = await row.evaluate((node) => getComputedStyle(node).backgroundColor);
   const linkColor = await link.evaluate((node) => getComputedStyle(node).backgroundColor);
   for (const action of ["취소", "닫기"]) {
@@ -90,7 +88,7 @@ test("sidebar cancellation clears pointer hover without losing keyboard focus re
     await expect(remove).toBeFocused();
     await expect(row).toHaveCSS("background-color", rowColor);
     await expect(link).toHaveCSS("background-color", linkColor);
-    await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
+    await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
   }
   await page
@@ -160,8 +158,12 @@ async function prepareReport(page: Page) {
 async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
   else await page.mouse.click(5, 85);
-  return page.evaluate(() => {
-    const scope = document.querySelector(".app-frame, .login-page, .consent-page");
+  return page.evaluate((keyboard) => {
+    const scope =
+      [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+        .reverse()
+        .find((node) => node.getClientRects().length && !node.closest("[hidden], [inert]")) ??
+      document.querySelector(".app-frame, .login-page, .consent-page");
     if (!scope) throw new Error("Focus audit scope missing");
     const failures: string[] = [];
     let count = 0;
@@ -172,7 +174,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
         !(node instanceof HTMLElement) ||
         node.matches(":disabled") ||
         !node.getClientRects().length ||
-        node.closest('[role="dialog"]:not([open]),[hidden]')
+        node.closest("[hidden], [inert]")
       )
         continue;
       const style = getComputedStyle(node);
@@ -196,12 +198,24 @@ async function focusAudit(page: Page, keyboard: boolean) {
         )
           failures.push(`${label}: outer focus shadow ${current.boxShadow}`);
       });
+      if (keyboard && node.matches("button, a[href], input, textarea, select")) {
+        const visible = parents.some((parent) => {
+          const current = getComputedStyle(parent);
+          return (
+            current.boxShadow.includes("inset") || current.textDecorationLine.includes("underline")
+          );
+        });
+        if (!visible)
+          failures.push(`${node.tagName}.${node.className}: missing keyboard indicator`);
+      }
     }
     return { count, failures: [...new Set(failures)] };
-  });
+  }, keyboard);
 }
 
-test("focus feedback covers login roles and consent without pointer outlines", async ({ page }) => {
+test("focus feedback covers common social login and consent without pointer outlines", async ({
+  page,
+}) => {
   await seed(page);
   await page.goto(base);
   await hydrated(page);
@@ -213,14 +227,15 @@ test("focus feedback covers login roles and consent without pointer outlines", a
   );
   await page.goto("/login");
   await hydrated(page);
-  const customer = page.getByRole("radio", { name: "고객", exact: true });
-  await expect(customer).toBeEnabled();
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  const provider = page.getByRole("button", { name: "Google로 계속하기", exact: true });
+  await expect(provider).toBeEnabled();
   for (const keyboard of [false, true]) {
     expect((await focusAudit(page, keyboard)).failures).toEqual([]);
   }
   await page.keyboard.press("Tab");
-  await customer.focus();
-  await expect(customer.locator("..")).toHaveCSS("box-shadow", /inset/);
+  await provider.focus();
+  await expect(provider).toHaveCSS("box-shadow", /inset/);
   await page.evaluate(() =>
     localStorage.setItem(
       "baro-api-mock-v1:session",
@@ -251,11 +266,11 @@ test("focus feedback keeps accordion keyboard operation without a container outl
   await expect(trigger).toHaveCSS("outline-style", "none");
   await expect(trigger).toHaveCSS("text-decoration-line", "underline");
   await page.keyboard.press("Enter");
-  await expect(disclosure).toHaveAttribute("open", "");
+  await expect(disclosure).toHaveAttribute("data-open");
   await page.keyboard.press("Space");
   await expect(disclosure).not.toHaveAttribute("data-open");
   await trigger.click();
-  await expect(disclosure).toHaveAttribute("open", "");
+  await expect(disclosure).toHaveAttribute("data-open");
   await expect(trigger).toHaveCSS("outline-style", "none");
   await page.screenshot({ path: ".wrangler/focus-accordion.png", fullPage: true });
 });
@@ -745,7 +760,7 @@ test("chat frame keeps its header and composer fixed when preparation expands an
     const context = page.locator(".workspace-context");
     await expect(messages.locator(".workspace-context")).toHaveCount(1);
     await context.locator("[data-disclosure-button]").click();
-    await expect(context).toHaveAttribute("open", "");
+    await expect(context).toHaveAttribute("data-open");
     await context.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.dispatchEvent(new Event("resize")));
     await expect.poll(geometry).toEqual(initial);
@@ -965,8 +980,27 @@ test("product navigation and reading surfaces support keyboard access and enlarg
     ).toBe(true);
     const notice = page.locator(".case-notice");
     if (await notice.count()) {
-      await notice.scrollIntoViewIfNeeded();
-      await expect(notice).toBeInViewport({ ratio: 1 });
+      await notice.evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await expect(notice).toBeVisible();
+      // A fractional document height can leave <1px of bottom padding outside
+      // the integer scroll range. Verify the actual enlarged text is readable.
+      const text = await notice.evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const bounds = range.getBoundingClientRect();
+        return {
+          top: bounds.top,
+          bottom: bounds.bottom,
+          left: bounds.left,
+          right: bounds.right,
+          width: innerWidth,
+          height: innerHeight,
+        };
+      });
+      expect(text.top, route).toBeGreaterThanOrEqual(0);
+      expect(text.bottom, route).toBeLessThanOrEqual(text.height);
+      expect(text.left, route).toBeGreaterThanOrEqual(0);
+      expect(text.right, route).toBeLessThanOrEqual(text.width);
       await page.evaluate(() => window.scrollTo(0, 0));
     }
     if (route === base)
@@ -998,7 +1032,7 @@ test("purpose choices change examples and persist without owner-category UI", as
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(
     menu.getByRole("navigation", { name: "모바일 주 메뉴" }).getByRole("link"),
-  ).toHaveCount(2);
+  ).toHaveCount(1);
   await expect(menu.getByRole("link", { name: "이용 유형 변경" })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: "도움말", exact: true })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: "도움말", exact: true })).toHaveCount(1);
 });

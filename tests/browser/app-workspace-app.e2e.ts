@@ -48,10 +48,14 @@ for (const width of [320, 390, 768, 1024, 1440]) {
   test(`actual Astro shell and direct case routes fit ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const route of ["/new", `/cases/${caseId}`, "/settings", "/lawyers"]) {
-      await page.goto(route);
+      const response = await page.goto(route);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready);
-      await expect(page.locator(".app-frame[data-app-workspace]")).toBeVisible();
+      if (route === "/lawyers") {
+        expect(response?.status()).toBe(410);
+        await expect(page.getByText("현재 변호사 연결 기능은 제공하지 않습니다.")).toBeVisible();
+        await expect(page.locator(".app-frame[data-app-workspace]")).toHaveCount(0);
+      } else await expect(page.locator(".app-frame[data-app-workspace]")).toBeVisible();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
         route,

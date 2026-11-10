@@ -28,7 +28,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   await page.locator('astro-island[component-export="AuthButtons"]:not([ssr])').waitFor();
-  await page.getByRole("radio", { name: /^고객/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   const policyOpened = context.waitForEvent("page");

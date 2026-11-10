@@ -318,8 +318,15 @@ test("an uploaded synthetic recording can be played while correcting and is remo
   await row.getByRole("button", { name: "자료 확인", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
-  await expect(dialog.locator("audio")).toBeVisible();
+  await expect(dialog.locator("audio")).toHaveCount(1);
+  await expect(dialog.locator("audio")).not.toHaveAttribute("controls");
+  await expect(dialog.getByRole("button", { name: "재생", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "재생", exact: true })).toBeEnabled();
   await expect(dialog.locator("audio")).toHaveAttribute("src", /^data:audio\/wav;base64,/);
+  await dialog.getByRole("button", { name: "재생", exact: true }).click();
+  await expect
+    .poll(() => dialog.locator("audio").evaluate((node: HTMLAudioElement) => node.currentTime))
+    .toBeGreaterThan(0);
   await expect(dialog.getByLabel("확인·교정한 내용", { exact: true })).toBeVisible();
   await page.evaluate(() =>
     window.dispatchEvent(

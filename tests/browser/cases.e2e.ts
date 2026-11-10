@@ -193,7 +193,7 @@ for (const [purposeLabel, casePurpose, subjectContext] of [
     await page.goto("/cases/new");
     await page.getByRole("radio", { name: purposeLabel, exact: true }).check();
     await expect(page.getByRole("radio")).toHaveCount(2);
-    const input = page.getByRole("textbox");
+    const input = page.locator("#narrative");
     const submit = page.getByRole("button", { name: "저장하고 계속" });
     // Five supplementary characters are ten UTF-16 code units but only five code points.
     const shortUnicode = "😀".repeat(5);

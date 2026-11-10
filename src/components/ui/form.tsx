@@ -14,6 +14,7 @@ import {
   type ChangeEvent,
   Children,
   type ComponentProps,
+  Fragment,
   isValidElement,
   type ReactNode,
   useState,
@@ -92,16 +93,24 @@ export function Input({
   }
   return (
     <HeadlessInput
-      {...definedProps(props)}
-      ref={ref ?? null}
-      type={type}
-      name={name}
-      value={value}
+      as={Fragment}
+      {...definedProps({ id: props.id })}
+      invalid={props["aria-invalid"] === true || props["aria-invalid"] === "true"}
       disabled={Boolean(disabled)}
-      onChange={onChange}
-      data-slot="input"
-      className={cn("ui-input", className)}
-    />
+      autoFocus={Boolean(props.autoFocus)}
+    >
+      <input
+        {...definedProps(props)}
+        ref={ref ?? null}
+        type={type}
+        name={name}
+        value={value}
+        disabled={Boolean(disabled)}
+        onChange={onChange}
+        data-slot="input"
+        className={cn("ui-input", className)}
+      />
+    </HeadlessInput>
   );
 }
 export function RadioGroup({ children, ...props }: ComponentProps<typeof HeadlessRadioGroup>) {
@@ -110,10 +119,18 @@ export function RadioGroup({ children, ...props }: ComponentProps<typeof Headles
 export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
   return (
     <HeadlessTextarea
-      data-slot="textarea"
-      className={cn("ui-input ui-textarea", className)}
-      {...definedProps(props)}
-    />
+      as={Fragment}
+      {...definedProps({ id: props.id })}
+      invalid={props["aria-invalid"] === true || props["aria-invalid"] === "true"}
+      disabled={Boolean(props.disabled)}
+      autoFocus={Boolean(props.autoFocus)}
+    >
+      <textarea
+        {...definedProps(props)}
+        data-slot="textarea"
+        className={cn("ui-input ui-textarea", className)}
+      />
+    </HeadlessTextarea>
   );
 }
 type Option = { value: string; label: ReactNode; disabled: boolean };

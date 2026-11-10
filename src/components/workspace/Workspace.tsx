@@ -56,6 +56,7 @@ import {
   Textarea as ControlTextarea,
   Label as FieldLabel,
 } from "../ui/form";
+import { MediaPlayer } from "../ui/media-player";
 import { Progress } from "../ui/progress";
 import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { CaseContextPanel } from "./CaseContextPanel";
@@ -1569,11 +1570,19 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
       </div>
       {original &&
         (original.type.startsWith("audio/") ? (
-          // biome-ignore lint/a11y/useMediaCaption: Private source recording; editable transcript is shown above, no verified timed captions exist.
-          <audio controls src={original.url} aria-label={`${preview.name} 원음 듣기`} />
+          <MediaPlayer
+            src={original.url}
+            label={`${preview.name} 원음 듣기`}
+            kind="audio"
+            enabled={ready}
+          />
         ) : original.type.startsWith("video/") ? (
-          // biome-ignore lint/a11y/useMediaCaption: Private source video; extracted text is shown above, no verified timed captions exist.
-          <video controls src={original.url} aria-label={`${preview.name} 원본 영상`} />
+          <MediaPlayer
+            src={original.url}
+            label={`${preview.name} 원본 영상`}
+            kind="video"
+            enabled={ready}
+          />
         ) : (
           <img src={original.url} alt={`${preview.name} 원본 미리보기`} />
         ))}
@@ -1615,8 +1624,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         ? { onReportRefresh: () => setConversationRefresh((value) => value + 1) }
         : {})}
     >
-      {tab === "chat" && materialsOpen && errorFeedback}
-      {tab === "chat" && materialsOpen && uploadRecovery}
       {conversationState?.snapshot &&
         !["stale", "pending", "running"].includes(conversationState.analysis.status) && (
           <div {...privateContent}>
@@ -1783,6 +1790,14 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                   viewer={fileViewer}
                   viewingFileId={preview?.id}
                   needsEvidence={missingRequirements.length > 0}
+                  feedback={
+                    materialsOpen && (errorFeedback || uploadRecovery) ? (
+                      <>
+                        {errorFeedback}
+                        {uploadRecovery}
+                      </>
+                    ) : null
+                  }
                   preparation={
                     <EvidenceRequirements
                       requirements={missingRequirements}

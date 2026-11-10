@@ -189,7 +189,6 @@ export function Directory() {
                       </option>
                     ))}
                   </ControlSelect>
-                  <ChevronDown size={18} aria-hidden="true" />
                 </span>
               </FieldLabel>
               <FieldLabel className="directory-search__field">
@@ -207,7 +206,6 @@ export function Directory() {
                       </option>
                     ))}
                   </ControlSelect>
-                  <ChevronDown size={18} aria-hidden="true" />
                 </span>
               </FieldLabel>
             </div>

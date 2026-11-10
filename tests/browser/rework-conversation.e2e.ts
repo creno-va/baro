@@ -83,7 +83,9 @@ async function stableForeground(locator: Locator) {
     opacity: getComputedStyle(element).opacity,
     filter: getComputedStyle(element).filter,
     running: element.getAnimations().filter((a) => a.playState === "running").length,
-    openDialogs: document.querySelectorAll('[role="[role="dialog"]"]').length,
+    openDialogs: document.querySelectorAll(
+      'dialog[open], [role="dialog"][aria-modal="true"]:not([hidden])',
+    ).length,
   }));
 }
 async function conversationFocus(page: Page) {
@@ -100,7 +102,9 @@ async function conversationFocus(page: Page) {
       isConversationScroll: active?.matches(".workspace-messages") ?? false,
       containsPane: !!active?.querySelector(".conversation-panel"),
       body: active === document.body,
-      dialogs: document.querySelectorAll('[role="[role="dialog"]"]').length,
+      dialogs: document.querySelectorAll(
+        'dialog[open], [role="dialog"][aria-modal="true"]:not([hidden])',
+      ).length,
     };
   });
 }

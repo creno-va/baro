@@ -202,7 +202,10 @@ export function MaterialsPanel({
         {report?.status === "failed" && (
           <p>완료된 결과가 아니에요. 리포트 화면에서 실패 상태와 다음 선택을 확인하세요.</p>
         )}
-        <ButtonLink href={`/cases/${encodeURIComponent(caseId)}/reports?mode=conversation`}>
+        <ButtonLink
+          variant="secondary"
+          href={`/cases/${encodeURIComponent(caseId)}/reports?mode=conversation`}
+        >
           리포트 열기
         </ButtonLink>
         {onReportRefresh && (

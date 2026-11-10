@@ -1,5 +1,30 @@
 # 에이전트 실행 기준
 
+## 2026-11-10 전체 browser 검증 실패 후속 (#799)
+
+main `8a7646e40061e993597279ea573cf7f199735ffe`의 full 42806156931은 core/native 성공,
+browser 과업 실패 누적 및 job 시간 한도로 cancelled, join skipped다. 완료로 바꾸지 않는다.
+색상 수정 PR #801/main `d2fb760595f7a9948f10e8f9204796389cc01345`는 CI와 preview
+42814817386 및 제한 smoke를 통과했다. 후속 브랜치는 `codex/799-full-browser-repair`다.
+다중 island 준비, Headless 입력의 ARIA, 모달 최초/복귀 focus와 열린 모달 안의 오류/재시도,
+reduced motion, 맞춤 선택 컨트롤과 기존 회귀 과업을 정비한다. 과거 고정 CSS는 보존하고,
+격리된 retired UI 회귀 페이지는 현재 DS로 실행하며 공개 경로의 410 경계를 유지한다.
+후속 과업 검사에서 768~900px 탐색 공백과 사건 화면의 중복 focus 규칙을 발견했다.
+사이드바 표시 경계를 통일하고 자료 패널 리포트 링크도 공통 보조 버튼 variant를 사용한다.
+고정 ID 입력 스타일이 공통 키보드 표시를 덮는 문제, 맞춤 선택/입력 높이와 모달 제목 중복도
+함께 확인한다. 테스트 server는 Playwright가 기동/종료해 다른 API 모드의 잔존 dev server를 재사용하지 않는다.
+전송 오류가 열린 자료 패널의 비활성 탭에 숨는 문제도 공통 피드백 영역으로 고쳤다.
+원본 재생 기본 controls를 공통 DS로 이전하고, 테마 변경 중간 색과 primary hover 대비를 수리한다.
+원본 재생은 요청 가로채기 대신 실제 합성 HTTP range 응답으로 Chromium/WebKit 모두 검증한다.
+후속 로컬 재검사에서 두 입장의 공통 예시 여정 4개, 컨트롤 회귀 23개, 원본 재생 8개가
+성공했다. 23개 경로 × 양 테마를 320/390/1440px에서 다시 확인해 가로 넘침·텍스트 대비
+실패가 없었고, 다크 desktop 12개 경로의 예상 밖 밝은 표면도 없었다. 합성 입력/HTTP·SQL
+검증이며 외부 OAuth·유료 공급자 인수로 표현하지 않는다. 최종 full 증거는 별도로 기록한다.
+대화 작업의 busy→idle 전환 시 스크롤 영역 Escape listener도 같은 commit에서 갱신한다.
+WebKit에서 이전 busy closure가 입력을 무시하던 실패를 수정했고 양 브라우저 42개 과업이 성공했다.
+API/DB·owner·CAS·실행 한도·비용 정책과 랜딩 구현은 유지한다. 최종 정확 SHA의 full
+core/browser/native/join과 동일 SHA preview smoke가 모두 성공할 때까지 인수는 미완료다.
+
 ## 2026-11-10 테마 색상 감사와 전체 검증 후속 (#799)
 
 사용자는 전체 수동 검증이 끝날 때까지 실패를 수정하고 preview에 다시 반영하며, 특히

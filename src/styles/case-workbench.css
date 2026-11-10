@@ -10,10 +10,6 @@
 .baro-workbench :where(h1, h2, h3, h4, p) {
   color: inherit;
 }
-.baro-workbench :where(button, a, input, textarea, [data-disclosure-button]):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
 .baro-workbench :where(button, a, [data-disclosure-button]) {
   -webkit-tap-highlight-color: transparent;
 }
@@ -94,6 +90,7 @@
   display: none;
 }
 .baro-workbench .sidebar-desktop {
+  display: flex;
   padding: 2px 8px 12px;
   gap: 18px;
   overflow: hidden;
@@ -762,6 +759,13 @@
   padding: 20px 16px;
   min-width: 0;
 }
+.baro-workbench .case-context__feedback {
+  position: sticky;
+  top: 48px;
+  z-index: 2;
+  padding: 12px 16px 0;
+  background: var(--card);
+}
 .baro-workbench [hidden] {
   display: none;
 }
@@ -1192,26 +1196,6 @@
   color: var(--muted-foreground);
 }
 
-.baro-workbench .materials-panel__report .ui-button--primary {
-  background: var(--muted);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-:root[data-focus-input="keyboard"]
-  .baro-workbench
-  :is(
-    button,
-    a[href],
-    input,
-    textarea,
-    select,
-    [data-disclosure-button],
-    [role="tab"]
-  ):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  box-shadow: none;
-}
 .baro-workbench .case-shell > astro-island > .intake-flow {
   width: 100%;
   max-width: 808px;

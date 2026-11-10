@@ -1,34 +1,29 @@
 /* Service focus is shared across pages, including login and consent. Keep the
    landing's visual system independent and never remove native focus semantics. */
-:root :is(.app-frame, .login-page, .consent-page):focus-visible,
-:root :is(.app-frame, .login-page, .consent-page) :focus-visible {
+:root[data-baro-ui] :is(button, a, input, textarea, select, [tabindex]):focus-visible {
   outline: none;
 }
 
 /* Keyboard location stays visible inside the control, without a blue outer box.
    Headings, scroll regions, tab panels and entire dialogs receive no decoration. */
-:root[data-focus-input="keyboard"]
-  :is(.app-frame, .login-page, .consent-page)
-  :is(button, a[href], input, textarea, select, [role="button"], [role="tab"]):focus-visible {
+:root[data-baro-ui][data-focus-input="keyboard"]
+:is(button, a, input, textarea, select):focus-visible {
   box-shadow: inset 0 0 0 2px var(--ring);
 }
 
-:root[data-focus-input="keyboard"]
-  :is(.app-frame, .login-page, .consent-page)
+:root[data-baro-ui][data-focus-input="keyboard"]
   :is(.ui-button--primary, button.primary, .primary-action):focus-visible {
   box-shadow: inset 0 0 0 2px var(--primary-foreground);
 }
-:root[data-focus-input="keyboard"]
-  :is(.app-frame, .login-page, .consent-page)
-  .ui-button--destructive:focus-visible {
+:root[data-baro-ui][data-focus-input="keyboard"] .ui-button--destructive:focus-visible {
   box-shadow: inset 0 0 0 2px var(--destructive-foreground);
 }
 
 /* Disclosure headers can span the page: identify their text rather than framing
    the entire section. Enter/Space and the normal Tab order remain native. */
-:root[data-focus-input="keyboard"]
-  :is(.app-frame, .login-page, .consent-page)
-  summary:focus-visible {
+:root[data-baro-ui][data-focus-input="keyboard"]
+:is(summary, [data-disclosure-button]):focus-visible {
+  box-shadow: none;
   text-decoration: underline;
   text-decoration-color: var(--ring);
   text-decoration-thickness: 2px;

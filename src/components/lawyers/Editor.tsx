@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, ChevronDown, X } from "lucide-react";
+import { ArrowUpFromLine, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
@@ -749,7 +749,6 @@ export function Editor() {
                             </option>
                           ))}
                         </ControlSelect>
-                        <ChevronDown size={18} aria-hidden="true" />
                       </span>
                     </FieldLabel>
                   </div>

@@ -575,6 +575,18 @@ function SummaryReconfirmationScene({
     // Retire and read back first, retaining the intent for either retry control.
     return cancel(previous.input);
   };
+  const errorPanel = Boolean(error) && (
+    <ErrorPanel
+      error={error}
+      disabled={busy}
+      retry={() =>
+        void (failed.current && (error as { code?: string }).code !== "CONFLICT"
+          ? mutate(failed.current)
+          : load(true))
+      }
+    />
+  );
+  const modalActive = ready && (purposeOpen || kind !== null || confirming !== null);
   return (
     <div className={embedded ? "summary-reconfirmation--embedded" : "intake-flow"}>
       {!embedded && (
@@ -593,17 +605,7 @@ function SummaryReconfirmationScene({
       {loading && !item && !error && (
         <LoadingContent layout="detail" title="저장한 사건 정리를 불러오고 있어요." />
       )}
-      {Boolean(error) && (
-        <ErrorPanel
-          error={error}
-          disabled={busy}
-          retry={() =>
-            void (failed.current && (error as { code?: string }).code !== "CONFLICT"
-              ? mutate(failed.current)
-              : load(true))
-          }
-        />
-      )}
+      {!modalActive && errorPanel}
       {item && ready && (
         <section
           className="intake-scene intake-summary-scene intake-scene-arrival"
@@ -857,9 +859,7 @@ function SummaryReconfirmationScene({
             </FieldLabel>
           ))}
         </RadioGroup>
-        {Boolean(error) && (
-          <p role="alert">저장 결과를 확인하지 못했어요. 선택한 입장은 남겨뒀어요.</p>
-        )}
+        {errorPanel}
         <div className="summary-review-actions">
           <Button
             loading={busy}
@@ -927,14 +927,7 @@ function SummaryReconfirmationScene({
             정확히 모르는 부분은 모른다고 적어주세요. 이 설명만으로 기존 사실이나 출처를 덮어쓰지
             않아요. {[...explanation.trim()].length.toLocaleString()} / 5,000자
           </p>
-          {Boolean(error) && (
-            <p role="alert">요청 결과를 확인하지 못했어요. 작성한 설명을 남겨뒀어요.</p>
-          )}
-          {(error as { code?: string })?.code === "CONFLICT" && (
-            <Button variant="outline" disabled={busy} onClick={() => void load(true)}>
-              최신 내용 불러오기
-            </Button>
-          )}
+          {errorPanel}
           {[...explanation.trim()].length > 5000 && (
             <p role="alert">설명은 5,000자까지 입력할 수 있어요.</p>
           )}
@@ -967,6 +960,7 @@ function SummaryReconfirmationScene({
         title="이 내용으로 계속할까요?"
         description="확인한 사실과 미확인 내용을 바탕으로 사건 정리를 이어가요."
       >
+        {errorPanel}
         <div className="summary-confirm-actions">
           <Button
             loading={busy}

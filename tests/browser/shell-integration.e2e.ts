@@ -179,7 +179,7 @@ test("customer login consent logout share the product shell without external API
   await page.goto("/login?error=access_denied");
   await expect(page.getByRole("alert")).toContainText("로그인을 취소");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("radio", { name: /고객/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Naver로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toBeDisabled();
@@ -195,7 +195,7 @@ test("customer login consent logout share the product shell without external API
     .getByRole("button", { name: "로그아웃", exact: true })
     .click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
   expect(requests).toEqual([]);
 });
 
@@ -432,7 +432,7 @@ test("peer logout clears the draft and opens plain login in both tabs", async ({
   await expect(peer).toHaveURL(/\/login$/);
   await expect(page).toHaveURL(/\/login$/);
   await expect(draft).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
 });
 
 test("expired session retains the safe return path instead of explicit logout behavior", async ({
@@ -500,6 +500,8 @@ test("failed logout keeps the session and draft without broadcasting a successfu
   await logoutFromMenu(page);
   await expect(page.getByRole("alert")).toContainText("로그아웃하지 못했어요");
   await expect(page).toHaveURL(/\/new$/);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "메뉴", exact: true })).toBeHidden();
   await expect(draft).toHaveValue("로그아웃 실패 시 유지할 합성 사건 초안입니다.");
   expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toBeNull();
 });
@@ -517,7 +519,7 @@ test("same-tab logout still navigates when cross-tab notification storage is una
   });
   await logoutFromMenu(page);
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
 });
 
 async function prepareReport(page: Page) {
