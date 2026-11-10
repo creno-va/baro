@@ -5,119 +5,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
 import { openReportEditor } from "../helpers/report-controls";
-import { confirmWorkspaceUpload } from "../helpers/workspace-navigation";
 
 // Uses the actual product pages and shared facade, with no component/API alias or injected seed.
 test.skip(process.env.BARO_D_SHARED_API !== "true", "Run the explicit shared mock configuration.");
-
-for (const width of [390, 1200])
-  test(`saved report edits remain available across regeneration and task changes at ${width}px`, async ({
-    page,
-  }) => {
-    test.setTimeout(60_000);
-    await page.setViewportSize({ width, height: 844 });
-    await page.goto("/login");
-    await page.locator('astro-island[component-export="AuthButtons"]:not([ssr])').waitFor();
-    await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-    await page
-      .getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.")
-      .check();
-    await page.getByRole("button", { name: "동의하고 계속하기", exact: true }).click();
-    await page
-      .getByRole("combobox", { name: "준비하는 방향", exact: true })
-      .selectOption({ label: "민사 대응" });
-    await page
-      .getByLabel("지금까지 있었던 일", { exact: true })
-      .fill(
-        "실제 인물이 없는 합성 민사 대응 사건입니다. 빌린 돈 중 일부를 보냈다는 이용자 진술이 있으나 입금 원본과 반환 날짜는 아직 확인하지 못했습니다.",
-      );
-    await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
-    for (let i = 0; i < 6; i++) {
-      await expect(
-        page.getByText(`${Math.floor(i / 3) + 1}차 질문 · ${(i % 3) + 1} / 3`, { exact: true }),
-      ).toBeVisible();
-      await page.getByRole("button", { name: "모름", exact: true }).click();
-    }
-    await page.getByRole("button", { name: "맞아요", exact: true }).click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "확인하고 계속", exact: true })
-      .click();
-    const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
-    await tasks.getByRole("link", { name: "리포트", exact: true }).click();
-    await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
-    await page.getByRole("button", { name: /^직접 해결/ }).click();
-    await openReportEditor(page);
-    const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
-    const marker = "합성 검수 수정: 일부 입금은 원본 확인 전 사용자 진술로 구분합니다.";
-    await editor.fill(`${await editor.inputValue()}\n${marker}`);
-    await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-    await page.getByRole("button", { name: "현재 기준 다시 확인", exact: true }).click();
-    await expect(page.getByText(/본문 수정은 사건 요약·분석에 자동 반영되지 않아요/)).toBeVisible();
-    await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
-    const modal = page.getByRole("dialog");
-    await expect(modal).toContainText("직접 수정한 본문은 새 버전에 자동 반영되지 않아요.");
-    await expect(modal).toContainText("새로고침하거나 사건을 나가면 보관 내용이 사라져요.");
-    await modal.getByRole("button", { name: "새 버전 생성", exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(modal).toHaveCount(0);
-    const preserved = page.getByRole("textbox", { name: "보관한 리포트 편집 내용", exact: true });
-    await expect(preserved).toHaveValue(new RegExp(marker));
-    await expect(preserved).toHaveAttribute("readonly", "");
-    await expect(page.locator(".report-reading")).not.toContainText(marker);
-    for (const task of ["대화", "자료", "문서 초안", "리포트"]) {
-      await tasks
-        .getByRole("link", { name: task === "자료" ? /^자료/ : task, exact: task !== "자료" })
-        .click();
-    }
-    await expect(preserved).toHaveValue(new RegExp(marker));
-    await page.getByRole("button", { name: /^직접 해결/ }).click();
-    await page.getByLabel("현재 리포트의 사실과 사용할 자료를 확인했어요.").check();
-    await page.getByRole("button", { name: "검토용 초안 준비", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "초안 검토·수정", exact: true })).toBeVisible();
-    await expect(
-      page.getByLabel("사실·증거·미입력 항목과 수정한 내용을 검토했어요."),
-    ).not.toBeChecked();
-    await expect(
-      page.getByRole("button", { name: "검토한 초안 저장", exact: true }),
-    ).toBeDisabled();
-    const current = await page.evaluate(async () => {
-      const path = "/src/client/api/index.ts";
-      const { api } = await import(path);
-      const id = location.pathname.split("/")[2] ?? "";
-      const [report, resolution] = await Promise.all([
-        api.rework.peekReport(id),
-        api.rework.getResolution(id),
-      ]);
-      return {
-        report: report && {
-          id: report.id,
-          revision: report.revision,
-          analysisReview: report.analysisReview,
-        },
-        draft: resolution.draft,
-      };
-    });
-    expect(current.report?.analysisReview.userEdited).toBe(false);
-    expect(current.report?.analysisReview.status).toBe("unavailable");
-    expect(current.draft?.basis.reportId).toBe(current.report?.id);
-    expect(current.draft?.basis.reportRevision).toBe(current.report?.revision);
-    expect(current.draft?.reviewed).toBe(false);
-    expect(current.draft?.content).not.toContain(marker);
-    await openReportEditor(page);
-    await editor.fill(`${await editor.inputValue()}\n두 번째 합성 수정`);
-    await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-    await expect(page.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeDisabled();
-    await expect(preserved).toHaveValue(new RegExp(marker));
-    const downloading = page.waitForEvent("download");
-    await page.getByRole("button", { name: "보관한 본문 TXT 다운로드", exact: true }).click();
-    const download = await downloading;
-    expect(download.suggestedFilename()).toMatch(/편집보관\.txt$/);
-    expect(await readFile((await download.path()) as string, "utf8")).toContain(marker);
-    await expect(preserved).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeEnabled();
-  });
-
 test("shared login/intake/C originals/D review downloads and deletion persist across reload", async ({
   page,
   baseURL,
@@ -138,19 +28,14 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   await page.locator('astro-island[component-export="AuthButtons"]:not([ssr])').waitFor();
-  await expect(page.getByRole("radio", { name: /^(고객|변호사)/ })).toHaveCount(0);
+  await page.getByRole("radio", { name: /^고객/ }).check();
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
-  const policyLink = page
-    .getByRole("navigation", { name: "정책 원문", exact: true })
-    .getByRole("link", { name: /^AI 이용 고지/ });
-  await expect(policyLink).toHaveAttribute("target", "_blank");
   const policyOpened = context.waitForEvent("page");
-  await policyLink.click();
+  await page.getByRole("link", { name: /^AI 이용 고지/ }).click();
   const policy = await policyOpened;
   await expect(policy.getByRole("heading", { name: "AI 이용 고지", exact: true })).toBeVisible();
   await policy.close();
-  await expect(page).toHaveURL(/\/consent$/);
   await page
     .getByRole("checkbox", {
       name: "이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.",
@@ -160,11 +45,6 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,
   );
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
-    ),
-  ).toBe("customer");
   await expect(page).toHaveURL(/\/app$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
@@ -184,11 +64,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     const confirmation = page.getByRole("dialog", { name: "이 내용으로 계속할까요?", exact: true });
     await expect(confirmation).toBeVisible();
     await confirmation.getByRole("button", { name: "확인하고 계속", exact: true }).click();
-    await expect(page).toHaveURL(/\/cases\/[^/]+$/);
-    await expect(
-      page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
-    ).toBeEnabled();
-    await expect(page.getByRole("navigation", { name: "사건 작업", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     return new URL(page.url()).pathname;
   }
   const casePath = await completeIntake(
@@ -202,14 +78,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     await page
       .getByLabel("업로드할 파일 선택", { exact: true })
       .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(originalText) });
-    await confirmWorkspaceUpload(page);
     await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   }
-  await expect(
-    page
-      .getByRole("region", { name: "사건 자료", exact: true })
-      .getByText("내용 확인 후 반영 가능", { exact: true }),
-  ).toHaveCount(2);
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toHaveCount(2);
   await page.goto(`${casePath}/reports`);
   await page
     .getByRole("region", { name: "리포트 준비 상태", exact: true })
@@ -308,9 +179,8 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     );
   expect(await originalCount()).toBe(0);
   await page.goto(`${casePath}/reports`);
-  await expect(page.locator(".workspace-error")).toHaveAttribute("role", "alert");
-  await expect(page.locator(".workspace-error")).toContainText("사건 또는 자료를 찾을 수 없어요.");
-  await expect(page.locator(".report-review")).toHaveCount(0);
+  await expect(page.locator(".report-error")).toHaveAttribute("role", "alert");
+  await expect(page.locator(".report-error")).toContainText("요청한 내용을 찾지 못했어요.");
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
   await page.goto("/cases");
@@ -327,12 +197,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     mimeType: "text/plain",
     buffer: Buffer.from(originalText),
   });
-  await confirmWorkspaceUpload(page);
-  await expect(
-    page
-      .getByRole("region", { name: "사건 자료", exact: true })
-      .getByText("내용 확인 후 반영 가능", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   expect(await originalCount()).toBeGreaterThan(0);
   const peer = await context.newPage();
   await peer.goto(`${accountCasePath}/reports`);
@@ -357,7 +222,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
   await expect(
-    peer.locator(".workspace-error").getByRole("link", { name: "로그인", exact: true }),
+    peer.locator(".report-error").getByRole("link", { name: "로그인", exact: true }),
   ).toBeVisible();
   await page.reload();
   expect(
@@ -453,7 +318,7 @@ test("oversized mock source shows first-report recovery and preserves the full o
   );
   await expect(
     page
-      .getByRole("region", { name: "이해한 내용을 다음 준비로 이어가요", exact: true })
+      .getByRole("region", { name: "리포트 이후 해결 방법", exact: true })
       .getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
   ).toBeVisible();
   await page.reload();

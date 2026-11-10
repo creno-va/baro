@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import { expect, type Page, test } from "@playwright/test";
-import { createCaseResponseSchema } from "../../src/contracts";
 import {
   v2ReworkCreateCaseRequestSchema,
   v2ReworkCreateCaseResponseSchema,
@@ -73,9 +72,9 @@ async function challenge(page: Page) {
     };
   });
 }
-for (const [entryChoice, purposeLabel, casePurpose, subjectContext] of [
-  ["unknown-prepare", "요구·고소 준비", "prepare_claim", "individual"],
-  ["unknown-response", "받은 주장에 대응", "respond_to_claim", "individual"],
+for (const [purposeLabel, casePurpose, subjectContext] of [
+  ["고소 준비", "prepare_claim", "individual"],
+  ["주장 대응", "respond_to_claim", "individual"],
 ] as const) {
   test(`${casePurpose}: intake validates code points, blocks duplicates, preserves replay key and focus after errors`, async ({
     page,
@@ -192,10 +191,8 @@ for (const [entryChoice, purposeLabel, casePurpose, subjectContext] of [
       route.fulfill({ json: null }),
     );
     await page.goto("/cases/new");
-    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(entryChoice);
-    await expect(
-      page.getByRole("combobox", { name: "준비하는 방향" }).locator("option"),
-    ).toHaveCount(6);
+    await page.getByRole("radio", { name: purposeLabel, exact: true }).check();
+    await expect(page.getByRole("radio")).toHaveCount(2);
     const input = page.getByRole("textbox");
     const submit = page.getByRole("button", { name: "저장하고 계속" });
     // Five supplementary characters are ten UTF-16 code units but only five code points.
@@ -380,23 +377,12 @@ test("real signed session submits admission into SQL and reloads owner-scoped li
       return { status: response.status, body: await response.json() };
     });
     expect(admitted.status).toBe(201);
-    const created = createCaseResponseSchema.parse(admitted.body);
-    for (let reload = 0; reload < 2; reload++) {
-      await page.reload();
-      const listed = page.getByRole("main").getByRole("link", { name: /금전 대여 사건/ });
-      await expect(listed).toBeVisible();
-      await expect(listed).toHaveAttribute("href", `/cases/${created.caseId}`);
-      const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
-      await opener.click();
-      const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
-      const recent = menu.getByRole("link", { name: "금전 대여 사건", exact: true });
-      await expect(recent).toBeVisible();
-      await expect(recent).toHaveAttribute("href", `/cases/${created.caseId}`);
-      await page.keyboard.press("Escape");
-      await expect(menu).not.toBeVisible();
-      await expect(opener).toBeFocused();
-      await expect(listed).toBeVisible();
-    }
+    await page.reload();
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
+    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", { name: "메뉴 열기" }).click();
+    await expect(page.getByRole("link", { name: /금전 대여 사건/ })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,

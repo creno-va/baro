@@ -21,6 +21,16 @@
   gap: 8px;
   align-items: center;
 }
+.evidence-picker .ui-button,
+.evidence-upload .ui-button,
+.evidence-requirements .ui-button,
+.evidence-file-review .ui-button,
+.workspace-chat-attachments .ui-button {
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+}
 .evidence-hint {
   color: var(--muted-foreground, #616b7a);
   font-size: 0.8125rem;

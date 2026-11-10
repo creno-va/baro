@@ -1,28 +1,20 @@
-/* Shared keyboard location for the application and public foundation. */
-:root :is(.app-frame, .public-layout, .login-page, .consent-page):focus-visible,
-:root :is(.app-frame, .public-layout, .login-page, .consent-page) :focus-visible {
+/* Service focus is shared across pages, including login and consent. Keep the
+   landing's visual system independent and never remove native focus semantics. */
+:root :is(.app-frame, .login-page, .consent-page):focus-visible,
+:root :is(.app-frame, .login-page, .consent-page) :focus-visible {
   outline: none;
 }
 
 /* Keyboard location stays visible inside the control, without a blue outer box.
-   Static headings, tab panels and entire dialogs receive no decoration. */
+   Headings, scroll regions, tab panels and entire dialogs receive no decoration. */
 :root[data-focus-input="keyboard"]
-  :is(.app-frame, .public-layout, .login-page, .consent-page)
-  :is(
-    button,
-    a[href],
-    input,
-    textarea,
-    select,
-    [role="button"],
-    [role="tab"],
-    .case-workspace__header
-  ):focus-visible {
+  :is(.app-frame, .login-page, .consent-page)
+  :is(button, a[href], input, textarea, select, [role="button"], [role="tab"]):focus-visible {
   box-shadow: inset 0 0 0 2px #526178;
 }
 
 :root[data-focus-input="keyboard"]
-  :is(.app-frame, .public-layout, .login-page, .consent-page)
+  :is(.app-frame, .login-page, .consent-page)
   :is(
     .ui-button--primary,
     .ui-button--destructive,
@@ -36,7 +28,7 @@
 /* Disclosure headers can span the page: identify their text rather than framing
    the entire section. Enter/Space and the normal Tab order remain native. */
 :root[data-focus-input="keyboard"]
-  :is(.app-frame, .public-layout, .login-page, .consent-page)
+  :is(.app-frame, .login-page, .consent-page)
   summary:focus-visible {
   text-decoration: underline;
   text-decoration-color: #526178;
@@ -61,10 +53,4 @@
     .report-paper
   ):focus-within {
   box-shadow: none;
-}
-
-/* A scrollable evidence table needs an explicit keyboard location as well. */
-:root[data-focus-input="keyboard"] :is(.ui-table-scroll, .report-table):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
 }

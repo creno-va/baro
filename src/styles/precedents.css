@@ -105,7 +105,7 @@
   max-width: 570px;
   margin: 0;
 }
-.precedent-workspace button:not(.ui-button) {
+.precedent-workspace button {
   min-height: 44px;
   border: 1px solid var(--border);
   background: #fff;
@@ -116,7 +116,7 @@
   color: var(--foreground);
   cursor: pointer;
 }
-.precedent-workspace button:not(.ui-button):disabled {
+.precedent-workspace button:disabled {
   opacity: 0.55;
   cursor: default;
 }

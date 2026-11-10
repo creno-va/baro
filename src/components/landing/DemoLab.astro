@@ -1,0 +1,92 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these icons in the template.
+import {
+  ArrowRight,
+  Check,
+  CheckCheck,
+  Clock3,
+  FileText,
+  FolderOpen,
+  MessageCircle,
+  Paperclip,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import "../../styles/landing-demo.css";
+---
+
+<section id="try-baro" class="demo-lab" data-baro-demo aria-labelledby="demo-title">
+  <header class="demo-heading">
+    <span class="demo-example-badge"><Sparkles size={15} aria-hidden="true" /> 예시로 체험하기</span>
+    <h2 id="demo-title">설명보다 먼저,<br /><span>한번 해보세요.</span></h2>
+    <p>짧은 이야기 하나가 상담 준비로 바뀌는 과정.<br />가상의 상황으로 BARO를 가볍게 경험해 보세요.</p>
+  </header>
+
+  <div class="demo-fallback" data-demo-fallback>
+    <div class="demo-fallback-intro"><MessageCircle size={25} aria-hidden="true" /><h3>“빌려준 돈을 돌려받지 못했어요.”</h3><p>이런 이야기에서 시작할 수 있어요. 아래는 가상의 이용 예시예요.</p></div>
+    <ol><li><strong>이야기하기</strong><span>언제, 어떤 약속을 했는지 차근차근 확인해요.</span></li><li><strong>자료 모으기</strong><span>이체 내역과 주고받은 대화를 함께 살펴봐요.</span></li><li><strong>흐름 정리하기</strong><span>알고 있는 사실을 날짜순으로 확인해요.</span></li><li><strong>상담 준비하기</strong><span>요약을 직접 검토하고, 전달할 자료를 선택해요.</span></li></ol>
+    <a class="demo-primary" href="/app">내 이야기로 시작하기 <ArrowRight size={17} aria-hidden="true" /></a>
+    <p class="demo-fallback-note">JavaScript를 켜면 이 페이지에서 예시를 직접 체험할 수 있어요.</p>
+  </div>
+
+  <div class="demo-interactive" data-demo-interactive hidden>
+    <fieldset class="demo-scenarios"><legend>어떤 이야기로 시작할까요?</legend><div>
+      <label><input type="radio" name="baro-demo-scenario" value="loan" checked /><span>빌려준 돈</span></label>
+      <label><input type="radio" name="baro-demo-scenario" value="deposit" /><span>돌려받을 보증금</span></label>
+      <label><input type="radio" name="baro-demo-scenario" value="wage" /><span>받지 못한 급여</span></label>
+    </div></fieldset>
+
+    <div class="demo-workspace">
+      <header class="demo-app-header"><div class="demo-app-brand"><img src="/brand/logo.svg" width="27" height="27" alt="" /><strong>BARO</strong><span>나의 이야기</span></div><button class="demo-restart" type="button" data-demo-restart><RotateCcw size={15} aria-hidden="true" /><span>다시 체험</span></button></header>
+      <div class="demo-case-heading"><div><span class="demo-case-eyebrow">가상의 사건 · 자유롭게 바꿔보세요</span><h3 data-demo-case-title>돌려받지 못한 돈</h3></div><span class="demo-case-state" data-demo-case-state>이야기 정리 중</span></div>
+      <div class="demo-progress"><progress max="4" value="1" aria-label="예시 체험 진행" data-demo-progress></progress><span data-demo-progress-text>1 / 4 · 이야기</span></div>
+      <div class="demo-tabs" role="tablist" aria-label="예시 체험 단계">
+        <button type="button" role="tab" id="demo-tab-conversation" data-demo-tab="conversation" aria-controls="demo-panel-conversation" aria-selected="true" tabindex="0"><MessageCircle size={17} aria-hidden="true" /><span>대화</span></button>
+        <button type="button" role="tab" id="demo-tab-files" data-demo-tab="files" aria-controls="demo-panel-files" aria-selected="false" tabindex="-1"><FolderOpen size={17} aria-hidden="true" /><span>자료</span></button>
+        <button type="button" role="tab" id="demo-tab-timeline" data-demo-tab="timeline" aria-controls="demo-panel-timeline" aria-selected="false" tabindex="-1"><Clock3 size={17} aria-hidden="true" /><span>타임라인</span></button>
+        <button type="button" role="tab" id="demo-tab-report" data-demo-tab="report" aria-controls="demo-panel-report" aria-selected="false" tabindex="-1"><FileText size={17} aria-hidden="true" /><span>상담 준비</span></button>
+      </div>
+
+      <div class="demo-panel" id="demo-panel-conversation" role="tabpanel" aria-labelledby="demo-tab-conversation" data-demo-panel="conversation">
+        <div class="demo-panel-heading"><h4 tabindex="-1" data-demo-focus>나의 말로 시작해요.</h4><p>미리 준비한 예시 답변으로 대화를 이어가 보세요.</p></div>
+        <div class="demo-conversation">
+          <div class="demo-message demo-message-user"><span class="demo-speaker">나의 이야기 · 예시</span><p data-demo-narrative>지인에게 빌려준 돈을 약속한 날짜에 돌려받지 못했어요.</p></div>
+          <div class="demo-message demo-message-baro"><span class="demo-baro-avatar"><img src="/brand/logo.svg" width="22" height="22" alt="" /></span><div><span class="demo-speaker">BARO · 예시 응답</span><p data-demo-question>언제, 어떤 방식으로 빌려주셨나요? 돌려받기로 한 날짜도 함께 알려주세요.</p></div></div>
+          <div class="demo-answer-group" data-demo-answer-group hidden>
+            <div class="demo-message demo-message-user"><span class="demo-speaker">예시 답변</span><p data-demo-answer></p></div>
+            <div class="demo-message demo-message-baro"><span class="demo-baro-avatar"><img src="/brand/logo.svg" width="22" height="22" alt="" /></span><div><span class="demo-speaker">BARO · 예시 응답</span><p>알려주신 날짜와 약속을 정리했어요. 함께 살펴볼 자료도 골라볼까요?</p><div class="demo-found-fact"><Check size={15} aria-hidden="true" /><span data-demo-fact></span></div></div></div>
+          </div>
+        </div>
+        <div class="demo-panel-actions"><span class="demo-action-hint" data-demo-conversation-hint>실제 입력 없이, 예시 답변으로 체험해요.</span><button type="button" class="demo-primary" data-demo-answer-button>예시로 답해보기 <ArrowRight size={17} aria-hidden="true" /></button><button type="button" class="demo-primary" data-demo-next="files" data-demo-conversation-next hidden>함께 볼 자료 선택하기 <ArrowRight size={17} aria-hidden="true" /></button></div>
+      </div>
+
+      <div class="demo-panel" id="demo-panel-files" role="tabpanel" aria-labelledby="demo-tab-files" data-demo-panel="files" hidden>
+        <div class="demo-panel-heading"><h4 tabindex="-1" data-demo-focus>어떤 자료를 함께 볼까요?</h4><p>예시 자료를 선택하거나 빼보세요. 파일을 올리지는 않아요.</p></div>
+        <fieldset class="demo-files"><legend class="demo-sr-only">정리에 포함할 예시 자료</legend>{[0, 1, 2].map((index) => <label class="demo-file-card"><input type="checkbox" data-demo-file={index} checked={index < 2} /><span class="demo-file-icon"><FileText size={24} aria-hidden="true" /></span><span class="demo-file-copy"><strong data-demo-file-title={index}></strong><span data-demo-file-description={index}></span><small>실제 파일이 아닌 예시 자료</small></span><span class="demo-file-check" aria-hidden="true"><Check size={17} /></span></label>)}</fieldset>
+        <div class="demo-selection-note"><Paperclip size={16} aria-hidden="true" /><span data-demo-file-count>예시 자료 2개를 함께 살펴봐요.</span></div>
+        <div class="demo-panel-actions"><button type="button" class="demo-secondary" data-demo-next="conversation">대화 다시 보기</button><button type="button" class="demo-primary" data-demo-next="timeline">시간순으로 정리해 보기 <ArrowRight size={17} aria-hidden="true" /></button></div>
+      </div>
+
+      <div class="demo-panel" id="demo-panel-timeline" role="tabpanel" aria-labelledby="demo-tab-timeline" data-demo-panel="timeline" hidden>
+        <div class="demo-panel-heading"><h4 tabindex="-1" data-demo-focus>흩어진 이야기에 흐름이 생겼어요.</h4><p>날짜와 사실을 살펴보고, 연결된 예시 자료도 확인해 보세요.</p></div>
+        <ol class="demo-timeline">{[0, 1, 2].map((index) => <li><span class="demo-timeline-dot" aria-hidden="true"></span><time data-demo-date={index}></time><h5 data-demo-event-title={index}></h5><p data-demo-event-body={index}></p><details><summary><Paperclip size={13} aria-hidden="true" /> 연결된 예시 자료 보기</summary><p data-demo-event-source={index}></p></details></li>)}</ol>
+        <div class="demo-timeline-notice"><Clock3 size={17} aria-hidden="true" /><span>기록된 날짜를 정리한 예시예요. 법적인 기한이나 판단을 계산하지 않아요.</span></div>
+        <div class="demo-panel-actions"><button type="button" class="demo-secondary" data-demo-next="files">자료 다시 선택하기</button><button type="button" class="demo-primary" data-demo-next="report">상담 준비 리포트 살펴보기 <ArrowRight size={17} aria-hidden="true" /></button></div>
+      </div>
+
+      <div class="demo-panel" id="demo-panel-report" role="tabpanel" aria-labelledby="demo-tab-report" data-demo-panel="report" hidden>
+        <div class="demo-panel-heading"><h4 tabindex="-1" data-demo-focus>마지막 확인은, 내가 직접.</h4><p>예시 요약을 고쳐보고, 함께 볼 자료를 검토해 보세요.</p></div>
+        <div class="demo-report-paper"><div class="demo-report-top"><span><FileText size={18} aria-hidden="true" /> 상담 준비 리포트</span><span>예시</span></div><label class="demo-report-label" for="demo-report-summary">사건 요약 직접 수정하기</label><textarea id="demo-report-summary" data-demo-report-summary rows="4" maxlength="600" aria-describedby="demo-summary-note"></textarea><p id="demo-summary-note" class="demo-input-note">가상 내용만 수정해 주세요. 실제 개인정보는 입력하지 마세요. 이 내용은 전송되거나 저장되지 않아요.</p><div class="demo-report-materials"><h5>내가 선택한 예시 자료</h5><div data-demo-report-files></div></div><div class="demo-report-question"><span>상담에서 확인할 질문</span><p data-demo-report-question></p></div></div>
+        <fieldset class="demo-review"><legend>내가 검토한 내용인지 확인해 주세요.</legend><label><input type="checkbox" data-demo-confirm="facts" /><span>예시 요약의 사실과 날짜를 확인했어요.</span></label><label><input type="checkbox" data-demo-confirm="files" /><span>함께 볼 예시 자료의 선택을 확인했어요.</span></label></fieldset>
+        <div class="demo-complete" data-demo-complete role="status" hidden><span class="demo-complete-icon"><CheckCheck size={24} aria-hidden="true" /></span><div><h5>나의 검토까지, 체험 완료.</h5><p>이제 실제 내 이야기로 시작해 보세요.<br />실제 자료의 전달도 내가 직접 선택해요.</p></div><a class="demo-primary" href="/app">내 이야기로 시작하기 <ArrowRight size={17} aria-hidden="true" /></a></div>
+        <div class="demo-panel-actions" data-demo-report-actions><button type="button" class="demo-secondary" data-demo-next="timeline">흐름 다시 보기</button><button type="button" class="demo-primary" data-demo-finish disabled>검토 마치기 <Check size={17} aria-hidden="true" /></button></div>
+      </div>
+      <footer class="demo-app-footer"><ShieldCheck size={15} aria-hidden="true" /><span>가상의 체험이에요. 입력·파일 저장이나 외부 전달은 이루어지지 않아요.</span></footer>
+    </div>
+    <p class="demo-live demo-sr-only" role="status" aria-live="polite" aria-atomic="true" data-demo-live></p>
+  </div>
+</section>
+<script>
+  import "../../client/landing-demo";
+</script>

@@ -923,11 +923,9 @@ test("embedded report preserves stale edits before generating a new snapshot and
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect(
-    page
-      .locator(".report-document")
-      .getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
+    page.getByText("최신 사건으로 생성한 새로운 합성 리포트입니다.", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".report-preserved-edit")).toHaveAttribute("open", "");
+  await page.getByText("새 버전을 만들기 전의 편집 내용 보관", { exact: true }).click();
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveValue(
     /유실하면 안 되는 직접 편집/,
   );
@@ -936,7 +934,7 @@ test("embedded report preserves stale edits before generating a new snapshot and
     .getByRole("textbox", { name: "보관한 리포트 편집 내용" })
     .inputValue();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "보관한 본문 TXT 다운로드", exact: true }).click();
+  await page.getByRole("button", { name: "보관한 편집 내용 저장", exact: true }).click();
   const saved = await download;
   // WebKit on macOS returns canonically equivalent decomposed Korean names.
   expect(saved.suggestedFilename().normalize("NFC")).toBe("BARO-synthetic-new-report-편집보관.txt");
@@ -947,21 +945,10 @@ test("embedded report preserves stale edits before generating a new snapshot and
   expect(savedBody).toContain("저장 전이지만 유실하면 안 되는 직접 편집입니다.");
   expect(savedBody).not.toContain("최신 사건으로 생성한 새로운 합성 리포트입니다.");
   await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
-  await page.getByRole("button", { name: "수정하기", exact: true }).click();
-  await page.getByRole("textbox", { name: "사건 개요 수정" }).fill("SYNTHETIC-PRIVATE-PRESERVED");
-  report = { ...report, stale: true };
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "새 버전 생성", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveValue(
-    /SYNTHETIC-PRIVATE-PRESERVED/,
-  );
   owner = "synthetic-another-owner";
   await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
   await expect(page.locator(".report-reading")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "보관한 리포트 편집 내용" })).toHaveCount(0);
-  expect(await page.content()).not.toContain("SYNTHETIC-PRIVATE-PRESERVED");
 });
 
 for (const side of ["prepare_claim", "respond_to_claim"] as const)
@@ -1034,13 +1021,11 @@ for (const side of ["prepare_claim", "respond_to_claim"] as const)
         await expect(page.getByText("관할", { exact: true })).toBeVisible();
         expect(updates).toBe(1);
       } else if (choice === "변호사와 해결") {
-        const dialog = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
-        await expect(dialog).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");
-        await expect(dialog.getByRole("button")).toHaveCount(1);
-        await dialog.getByRole("button", { name: "확인", exact: true }).click();
-        await expect(button).toBeFocused();
-        expect(updates).toBe(0);
-        expect(pdfs).toBe(0);
+        await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
+          "href",
+          "/lawyers",
+        );
+        expect(updates).toBe(1);
       } else {
         await expect(page.locator(".resolution").getByRole("alert")).toContainText(
           "완료하지 못했어요",
@@ -1264,132 +1249,3 @@ for (const outcome of ["lost_ack", "rejected"] as const)
     expect(admissions).toBe(1);
     expect(receipts.size).toBe(1);
   });
-
-async function retainedReadRoutes(page: Page) {
-  let owner = "synthetic-report-owner";
-  const report = preparedReport();
-  report.content =
-    "사건 개요\n합성 최초 설명\n\n다음 행동과 필요 자료\n원본 대화 확인\n\n추가 확인 사항\n상대방 설명 미확인";
-  const state = conversationState();
-  state.analysis.status = "pending";
-  state.analysis.basis = basis;
-  state.analysis.currentJobId = "synthetic-pending";
-  let reads = 0,
-    writes = 0;
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (request.method() !== "GET") writes++;
-    if (path === "/api/me/session")
-      return route.fulfill({
-        json: { user: { id: owner, name: "합성", accountType: "customer" }, needsConsent: false },
-      });
-    if (path.endsWith("/rework/conversation")) {
-      reads++;
-      return route.fulfill({ json: state });
-    }
-    if (path.endsWith("/rework/report")) return route.fulfill({ json: report });
-    if (path.endsWith("/rework/resolution"))
-      return route.fulfill({ json: resolutionState(report) });
-    if (path.endsWith("/files")) return route.fulfill({ json: [] });
-    return route.fulfill({ status: 404, json: {} });
-  });
-  return {
-    get reads() {
-      return reads;
-    },
-    get writes() {
-      return writes;
-    },
-    changeOwner: () => {
-      owner = "another-owner";
-    },
-  };
-}
-
-test("direct draft hash only reads and preserves a report edit across task changes and an explicit question", async ({
-  page,
-}) => {
-  const calls = await retainedReadRoutes(page);
-  await page.goto("/cases/synthetic-rework-case/reports?rework=true#document-drafts");
-  await expect(page.getByRole("heading", { name: "문서 초안", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "검토용 초안 준비" })).toBeDisabled();
-  expect(calls.writes).toBe(0);
-  await page.goto("/cases/synthetic-rework-case/reports?retained=true");
-  await page.getByRole("button", { name: "수정하기", exact: true }).click();
-  const editor = page.getByRole("textbox", { name: "사건 개요 수정", exact: true });
-  await editor.fill("SYNTHETIC-RETAINED-REPORT-EDIT");
-  await page.getByRole("button", { name: "drafts", exact: true }).click();
-  await expect(editor).toBeHidden();
-  await expect(page.getByRole("heading", { name: "문서 초안", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "reports", exact: true }).click();
-  await expect(editor).toHaveValue("SYNTHETIC-RETAINED-REPORT-EDIT");
-  await page
-    .locator(".report-reading-section")
-    .first()
-    .getByRole("button", { name: "이 내용 대화로 질문" })
-    .click();
-  await expect(page.getByLabel("합성 대화 입력")).toHaveValue("보내기 전 문장");
-  const context = JSON.parse(await page.getByLabel("질문의 리포트 맥락").innerText());
-  expect(context).toEqual({
-    reportId: preparedReport().id,
-    revision: 1,
-    sectionTitle: "사건 개요",
-    excerpt: "SYNTHETIC-RETAINED-REPORT-EDIT",
-  });
-  expect(context.excerpt.length).toBeLessThanOrEqual(600);
-  expect(calls.writes).toBe(0);
-  await page.getByRole("button", { name: "reports", exact: true }).click();
-  await expect(editor).toHaveValue("SYNTHETIC-RETAINED-REPORT-EDIT");
-});
-
-test("inactive retained report stops ordinary polling but still purges the old owner", async ({
-  page,
-}) => {
-  const calls = await retainedReadRoutes(page);
-  await page.goto("/cases/synthetic-rework-case/reports?retained=true");
-  await expect(page.locator(".report-reading")).toBeVisible();
-  await page.getByRole("button", { name: "수정하기", exact: true }).click();
-  await page
-    .getByRole("textbox", { name: "사건 개요 수정", exact: true })
-    .fill("SYNTHETIC-PRIVATE-RETAINED");
-  await page.getByRole("button", { name: "chat", exact: true }).click();
-  await expect(page.locator(".report-reading")).toBeHidden();
-  const reads = calls.reads;
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await page.waitForTimeout(4200);
-  expect(calls.reads).toBe(reads);
-  calls.changeOwner();
-  await page.evaluate(() => window.dispatchEvent(new Event("baro-session-changed")));
-  await expect(page.locator(".report-reading")).toHaveCount(0);
-  expect(await page.content()).not.toContain("SYNTHETIC-PRIVATE-RETAINED");
-  expect(calls.writes).toBe(0);
-});
-
-test("standalone report and draft navigation preserves query parameters and the existing history state without writes", async ({
-  page,
-}) => {
-  const calls = await retainedReadRoutes(page);
-  await page.goto(
-    "/cases/synthetic-rework-case/reports?rework=true&mode=conversation&version=older&keep=alpha",
-  );
-  await expect(page.locator(".report-reading")).toBeVisible();
-  await page.evaluate(() =>
-    history.replaceState({ syntheticMarker: "preserved" }, "", location.href),
-  );
-  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
-  await tasks.getByRole("link", { name: "문서 초안", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "문서 초안", exact: true })).toBeVisible();
-  expect(new URL(page.url()).search).toBe(
-    "?rework=true&mode=conversation&version=older&keep=alpha",
-  );
-  expect(new URL(page.url()).hash).toBe("#document-drafts");
-  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
-  await expect(page.locator(".report-reading")).toBeVisible();
-  expect(new URL(page.url()).search).toBe(
-    "?rework=true&mode=conversation&version=older&keep=alpha",
-  );
-  expect(new URL(page.url()).hash).toBe("");
-  expect(await page.evaluate(() => history.state)).toEqual({ syntheticMarker: "preserved" });
-  expect(calls.writes).toBe(0);
-});

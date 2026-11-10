@@ -9,17 +9,6 @@ async function reserveScrollbarGutter(page: Page) {
   // Classic scrollbars consume layout width. Reserving their gutter makes this
   // boundary deterministic even on machines where page height varies.
   await page.evaluate(() => {
-    // macOS can retain overlay scrollbars despite --hide-scrollbars removal.
-    // Use an already loaded local sheet to exercise a real 15px gutter under CSP.
-    const stylesheet = [...document.styleSheets].find(
-      (sheet) => !sheet.href || new URL(sheet.href).origin === location.origin,
-    );
-    if (!stylesheet) throw new Error("Missing local scrollbar test stylesheet");
-    stylesheet.insertRule(
-      "html::-webkit-scrollbar { width: 15px; height: 15px; }",
-      stylesheet.cssRules.length,
-    );
-    document.documentElement.style.overflowY = "scroll";
     document.documentElement.style.scrollbarGutter = "stable";
     document.body.style.minHeight = "calc(100vh + 1px)";
   });
@@ -64,10 +53,6 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     if (path === "/app") {
       await expect(page).toHaveURL(/\/app$/);
       await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
-    }
-    if (path === "/cases") {
-      await expect(page).toHaveURL(/\/cases$/);
-      await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
     }
     await reserveScrollbarGutter(page);
     await expect(page.locator(".brand img").first()).toBeVisible();

@@ -449,7 +449,7 @@ test("foreground refresh recovers processing files and removes deleted files wit
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   const stored = page.getByRole("list", { name: "사건에 추가한 증거" });
   await expect(stored).toContainText("기존 합성 증거.jpg");
-  await expect(stored).toContainText("내용 추출 중");
+  await expect(stored).toContainText("분석 중");
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
     photo.name,
   );

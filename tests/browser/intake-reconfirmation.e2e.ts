@@ -208,84 +208,24 @@ for (const focusInside of [true, false]) {
   });
 }
 
-for (const [entry, purpose, kind] of [
-  ["civil-prepare", "prepare_claim", "civil"],
-  ["civil-response", "respond_to_claim", "civil"],
-  ["criminal-prepare", "prepare_claim", "criminal"],
-  ["criminal-response", "respond_to_claim", "criminal"],
-  ["unknown-prepare", "prepare_claim", "unconfirmed"],
-  ["unknown-response", "respond_to_claim", "unconfirmed"],
-] as const) {
-  test(`${entry}: saves existing purpose and procedure without inventing a stage`, async ({
+for (const purpose of ["고소 준비", "주장 대응"] as const) {
+  test(`${purpose}: saves the selected purpose and resumes without an owner-category choice`, async ({
     page,
   }) => {
     await seed(page);
     await page.goto("/app");
-    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(entry);
+    await page.getByRole("radio", { name: purpose, exact: true }).check();
     await page
       .getByLabel("지금까지 있었던 일")
       .fill("실제 사건이 없는 합성 입력입니다. 서로 다른 입장과 기업 맥락을 따로 저장합니다.");
     await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
     await expect(page).toHaveURL(/\/intake$/);
-    const label = purpose === "prepare_claim" ? "요구·고소 준비" : "받은 주장에 대응";
-    await expect(page.getByText(label, { exact: true })).toBeVisible();
-    const id = new URL(page.url()).pathname.split("/")[2];
-    expect(
-      await page.evaluate(
-        (id) =>
-          JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}")[id ?? ""],
-        id,
-      ),
-    ).toMatchObject({
-      casePurpose: purpose,
-      procedure: { kind, stage: "unconfirmed", description: null },
-    });
+    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
     await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByText(purpose, { exact: true })).toBeVisible();
     await expect(page.getByText(/개인 사건|기업 사건/)).toHaveCount(0);
     await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
-  });
-}
-
-for (const fault of ["before", "after"] as const) {
-  test(`entry context ${fault} failure preserves the accepted registration for explicit retry`, async ({
-    page,
-  }) => {
-    await seed(page);
-    await page.goto("/app");
-    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("criminal-response");
-    await page
-      .getByLabel("지금까지 있었던 일")
-      .fill("고소됐다는 연락을 받은 합성 대응 사례예요. 받은 문서는 아직 없어요.");
-    await page.evaluate(
-      (fault) => localStorage.setItem("synthetic-entry-context-fault", fault),
-      fault,
-    );
-    await page.getByRole("button", { name: "저장하고 계속", exact: true }).click();
-    const retry = page.getByRole("button", { name: "준비 방향 저장 다시 시도", exact: true });
-    await expect(retry).toBeVisible();
-    await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByText("선택한 방향은 형사 대응예요.", { exact: false })).toBeVisible();
-    const attempts = () =>
-      page.evaluate(() =>
-        JSON.parse(localStorage.getItem("baro-api-mock-v1:syntheticEntryAttempts") ?? "{}"),
-      );
-    expect(await attempts()).toEqual({ create: 1, context: 1 });
-    await retry.click();
-    await expect(page).toHaveURL(/\/intake$/);
-    expect(await attempts()).toEqual({ create: 1, context: fault === "before" ? 2 : 1 });
-    const id = new URL(page.url()).pathname.split("/")[2];
-    expect(
-      await page.evaluate(
-        (id) =>
-          JSON.parse(localStorage.getItem("baro-api-mock-v1:reworkContexts") ?? "{}")[id ?? ""],
-        id,
-      ),
-    ).toMatchObject({
-      casePurpose: "respond_to_claim",
-      procedure: { kind: "criminal", stage: "unconfirmed" },
-    });
   });
 }
 
@@ -755,14 +695,12 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   const item = await seed(page, "active");
   await page.goto(`/cases/${item.id}/summary`);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await expect(
-    page.getByRole("radio", { name: "받은 주장에 대응", exact: true }),
-  ).not.toBeChecked();
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).not.toBeChecked();
   await page.getByRole("button", { name: "나중에 확인", exact: true }).click();
   await expect(page.getByText("미확인 입장", { exact: true })).toBeVisible();
   expect((await canonical(page, item.id)).revision).toBe(12);
   await page.getByRole("button", { name: "입장 확인하기", exact: true }).click();
-  await page.getByRole("radio", { name: "받은 주장에 대응", exact: true }).check();
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await page.getByRole("button", { name: "입장 저장", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "어떤 입장에서 정리하고 싶나요?" }),
@@ -770,7 +708,7 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("받은 주장에 대응", { exact: true }),
+      .getByText("주장 대응", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("기업 사건", { exact: true })).toHaveCount(0);
   await expect(page.getByText("절차 단계 미확인", { exact: true })).toHaveCount(0);
@@ -782,46 +720,40 @@ test("legacy purpose stays unconfirmed until the user saves; subject and procedu
   await expect(
     page
       .getByRole("complementary", { name: "사건 입장과 맥락" })
-      .getByText("받은 주장에 대응", { exact: true }),
+      .getByText("주장 대응", { exact: true }),
   ).toBeVisible();
 });
 
-test("320px case input keeps all six mapped choices and keyboard access at 44px without owner-category controls", async ({
+test("320px case input keeps both purpose choices at 44px without owner-category controls or overflow", async ({
   page,
 }) => {
   await seed(page);
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/app");
-  const select = page.getByRole("combobox", { name: "준비하는 방향" });
-  await select.selectOption("unknown-response");
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await expect(page.getByLabel("지금까지 있었던 일")).toHaveAttribute(
     "placeholder",
     /상대방의 주장/,
   );
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(select.locator("option")).toHaveCount(6);
+  await expect(page.getByRole("radio")).toHaveCount(2);
   for (const name of ["개인", "기업"])
     await expect(page.getByRole("radio", { name, exact: true })).toHaveCount(0);
-  const box = await select.boundingBox();
-  expect(box?.width).toBeGreaterThanOrEqual(44);
-  expect(box?.height).toBeGreaterThanOrEqual(44);
-  for (const choice of [
-    "civil-prepare",
-    "civil-response",
-    "criminal-prepare",
-    "criminal-response",
-    "unknown-prepare",
-    "unknown-response",
-  ]) {
-    await select.selectOption(choice);
-    await expect(select).toHaveValue(choice);
+  for (const name of ["고소 준비", "주장 대응"]) {
+    const radio = page.getByRole("radio", { name, exact: true });
+    const target = radio.locator("..");
+    const box = await target.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    await target.click();
+    await expect(radio).toBeChecked();
   }
-  await select.selectOption("civil-prepare");
-  await expect(select).toHaveValue("civil-prepare");
-  await page.getByLabel("지금까지 있었던 일").focus();
-  await page.keyboard.press("Shift+Tab");
-  await expect(select).toBeFocused();
-  await expect(select).toHaveCSS("box-shadow", "rgb(82, 97, 120) 0px 0px 0px 2px inset");
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeFocused();
+  await expect(page.getByRole("radio", { name: "주장 대응", exact: true })).toBeChecked();
   await page.screenshot({
     path: ".wrangler/ui622/case-input-respond-mobile-320.png",
     fullPage: true,

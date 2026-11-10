@@ -1,22 +1,12 @@
 ---
-import { env } from "cloudflare:workers";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { Workspace } from "../../../components/workspace/Workspace";
-import { opaqueIdSchema } from "../../../contracts";
+import { ReportReview } from "../../../components/reports/ReportReview";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
 import CaseLayout from "../../../layouts/CaseLayout.astro";
-import { lookupCatalog, lookupConfiguration } from "../../../server/modules/external-tools/catalog";
 import "../../../styles/workspace.css";
 import "../../../styles/reports.css";
 
-const identity = opaqueIdSchema.safeParse(Astro.params.caseId);
-if (!identity.success) return Astro.redirect("/cases");
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads route.
-const caseId = identity.data;
-// Only capability metadata is serialized, matching the existing conversation route.
-// biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
-const lookupAvailable =
-  import.meta.env.PUBLIC_API_MODE === "mock" ||
-  lookupCatalog(lookupConfiguration(env)).some((tool) => tool.status === "input_required");
+const caseId = Astro.params.caseId ?? "";
 ---
-<CaseLayout title="내 사건 이해와 해결 준비"><Workspace caseId={caseId} initialTask="reports" lookupAvailable={lookupAvailable} client:load /></CaseLayout>
+<CaseLayout title="내 사건 이해와 해결 준비"><ReportReview caseId={caseId} rework client:load /></CaseLayout>

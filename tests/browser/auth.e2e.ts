@@ -29,7 +29,7 @@ test("callback cancellation and expired sessions show safe messages", async ({ p
     await page.goto(`/login?error=${error}&error_description=untrusted-raw-detail`);
     await expect(page.getByRole("alert")).toContainText(message);
     await expect(page.locator("body")).not.toContainText("untrusted-raw-detail");
-    const descriptionBounds = await page.locator(".page-header__description").boundingBox();
+    const descriptionBounds = await page.locator(".login-panel__description").boundingBox();
     const errorBounds = await page.getByRole("alert").boundingBox();
     const roleBounds = await page
       .getByRole("group", { name: "소셜 계정으로 계속하기" })
@@ -75,7 +75,7 @@ test("branded social login stays accessible on narrow phones and desktop", async
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       ),
     ).toBe(true);
-    const form = await page.locator(".ui-auth").boundingBox();
+    const form = await page.locator(".login-options").boundingBox();
     expect(form?.width).toBeLessThanOrEqual(448);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     if (viewport.width === 1366 || viewport.width === 390) {

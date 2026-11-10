@@ -4,31 +4,6 @@ import { CURRENT_POLICY_VERSIONS } from "../../src/contracts/consent";
 import { openReportEditor } from "../helpers/report-controls";
 import { preparationRead } from "../helpers/report-rework-reads";
 
-async function reportWorkspaceRead(route: import("@playwright/test").Route) {
-  const path = new URL(route.request().url()).pathname;
-  const match = /^\/api\/v2\/cases\/([^/]+)\/workspace$/.exec(path);
-  if (!match) return false;
-  await route.fulfill({
-    json: {
-      case: {
-        id: decodeURIComponent(match[1] ?? ""),
-        title: "Synthetic report case",
-        subjectContext: "individual",
-        stage: "active",
-        revision: 1,
-        updatedAt: "2026-10-10T00:00:00Z",
-        summary: "Synthetic report access fixture",
-        schemaVersion: "2",
-      },
-      messages: [],
-      actions: [],
-      timeline: [],
-      files: [],
-    },
-  });
-  return true;
-}
-
 async function trackSessionReads(page: Page) {
   await page.evaluate(async () => {
     const path = "/src/client/api/session.ts";
@@ -117,16 +92,22 @@ for (const role of ["customer", "lawyer"] as const) {
       page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }),
     ).toBeEnabled();
     await expect(page.getByRole("alert")).toHaveCount(0);
-    // Every existing account keeps its own archive and deletion rights.
-    expect(caseReads).toBeGreaterThanOrEqual(2);
-    await expect(
-      page.getByRole("link", { name: "Synthetic legacy case", exact: true }),
-    ).toHaveAttribute("href", "/cases/11111111-1111-4111-8111-111111111111");
-    await expect(page.getByRole("link", { name: /리포트 확인/ })).toHaveCount(0);
+    if (role === "lawyer") {
+      // Both roles can enter cases and use the shared recent-case navigation.
+      // Settings still omits the customer's legacy archive for lawyers.
+      expect(caseReads).toBeGreaterThanOrEqual(2);
+      await expect(page.getByRole("region", { name: "보관한 사건" })).toHaveCount(0);
+    } else {
+      expect(caseReads).toBeGreaterThanOrEqual(2);
+      await expect(
+        page.getByRole("link", { name: "Synthetic legacy case", exact: true }),
+      ).toHaveAttribute("href", "/cases/11111111-1111-4111-8111-111111111111");
+      await expect(page.getByRole("link", { name: /리포트 확인/ })).toHaveCount(0);
+    }
   });
 }
 
-test("failed common OAuth start clears stale selection without rewriting the existing account", async ({
+test("failed OAuth start clears the selected role without rewriting an existing customer session", async ({
   page,
 }) => {
   let writes = 0;
@@ -144,10 +125,6 @@ test("failed common OAuth start clears stale selection without rewriting the exi
       writes++;
       return route.fulfill({ json: { accountType: "lawyer" } });
     }
-    if (path === "/api/me/consent")
-      return route.fulfill({
-        json: { required: { ...CURRENT_POLICY_VERSIONS }, consent: null, needsConsent: false },
-      });
     if (path.includes("sign-in/social"))
       return route.fulfill({
         status: 503,
@@ -156,21 +133,21 @@ test("failed common OAuth start clears stale selection without rewriting the exi
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login");
-  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
-  await page.goto("/consent?returnTo=/app");
-  await expect(page).toHaveURL((url) => url.pathname === "/app");
+  await page.goto("/lawyer");
+  await expect(page.getByText("변호사 역할로 로그인해 주세요.", { exact: true })).toBeVisible();
   expect(writes).toBe(0);
 });
 
-test("common OAuth return preserves an existing lawyer account and returnTo without any role write", async ({
+test("successful OAuth return consumes its selected role once and preserves returnTo", async ({
   page,
 }) => {
   let writes = 0;
   let callback = "";
-  let role = "lawyer";
+  let role = "customer";
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
@@ -203,16 +180,15 @@ test("common OAuth return preserves an existing lawyer account and returnTo with
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login?returnTo=/settings");
-  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.getByRole("radio", { name: "변호사", exact: true }).check();
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   // A returnTo=/settings query also ends with /settings. Wait for the actual
   // destination pathname before reloading so callback navigation can finish.
   await page.waitForURL((url) => url.pathname === "/settings", { waitUntil: "load" });
   await expect(page).toHaveURL((url) => url.pathname === "/settings");
-  expect(writes).toBe(0);
+  await expect.poll(() => writes).toBe(1);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
   expect(role).toBe("lawyer");
-  expect(new URL(callback, "http://localhost").searchParams.has("loginAttempt")).toBe(false);
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
@@ -228,7 +204,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
-    if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session") {
       if (outage) {
         failures++;
@@ -297,14 +273,14 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await expect(editor).toHaveCount(0);
 });
 
-test("normal OAuth state/callback and SQL preserve an existing lawyer account on common login", async ({
+test("normal OAuth state/callback and SQL session apply the chosen lawyer role on return", async ({
   page,
   context,
   baseURL,
 }) => {
   const child = spawn(
     "bun",
-    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account-lawyer"],
+    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account"],
     { stdio: ["pipe", "pipe", "pipe"] },
   );
   try {
@@ -334,7 +310,7 @@ test("normal OAuth state/callback and SQL preserve an existing lawyer account on
     });
     // Start signed out: authenticated visits now redirect before the login form.
     // The callback establishes the browser session; the seeded SQL session below
-    // independently verifies that the existing account and role are preserved.
+    // independently verifies that the same account receives the selected role.
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
@@ -358,10 +334,9 @@ test("normal OAuth state/callback and SQL preserve an existing lawyer account on
       });
     });
     await page.goto("/login?returnTo=/settings");
-    await expect(page.getByRole("radio")).toHaveCount(0);
+    await page.getByRole("radio", { name: "변호사", exact: true }).check();
     await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-    await expect(page).toHaveURL(/\/consent\?returnTo=/);
-    expect(new URL(page.url()).searchParams.has("loginAttempt")).toBe(false);
+    await expect(page).toHaveURL(/\/consent\?.*loginAttempt=/);
     await expect
       .poll(async () => {
         const response = await context.request.get(`${seed.origin}/api/me/session`, {
@@ -385,7 +360,7 @@ test("a confirmed account change clears the report draft and explains why", asyn
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (!path.startsWith("/api/")) return route.continue();
-    if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
+    if (await preparationRead(route)) return;
     if (path === "/api/me/session")
       return route.fulfill({
         json: {
@@ -438,7 +413,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       if (!path.startsWith("/api/")) return route.continue();
-      if ((await reportWorkspaceRead(route)) || (await preparationRead(route))) return;
+      if (await preparationRead(route)) return;
       if (path === "/api/me/session") {
         if (phase === "late") {
           held++;

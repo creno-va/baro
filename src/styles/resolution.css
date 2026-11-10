@@ -161,6 +161,9 @@
   gap: 8px;
   margin-block: 16px;
 }
+.resolution .ui-button {
+  min-height: 44px;
+}
 .resolution-preline {
   white-space: pre-line;
   line-height: 1.8;

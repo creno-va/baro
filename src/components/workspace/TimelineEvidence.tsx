@@ -1,6 +1,6 @@
 import { BadgeCheck, CircleHelp, MessageSquare, Paperclip, PencilLine } from "lucide-react";
 import type { FileView, TimelineView } from "../../client/api/types";
-import type { V2Fact, V2FactReference } from "../../contracts/v2";
+import type { V2Fact } from "../../contracts/v2";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { positionLabel } from "./source-label";
@@ -17,10 +17,7 @@ export function TimelineEvidence({
   files: readonly FileView[];
   facts?: readonly V2Fact[] | undefined;
   base: string;
-  onReviewFile?: (
-    fileId: string,
-    reference?: Extract<V2FactReference, { kind: "user_material" }>,
-  ) => void;
+  onReviewFile?: (fileId: string) => void;
 }) {
   const evidence = timelineEvidence(entry, files, facts);
   const Icon =
@@ -61,7 +58,7 @@ export function TimelineEvidence({
                     size="sm"
                     onClick={(event) => {
                       event.currentTarget.focus();
-                      onReviewFile(file.id, reference);
+                      onReviewFile(file.id);
                     }}
                   >
                     {file.name} · {positionLabel(reference.position)}

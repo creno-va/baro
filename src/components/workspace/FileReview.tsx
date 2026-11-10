@@ -3,7 +3,7 @@ import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { FileReviewProgress, FileReviewView } from "../../client/api/types";
 import { accessHref } from "../../client/return-path";
-import type { V2Coverage, V2FactReference } from "../../contracts/v2";
+import type { V2Coverage } from "../../contracts/v2";
 import { secondsLabel } from "../../utils/time";
 import { ErrorPanel } from "../intake/common";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
@@ -51,7 +51,6 @@ export function FileReview({
   onDirtyChange,
   onBusyChange,
   refreshVersion,
-  sourceReference,
 }: {
   caseId: string;
   fileId: string;
@@ -61,26 +60,9 @@ export function FileReview({
   onDirtyChange?: (dirty: boolean) => void;
   onBusyChange?: (busy: boolean) => void;
   refreshVersion?: string;
-  sourceReference?: Extract<V2FactReference, { kind: "user_material" }> | undefined;
 }) {
   const fieldPrefix = useId();
   const [review, setReview] = useState<FileReviewView | null>(null);
-  const sourceTarget = useRef<HTMLLegendElement>(null);
-  const lastSourceTarget = useRef("");
-  const sourceCurrent = !!sourceReference && review?.file.revision === sourceReference.fileRevision;
-  const sourceObservation = sourceCurrent
-    ? review.observations.find(
-        ({ value }) => JSON.stringify(value.position) === JSON.stringify(sourceReference.position),
-      )?.value.id
-    : undefined;
-  useEffect(() => {
-    if (!sourceObservation || !sourceTarget.current) return;
-    const key = `${fileId}:${sourceReference?.fileRevision}:${sourceObservation}`;
-    if (lastSourceTarget.current === key) return;
-    lastSourceTarget.current = key;
-    sourceTarget.current.scrollIntoView({ block: "nearest" });
-    sourceTarget.current.focus({ preventScroll: true });
-  }, [fileId, sourceReference?.fileRevision, sourceObservation]);
   const [drafts, setDrafts] = useState<Record<string, { text: string; included: boolean }>>({});
   const [busy, setBusy] = useState(false);
   const [loadingAfter, setLoadingAfter] = useState<number | null>(null);
@@ -328,18 +310,6 @@ export function FileReview({
               </Button>
             )}
           </details>
-          {sourceReference && (
-            <p role="status" className="evidence-hint">
-              인용한 위치: {positionLabel(sourceReference.position)}.
-              {!sourceCurrent
-                ? " 인용 이후 자료가 바뀌었어요. 현재 추출 결과와 원문을 다시 확인해 주세요."
-                : !sourceObservation
-                  ? review.nextAfterOrdinal !== null
-                    ? " 현재 불러온 추출 내용에 이 위치가 없어요. 추출 내용을 더 불러와 확인할 수 있어요."
-                    : " 이 위치의 추출 결과를 찾지 못했어요. 원문에서 확인해 주세요."
-                  : " 인용 위치의 추출 결과를 표시했어요. 원문과 함께 확인해 주세요."}
-            </p>
-          )}
           {review.observations.map(({ value, original, ordinal }) => {
             const draft = drafts[value.id] ?? value;
             const update = (next: { text: string; included: boolean }) =>
@@ -356,13 +326,7 @@ export function FileReview({
                 key={value.id}
                 disabled={busy || !canWrite || !!review.pendingReview}
               >
-                <legend
-                  ref={value.id === sourceObservation ? sourceTarget : undefined}
-                  tabIndex={value.id === sourceObservation ? -1 : undefined}
-                >
-                  {value.id === sourceObservation && "인용한 위치 · "}
-                  {positionLabel(value.position)}
-                </legend>
+                <legend>{positionLabel(value.position)}</legend>
                 <p className="evidence-observation-kind">
                   {observationKindLabels[observationKind(value)]}
                 </p>

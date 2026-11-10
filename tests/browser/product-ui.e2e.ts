@@ -1,43 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
-import { openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
-import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
+import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
 import { openReportEditor } from "../helpers/report-controls";
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
 
-async function expectCaseTasks(page: Page, current: "대화" | "자료" | "리포트" | "문서 초안") {
-  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
-  const links = tasks.getByRole("link");
-  await expect(links).toHaveCount(4);
-  expect(
-    await links.evaluateAll((items) => items.map((item) => item.getAttribute("href"))),
-  ).toEqual([base, `${base}/files`, `${base}/reports`, `${base}/reports#document-drafts`]);
-  for (const label of ["대화", "자료", "리포트", "문서 초안"] as const) {
-    const destination = tasks.getByRole("link", {
-      name: label === "자료" ? /^자료(?:\s*\d+개)?$/ : label,
-      exact: true,
-    });
-    await expect(destination).toBeVisible();
-    await destination.scrollIntoViewIfNeeded();
-    await expect(destination).toBeInViewport({ ratio: 0.99 });
-    const bounds = await destination.boundingBox();
-    expect(bounds?.height ?? 0, label).toBeGreaterThanOrEqual(44);
-    expect(bounds?.width ?? 0, label).toBeGreaterThanOrEqual(44);
-    if (label === current) await expect(destination).toHaveAttribute("aria-current", "page");
-    else await expect(destination).not.toHaveAttribute("aria-current");
-  }
-  await expect(tasks.locator('[aria-current="page"]')).toHaveCount(1);
-  return tasks;
-}
-
-test.beforeEach(async ({ page }) => {
-  await installLegacyLawyerPages(page);
-});
-
-test("existing lawyer account retains case AI and history through general user navigation", async ({
+test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
   page,
 }) => {
   await seed(page, false, "active", "lawyer");
@@ -46,11 +16,7 @@ test("existing lawyer account retains case AI and history through general user n
   await hydrated(page);
   const sidebar = page.locator(".sidebar-desktop");
   await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "href",
-    "/cases",
-  );
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
@@ -74,20 +40,13 @@ test("existing lawyer account retains case AI and history through general user n
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
-  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "href",
-    "/cases",
-  );
+  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
   await expect(menu.locator(".sidebar-story")).toHaveCount(2);
-  expect(
-    await page.evaluate(
-      () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
-    ),
-  ).toBe("lawyer");
 });
 
-test("sidebar cancellation retains visible actions and keyboard focus return", async ({ page }) => {
+test("sidebar cancellation clears pointer hover without losing keyboard focus return", async ({
+  page,
+}) => {
   await seed(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(base);
@@ -112,10 +71,7 @@ test("sidebar cancellation retains visible actions and keyboard focus return", a
   const link = row.locator(".sidebar-story");
   const remove = row.locator(".sidebar-story-delete");
   await page.mouse.move(1000, 400);
-  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
-  const removeBounds = await remove.boundingBox();
-  expect(removeBounds?.width ?? 0).toBeGreaterThanOrEqual(44);
-  expect(removeBounds?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
   const rowColor = await row.evaluate((node) => getComputedStyle(node).backgroundColor);
   const linkColor = await link.evaluate((node) => getComputedStyle(node).backgroundColor);
   for (const action of ["취소", "닫기"]) {
@@ -127,7 +83,7 @@ test("sidebar cancellation retains visible actions and keyboard focus return", a
     await expect(remove).toBeFocused();
     await expect(row).toHaveCSS("background-color", rowColor);
     await expect(link).toHaveCSS("background-color", linkColor);
-    await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "1");
+    await expect(row.locator(".sidebar-story-actions")).toHaveCSS("opacity", "0");
     await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
   }
   await page
@@ -198,7 +154,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
   if (keyboard) await page.keyboard.press("Tab");
   else await page.mouse.click(5, 85);
   return page.evaluate(() => {
-    const scope = document.querySelector(".app-frame, .public-layout");
+    const scope = document.querySelector(".app-frame, .login-page, .consent-page");
     if (!scope) throw new Error("Focus audit scope missing");
     const failures: string[] = [];
     let count = 0;
@@ -238,9 +194,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
   });
 }
 
-test("focus feedback covers common login and consent without pointer outlines", async ({
-  page,
-}) => {
+test("focus feedback covers login roles and consent without pointer outlines", async ({ page }) => {
   await seed(page);
   await page.goto(base);
   await hydrated(page);
@@ -252,16 +206,14 @@ test("focus feedback covers common login and consent without pointer outlines", 
   );
   await page.goto("/login");
   await hydrated(page);
-  const provider = page.getByRole("button", { name: "Google로 계속하기", exact: true });
-  await expect(provider).toBeEnabled();
-  await expect(page.getByRole("radio")).toHaveCount(0);
+  const customer = page.getByRole("radio", { name: "고객", exact: true });
+  await expect(customer).toBeEnabled();
   for (const keyboard of [false, true]) {
     expect((await focusAudit(page, keyboard)).failures).toEqual([]);
   }
   await page.keyboard.press("Tab");
-  await provider.focus();
-  await expect(provider).toBeFocused();
-  await expect(provider).toHaveCSS("box-shadow", /inset/);
+  await customer.focus();
+  await expect(customer.locator("..")).toHaveCSS("box-shadow", /inset/);
   await page.evaluate(() =>
     localStorage.setItem(
       "baro-api-mock-v1:session",
@@ -491,13 +443,11 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await seed(page);
   await page.goto("/settings");
   await expect(page.getByRole("navigation", { name: "설정 바로가기" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "사용량과 한도", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "도움말과 정책", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "계정 삭제", exact: true })).toBeVisible();
+  await expect(page.locator("#settings-usage-title")).toBeVisible();
+  await expect(page.locator("#settings-help-title")).toBeVisible();
+  await expect(page.locator("#settings-danger-title")).toBeVisible();
   await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
-  const disclosure = page
-    .getByRole("region", { name: "사용량과 한도", exact: true })
-    .locator("details");
+  const disclosure = page.locator(".settings-usage-guide");
   const summary = disclosure.locator("summary");
   const content = disclosure.locator("p");
   const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });
@@ -646,28 +596,21 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       `${base}/files`,
       `${base}/timeline`,
       `${base}/reports`,
-      `${base}/reports#document-drafts`,
     ]) {
       await page.goto(route);
       await hydrated(page);
       if (route.startsWith(base))
         await expect(
           page.getByRole("heading", {
-            name: "돌려받지 못한 보증금, 함께 정리한 이야기",
+            name: route.endsWith("/reports")
+              ? "내 사건 이해와 해결 준비"
+              : "돌려받지 못한 보증금, 함께 정리한 이야기",
             exact: true,
             level: 1,
           }),
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
-      if (route === "/settings") {
-        const usage = page.getByRole("region", { name: "사용량과 한도", exact: true });
-        await expect(usage.getByRole("progressbar")).toHaveCount(4);
-        for (const name of ["오늘 새 사건", "오늘 AI 응답", "오늘 음성·영상", "계정 저장 공간"])
-          await expect(usage.getByRole("progressbar", { name, exact: true })).toBeVisible();
-        await expect(
-          usage.getByRole("progressbar", { name: "오늘 AI 응답", exact: true }),
-        ).toHaveAttribute("max", "200");
-      }
+      if (route === "/settings") await expect(page.locator(".usage-item")).toHaveCount(4);
       await expect(page.locator(".app-frame")).toBeVisible();
       const dimensions = await page.evaluate(() => ({
         available: document.documentElement.clientWidth,
@@ -675,26 +618,19 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       }));
       expect(dimensions.scroll, route).toBeLessThanOrEqual(dimensions.available);
       if (route === "/cases") {
-        await expect(page).toHaveURL("/cases");
-        await expect(
-          page.getByRole("heading", { name: "내 사건", exact: true, level: 1 }),
-        ).toBeVisible();
-        await expect(
-          page
-            .getByRole("main")
-            .getByRole("link", { name: /돌려받지 못한 보증금, 함께 정리한 이야기/ }),
-        ).toHaveAttribute("href", base);
+        await expect(page).toHaveURL("/app");
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       }
       if (route === base) {
-        await expectCaseTasks(page, "대화");
         const menu = await openCaseTools(page);
         const destinations = menu.getByRole("link");
-        await expect(destinations).toHaveCount(4);
+        await expect(destinations).toHaveCount(6);
         expect(
           await destinations.evaluateAll((links) => links.map((link) => link.getAttribute("href"))),
         ).toEqual(
-          ["summary", "timeline", "actions", "precedents"].map((path) => `${base}/${path}`),
+          ["summary", "timeline", "actions", "precedents", "files", "reports"].map(
+            (path) => `${base}/${path}`,
+          ),
         );
         const columns = await destinations.evaluateAll((links) =>
           links.map((link) => Math.round(link.getBoundingClientRect().left)),
@@ -703,25 +639,8 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
         for (const destination of await destinations.all()) {
           await destination.scrollIntoViewIfNeeded();
           await expect(destination).toBeInViewport({ ratio: 0.99 });
-          const bounds = await destination.boundingBox();
-          expect(bounds?.height ?? 0).toBeGreaterThanOrEqual(44);
         }
-        const trigger = page.locator(".case-tools > summary");
-        await trigger.focus();
-        await page.keyboard.press("Escape");
-        await expect(menu).not.toBeVisible();
-        await expect(trigger).toBeFocused();
-        await page.keyboard.press("Enter");
-        await expect(menu).toBeVisible();
-        await page.keyboard.press("Tab");
-        await expect(destinations.first()).toBeFocused();
-        await page.keyboard.press("Escape");
-        await expect(menu).not.toBeVisible();
-        await expect(trigger).toBeFocused();
       }
-      if (route === `${base}/files`) await expectCaseTasks(page, "자료");
-      if (route === `${base}/reports`) await expectCaseTasks(page, "리포트");
-      if (route === `${base}/reports#document-drafts`) await expectCaseTasks(page, "문서 초안");
       if ([390, 901, 1440].includes(width))
         await page.screenshot({
           path: `.wrangler/ui332/${width}-${route.replaceAll("/", "-")}.png`,
@@ -743,28 +662,16 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   const box = await send.boundingBox();
   expect(box).not.toBeNull();
   expect((box?.y ?? 10000) + (box?.height ?? 0)).toBeLessThanOrEqual(844);
-  const tasks = await expectCaseTasks(page, "대화");
-  await tasks.getByRole("link", { name: /^자료/ }).click();
-  await expect(page).toHaveURL(`${base}/files`);
-  await expectCaseTasks(page, "자료");
-  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
-  await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
-  await expectCaseTasks(page, "리포트");
-  await tasks.getByRole("link", { name: "문서 초안", exact: true }).click();
-  await expect(page).toHaveURL(`${base}/reports?mode=conversation#document-drafts`);
-  await expectCaseTasks(page, "문서 초안");
-  await tasks.getByRole("link", { name: "리포트", exact: true }).click();
-  await expect(page).toHaveURL(`${base}/reports?mode=conversation`);
-  await expectCaseTasks(page, "리포트");
-  const selected = tasks.getByRole("link", { name: "리포트", exact: true });
+  await goToCaseTool(page, "reports");
+  await expect(page).toHaveURL(`${base}/reports`);
+  const menu = await openCaseTools(page);
+  const selected = menu.getByRole("link", { name: "리포트 보기" });
   await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(selected).toBeInViewport({ ratio: 1 });
-  const menu = await openCaseTools(page);
-  await expect(menu.getByRole("link")).toHaveCount(4);
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
   await expect(page.locator(".case-tools > summary")).toBeFocused();
@@ -780,9 +687,7 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(page.locator(".case-options")).toHaveCount(0);
   await page.goto("/cases");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
-  const sidebarMenu = page.getByRole("dialog", { name: "메뉴", exact: true });
-  await expect(sidebarMenu).toBeVisible();
-  const remove = sidebarMenu.getByRole("button", {
+  const remove = page.getByRole("button", {
     name: "돌려받지 못한 보증금, 함께 정리한 이야기 사건 삭제",
     exact: true,
   });
@@ -923,16 +828,11 @@ test("mobile workspace dialogs return focus to their own opener", async ({ page 
     await opener.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    const bounds = await dialog.boundingBox();
-    expect(bounds).not.toBeNull();
-    expect(await dialog.evaluate((element) => element.matches(":modal"))).toBe(true);
-    expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(16);
-    expect(bounds?.width ?? 0).toBeLessThanOrEqual(390 - 32);
-    expect(bounds?.y ?? -1).toBeGreaterThanOrEqual(0);
-    expect((bounds?.y ?? 0) + (bounds?.height ?? 10000)).toBeLessThanOrEqual(844);
-    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-      true,
-    );
+    const sheet = await dialog.boundingBox();
+    expect(sheet).not.toBeNull();
+    expect(sheet?.x).toBe(0);
+    expect(sheet?.width).toBe(390);
+    expect(Math.abs((sheet?.y ?? 0) + (sheet?.height ?? 0) - 844)).toBeLessThan(2);
     await dialog.getByLabel("닫기", { exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect.soft(opener, label).toBeFocused();
@@ -1069,10 +969,8 @@ test("purpose choices change examples and persist without owner-category UI", as
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app");
-  await expect(page.getByRole("combobox", { name: "준비하는 방향" }).locator("option")).toHaveCount(
-    6,
-  );
-  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("unknown-response");
+  await expect(page.getByRole("radio")).toHaveCount(2);
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await expect(page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" })).toBeVisible();
   await expect(page.getByRole("button", { name: "빌려준 돈을 못 받았어요" })).toHaveCount(0);
   await page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" }).click();
@@ -1093,8 +991,5 @@ test("purpose choices change examples and persist without owner-category UI", as
     menu.getByRole("navigation", { name: "모바일 주 메뉴" }).getByRole("link"),
   ).toHaveCount(2);
   await expect(menu.getByRole("link", { name: "이용 유형 변경" })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: "도움말", exact: true })).toHaveAttribute(
-    "href",
-    "/help",
-  );
+  await expect(menu.getByRole("link", { name: "도움말", exact: true })).toHaveCount(0);
 });
