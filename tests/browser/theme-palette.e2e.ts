@@ -17,7 +17,7 @@ async function token(page: Page, name: string) {
     const probe = document.createElement("i");
     probe.hidden = true;
     probe.style.color = `var(${name})`;
-    document.body.append(probe);
+    document.body.appendChild(probe);
     const value = getComputedStyle(probe).color;
     probe.remove();
     return value;
@@ -142,8 +142,8 @@ test("saved document paper colors stay independent from the surrounding applicat
     const sheet = document.createElement("div");
     sheet.className = "sheet";
     sheet.textContent = "합성 저장 문서의 출력 팔레트";
-    paper.append(sheet);
-    document.querySelector("main")!.append(paper);
+    paper.appendChild(sheet);
+    document.querySelector("main")!.appendChild(paper);
   });
   for (const mode of ["light", "dark"] as const) {
     await theme(page, mode);
