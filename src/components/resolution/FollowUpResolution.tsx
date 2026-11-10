@@ -651,8 +651,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       )}
       {state?.status === "not_ready" && (
         <p>
-          아직 연결할 현재 리포트·분석이 없어요. 리포트를 확인해 주세요. 기존 리포트 저장은
-          이용할 수 있어요.
+          아직 연결할 현재 리포트·분석이 없어요. 리포트를 확인해 주세요. 기존 리포트 저장은 이용할
+          수 있어요.
         </p>
       )}
       {state?.status === "paused" && (
