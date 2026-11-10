@@ -163,9 +163,33 @@ test("Codex workbench keeps a readable conversation, separate report action and 
   );
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "최근 사건 검색", exact: true })).toBeFocused();
+  await expect(page.locator("[data-workbench]")).toHaveCSS("color-scheme", "light");
+  const caseSidebar = await page.locator(".app-header").evaluate((node) => ({
+    width: node.getBoundingClientRect().width,
+    background: getComputedStyle(node).backgroundColor,
+    links: Array.from(node.querySelectorAll("a")).map((link) => link.getAttribute("href")),
+  }));
   await page.goto("/app");
+  await expect(page).toHaveURL(/\/new$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
-  await expect(page.locator("[data-workbench]")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.locator(".app-header").evaluate((node) => ({
+        width: node.getBoundingClientRect().width,
+        background: getComputedStyle(node).backgroundColor,
+        links: Array.from(node.querySelectorAll("a")).map((link) => link.getAttribute("href")),
+      })),
+    )
+    .toEqual(caseSidebar);
+  await expect(page.locator("[data-workbench]")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "최근 사건 검색", exact: true })).toBeVisible();
+  await expect(page.locator("[data-workbench]")).toHaveCSS("color-scheme", "light");
+  await expect(page.locator(".app-header")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator("[data-workbench]")).toHaveCSS(
+    "background-color",
+    "rgb(246, 247, 249)",
+  );
 });
 
 test("plus menu mentions real material IDs without executing work, preserves input across panel and viewport changes", async ({

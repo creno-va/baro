@@ -22,10 +22,7 @@ test("existing lawyer account keeps case AI and history through general navigati
   const sidebar = page.locator(".sidebar-desktop");
   await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "href",
-    "/cases",
-  );
+  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
@@ -38,8 +35,8 @@ test("existing lawyer account keeps case AI and history through general navigati
   await page.goto(`${base}/reports`);
   await prepareReport(page);
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
-  await page.goto("/app");
-  await expect(page).toHaveURL(/\/app$/);
+  await page.goto("/new");
+  await expect(page).toHaveURL(/\/new$/);
   await expect(page.getByRole("button", { name: "저장하고 계속", exact: true })).toBeVisible();
   await page
     .locator("#narrative")
@@ -50,10 +47,7 @@ test("existing lawyer account keeps case AI and history through general navigati
   await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "href",
-    "/cases",
-  );
+  await expect(menu.getByRole("link", { name: "내 사건", exact: true })).toHaveCount(0);
   await expect(menu.locator(".sidebar-story")).toHaveCount(2);
 });
 
@@ -274,7 +268,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     let count = 0;
     for (const route of [
-      "/app",
+      "/new",
       base,
       `${base}/files`,
       `${base}/timeline`,
@@ -631,7 +625,7 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
       }));
       expect(dimensions.scroll, route).toBeLessThanOrEqual(dimensions.available);
       if (route === "/cases") {
-        await expect(page).toHaveURL("/app");
+        await expect(page).toHaveURL("/new");
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       }
       if (route === base) {
@@ -981,7 +975,7 @@ test("product navigation and reading surfaces support keyboard access and enlarg
 test("purpose choices change examples and persist without owner-category UI", async ({ page }) => {
   await seed(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("radio")).toHaveCount(2);
   await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await expect(page.getByRole("button", { name: "돈을 갚으라는 연락을 받았어요" })).toBeVisible();

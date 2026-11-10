@@ -95,7 +95,7 @@ const services = [
         <div class="phone-story-controls" aria-label="기능 소개 단계 선택">
           {chapters.map((chapter, index) => <button type="button" data-phone-step={index} aria-controls={`phone-chapter-${index}`} aria-pressed={index === 0 ? "true" : "false"}><span class="phone-story-step-number">{String(index + 1).padStart(2, "0")}</span>{chapter.label}</button>)}
         </div>
-        <a class="phone-story-link" href="/app">내 이야기 정리해 보기 <ArrowRight size={18} aria-hidden="true" /></a>
+        <a class="phone-story-link" href="/new">내 이야기 정리해 보기 <ArrowRight size={18} aria-hidden="true" /></a>
       </div>
 
       <div class="phone-story-visual" aria-hidden="true">

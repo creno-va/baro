@@ -57,7 +57,7 @@ try {
     );
   // The same production guard must render its outage/closed-beta page before
   // SSR. A successful anonymous login cannot prove this independent HTML path.
-  const unavailable = await fetch(`http://127.0.0.1:${port}/app`, {
+  const unavailable = await fetch(`http://127.0.0.1:${port}/new`, {
     signal: AbortSignal.timeout(5000),
     redirect: "manual",
   });

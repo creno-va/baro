@@ -47,7 +47,7 @@ test.beforeEach(async ({ page }) => {
 for (const width of [320, 390, 768, 1024, 1440]) {
   test(`actual Astro shell and direct case routes fit ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ["/app", `/cases/${caseId}`, "/settings", "/lawyers"]) {
+    for (const route of ["/new", `/cases/${caseId}`, "/settings", "/lawyers"]) {
       await page.goto(route);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready);
@@ -57,7 +57,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         route,
       ).toBe(true);
       await page.screenshot({
-        path: `.wrangler/ui01/app-${route === "/app" ? "new" : route.includes("cases") ? "chat" : route.slice(1)}-${width}.png`,
+        path: `.wrangler/ui01/app-${route === "/new" ? "new" : route.includes("cases") ? "chat" : route.slice(1)}-${width}.png`,
         animations: "disabled",
       });
     }
@@ -93,12 +93,12 @@ for (const width of [390, 1440]) {
   test(`captures exact-base app before images at ${width}px`, async ({ page }) => {
     test.skip(!process.env.BARO_SHELL_BASELINE_URL, "Set an isolated exact-base mock server URL.");
     await page.setViewportSize({ width, height: 900 });
-    for (const route of ["/app", `/cases/${caseId}`]) {
+    for (const route of ["/new", `/cases/${caseId}`]) {
       await page.goto(`${process.env.BARO_SHELL_BASELINE_URL}${route}`);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready);
       await page.screenshot({
-        path: `.wrangler/ui01/app-${route === "/app" ? "new" : "chat"}-before-${width}.png`,
+        path: `.wrangler/ui01/app-${route === "/new" ? "new" : "chat"}-before-${width}.png`,
         animations: "disabled",
       });
     }

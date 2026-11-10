@@ -183,7 +183,7 @@ test("case header keeps a compact title and accessible tools while deletion stay
   await row.hover();
   await row.getByRole("button", { name: `${title} 사건 삭제`, exact: true }).click();
   await modal.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   expect(
     await page.evaluate(
       (id) => Boolean(JSON.parse(localStorage.getItem("baro-api-mock-v1:cases") ?? "{}")[id]),

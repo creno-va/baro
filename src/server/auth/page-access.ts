@@ -7,7 +7,7 @@ import * as schema from "../db/schema";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { getSession } from "./session";
 
-function isPage(path: string, page: "/app" | "/login"): boolean {
+function isPage(path: string, page: "/app" | "/new" | "/login"): boolean {
   try {
     // Match aliases before Astro decodes/renders them, including encoded or repeated slashes.
     const decoded = decodeURIComponent(path).replaceAll("\\", "/").replace(/\/+/g, "/");
@@ -38,7 +38,7 @@ async function activeSession(context: Context<ApiEnvironment>) {
 
 async function loginEntry(context: Context<ApiEnvironment>) {
   try {
-    if (await activeSession(context)) return context.redirect("/app", 302);
+    if (await activeSession(context)) return context.redirect("/new", 302);
   } catch {
     return unavailable(context);
   }
@@ -59,7 +59,7 @@ async function appEntry(context: Context<ApiEnvironment>, syntheticFixture: bool
       return unavailable(context);
     }
   }
-  if (path !== "/app" && path !== "/app/") return context.redirect("/app", 302);
+  if (path !== "/new" && path !== "/new/") return context.redirect("/new", 302);
   return undefined;
 }
 
@@ -72,7 +72,7 @@ export function createPageAccess({
   return async (context, next) => {
     const path = new URL(context.req.url).pathname;
     const loginPage = isPage(path, "/login");
-    if (!loginPage && !isPage(path, "/app")) {
+    if (!loginPage && !isPage(path, "/new") && !isPage(path, "/app")) {
       await next();
       return;
     }

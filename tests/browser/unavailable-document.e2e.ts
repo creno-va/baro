@@ -13,7 +13,7 @@ for (const betaClosed of [false, true]) {
       await page.route("**/*", (route) => {
         const path = new URL(route.request().url()).pathname;
         paths.push(path);
-        if (path === "/app")
+        if (path === "/new")
           return route.fulfill({
             status: 503,
             headers: {
@@ -32,7 +32,7 @@ for (const betaClosed of [false, true]) {
           });
         return route.abort();
       });
-      const response = await page.goto("http://unavailable.test/app");
+      const response = await page.goto("http://unavailable.test/new");
       expect(response?.status()).toBe(503);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(
         betaClosed ? "공개 베타를 준비하고 있어요." : "로그인 상태를 확인할 수 없어요.",
@@ -47,7 +47,7 @@ for (const betaClosed of [false, true]) {
         expect(box?.width).toBeGreaterThanOrEqual(designTokens.control.minimumSize);
         expect(box?.height).toBeGreaterThanOrEqual(designTokens.control.minimumSize);
       }
-      await expect(retry).toHaveAttribute("href", "/app");
+      await expect(retry).toHaveAttribute("href", "/new");
       await expect(home).toHaveAttribute("href", "/");
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -67,14 +67,14 @@ for (const betaClosed of [false, true]) {
       expect(await retry.evaluate((link) => getComputedStyle(link).outlineStyle)).not.toBe("none");
       await Promise.all([
         page.waitForResponse(
-          (result) => new URL(result.url()).pathname === "/app" && result.status() === 503,
+          (result) => new URL(result.url()).pathname === "/new" && result.status() === 503,
         ),
         page.keyboard.press("Enter"),
       ]);
-      await expect.poll(() => paths).toEqual(["/app", "/app"]);
+      await expect.poll(() => paths).toEqual(["/new", "/new"]);
       await home.click();
       await expect(page.getByRole("heading", { name: "합성 서비스 소개" })).toBeVisible();
-      await expect.poll(() => paths).toEqual(["/app", "/app", "/"]);
+      await expect.poll(() => paths).toEqual(["/new", "/new", "/"]);
     });
   }
 }
@@ -91,7 +91,7 @@ test("200% CSS zoom keeps the fallback title, recovery links and visible focus",
       body: renderUnavailableDocument(),
     }),
   );
-  await page.goto("http://unavailable.test/app");
+  await page.goto("http://unavailable.test/new");
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
@@ -121,7 +121,7 @@ test.describe("automated accessibility on the same script-free document", () => 
             body: renderUnavailableDocument(betaClosed),
           }),
         );
-        await page.goto("http://unavailable.test/app");
+        await page.goto("http://unavailable.test/new");
         await expect(page.locator("script")).toHaveCount(0);
         expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       });

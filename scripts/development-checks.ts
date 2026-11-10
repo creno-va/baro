@@ -111,7 +111,7 @@ export function browserTargets(files: string[], available: string[]): string[] {
       /\/(?:auth|session|cases|analysis|settings|reports|legacy-case-recovery)\.e2e\.ts$/,
     ],
     [
-      /src\/(worker\.|layouts\/|styles\/(global|shell|product|case-workbench)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
+      /src\/(worker\.|layouts\/|pages\/(?:new|app)\.astro|styles\/(global|shell|product|case-workbench)|server\/(router\.|api\/index)|components\/ui\/|client\/api\/(core|types|index|mock\/runtime))/,
       /\.e2e\.ts$/,
     ],
     [

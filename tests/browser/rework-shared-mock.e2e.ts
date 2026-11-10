@@ -23,7 +23,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
       .getByLabel("이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.")
       .check();
     await page.getByRole("button", { name: "동의하고 계속하기", exact: true }).click();
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(/\/new$/);
     await page.goto("/cases/new");
     await page.getByRole("radio", { name: purpose, exact: true }).check();
     await page

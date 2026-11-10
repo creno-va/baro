@@ -139,7 +139,7 @@ const features = [
                   {feature.id === "review" && <div class="logo-preview-review"><p><ShieldCheck size={20} /><span>공유 전에, 한 번 더 확인해요</span></p><div><span class="logo-preview-checkbox"><Check size={12} /></span><strong>직접 확인한 리포트</strong><span>선택</span></div><div><span class="logo-preview-checkbox"><Check size={12} /></span><strong>계좌 이체 내역.pdf</strong><span>선택</span></div><div><span class="logo-preview-checkbox is-empty"></span><strong>추가 개인 메모</strong><span>제외</span></div></div>}
                 </div>
                 <p class="logo-feature-benefit"><Check size={15} aria-hidden="true" />{feature.benefit}</p>
-                <a class="logo-feature-cta" href={feature.demo ? "#try-baro" : "/app"} data-logo-demo={feature.demo ?? undefined}>{feature.cta}<ArrowRight size={17} aria-hidden="true" /></a>
+                <a class="logo-feature-cta" href={feature.demo ? "#try-baro" : "/new"} data-logo-demo={feature.demo ?? undefined}>{feature.cta}<ArrowRight size={17} aria-hidden="true" /></a>
               </article>
             ))}
           </div>

@@ -770,7 +770,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
   await expectAnswerNavigation(page);
   await expect(page.getByRole("button", { name: "나중에 이어하기" })).toHaveCount(0);
-  await page.goto("/app");
+  await page.goto("/new");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page
     .getByRole("dialog", { name: "메뉴", exact: true })

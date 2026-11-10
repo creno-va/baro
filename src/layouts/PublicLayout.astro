@@ -19,7 +19,7 @@ const { title, description, showStart = true } = Astro.props;
       <Brand />
       <nav aria-label="서비스 안내">
         <a class="ui-link" href="/help">도움말</a>
-        {showStart && <a class="ui-button ui-button--primary" href="/app">사건 준비 시작</a>}
+        {showStart && <a class="ui-button ui-button--primary" href="/new">사건 준비 시작</a>}
       </nav>
     </header>
     <main id="main-content" tabindex="-1" class="public-main"><slot /></main>

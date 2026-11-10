@@ -89,7 +89,7 @@ test("integrated lawyer login/consent/editor uses persistent API mock with no re
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보 처리방침/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app/);
+  await expect(page).toHaveURL(/\/new/);
   await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
   // Legacy owner-data regressions use an explicit test-only document.
   await page.goto("/lawyer");

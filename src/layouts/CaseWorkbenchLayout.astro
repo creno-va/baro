@@ -8,13 +8,14 @@ import "../styles/case-workbench.css";
 interface Props {
   title: string;
   description: string;
+  contentClass?: string;
 }
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
-const { title, description } = Astro.props;
+const { title, description, contentClass = "case-shell" } = Astro.props;
 ---
 <BaseLayout title={title} description={description}>
   <div class="app-frame baro-workbench" data-app-workspace data-workbench>
-    <AppNavigation role="user" pathname={Astro.url.pathname} availableRoutes={["/app", "/cases", "/settings"]} appearance="workbench" client:load />
-    <div class="app-surface"><main id="main-content" class="case-shell" tabindex="-1"><slot /></main></div>
+    <AppNavigation role="user" pathname={Astro.url.pathname} availableRoutes={["/new", "/settings"]} appearance="workbench" client:load />
+    <div class="app-surface"><main id="main-content" class={contentClass} tabindex="-1"><slot /></main></div>
   </div>
 </BaseLayout>

@@ -105,7 +105,7 @@ test("public landing explains BARO and exposes the login and protected app entry
   await expect(login).toHaveAttribute("href", "/login");
   await expect(
     page.getByRole("link", { name: "내 상황 정리하기", exact: true }).first(),
-  ).toHaveAttribute("href", "/app");
+  ).toHaveAttribute("href", "/new");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
   for (const section of landingSections) await expect(page.locator(`#${section}`)).toBeVisible();
   await login.focus();
@@ -835,7 +835,7 @@ for (const viewport of [
       await expect(benefit).toHaveCSS("opacity", "1");
     await expect(time.getByRole("link", { name: "내 이야기 시작하기" })).toHaveAttribute(
       "href",
-      "/app",
+      "/new",
     );
     await time.getByRole("link", { name: "직접 체험하기" }).click();
     await expect(page).toHaveURL(/#try-baro$/);
@@ -908,7 +908,7 @@ test("the ending gathers four features into the app, shows the final message and
   await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "0");
   await action.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fnew$/);
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
 });
 
@@ -943,7 +943,7 @@ test("short screens and reduced motion retain the photos and readable origin, ti
     await expect(page).toHaveURL(/#try-baro$/);
     await expect(finale.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
       "href",
-      "/app",
+      "/new",
     );
     await expect(origin.locator(".origin-photo-stage")).toBeVisible();
     await expect(time.locator(".time-clock-stage")).toBeVisible();
@@ -988,7 +988,7 @@ for (const viewport of [
     await scrollScene(finale, "[data-finale-pin]", 0.99);
     await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "1");
     const action = finale.getByRole("link", { name: "내 이야기로 시작하기", exact: true });
-    await expect(action).toHaveAttribute("href", "/app");
+    await expect(action).toHaveAttribute("href", "/new");
     await expect(action).toBeInViewport({ ratio: 1 });
     await finale.getByRole("button", { name: "처음부터 다시 보기" }).click();
     await expect(finale.locator("[data-finale-message]")).toHaveCSS("opacity", "0");
@@ -1160,11 +1160,11 @@ test("mobile everyday photos and films remain available and respect manual pause
     .toBe(true);
   await expect(future.getByRole("link", { name: "내 이야기로 시작하기" })).toHaveAttribute(
     "href",
-    "/app",
+    "/new",
   );
   await expect(future.getByRole("link", { name: "내 사건 준비하기" })).toHaveAttribute(
     "href",
-    "/app",
+    "/new",
   );
 });
 
@@ -1265,7 +1265,7 @@ test("phone chapters follow keyboard selection and reverse scrolling while the s
   await expect(arrival).toContainText("어떤 일이 있었나요?");
   await expect(story.getByRole("link", { name: "내 이야기 정리해 보기" })).toHaveAttribute(
     "href",
-    "/app",
+    "/new",
   );
   await scrollScene(story, ".phone-story-sticky", 0.12);
   await expect(arrival).toHaveCSS("opacity", "0");
@@ -1314,7 +1314,7 @@ test("the brand turns, separates, and reveals selectable features that open the 
   await expect(scene).toHaveAttribute("data-logo-selected", "4");
   await expect(scene.locator(".logo-experience-sticky")).toHaveJSProperty("scrollTop", 0);
   await expect(scene.locator('[data-logo-panel="4"]')).toBeVisible();
-  await expect(scene.locator('[data-logo-panel="4"] a')).toHaveAttribute("href", "/app");
+  await expect(scene.locator('[data-logo-panel="4"] a')).toHaveAttribute("href", "/new");
   // A non-scroll redraw must not override the visitor's chosen feature.
   await page.evaluate(() => window.dispatchEvent(new Event("resize")));
   await expect(scene).toHaveAttribute("data-logo-selected", "4");
@@ -1718,7 +1718,7 @@ for (const viewport of [
     expect(boxes[1]?.top ?? 0).toBeGreaterThanOrEqual(boxes[0]?.bottom ?? 1);
     await expect(ceo.getByRole("link", { name: "BARO에서 시작하기" })).toHaveAttribute(
       "href",
-      "/app",
+      "/new",
     );
   });
 }
@@ -1777,7 +1777,7 @@ test("core landing content, login and FAQs work when JavaScript is unavailable",
       await expect(feature).toBeVisible();
     await expect(
       page.locator("[data-finale]").getByRole("link", { name: "내 이야기로 시작하기" }),
-    ).toHaveAttribute("href", "/app");
+    ).toHaveAttribute("href", "/new");
     await expect(page.locator("[data-logo-panel]")).toHaveCount(6);
     for (const panel of await page.locator("[data-logo-panel]").all())
       await expect(panel).toBeVisible();

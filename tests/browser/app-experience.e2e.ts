@@ -55,7 +55,7 @@ test("sidebar delete overlays a full-width title and stays centered on hover and
 }) => {
   await session(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   await settled(page);
   const row = page.locator(".sidebar-desktop .sidebar-story-row").first();
   const link = row.locator(".sidebar-story");
@@ -163,7 +163,7 @@ test("touch sidebar retains a visible centered overlay delete control", async ({
   try {
     const page = await context.newPage();
     await session(page);
-    await page.goto("/app");
+    await page.goto("/new");
     await settled(page);
     const row = page.locator(".ui-sheet .sidebar-story-row").first();
     const remove = row.getByRole("button");

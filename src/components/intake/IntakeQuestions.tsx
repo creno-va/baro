@@ -533,7 +533,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       // Navigation can run before React commits the acknowledged answer.
       if (draftSnapshot.current) draftSnapshot.current.dirty = false;
     }
-    window.location.assign("/app");
+    window.location.assign("/new");
   }
   async function advance() {
     if (!canMutate || !result || pending.current || result.processing) return;

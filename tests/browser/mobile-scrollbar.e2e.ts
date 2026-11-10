@@ -48,10 +48,10 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: {} }));
-  for (const path of ["/", "/app", "/login", "/cases", "/cases/new", "/settings"]) {
+  for (const path of ["/", "/new", "/login", "/cases", "/cases/new", "/settings"]) {
     await page.goto(path);
-    if (path === "/app") {
-      await expect(page).toHaveURL(/\/app$/);
+    if (path === "/new") {
+      await expect(page).toHaveURL(/\/new$/);
       await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
     }
     await reserveScrollbarGutter(page);

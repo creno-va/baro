@@ -88,7 +88,7 @@ test("branded social login stays accessible on narrow phones and desktop", async
 for (const [accountType, returnTo, destination] of [
   ["customer", "/cases/synthetic-case/files", "/cases/synthetic-case/files"],
   ["lawyer", "/settings", "/settings"],
-  ["customer", "https://example.com/evil", "/app"],
+  ["customer", "https://example.com/evil", "/new"],
   ["lawyer", "/cases/private-case", "/cases/private-case"],
 ] as const) {
   test(`current consent continues automatically: ${accountType} ${returnTo}`, async ({ page }) => {
@@ -301,7 +301,7 @@ test("consent loading failure retries; keyboard checks gate save, failure recove
   await expect(page.getByRole("alert")).toContainText("동의를 저장하지 못했어요.");
   await expect(save).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
 });
 
 test("app hides the composer while session checks are pending or fail and supports retry", async ({
@@ -322,7 +322,7 @@ test("app hides the composer while session checks are pending or fail and suppor
       },
     });
   });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("main").getByRole("status")).toContainText("로그인 상태를 확인");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
   release?.();
@@ -336,14 +336,14 @@ test("app hides the composer while session checks are pending or fail and suppor
 test("app clears an active draft and returns to login when the session expires", async ({
   page,
 }) => {
-  await page.goto("/app");
+  await page.goto("/new");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await narrative.fill("세션 만료 전 합성 초안입니다. 이전 입력이 로그인 화면에 남으면 안 됩니다.");
   await page.route("**/api/me/session", (route) =>
     route.fulfill({ json: { user: null, needsConsent: false } }),
   );
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fnew$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText("세션 만료 전 합성 초안");
 });
