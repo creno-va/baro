@@ -69,16 +69,19 @@ test("real playback, keyboard and pointer seeking, volume and speed use the orig
   await seek.focus();
   await seek.press("Home");
   await seek.press("ArrowRight");
+  // Decoder clocks can quantize a seek by a few milliseconds (WebKit: 1.01s).
+  // Verify the real clock within one frame, then require the seek to complete.
   await expect
     .poll(() => audio(page).evaluate((node: HTMLAudioElement) => node.currentTime))
-    .toBe(1);
+    .toBeCloseTo(1, 1);
   await seek.press("End");
   await expect
     .poll(() => audio(page).evaluate((node: HTMLAudioElement) => node.currentTime))
-    .toBe(20);
+    .toBeCloseTo(20, 1);
   await expect
     .poll(() => audio(page).evaluate((node: HTMLAudioElement) => node.seeking))
     .toBe(false);
+  await expect(group.locator(".ui-media__time")).toHaveText("0:20 / 0:20");
   await expect(seek).toBeEnabled();
   await seek.scrollIntoViewIfNeeded();
   const bounds = await seek.boundingBox();

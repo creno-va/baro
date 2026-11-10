@@ -806,6 +806,9 @@
   max-height: calc(100% - 80px);
   overflow: auto;
 }
+:root[data-baro-ui] .case-tools__menu .ui-menu__item {
+  min-height: 44px;
+}
 @media (max-width: 1023px) {
   :root[data-baro-ui] .case-tools__menu {
     top: 120px;

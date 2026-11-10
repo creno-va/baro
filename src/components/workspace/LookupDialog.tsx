@@ -1,5 +1,5 @@
 import type { LookupCatalog } from "@baro/api-client";
-import { useEffect, useId, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { api } from "../../client/api";
 import {
   LOOKUP_CONSENT_VERSION,
@@ -39,11 +39,13 @@ export function LookupDialog({
   busy,
   onClose,
   onSubmit,
+  returnFocusRef,
 }: {
   caseId: string;
   busy: boolean;
   onClose: () => void;
   onSubmit: (request: V2LookupRequest) => Promise<boolean>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const prefix = useId();
   const [catalog, setCatalog] = useState<LookupCatalog | null>(null);
@@ -86,6 +88,7 @@ export function LookupDialog({
   return (
     <Dialog
       open
+      returnFocusRef={returnFocusRef}
       onOpenChange={(open) => {
         if (!open && !busy && !sending) onClose();
       }}
