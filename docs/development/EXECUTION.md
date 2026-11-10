@@ -20,6 +20,8 @@ reduced motion, 맞춤 선택 컨트롤과 기존 회귀 과업을 정비한다.
 성공했다. 23개 경로 × 양 테마를 320/390/1440px에서 다시 확인해 가로 넘침·텍스트 대비
 실패가 없었고, 다크 desktop 12개 경로의 예상 밖 밝은 표면도 없었다. 합성 입력/HTTP·SQL
 검증이며 외부 OAuth·유료 공급자 인수로 표현하지 않는다. 최종 full 증거는 별도로 기록한다.
+대화 작업의 busy→idle 전환 시 스크롤 영역 Escape listener도 같은 commit에서 갱신한다.
+WebKit에서 이전 busy closure가 입력을 무시하던 실패를 수정했고 양 브라우저 42개 과업이 성공했다.
 API/DB·owner·CAS·실행 한도·비용 정책과 랜딩 구현은 유지한다. 최종 정확 SHA의 full
 core/browser/native/join과 동일 SHA preview smoke가 모두 성공할 때까지 인수는 미완료다.
 

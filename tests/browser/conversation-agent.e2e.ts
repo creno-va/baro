@@ -20,6 +20,7 @@ test("320px inline work stays on the conversation, protects dirty input and rest
   await page.keyboard.press("Escape");
   await keepEditing;
   await expect(panel.getByLabel("검토 중인 입력")).toHaveValue("보존할 합성 초안");
+  await expect(panel.getByLabel("검토 중인 입력")).toBeFocused();
   const discardChanges = answerDiscard(page, true);
   await page.keyboard.press("Escape");
   await discardChanges;
