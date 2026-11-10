@@ -1021,11 +1021,13 @@ for (const side of ["prepare_claim", "respond_to_claim"] as const)
         await expect(page.getByText("관할", { exact: true })).toBeVisible();
         expect(updates).toBe(1);
       } else if (choice === "변호사와 해결") {
-        await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
-          "href",
-          "/lawyers",
-        );
-        expect(updates).toBe(1);
+        const dialog = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
+        await expect(dialog).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");
+        await expect(dialog.getByRole("button")).toHaveCount(1);
+        await expect(dialog.getByRole("link")).toHaveCount(0);
+        await dialog.getByRole("button", { name: "확인", exact: true }).click();
+        await expect(button).toBeFocused();
+        expect(updates).toBe(0);
       } else {
         await expect(page.locator(".resolution").getByRole("alert")).toContainText(
           "완료하지 못했어요",

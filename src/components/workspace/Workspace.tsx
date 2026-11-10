@@ -2264,9 +2264,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                       <p>리포트를 검토하고 필요한 준비나 상담을 이어가세요.</p>
                       <div className="workspace-buttons">
                         <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
-                        <ButtonLink href="/lawyers" variant="outline">
-                          변호사 찾기 <ArrowRight size={17} />
-                        </ButtonLink>
                       </div>
                     </div>
                   </>

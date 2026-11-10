@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import { goToCaseTool } from "../helpers/case-navigation";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
   page,

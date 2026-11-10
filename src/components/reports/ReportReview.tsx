@@ -1146,6 +1146,7 @@ export function ReportReview({
             <section className="report-read-content" aria-label="리포트 검토 본문">
               <div id="report-edit-fields">
                 <ReportReading
+                  showOrientation={false}
                   content={maskIdentifiers && !editing ? maskReportText(content) : content}
                   editing={editing}
                   disabled={Boolean(busy) || needsConsent}

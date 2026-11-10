@@ -901,6 +901,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         title="아직 지원하지 않는 기능이에요"
         description="현재 변호사 연결 기능은 제공하지 않습니다."
         returnFocusRef={lawyerTrigger}
+        showCloseButton={false}
       >
         <Button onClick={() => setLawyerNoticeOpen(false)}>확인</Button>
       </Dialog>

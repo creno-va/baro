@@ -2256,7 +2256,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   ).toHaveAttribute("href", `${base}/reports`);
   await expect(
     page.locator(".workspace-next").getByRole("link", { name: "변호사 찾기", exact: true }),
-  ).toHaveAttribute("href", "/lawyers");
+  ).toHaveCount(0);
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 날짜 확인");

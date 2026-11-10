@@ -3,10 +3,7 @@
 import BaseLayout from "../../src/layouts/BaseLayout.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro reads the test component.
 import { DesignSystemFixture } from "./design-system-fixture";
-import "../../src/styles/product.css";
 ---
 <BaseLayout title="합성 UI 구성 요소 · BARO" description="테스트 전용 공유 UI 구성 요소">
-  <div class="app-frame" data-app-workspace data-design="foundation">
-    <DesignSystemFixture client:load />
-  </div>
+  <DesignSystemFixture client:load />
 </BaseLayout>

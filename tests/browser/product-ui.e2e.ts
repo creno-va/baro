@@ -2,12 +2,17 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { summary } from "../fixtures/contracts/v2";
 import { goToCaseTool, openCaseTools, returnToCaseConversation } from "../helpers/case-navigation";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 import { openReportEditor } from "../helpers/report-controls";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 const id = "product-review-case";
 const base = `/cases/${id}`;
 
-test("lawyer workspace shares case AI and history with a profile navigation entry", async ({
+test("existing lawyer account keeps case AI and history through general navigation", async ({
   page,
 }) => {
   await seed(page, false, "active", "lawyer");
@@ -16,7 +21,11 @@ test("lawyer workspace shares case AI and history with a profile navigation entr
   await hydrated(page);
   const sidebar = page.locator(".sidebar-desktop");
   await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
+    "href",
+    "/cases",
+  );
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
@@ -40,7 +49,11 @@ test("lawyer workspace shares case AI and history with a profile navigation entr
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
   const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
-  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
+  await expect(menu.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
+    "href",
+    "/cases",
+  );
   await expect(menu.locator(".sidebar-story")).toHaveCount(2);
 });
 

@@ -1,6 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
 import { syntheticConsentStatus } from "../fixtures/consent-status";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 const stories = Array.from({ length: 30 }, (_, index) => ({
   id: `11111111-1111-4111-8111-${String(index + 1).padStart(12, "0")}`,
