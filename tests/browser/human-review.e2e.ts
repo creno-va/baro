@@ -117,67 +117,24 @@ test("active summary proposes a change, keeps materials and confirms before retu
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 760 });
-  await page.evaluate(() => document.fonts.ready);
-  const measureOverflow = () =>
-    page.evaluate(() => ({
-      fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-      overflow: [...document.querySelectorAll("body *")]
-        .filter((node) => {
-          const r = node.getBoundingClientRect();
-          return (
-            node.checkVisibility({ checkVisibilityCSS: true }) &&
-            r.width > 0 &&
-            r.right > innerWidth + 1 &&
-            getComputedStyle(node).position !== "fixed"
-          );
-        })
-        .map((node) => ({
-          tag: node.tagName,
-          class: node.className,
-          width: node.getBoundingClientRect().width,
-        })),
-    }));
-  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
-  const trigger = page.locator(".case-tools > summary");
-  const menu = page.locator(".case-tools__menu");
-  await expect(menu).not.toBeVisible();
-  await expect(menu.getByRole("link", { includeHidden: true })).toHaveCount(4);
-  await trigger.focus();
-  await page.keyboard.press("Tab");
-  await expect(
-    page
-      .getByRole("navigation", { name: "사건 작업", exact: true })
-      .getByRole("link", { name: "대화", exact: true }),
-  ).toBeFocused();
-  await trigger.focus();
-  await page.keyboard.press("Enter");
-  await expect(menu).toBeVisible();
-  await expect(menu.getByRole("link")).toHaveCount(4);
-  for (const name of ["요약 보기 · 재확인", "타임라인", "다음 행동", "유사 판례"]) {
-    await page.keyboard.press("Tab");
-    const link = menu.getByRole("link", { name, exact: true });
-    await expect(link).toBeFocused();
-    await expect(link).toBeInViewport({ ratio: 1 });
-    const bounds = await link.boundingBox();
-    if (!bounds) throw new Error("Visible case tool bounds missing");
-    expect(bounds.width).toBeGreaterThanOrEqual(44);
-    expect(bounds.height).toBeGreaterThanOrEqual(44);
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
-    await link.click({ trial: true });
-    expect(
-      await link.evaluate((node) => {
-        const r = node.getBoundingClientRect();
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        return hit === node || node.contains(hit);
-      }),
-    ).toBe(true);
-  }
-  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
-  await page.keyboard.press("Escape");
-  await expect(menu).not.toBeVisible();
-  await expect(trigger).toBeFocused();
-  await expect.poll(measureOverflow).toEqual({ fits: true, overflow: [] });
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [...document.querySelectorAll("body *")]
+          .filter((node) => {
+            const r = node.getBoundingClientRect();
+            return (
+              r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(node).position !== "fixed"
+            );
+          })
+          .map((node) => ({
+            tag: node.tagName,
+            class: node.className,
+            width: node.getBoundingClientRect().width,
+          })),
+      ),
+    )
+    .toEqual([]);
   await page.screenshot({ path: ".wrangler/ui-human-files-320.png", fullPage: true });
 });
 
@@ -321,8 +278,7 @@ test("correction is saved before an explicit material reflection request", async
 test("case deletion is reachable from the list and survives reload", async ({ page }) => {
   await seed(page);
   await page.goto("/cases");
-  const list = page.getByRole("region", { name: "불러온 사건 1개", exact: true });
-  const opener = list.getByRole("button", { name: "휴먼 리뷰 합성 사건 사건 삭제", exact: true });
+  const opener = page.getByRole("button", { name: "휴먼 리뷰 합성 사건 사건 삭제", exact: true });
   await opener.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog");
@@ -332,8 +288,6 @@ test("case deletion is reachable from the list and survives reload", async ({ pa
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("link", { name: /휴먼 리뷰 합성 사건/ })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "불러온 사건 0개", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /휴먼 리뷰 합성 사건/ })).toHaveCount(0);
   await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(0);
 });
 
@@ -360,35 +314,13 @@ test("an uploaded synthetic recording can be played while correcting and is remo
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "synthetic-silence.wav", mimeType: "audio/wav", buffer: wav });
   const row = page.locator(".workspace-file-list li").filter({ hasText: "synthetic-silence.wav" });
-  await expect(row).toHaveCount(0);
-  const upload = page.getByRole("button", { name: "선택한 자료 업로드", exact: true });
-  await expect(upload).toBeDisabled();
-  await page
-    .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
-    .check();
-  await expect(upload).toBeEnabled();
-  await upload.click();
-  await expect(row.getByText("내용 확인 후 반영 가능", { exact: true })).toBeVisible();
+  await expect(row.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await row.getByRole("button", { name: "자료 확인", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
+  const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "원본 확인 · 다운로드", exact: true }).click();
   await expect(dialog.locator("audio")).toBeVisible();
   await expect(dialog.locator("audio")).toHaveAttribute("src", /^data:audio\/wav;base64,/);
-  const audio = dialog.locator("audio");
-  await expect
-    .poll(() => audio.evaluate((node: HTMLAudioElement) => node.readyState))
-    .toBeGreaterThanOrEqual(2);
-  expect(await audio.evaluate((node: HTMLAudioElement) => node.duration)).toBeCloseTo(1, 2);
-  await audio.evaluate(async (node: HTMLAudioElement) => node.play());
-  await expect(audio).toHaveJSProperty("paused", false);
-  const editor = dialog.getByLabel("확인·교정한 내용", { exact: true });
-  await expect(editor).toBeVisible();
-  await editor.fill("원음을 들으며 확인한 합성 교정 내용입니다.");
-  await expect(editor).toHaveValue("원음을 들으며 확인한 합성 교정 내용입니다.");
-  await expect(audio).toBeVisible();
-  await expect
-    .poll(() => audio.evaluate((node: HTMLAudioElement) => node.currentTime))
-    .toBeGreaterThan(0);
+  await expect(dialog.getByLabel("확인·교정한 내용", { exact: true })).toBeVisible();
   await page.evaluate(() =>
     window.dispatchEvent(
       new CustomEvent("baro-session-changed", { detail: { reason: "signout" } }),

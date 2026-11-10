@@ -397,10 +397,20 @@
   font-size: 0.8rem;
 }
 .workspace-suggestions .ui-button {
+  display: inline-flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
+  height: auto;
   margin: 0;
-  text-align: left;
+  padding: 10px 14px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: var(--muted);
+  font-size: 0.75rem;
+  color: #586981;
+  white-space: normal;
 }
 .workspace-suggestions :where(.ui-button) svg {
   flex-shrink: 0;
@@ -526,6 +536,19 @@
 }
 .workspace-attach:hover {
   background: #f3f6fa;
+}
+.workspace-send.ui-button {
+  min-height: 44px;
+  border-radius: 20px;
+  padding: 9px 17px;
+  font-size: 0.8rem;
+  gap: 7px;
+}
+.app-frame .workspace-send.ui-button:disabled {
+  background: #eef2f7;
+  color: #5c6b80;
+  border-color: transparent;
+  opacity: 1;
 }
 .workspace-evidence {
   margin: 0 2px 7px;
@@ -968,7 +991,7 @@
   inset: 0;
   margin: auto;
   width: min(640px, calc(var(--workspace-viewport-width, 100vw) - 32px));
-  max-height: min(calc(var(--workspace-viewport-height, 100dvh) - 40px), calc(100% - 32px));
+  max-height: calc(var(--workspace-viewport-height, 100dvh) - 40px);
   border: 1px solid var(--border);
   border-radius: 22px;
   padding: 24px;
@@ -1368,7 +1391,7 @@
   cursor: pointer;
   font-family: inherit;
 }
-.workspace-attach:not(.ui-button):disabled {
+.workspace-attach:disabled {
   opacity: 0.5;
   cursor: default;
 }

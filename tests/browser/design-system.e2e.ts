@@ -49,9 +49,7 @@ test("application, login and case screens share local brand and remain usable at
     route.fulfill({ json: { needsConsent: false } }),
   );
   await page.goto("/app");
-  await expect(
-    page.getByRole("heading", { name: "내 사건, 무엇부터 준비할까요?", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await expect(page.locator(".app-frame--product")).toHaveCount(0);
   await page.screenshot({ path: ".wrangler/home-desktop.png", fullPage: true });
@@ -76,10 +74,10 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toHaveCSS(
     "background-color",
-    "rgb(35, 100, 232)",
+    "rgb(37, 99, 235)",
   );
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/case-list-320.png", fullPage: true });
 });
 
@@ -187,12 +185,9 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  expect(
-    await opener.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return style.outlineStyle !== "none" || style.boxShadow !== "none";
-    }),
-  ).toBe(true);
+  expect(await opener.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
+    "none",
+  );
 });
 
 for (const activation of ["pointer", "keyboard"] as const)

@@ -111,6 +111,7 @@ export function ReportReading({
   reportId,
   photoUrls,
   onAsk,
+  showOrientation = true,
 }: {
   content: string;
   editing?: boolean;
@@ -122,6 +123,7 @@ export function ReportReading({
   /** Mock originals use the same bounded data-image vocabulary as saved HTML. */
   photoUrls?: Readonly<Record<string, string>> | undefined;
   onAsk?: ((context: { sectionTitle: string; excerpt: string }) => void) | undefined;
+  showOrientation?: boolean;
 }) {
   const outlineId = useId().replaceAll(":", "");
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -138,7 +140,7 @@ export function ReportReading({
     : [];
   return (
     <>
-      {!editing && orientation.some((item) => item.index >= 0) && (
+      {showOrientation && !editing && orientation.some((item) => item.index >= 0) && (
         <Section
           title="먼저 확인할 내용"
           description="현재 리포트 본문에서 발췌했어요. 각 항목의 조건과 근거는 본문에서 이어서 확인하세요."

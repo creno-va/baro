@@ -1,0 +1,144 @@
+/* A shared type scale keeps the cinematic chapters distinct from the app's UI. */
+.landing {
+  --landing-display-weight: 760;
+  --landing-heading-weight: 700;
+  --landing-body-weight: 440;
+  font-optical-sizing: auto;
+}
+.landing-nav {
+  gap: 27px;
+}
+.landing .landing-body {
+  font-weight: var(--landing-body-weight);
+  line-height: 1.85;
+}
+.landing .landing-section h2 {
+  font-weight: var(--landing-heading-weight);
+  letter-spacing: -0.045em;
+}
+.landing .landing-intro h2 {
+  font-size: clamp(38px, 4.1vw, 64px);
+  line-height: 1.34;
+  font-weight: 720;
+}
+.landing .landing-kicker {
+  font-size: 15px;
+  font-weight: 630;
+  letter-spacing: -0.015em;
+}
+.landing .landing-principles h2 {
+  font-size: clamp(38px, 4.4vw, 68px);
+}
+.landing .landing-faq h2 {
+  font-size: clamp(32px, 3.4vw, 50px);
+}
+.landing .landing-final h2 {
+  font-size: clamp(38px, 5.4vw, 78px);
+  font-weight: 760;
+  letter-spacing: -0.05em;
+}
+.landing-chapter-nav {
+  position: fixed;
+  z-index: 45;
+  top: 50%;
+  left: 18px;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 2px;
+}
+.landing-chapter-nav a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 32px;
+  height: 30px;
+  padding: 0 7px;
+  color: #253452;
+}
+.landing-chapter-nav i {
+  display: block;
+  width: 10px;
+  height: 3px;
+  border-radius: 6px;
+  background: #9aabc2;
+  box-shadow: 0 0 0 1px #ffffff70;
+  transition:
+    width 0.25s,
+    background 0.25s;
+}
+.landing-chapter-nav a[aria-current="location"] i {
+  width: 22px;
+  background: #3679ef;
+}
+.landing-chapter-nav span {
+  position: absolute;
+  left: 34px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f1;
+  border-radius: 10px;
+  background: #fffffff5;
+  box-shadow: 0 5px 18px #112d5110;
+  font-size: 12px;
+  font-weight: 600;
+  transform: translateX(-5px);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+.landing-chapter-nav a:hover span,
+.landing-chapter-nav a:focus-visible span {
+  opacity: 1;
+  transform: none;
+}
+.landing-chapter-nav a:focus-visible {
+  outline: 2px solid #3778ef;
+  outline-offset: 3px;
+  border-radius: 5px;
+}
+@media (max-width: 1199px) {
+  .landing-chapter-nav {
+    display: none;
+  }
+  .landing-nav {
+    gap: 18px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 1023px) {
+  .landing-nav .landing-nav-section {
+    display: none;
+  }
+  .landing-nav {
+    gap: 5px;
+  }
+}
+@media (max-width: 767px) {
+  .landing .landing-intro h2 {
+    font-size: clamp(30px, 7.7vw, 43px);
+  }
+  .landing .landing-body {
+    font-size: 16px;
+    line-height: 1.8;
+  }
+  .landing .landing-kicker {
+    font-size: 13px;
+  }
+  .landing .landing-faq h2 {
+    font-size: 31px;
+  }
+  .landing .landing-principles h2 {
+    font-size: 36px;
+  }
+  .landing .landing-final h2 {
+    font-size: clamp(32px, 7.4vw, 44px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-chapter-nav i,
+  .landing-chapter-nav span {
+    transition: none;
+  }
+}

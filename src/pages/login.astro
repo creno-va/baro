@@ -1,14 +1,11 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the island.
+// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import { AuthButtons } from "../components/AuthButtons";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the components.
-import { InlineNotice } from "../components/ui/inline-notice";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the components.
-import { PageHeader } from "../components/ui/page-header";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the components.
-import { ReadingContent } from "../components/ui/reading-content";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
-import PublicLayout from "../layouts/PublicLayout.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
+import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../styles/login.css";
 
 // biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
 const oauthFailed = Astro.url.searchParams.has("error");
@@ -24,12 +21,37 @@ const errorMessage = oauthErrors.includes("account_not_linked")
         ? "안전한 이용을 위해 다시 로그인해 주세요."
         : "로그인이 완료되지 않았어요. 다시 선택해 주세요.";
 ---
-<PublicLayout title="로그인 · 회원가입 — BARO" description="Google·네이버·카카오 계정으로 로그인하고 내 사건 준비를 이어가세요." showStart={false}>
-  <ReadingContent className="ui-auth ui-stack">
-    <PageHeader title="로그인 · 회원가입" description="사용하던 소셜 계정으로 내 사건 준비를 이어가세요. 처음이라면 같은 방법으로 시작할 수 있어요." />
-    {oauthFailed && <InlineNotice tone="danger" title={errorMessage} announce />}
-    <AuthButtons client:load />
-    <p class="ui-muted">기존 계정의 본인 사건·자료·리포트를 계속 이용할 수 있어요.</p>
-    <nav class="ui-cluster" aria-label="로그인 안내"><a class="ui-link" href="/policies/terms">이용약관</a><a class="ui-link" href="/policies/privacy">개인정보 처리방침</a><a class="ui-link" href="/help#login">로그인에 어려움이 있나요?</a></nav>
-  </ReadingContent>
-</PublicLayout>
+
+<BaseLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다.">
+  <main id="main-content" tabindex="-1" class="login-page">
+    <nav class="login-navigation" aria-label="로그인 화면">
+      <a class="login-back" href="/" aria-label="홈으로 돌아가기">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m12 5-7 7 7 7M5 12h15" />
+        </svg>
+      </a>
+      <span>로그인 · 회원가입</span>
+    </nav>
+    <div class="login-content">
+      <header class="login-intro">
+        <Brand />
+        <p class="login-intro__headline">법률 고민의 시작, <br />바로와 함께.</p>
+        <p class="login-intro__caption">막막한 순간부터, 다음 한 걸음까지.</p>
+      </header>
+      <section class="login-panel" aria-labelledby="login-title">
+        <h1 id="login-title">로그인 · 회원가입</h1>
+        <p class="login-panel__description">소셜 계정으로 내 사건 정리를 시작하세요.</p>
+        {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
+        <AuthButtons client:load />
+        <footer class="login-footer">
+          <div class="login-policy-links">
+            <a href="/policies/terms">이용약관</a>
+            <span aria-hidden="true">·</span>
+            <a href="/policies/privacy">개인정보 처리방침</a>
+          </div>
+          <a class="login-help" href="/help">로그인에 어려움이 있나요?</a>
+        </footer>
+      </section>
+    </div>
+  </main>
+</BaseLayout>

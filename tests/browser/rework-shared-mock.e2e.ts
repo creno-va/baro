@@ -11,7 +11,7 @@ import {
 // explicitly has no legal provider: these tests must never assert verified law.
 test.skip(process.env.BARO_REWORK_SHARED_MOCK !== "true", "Shared rework mock main gate required");
 
-for (const purpose of ["unknown-prepare", "unknown-response"] as const)
+for (const purpose of ["고소 준비", "주장 대응"] as const)
   test(`shared mock ${purpose}: actual intake, material panel and primary limited report preserve unavailable law`, async ({
     page,
   }) => {
@@ -25,7 +25,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
     await page.getByRole("button", { name: "동의하고 계속하기", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);
     await page.goto("/cases/new");
-    await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption(purpose);
+    await page.getByRole("radio", { name: purpose, exact: true }).check();
     await page
       .getByLabel("지금까지 있었던 일", { exact: true })
       .fill(
@@ -98,7 +98,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
     await expect(contextDialog).toBeVisible();
     await expect(
       contextDialog.getByRole("combobox", { name: "사건 입장", exact: true }),
-    ).toHaveValue(purpose === "unknown-prepare" ? "prepare_claim" : "respond_to_claim");
+    ).toHaveValue(purpose.startsWith("고소") ? "prepare_claim" : "respond_to_claim");
     await expect(
       contextDialog.getByRole("combobox", { name: "사건 분야", exact: true }),
     ).toHaveValue("unconfirmed");
@@ -174,7 +174,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
     await expect(
       contextDialog.getByText("다른 탭에서 기록한 합성 현재값", { exact: true }),
     ).toBeVisible();
-    if (purpose === "unknown-prepare") {
+    if (purpose.startsWith("고소")) {
       expect(
         (await new AxeBuilder({ page }).include("dialog[open]").analyze()).violations.filter(
           (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
@@ -207,7 +207,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
       report.getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
     ).toBeVisible();
     await expect(report).toContainText(/보완 필요|확인하지 못|원문 확인/);
-    if (purpose === "unknown-prepare") {
+    if (purpose.startsWith("고소")) {
       // An unavailable analysis deliberately takes the explicit document POST,
       // not another analysis action. Editing that fresh document cannot make
       // its source stale or turn the unavailable audit into a verified result.
@@ -239,7 +239,7 @@ for (const purpose of ["unknown-prepare", "unknown-response"] as const)
       });
       await expect(report.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeEnabled();
     }
-    if (purpose === "unknown-prepare")
+    if (purpose.startsWith("고소"))
       await page.screenshot({ path: "/tmp/baro-625-report-main-320.png", fullPage: true });
     await expect(page).toHaveURL(`${conversationUrl}/reports?mode=conversation`);
     await returnToWorkspace(page);

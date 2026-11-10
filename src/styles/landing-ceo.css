@@ -1,0 +1,298 @@
+.ceo-greeting {
+  --ceo-sticky-top: 92px;
+  --ceo-turn: 0deg;
+  --ceo-read-y: 0px;
+  --ceo-photo-follow: 0px;
+  position: relative;
+  padding: 115px 40px 105px;
+  background: #f5f6f8;
+  color: #25364e;
+}
+.ceo-greeting :where(h2, h3, p) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.ceo-introduction {
+  max-width: 1130px;
+  margin: 0 auto 65px;
+  text-align: center;
+}
+.ceo-eyebrow {
+  margin: 0 0 24px;
+  color: #536c8d;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.ceo-greeting .ceo-introduction h2 {
+  margin: 0 0 26px;
+  font-size: clamp(37px, 4.1vw, 60px);
+  font-weight: 730;
+  line-height: 1.35;
+  letter-spacing: -0.055em;
+}
+.ceo-introduction :where(h2) > span {
+  color: #376ec2;
+}
+.ceo-introduction > p:not(.ceo-eyebrow, .ceo-scroll-instruction) {
+  margin: 0;
+  color: #607189;
+  font-size: 17px;
+  line-height: 1.85;
+  letter-spacing: -0.025em;
+}
+.ceo-scroll-instruction {
+  display: none;
+  margin: 28px 0 0;
+  color: #59718e;
+  font-size: 12px;
+}
+.ceo-scroll-instruction span {
+  display: inline-block;
+  margin-left: 10px;
+}
+.ceo-scroll-stage,
+.ceo-footer {
+  position: relative;
+  max-width: 1130px;
+  margin: 0 auto;
+}
+.ceo-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(32px, 6vw, 90px);
+}
+.ceo-scene + .ceo-scene {
+  margin-top: 100px;
+}
+.ceo-portrait {
+  width: min(100%, 430px);
+  min-width: 0;
+  margin: 0;
+  justify-self: center;
+}
+.ceo-portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 814 / 964;
+  object-fit: cover;
+  object-position: 50% 0;
+  border-radius: 20px;
+  background: #e4e7ec;
+}
+.ceo-portrait figcaption {
+  margin-top: 16px;
+  color: #5d6e84;
+  font-size: 11px;
+  line-height: 1.8;
+  text-align: center;
+}
+.ceo-portrait :where(figcaption) strong {
+  font-size: 15px;
+  font-weight: 650;
+  color: #344e70;
+}
+.ceo-letter {
+  min-width: 0;
+  padding: 0;
+}
+.ceo-greeting .ceo-letter h3 {
+  margin: 0 0 25px;
+  font-size: clamp(28px, 2.6vw, 38px);
+  font-weight: 710;
+  line-height: 1.45;
+  letter-spacing: -0.05em;
+}
+.ceo-letter :where(h3) > span {
+  color: #3970c2;
+}
+.ceo-letter > p {
+  margin: 0 0 20px;
+  color: #586b85;
+  font-size: 16px;
+  line-height: 1.95;
+  letter-spacing: -0.025em;
+}
+.ceo-letter > .ceo-closing {
+  padding-top: 2px;
+  color: #344e70;
+}
+.ceo-signature {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 26px;
+}
+.ceo-signature > span {
+  color: #435976;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ceo-signature > strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  color: #243b5b;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+.ceo-signature :where(strong) > span {
+  color: #596d89;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.ceo-footer {
+  padding-top: 36px;
+  text-align: center;
+}
+.ceo-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 48px;
+  color: #2b64b9;
+  font-size: 14px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.ceo-start svg {
+  transition: transform 180ms ease;
+}
+.ceo-start:where(:hover) svg {
+  transform: translateX(4px);
+}
+.ceo-start:focus-visible {
+  outline: 3px solid #4e87db;
+  outline-offset: 4px;
+}
+/* Without motion enhancement, both complete photo/letter pairs stay in normal flow. */
+.ceo-motion-ready .ceo-scroll-instruction {
+  display: block;
+}
+.ceo-motion-ready .ceo-viewport {
+  position: sticky;
+  top: var(--ceo-sticky-top);
+  height: calc(100svh - var(--ceo-sticky-top) - 16px);
+  padding: 18px 0;
+  overflow: clip;
+}
+.ceo-motion-ready .ceo-reading-plane {
+  transform: translateY(var(--ceo-read-y));
+  transform-style: preserve-3d;
+}
+.ceo-motion-ready .ceo-visual {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(32px, 6vw, 90px);
+  perspective: 1800px;
+  transform-style: preserve-3d;
+}
+.ceo-motion-ready .ceo-scene {
+  display: contents;
+}
+.ceo-motion-ready .ceo-portrait,
+.ceo-motion-ready .ceo-letter {
+  --ceo-face-turn: var(--ceo-turn);
+  align-self: start;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.ceo-motion-ready [data-ceo-chapter="crenova"] > * {
+  --ceo-face-turn: calc(var(--ceo-turn) + 180deg);
+}
+.ceo-motion-ready .ceo-portrait {
+  grid-area: 1 / 1;
+  width: min(100%, 430px, calc((100svh - var(--ceo-sticky-top) - 130px) * 814 / 964));
+  transform: translateY(var(--ceo-photo-follow)) rotateY(var(--ceo-face-turn));
+}
+.ceo-motion-ready .ceo-letter {
+  grid-area: 1 / 2;
+  transform: rotateY(var(--ceo-face-turn));
+}
+@media (min-width: 768px) and (max-width: 1000px) {
+  .ceo-greeting {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+}
+@media (max-width: 767px) {
+  .ceo-greeting {
+    --ceo-sticky-top: 78px;
+    padding: 78px 22px 68px;
+  }
+  .ceo-introduction {
+    margin-bottom: 36px;
+    text-align: left;
+  }
+  .ceo-eyebrow {
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+  .ceo-greeting .ceo-introduction h2 {
+    margin-bottom: 23px;
+    font-size: clamp(29px, 7.2vw, 42px);
+    line-height: 1.4;
+  }
+  .ceo-introduction > p:not(.ceo-eyebrow, .ceo-scroll-instruction) {
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .ceo-scene {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 30px;
+  }
+  .ceo-scene + .ceo-scene {
+    margin-top: 65px;
+  }
+  .ceo-portrait {
+    width: min(100%, 300px);
+  }
+  .ceo-motion-ready .ceo-visual {
+    grid-template-columns: minmax(0, 0.32fr) minmax(0, 0.68fr);
+    gap: 16px;
+    perspective: 1200px;
+  }
+  .ceo-motion-ready .ceo-portrait {
+    max-width: 160px;
+  }
+  .ceo-portrait img {
+    border-radius: 12px;
+  }
+  .ceo-portrait figcaption {
+    margin-top: 12px;
+    font-size: 9px;
+  }
+  .ceo-portrait :where(figcaption) strong {
+    font-size: 12px;
+  }
+  .ceo-greeting .ceo-letter h3 {
+    margin-bottom: 22px;
+    font-size: clamp(21px, 5.8vw, 30px);
+    line-height: 1.5;
+  }
+  .ceo-letter > p {
+    font-size: 15px;
+    line-height: 1.95;
+  }
+  .ceo-signature > strong {
+    font-size: 18px;
+  }
+  .ceo-signature :where(strong) > span {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ceo-start svg {
+    transition: none;
+  }
+  .ceo-start:where(:hover) svg {
+    transform: none;
+  }
+}

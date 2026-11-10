@@ -1,6 +1,10 @@
 # ADR-0021: 사건 작업대와 웹 디자인 시스템 교체
 
 - Status: Accepted
+- 2026-11-10 partial supersession: 사용자 직접 지시 [#792](https://github.com/creno-va/baro/issues/792)로
+  전면 교체한 랜딩·네 작업 통합 레이아웃·웹 DS 적용은 철회하고 PR778 직전 UI를 복구한다.
+  변호사 컨택 미지원·공통 계정·데이터/권한·Workers·비용 정책은 유지한다.
+  아래 내용과 인수 기록은 당시 결정이며 [현재 실행 기준](../development/EXECUTION.md)이 우선한다.
 - Date: 2026-11-08
 - Authority: 전면 리디자인 총괄 채팅의 사용자 직접 지시와 범위 내 설계 판단
 - Tracking: [#764](https://github.com/creno-va/baro/issues/764), [실행 계약](../development/REDESIGN-EXECUTION.md)

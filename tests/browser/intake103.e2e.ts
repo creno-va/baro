@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
 import type { CaseView, WorkspaceView } from "../../src/client/api/types";
+import { goToCaseTool, openCaseTools } from "../helpers/case-navigation";
 import { settleIntakeSave } from "../helpers/intake-autosave";
 
 type IntakePostflightRegression = {
@@ -336,21 +337,18 @@ test("pending workspace files keep polling after a transient failure and stop on
   page,
 }) => {
   await recoveryWorkspace(page);
-  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
-  const materials = tasks.getByRole("link", { name: "자료 0개", exact: true });
-  await expect(materials).toHaveAttribute("href", /\/files$/);
-  await materials.click();
+  const tools = await openCaseTools(page);
+  await expect(tools.getByRole("link", { name: "자료 0", exact: true })).toBeVisible();
+  await goToCaseTool(page, "files");
   await expect(page).toHaveURL(/\/files$/);
   await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const modulePath = "/src/client/api/index.ts";
     const { api } = await import(modulePath);
-    // A retained chat → files switch keeps the original workspace reader.
-    // Direct files-only reads are covered by workspace-files-snapshot.e2e.ts.
-    const original = api.workspace.get.bind(api.workspace);
+    const original = api.workspace.getFiles.bind(api.workspace);
     const state = { reads: 0 };
     (window as unknown as { customerPoll: typeof state }).customerPoll = state;
-    const get = async (id: string) => {
+    const getFiles = async (id: string) => {
       const owned = new Error().stack?.includes("Workspace.tsx");
       if (!owned) return original(id);
       const ordinal = ++state.reads;
@@ -377,7 +375,7 @@ test("pending workspace files keep polling after a transient failure and stop on
     };
     api.workspace = new Proxy(api.workspace, {
       get(target, key, receiver) {
-        return key === "get" ? get : Reflect.get(target, key, receiver);
+        return key === "getFiles" ? getFiles : Reflect.get(target, key, receiver);
       },
     });
     window.dispatchEvent(new Event("focus"));
@@ -393,11 +391,7 @@ test("pending workspace files keep polling after a transient failure and stop on
   await expect(
     page.getByRole("heading", { name: "합성 처리 자료.txt", exact: true }),
   ).toBeVisible();
-  await expect(
-    page
-      .getByRole("region", { name: "사건 자료", exact: true })
-      .getByText("내용 확인 후 반영 가능", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   // Two polling periods pass without any further workspace read after completion.
   await page.waitForTimeout(3800);
   expect(await reads()).toBe(3);
@@ -743,17 +737,9 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
     if (new URL(request.url()).origin !== localOrigin) external.push(request.url());
   });
   await page.goto("/cases");
-  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
-  const start = page.getByRole("link", { name: "새 사건 만들기", exact: true });
-  await expect(start).toHaveAttribute("href", "/cases/new");
-  await start.focus();
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/cases\/new$/);
-  await expect(
-    page.getByRole("heading", { name: "내 사건, 무엇부터 준비할까요?", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
-  await expect(page.locator(".case-entry")).toHaveCSS("view-transition-name", "none");
+  await expect(page.locator(".conversation-home")).toHaveCSS("view-transition-name", "intake-page");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await narrative.fill(
     "합성 사건입니다. 지난달 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.",

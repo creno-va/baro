@@ -113,11 +113,6 @@ function Host() {
       </nav>
       <FollowUpResolution
         key={new URLSearchParams(location.search).has("retained") ? "retained" : surface}
-        section={
-          new URLSearchParams(location.search).has("retained") && surface === "chat"
-            ? "drafts"
-            : "report"
-        }
         caseId="case"
         {...(new URLSearchParams(location.search).has("default")
           ? {}

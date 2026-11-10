@@ -17,109 +17,6 @@ const customer: SessionView = {
   needsConsent: false,
 };
 
-test("entry presents value and a visible desktop next action using the shared reading and form primitives", async ({
-  page,
-}) => {
-  await setSession(page, customer);
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto("/app");
-  await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
-  await expect(page.locator(".case-entry [data-slot='page-header']")).toContainText("준비할 일");
-  expect(
-    await page
-      .locator(".case-entry h1")
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
-  ).toBeLessThanOrEqual(28);
-  await expect(page.locator(".conversation-emblem, .conversation-composer")).toHaveCount(0);
-  await page.screenshot({ path: ".wrangler/flow02-entry-desktop.png", fullPage: true });
-  await expect(page.getByRole("button", { name: "저장하고 계속", exact: true })).toBeInViewport({
-    ratio: 1,
-  });
-  for (const width of [390, 320]) {
-    await page.setViewportSize({ width, height: 844 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-      true,
-    );
-    const next = page.getByRole("button", { name: "저장하고 계속", exact: true });
-    await next.scrollIntoViewIfNeeded();
-    await expect(next).toBeInViewport({ ratio: 1 });
-    expect((await next.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-    await page.screenshot({ path: `.wrangler/flow02-entry-${width}.png`, fullPage: true });
-  }
-});
-
-test("case list has an honest empty state and a direct explanation entry", async ({ page }) => {
-  await setSession(page, customer);
-  await page.goto("/cases");
-  await expect(page).toHaveURL(/\/cases$/);
-  await expect(page.getByRole("heading", { name: "내 사건", exact: true })).toBeVisible();
-  await expect(page.getByText("아직 정리한 사건이 없어요", { exact: true })).toBeVisible();
-  await page
-    .locator(".case-list")
-    .getByRole("link", { name: "새 사건 만들기", exact: true })
-    .click();
-  await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
-});
-
-test("an existing lawyer account can resume its cases and explicit list deletion removes only the chosen case", async ({
-  page,
-}) => {
-  await setSession(page, {
-    ...customer,
-    user: { id: "conversation-customer", name: "합성 기존 계정", accountType: "lawyer" },
-  });
-  await page.addInitScript(() => {
-    const cases = Object.fromEntries(
-      ["intake", "summary"].map((stage) => [
-        stage,
-        {
-          id: stage,
-          title: `${stage === "intake" ? "질문을 이어갈" : "요약을 확인할"} 합성 사건`,
-          summary: "목록에서 현재 단계를 확인하는 합성 사건입니다.",
-          stage,
-          subjectContext: "individual",
-          schemaVersion: "2",
-          revision: 1,
-          updatedAt: "2026-11-08T00:00:00.000Z",
-        },
-      ]),
-    );
-    localStorage.setItem("baro-api-mock-v1:cases", JSON.stringify(cases));
-    localStorage.setItem(
-      "baro-api-mock-v1:caseOwners",
-      JSON.stringify({ intake: "conversation-customer", summary: "conversation-customer" }),
-    );
-  });
-  await page.setViewportSize({ width: 320, height: 844 });
-  await page.goto("/cases");
-  const list = page.locator(".case-list__rows");
-  await expect(list.locator("li")).toHaveCount(2);
-  await expect(list.getByRole("link", { name: /질문을 이어갈/ })).toHaveAttribute(
-    "href",
-    "/cases/intake/intake",
-  );
-  await expect(list.getByRole("link", { name: /요약을 확인할/ })).toHaveAttribute(
-    "href",
-    "/cases/summary/summary",
-  );
-  await list
-    .getByRole("button", { name: "질문을 이어갈 합성 사건 사건 삭제", exact: true })
-    .click();
-  const confirmation = page.getByRole("dialog", { name: "이 사건을 삭제할까요?", exact: true });
-  await expect(confirmation).toBeVisible();
-  await confirmation.getByRole("button", { name: "취소", exact: true }).click();
-  await expect(list.locator("li")).toHaveCount(2);
-  await list
-    .getByRole("button", { name: "질문을 이어갈 합성 사건 사건 삭제", exact: true })
-    .click();
-  await confirmation.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await expect(list.locator("li")).toHaveCount(1);
-  await expect(list).toContainText("요약을 확인할 합성 사건");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
-    true,
-  );
-});
-
 test("a customer starts directly on home and reaches adaptive questions without an intermediate list", async ({
   page,
 }) => {
@@ -150,7 +47,7 @@ test("a customer starts directly on home and reaches adaptive questions without 
   await narrative.fill(
     "합성 사건입니다. 회사 거래처에서 계약한 대금을 약속한 날짜가 지나도 지급하지 않았어요.",
   );
-  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("civil-response");
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   await submit.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/cases\/[^/]+\/intake/);
@@ -185,52 +82,33 @@ test("a short account is accepted and recent-story deletion requires explicit co
   await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
 });
 
-test("help and policy preserve account access for both roles without contact profile entries", async ({
+test("help and policy keep account settings available without restoring lawyer profile navigation", async ({
   page,
 }) => {
-  // Keep the chosen role across public → application navigation in this test.
-  await page.addInitScript((session) => {
-    if (localStorage.getItem("help-role-seeded")) return;
-    localStorage.setItem("help-role-seeded", "true");
-    localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
-  }, customer);
+  await setSession(page, customer);
   for (const url of ["/help", "/policies/ai"]) {
-    for (const accountType of ["customer", "lawyer", "customer"] as const) {
-      await page.goto(url);
-      const name = accountType === "lawyer" ? "합성 기존 계정" : "합성 고객";
+    await page.goto(url);
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+      s.user.accountType = "lawyer";
+      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
+      window.dispatchEvent(new Event("baro-session-changed"));
+    });
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    await expect(page.locator('a[href="/settings"]').first()).toBeVisible();
+    expect(
       await page.evaluate(
-        ({ accountType, name }) => {
-          const key = "baro-api-mock-v1:session";
-          const session = JSON.parse(localStorage.getItem(key) ?? "{}");
-          session.user.accountType = accountType;
-          session.user.name = name;
-          localStorage.setItem(key, JSON.stringify(session));
-          window.dispatchEvent(new Event("baro-session-changed"));
-        },
-        { accountType, name },
-      );
-      const start = page
-        .getByRole("navigation", { name: "서비스 안내", exact: true })
-        .getByRole("link", { name: "사건 준비 시작", exact: true });
-      await expect(start).toBeVisible();
-      await expect(start).toHaveAttribute("href", "/app");
-      await expect(
-        page.locator('a[href="/lawyer"], a[href="/lawyers"], a[href^="/lawyers/"]'),
-      ).toHaveCount(0);
-      await start.click();
-      await expect(page).toHaveURL(/\/app$/);
-      await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
-      const account = page.getByRole("link", { name: `${name} · 계정 관리`, exact: true }).first();
-      await expect(account).toBeVisible();
-      await expect(account).toHaveAttribute("href", "/settings");
-      await expect(
-        page.locator('a[href="/lawyer"], a[href="/lawyers"], a[href^="/lawyers/"]'),
-      ).toHaveCount(0);
-      const session = await page.evaluate(() =>
-        JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}"),
-      );
-      expect(session.user).toMatchObject({ id: customer.user?.id, accountType, name });
-    }
+        () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
+      ),
+    ).toBe("lawyer");
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
+      s.user.accountType = "customer";
+      localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
+      window.dispatchEvent(new Event("baro-session-changed"));
+    });
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
   }
 });
 
@@ -306,12 +184,10 @@ test("conversation screens remain accessible and responsive from home through ch
   await expect
     .poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth)))
     .toBe(0);
-  await expect(page.getByText("API 예시", { exact: true })).not.toBeVisible();
+  await expect(page.getByText("API 예시", { exact: true })).toBeVisible();
   await page.screenshot({ path: ".wrangler/ui-review/home-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "메뉴 열기" }).click();
-  const menu = page.getByRole("dialog", { name: "메뉴", exact: true });
-  await expect(menu).toBeVisible();
-  await expect(menu.getByText("API 예시 모드 · 합성 데이터", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "메뉴", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "메뉴 열기" })).toBeFocused();
   await page
@@ -399,7 +275,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   await narrative.fill(
     "이전 고객만 입력한 합성 초안입니다. 약속한 날짜가 지나도 대금을 받지 못했어요.",
   );
-  await page.getByRole("combobox", { name: "준비하는 방향" }).selectOption("criminal-response");
+  await page.getByRole("radio", { name: "주장 대응", exact: true }).check();
   const peer = await context.newPage();
   await peer.goto("/login");
   // addInitScript seeds each page; change the session after the peer has loaded.
@@ -416,9 +292,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
     page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
   ).toBeVisible();
   await expect(narrative).toHaveValue("");
-  await expect(page.getByRole("combobox", { name: "준비하는 방향" })).toHaveValue(
-    "unknown-prepare",
-  );
+  await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
 });

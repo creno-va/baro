@@ -1,25 +1,17 @@
 ---
 import * as drafts from "../content/policy-drafts";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { PageHeader } from "./ui/page-header";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { ReadingContent } from "./ui/reading-content";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { Section } from "./ui/section";
 
 interface Props {
   kind: keyof typeof drafts.policyDrafts;
 }
 const { kind } = Astro.props;
-// biome-ignore lint/correctness/noUnusedVariables: Astro renders the policy.
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads policy.
 const policy = drafts.policyDrafts[kind];
-// biome-ignore lint/correctness/noUnusedVariables: Astro renders the policy version.
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the versions.
 const version = drafts.POLICY_VERSIONS[kind];
 ---
-<ReadingContent>
-  <article class="policy-document ui-stack">
-    <div class="policy-heading"><PageHeader eyebrow={`이용 안내 · ${version}`} title={policy.title} description={policy.description} /></div>
-    {policy.sections.map((section) => <Section id={section.id} title={section.title}>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</Section>)}
-    <nav class="ui-cluster" aria-label="다른 이용 안내"><a class="ui-link" href="/help">도움말</a><a class="ui-link" href="/policies/terms">이용약관</a><a class="ui-link" href="/policies/privacy">개인정보 처리방침</a><a class="ui-link" href="/policies/ai">AI 이용 고지</a></nav>
-  </article>
-</ReadingContent>
+<article class="policy-document">
+  <header class="policy-heading"><span class="policy-eyebrow">이용 안내 · {version}</span><h1>{policy.title}</h1><p>{policy.description}</p></header>
+  {policy.sections.map((section) => <section class="policy-card" id={section.id}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</section>)}
+  <nav class="policy-links" aria-label="다른 이용 안내"><a href="/help">도움말</a><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a><a href="/settings">설정</a></nav>
+</article>

@@ -1,9 +1,12 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the document.
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
 import PolicyDocument from "../../components/PolicyDocument.astro";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders policy metadata.
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
 import { policyDrafts } from "../../content/policy-drafts";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
-import PublicLayout from "../../layouts/PublicLayout.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import AppLayout from "../../layouts/AppLayout.astro";
+import "../../styles/policies.css";
 ---
-<PublicLayout title={policyDrafts.terms.title} description={policyDrafts.terms.description}><PolicyDocument kind="terms" /></PublicLayout>
+<AppLayout title={policyDrafts.terms.title} description={policyDrafts.terms.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
+  <PolicyDocument kind="terms" />
+</AppLayout>

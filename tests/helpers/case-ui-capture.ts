@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
+import { closeWorkspaceMaterials } from "./workspace-navigation";
 
 export async function captureCaseViewports(page: Page, name: string, selector = ".workspace") {
   const original = page.viewportSize();
@@ -8,6 +9,7 @@ export async function captureCaseViewports(page: Page, name: string, selector = 
     { name: "mobile", width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
+    await closeWorkspaceMaterials(page);
     // Audit the settled appearance, including scene and cross-page entrances.
     await page.evaluate(() =>
       Promise.all(

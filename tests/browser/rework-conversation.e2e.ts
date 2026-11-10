@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Frame, type Locator, type Page, type Request, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { z } from "zod";
 import { v2AcceptedOperationSchema } from "../../src/contracts/v2";
 import { openReportEditor } from "../helpers/report-controls";
@@ -103,129 +103,6 @@ async function conversationFocus(page: Page) {
       dialogs: document.querySelectorAll("dialog[open]").length,
     };
   });
-}
-async function verifyUnavailableLawyer(page: Page, report: Locator, fixture: Fixture) {
-  const trigger = report.getByRole("button", { name: /^변호사와 해결/ });
-  const stored = () =>
-    page.evaluate(async () => {
-      const path = "/src/client/api/index.ts";
-      const { api } = (await import(path)) as typeof import("../../src/client/api/index");
-      const id = decodeURIComponent(location.pathname.split("/")[2] ?? "");
-      const [resolution, report] = await Promise.all([
-        api.rework.getResolution(id),
-        api.rework.peekReport(id),
-      ]);
-      return { resolution, report };
-    });
-  const local = () =>
-    report.locator("input, textarea, select, .resolution-paths button").evaluateAll((elements) =>
-      elements.map((element) => ({
-        id: element.id,
-        name: element.getAttribute("aria-label"),
-        value:
-          element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement ||
-          element instanceof HTMLSelectElement
-            ? element.value
-            : null,
-        checked: element instanceof HTMLInputElement ? element.checked : null,
-        pressed: element.getAttribute("aria-pressed"),
-        start: element instanceof HTMLTextAreaElement ? element.selectionStart : null,
-        end: element instanceof HTMLTextAreaElement ? element.selectionEnd : null,
-      })),
-    );
-  await expect(trigger).toBeEnabled();
-  const before = await stored();
-  const beforeLocal = await local();
-  const beforeCalls = await counters(fixture);
-  const beforeRequests = await (await fixture.control("requests")).json();
-  const url = page.url();
-  const requests: { method: string; path: string }[] = [];
-  const external: string[] = [];
-  const navigations: string[] = [];
-  let downloads = 0;
-  let popups = 0;
-  const observeRequest = (request: Request) => {
-    const target = new URL(request.url());
-    if (target.pathname.startsWith("/api/"))
-      requests.push({ method: request.method(), path: target.pathname });
-    if (target.origin !== new URL(url).origin) external.push(target.origin);
-  };
-  const observeNavigation = (frame: Frame) => {
-    if (frame === page.mainFrame()) navigations.push(frame.url());
-  };
-  const observeDownload = () => downloads++;
-  const observePopup = () => popups++;
-  page.on("request", observeRequest);
-  page.on("framenavigated", observeNavigation);
-  page.on("download", observeDownload);
-  page.on("popup", observePopup);
-  try {
-    for (const close of ["confirm", "escape"] as const) {
-      await trigger.focus();
-      await trigger.press("Enter");
-      const dialog = page.getByRole("dialog", {
-        name: "아직 지원하지 않는 기능이에요",
-        exact: true,
-      });
-      await expect(dialog).toBeVisible();
-      await expect(dialog).toHaveAccessibleDescription(
-        "현재 변호사 연결 기능은 제공하지 않습니다.",
-      );
-      await expect(
-        dialog.getByRole("heading", { name: "아직 지원하지 않는 기능이에요", exact: true }),
-      ).toBeVisible();
-      await expect(
-        dialog.getByText("현재 변호사 연결 기능은 제공하지 않습니다.", { exact: true }),
-      ).toBeVisible();
-      await expect(page.getByRole("dialog")).toHaveCount(1);
-      await expect(dialog.getByRole("button")).toHaveCount(1);
-      await expect(dialog.getByRole("link")).toHaveCount(0);
-      const confirm = dialog.getByRole("button", { name: "확인", exact: true });
-      await expect(confirm).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(confirm).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
-      await expect(confirm).toBeFocused();
-      if (close === "confirm") await confirm.press("Enter");
-      else await page.keyboard.press("Escape");
-      await expect(dialog).toHaveCount(0);
-      await expect(trigger).toBeFocused();
-      expect(page.url()).toBe(url);
-    }
-  } finally {
-    page.off("request", observeRequest);
-    page.off("framenavigated", observeNavigation);
-    page.off("download", observeDownload);
-    page.off("popup", observePopup);
-  }
-  expect(requests).toEqual([]);
-  expect(external).toEqual([]);
-  expect(navigations).toEqual([]);
-  expect(downloads).toBe(0);
-  expect(popups).toBe(0);
-  expect(await (await fixture.control("requests")).json()).toEqual(beforeRequests);
-  const after = await stored();
-  expect(after).toEqual(before);
-  expect(await local()).toEqual(beforeLocal);
-  const afterCalls = await counters(fixture);
-  expect(afterCalls.models).toEqual(beforeCalls.models);
-  expect(afterCalls.sources).toBe(beforeCalls.sources);
-  expect(afterCalls.native).toEqual(beforeCalls.native);
-  return {
-    choice: after.resolution.selection,
-    revision: after.resolution.revision,
-    reportRevision: after.report?.revision,
-    requests,
-    external,
-    navigations,
-    downloads,
-    popups,
-    storedStateUnchanged: true,
-    localStateUnchanged: true,
-    focusReturned: true,
-    closes: ["confirm", "escape"],
-  };
 }
 async function captureReadiness(page: Page, directory: string, phase: string) {
   const value = await page.evaluate(async () => {
@@ -414,15 +291,12 @@ async function addMaterial(
   await afterSend?.();
   if (expectProcessingFailure) {
     await openWorkspaceMaterials(page);
-    const failedFile = materials
-      .locator(".workspace-file-list > li")
-      .filter({ has: page.getByRole("heading", { name, exact: true }) });
-    await expect(failedFile.locator(".workspace-status")).toHaveText("처리 실패 · 확인 필요");
-    await expect(
-      failedFile.getByRole("button", { name: "처리 다시 시도", exact: true }),
-    ).toBeEnabled();
+    await expect(materials.getByText("처리 실패", { exact: true })).toBeVisible();
     await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
-    const original = failedFile.getByRole("button", { name: "자료 확인", exact: true });
+    const original = materials
+      .locator(".workspace-file-list > li")
+      .filter({ has: page.getByRole("heading", { name, exact: true }) })
+      .getByRole("button", { name: "자료 확인", exact: true });
     await expect(original).toBeVisible();
     return original;
   }
@@ -586,48 +460,6 @@ async function openPreparedWorkspace(page: Page, f: Fixture) {
   ).toBeEnabled();
 }
 
-for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
-  test(`${purpose}: unavailable lawyer preserves the existing choice and unsaved report without requests`, async ({
-    page,
-    context,
-  }, testInfo) => {
-    const f = await openReworkBrowserFixture(
-      context,
-      new URL(String(testInfo.project.use.baseURL)).origin,
-      purpose,
-    );
-    const directory = join(journeyArtifacts, testInfo.project.name, `${purpose}-unavailable`);
-    try {
-      await mkdir(directory, { recursive: true });
-      await page.setViewportSize({ width: 320, height: 844 });
-      await openPreparedWorkspace(page, f);
-      await reportReady(page);
-      const report = page.locator(".report-review");
-      await expect(report.getByRole("button", { name: /^직접 해결/ })).toBeEnabled();
-      const initial = await verifyUnavailableLawyer(page, report, f);
-      await report.getByRole("button", { name: /^직접 해결/ }).click();
-      const ready = report.getByRole("checkbox", {
-        name: "현재 리포트의 사실과 사용할 자료를 확인했어요.",
-        exact: true,
-      });
-      await ready.check();
-      await openReportEditor(page);
-      const editor = report.getByRole("textbox", { name: / 수정$/ }).first();
-      const edited = `${await editor.inputValue()}\n아직 저장하지 않은 합성 검토 내용`;
-      await editor.fill(edited);
-      const editing = await verifyUnavailableLawyer(page, report, f);
-      expect(editing.choice).toBe("self");
-      await expect(editor).toHaveValue(edited);
-      await expect(ready).toBeChecked();
-      await writeFile(
-        join(directory, "keyboard-focus.json"),
-        JSON.stringify({ initial, editing }, null, 2),
-      );
-    } finally {
-      await f.close();
-    }
-  });
-
 test("official source failure stays explicit and reload does not start another search", async ({
   page,
   context,
@@ -676,10 +508,7 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await returnToWorkspace(page);
     expect((await f.control("native", { failProcess: true })).ok()).toBe(true);
     const attachment = await addMaterial(page, f, true);
-    const materialsUrl = page.url();
-    expect(new URL(materialsUrl).pathname).toBe(`/cases/${f.info.caseId}/files`);
-    await attachment.focus();
-    await attachment.press("Enter");
+    await attachment.click();
     const dialog = page.getByRole("dialog", { name: "자료 확인", exact: true });
     await expect(dialog.getByRole("status")).toContainText(
       "자료 처리를 완료하지 못했어요. 원본은 보관돼요.",
@@ -694,10 +523,6 @@ test("a real processing failure keeps the original and is not shown as reviewed 
     await artifact.delete();
     expect((await counters(f)).native?.failed).toBeGreaterThan(0);
     await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
-    await expect(attachment).toBeFocused();
-    expect(page.url()).toBe(materialsUrl);
-    await returnToWorkspace(page);
     expect(new URL(page.url()).pathname).toBe(`/cases/${f.info.caseId}`);
   } finally {
     await f.close();
@@ -928,7 +753,7 @@ test("a foreign signed account cannot retain the previous conversation report or
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    const priorTitle = await page.getByRole("heading", { level: 1 }).innerText();
+    const priorTitle = await page.locator(".report-heading h2").innerText();
     const priorBody = await page.locator(".report-reading .report-markdown").first().innerText();
     await expect(page.getByText(priorTitle, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(1);
@@ -939,10 +764,7 @@ test("a foreign signed account cannot retain the previous conversation report or
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.locator(".report-reading")).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { name: "사건을 확인할 수 없어요", exact: true }),
-    ).toBeVisible();
-    await expect(page.locator(".report-review")).toHaveCount(0);
+    await expect(page.locator(".report-heading h2")).toHaveText("내 사건 이해와 해결 준비");
     await expect(page.getByText(priorTitle, { exact: true })).toHaveCount(0);
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -1330,21 +1152,13 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           JSON.stringify(await stableForeground(report), null, 2),
         );
         await page.screenshot({ path: join(directory, "report.png"), animations: "disabled" });
-        if (followup === "변호사와 해결") {
-          await expect(report.getByRole("button", { name: /^직접 해결/ })).toBeEnabled();
-          await writeFile(
-            join(directory, "keyboard-focus.json"),
-            JSON.stringify(await verifyUnavailableLawyer(page, report, f), null, 2),
-          );
-        }
         const preservedPdf = await preserveReport(page, directory, f);
         if (camera)
           expect(await readFile(join(directory, "report.html"), "utf8")).toContain(photoName);
         const download = followup === "리포트만 저장" ? page.waitForEvent("download") : null;
         let beforeDraftDownload: Awaited<ReturnType<typeof conversationFocus>> | null = null;
         const pdfResponseIndex = f.pdfResponses.length;
-        if (followup !== "변호사와 해결")
-          await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
+        await report.getByRole("button", { name: new RegExp(`^${followup}`) }).click();
         if (followup === "직접 해결") {
           await expect(
             report.getByRole("heading", { name: "준비 순서와 확인할 안내", exact: true }),
@@ -1382,7 +1196,11 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           expect(await readFile(file, "utf8")).toBe(reviewedText);
           await artifact.saveAs(join(directory, "reviewed-draft.txt"));
           await artifact.delete();
-        } else if (followup === "리포트만 저장") {
+        } else if (followup === "변호사와 해결")
+          await expect(
+            report.getByRole("heading", { name: "상담 준비와 공유 범위", exact: true }),
+          ).toBeVisible();
+        else {
           if (!download) throw new Error("MISSING_REVIEWED_REPORT_DOWNLOAD");
           const artifact = await download;
           expect(artifact.suggestedFilename()).toMatch(/\.pdf$/i);

@@ -14,8 +14,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  lazy,
-  Suspense,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -39,24 +37,20 @@ import {
   V2_LIMITS,
   type V2ConversationIntent,
   type V2ConversationState,
-  type V2FactReference,
   type V2LookupRequest,
   type V2MessageRequest,
 } from "../../contracts/v2";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
-import type { ReportQuestionContext } from "../reports/ReportReview";
 import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
 import { CaseWorkspaceFrame } from "../ui/workspace-frame";
 import { MaterialsPanel } from "./MaterialsPanel";
 import "../../styles/workspace-conversation.css";
-import "../../styles/reports.css";
 import { Button, ButtonLink } from "../ui/button";
-import { Dialog } from "../ui/dialog";
 import { CaseMaterials } from "./CaseMaterials";
-import { CaseNavigation, type CaseTask } from "./CaseNavigation";
+import { CaseNavigation } from "./CaseNavigation";
 import { ChatAttachments } from "./ChatAttachments";
 import {
   ConversationAgent,
@@ -84,9 +78,6 @@ import { TimelineEvidence } from "./TimelineEvidence";
 import { timelineDateInput, timelineEventLength } from "./timeline-draft";
 
 export type WorkspaceTab = "chat" | "files" | "timeline" | "actions";
-const RetainedReportReview = lazy(() =>
-  import("../reports/ReportReview").then((module) => ({ default: module.ReportReview })),
-);
 const tabLabels = { chat: "대화", files: "자료", timeline: "타임라인", actions: "다음 행동" };
 const materialReflectionRequest =
   "선택한 자료에서 읽은 정보를 먼저 요약하고, 근거가 있는 사실·관련 인물·타임라인에 반영해 주세요. 거래 자료라면 거래일자와 송금일시, 플랫폼·은행, 금액, 거래 상태를 각각 구분하고 계좌는 확인되는 끝 4자리만 표시해 주세요. 기존 내용과 다른 점을 설명하고, 이미 나온 정보는 다시 묻지 말고 자료만으로 확인되지 않는 내용만 알려 주세요. 원문에 없는 내용은 추측하지 마세요.";
@@ -135,156 +126,14 @@ function download(blob: Blob, name: string) {
 type WorkspaceProps = {
   caseId: string;
   tab?: WorkspaceTab;
-  initialTask?: CaseTask;
   lookupAvailable?: boolean;
 };
 export function Workspace(props: WorkspaceProps) {
   return <WorkspaceContent key={props.caseId} {...props} />;
 }
-function WorkspaceContent({
-  caseId,
-  tab: initialTab = "chat",
-  initialTask,
-  lookupAvailable = false,
-}: WorkspaceProps) {
-  const [tab, setTab] = useState<WorkspaceTab>(initialTask === "files" ? "files" : initialTab);
-  const [activeTask, setActiveTask] = useState<CaseTask | null>(
-    initialTask ?? (initialTab === "chat" || initialTab === "files" ? initialTab : null),
-  );
-  const [chatVisited, setChatVisited] = useState(
-    initialTask ? initialTask === "chat" : initialTab === "chat",
-  );
-  const [filesVisited, setFilesVisited] = useState(
-    initialTask === "files" || initialTab === "files",
-  );
-  const [reportVisited, setReportVisited] = useState(
-    initialTask === "reports" || initialTask === "drafts",
-  );
-  const [reportSection, setReportSection] = useState<"report" | "drafts">(
-    initialTask === "drafts" ? "drafts" : "report",
-  );
-  const [reportQuestion, setReportQuestion] = useState<ReportQuestionContext | null>(null);
-  const [reportDirty, setReportDirty] = useState(false);
-  const taskScroll = useRef(new Map<string, number>());
-  const taskBodyScroll = useRef(new Map<string, number>());
-  const taskFocus = useRef(new Map<string, HTMLElement>());
-  const chatScroll = useRef(0);
-  const acceptedSearch = useRef<Partial<Record<CaseTask, string>>>({
-    reports: "?mode=conversation",
-    drafts: "?mode=conversation",
-  });
-  const activeTaskRef = useRef(activeTask);
-  activeTaskRef.current = activeTask;
-  const root = useRef<HTMLDivElement>(null);
-  const linkedReview = useRef<(fileId: string, origin: HTMLElement) => void>(() => {});
-  const navigateTask = useCallback(
-    (next: CaseTask, history: "push" | "none" = "push") => {
-      const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
-      if (scroller) taskScroll.current.set(activeTask ?? tab, scroller.scrollTop);
-      const body = root.current?.querySelector<HTMLElement>(
-        `[data-workspace-task="${activeTask === "drafts" ? "reports" : activeTask}"]`,
-      );
-      if (body && activeTask) taskBodyScroll.current.set(activeTask, body.scrollTop);
-      if (activeTask === "chat" && chatMessages.current)
-        chatScroll.current = chatMessages.current.scrollTop;
-      const base = `/cases/${encodeURIComponent(caseId)}`;
-      const url = new URL(window.location.href);
-      if (url.pathname === `${base}/reports`) {
-        acceptedSearch.current.reports = url.search;
-        acceptedSearch.current.drafts = url.search;
-      } else if (url.pathname === `${base}/files`) acceptedSearch.current.files = url.search;
-      else if (url.pathname === base) acceptedSearch.current.chat = url.search;
-      if (next === "chat") {
-        setChatVisited(true);
-        setContextRequested(true);
-        setTab("chat");
-      } else if (next === "files") {
-        setFilesVisited(true);
-        setTab("files");
-      } else {
-        setReportVisited(true);
-        setReportSection(next === "drafts" ? "drafts" : "report");
-      }
-      setActiveTask(next);
-      if (history === "push") {
-        const destination =
-          next === "chat"
-            ? `${base}${acceptedSearch.current.chat ?? ""}`
-            : next === "files"
-              ? `${base}/files${acceptedSearch.current.files ?? ""}`
-              : `${base}/reports${acceptedSearch.current[next] ?? "?mode=conversation"}${next === "drafts" ? "#document-drafts" : ""}`;
-        if (`${url.pathname}${url.search}${url.hash}` !== destination)
-          window.history.pushState(
-            { ...window.history.state, baroCaseTask: next, baroCaseId: caseId },
-            "",
-            destination,
-          );
-      }
-    },
-    [activeTask, tab, caseId],
-  );
-  useLayoutEffect(() => {
-    const scroller = root.current?.querySelector<HTMLElement>(".case-workspace__content");
-    if (scroller) scroller.scrollTop = taskScroll.current.get(activeTask ?? tab) ?? 0;
-    if (activeTask) {
-      const body = root.current?.querySelector<HTMLElement>(
-        `[data-workspace-task="${activeTask === "drafts" ? "reports" : activeTask}"]`,
-      );
-      if (body) body.scrollTop = taskBodyScroll.current.get(activeTask) ?? 0;
-      if (activeTask === "chat" && chatMessages.current)
-        chatMessages.current.scrollTop = chatScroll.current;
-      const focus = taskFocus.current.get(activeTask);
-      if (
-        focus?.isConnected &&
-        focus.getClientRects().length &&
-        !focus.closest("[inert], [aria-hidden='true']") &&
-        !focus.matches(":disabled")
-      )
-        focus.focus({ preventScroll: true });
-    }
-  }, [activeTask, tab]);
-  useEffect(() => {
-    const remember = (event: FocusEvent) => {
-      if (
-        !(event.target instanceof HTMLElement) ||
-        !root.current?.contains(event.target) ||
-        !activeTask
-      )
-        return;
-      if (event.target.closest("[data-workspace-task]"))
-        taskFocus.current.set(activeTask, event.target);
-    };
-    document.addEventListener("focusin", remember);
-    return () => document.removeEventListener("focusin", remember);
-  }, [activeTask]);
-  const locationInitialized = useRef(false);
-  useEffect(() => {
-    if (!locationInitialized.current) {
-      locationInitialized.current = true;
-      if (window.location.hash === "#document-drafts") navigateTask("drafts", "none");
-    }
-    const pop = () => {
-      const base = `/cases/${encodeURIComponent(caseId)}`;
-      const path = window.location.pathname;
-      const task =
-        path === base
-          ? "chat"
-          : path === `${base}/files`
-            ? "files"
-            : path === `${base}/reports`
-              ? window.location.hash === "#document-drafts"
-                ? "drafts"
-                : "reports"
-              : null;
-      if (task) navigateTask(task, "none");
-    };
-    window.addEventListener("popstate", pop);
-    return () => window.removeEventListener("popstate", pop);
-  }, [caseId, navigateTask]);
+function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: WorkspaceProps) {
   const [view, setView] = useState<CustomerWorkspaceView | null>(null);
-  const [contextRequested, setContextRequested] = useState(
-    initialTask !== "files" && initialTab !== "files",
-  );
+  const [contextRequested, setContextRequested] = useState(false);
   const [contextLoaded, setContextLoaded] = useState(false);
   const preparationAttempt = useRef<{
     target: "timeline" | "actions";
@@ -299,19 +148,17 @@ function WorkspaceContent({
     action: V2ConversationIntent;
   } | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [materialsOpen, setMaterialsOpen] = useState(false);
   const [conversationState, setConversationState] = useState<V2ConversationState | null>(null);
-  const openMaterials = useCallback(() => navigateTask("files"), [navigateTask]);
+  const openMaterials = useCallback(() => setMaterialsOpen(true), []);
+  useEffect(() => {
+    setMaterialsOpen(window.matchMedia("(min-width: 1200px)").matches);
+  }, []);
   const [error, setError] = useState<ReturnType<typeof problem> | null>(null);
-  const [accessChanged, setAccessChanged] = useState(false);
-  const privateViewLoaded = useRef(false);
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
   const draftComposing = useRef(false);
-  const questionContext = reportQuestion
-    ? `리포트의 ‘${reportQuestion.sectionTitle}’에서 읽은 내용입니다. 아래 발췌는 질문을 위한 맥락이며 확인된 사실로 단정하지 않습니다.\n${reportQuestion.excerpt}\n\n`
-    : "";
-  const messageText = `${questionContext}${draft.trim()}`.trim();
-  const messageTooLong = [...messageText].length > 10000;
+  const messageTooLong = [...draft.trim()].length > 10000;
   const [selected, setSelected] = useState<string[]>([]);
   const [localAttachments, setLocalAttachments] = useState<File[]>([]);
   const [chatAttachments, setChatAttachments] = useState<FileView[]>([]);
@@ -319,13 +166,8 @@ function WorkspaceContent({
   const queuedUpload = useRef<ConversationUpload | null>(null);
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [notice, setNotice] = useState("");
-  const [leaveTarget, setLeaveTarget] = useState<string | null>(null);
-  const leaveApproved = useRef(false);
   const [uploadReadbackPending, setUploadReadbackPending] = useState(false);
   const [preview, setPreview] = useState<FileView | null>(null);
-  const [sourceReference, setSourceReference] = useState<
-    Extract<V2FactReference, { kind: "user_material" }> | undefined
-  >();
   const [deleteFile, setDeleteFile] = useState<FileView | null>(null);
   const [entry, setEntry] = useState<(Partial<TimelineView> & { expectedRevision: number }) | null>(
     null,
@@ -355,12 +197,6 @@ function WorkspaceContent({
   const uploadInput = useRef<HTMLInputElement>(null);
   const uploadChooserScope = useRef<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
-  const filePreviewOrigin = useRef<{
-    element: HTMLElement;
-    epoch: number;
-    task: CaseTask | null;
-    url: string;
-  } | null>(null);
   const reviewDirty = useRef(false);
   const reviewBusy = useRef(false);
   const [reviewState, setReviewState] = useState({ dirty: false, busy: false });
@@ -384,8 +220,6 @@ function WorkspaceContent({
   const acknowledgedTimeline = useRef(false);
   const [timelineRecovery, setTimelineRecovery] = useState(false);
   const purge = useCallback(() => {
-    if (privateViewLoaded.current) setAccessChanged(true);
-    privateViewLoaded.current = false;
     ++latest.current;
     operationError.current = null;
     acknowledgedTimeline.current = false;
@@ -400,15 +234,7 @@ function WorkspaceContent({
     setConversationRequest(null);
     setAgentBusy(false);
     setConversationState(null);
-    setReportVisited(false);
-    setReportDirty(false);
-    setReportQuestion(null);
-    taskScroll.current.clear();
-    taskBodyScroll.current.clear();
-    taskFocus.current.clear();
-    chatScroll.current = 0;
-    setLeaveTarget(null);
-    leaveApproved.current = false;
+    setMaterialsOpen(false);
     setView(null);
     setContextRequested(false);
     setContextLoaded(false);
@@ -421,8 +247,6 @@ function WorkspaceContent({
     setQueuedSend(false);
     queuedUpload.current = null;
     setPreview(null);
-    filePreviewOrigin.current = null;
-    setSourceReference(undefined);
     setDeleteFile(null);
     setEntry(null);
     setOriginal(null);
@@ -441,12 +265,7 @@ function WorkspaceContent({
   }, []);
   const access = useCustomerAccess(purge, (cause) => setError(problem(cause)), true);
   const { ready, canMutate, version, verify, ticket, current, alive, deny } = access;
-  const readonly =
-    !ready ||
-    !canMutate ||
-    view?.case.stage !== "active" ||
-    agentBusy ||
-    (activeTask === "chat" && !contextLoaded);
+  const readonly = !ready || !canMutate || view?.case.stage !== "active" || agentBusy;
   const privateContent = {
     style: { visibility: ready ? undefined : ("hidden" as const) },
     inert: !ready,
@@ -463,7 +282,6 @@ function WorkspaceContent({
   );
 
   const apply = useCallback((next: WorkspaceView, animateNew = true) => {
-    privateViewLoaded.current = true;
     const previous = previousMessages.current;
     if (previous && animateNew) {
       const added = next.messages.filter(
@@ -493,7 +311,6 @@ function WorkspaceContent({
     setPreview((file) => (file ? (next.files.find((item) => item.id === file.id) ?? null) : null));
   }, []);
   const followReply = useCallback(() => {
-    if (activeTaskRef.current !== "chat") return;
     const messages = chatMessages.current;
     if (followingChat.current && messages)
       messages.scrollTo({ top: messages.scrollHeight, behavior: "instant" });
@@ -522,10 +339,12 @@ function WorkspaceContent({
     });
   }, []);
   const fileReviewError = useCallback((cause: unknown) => showError(cause, true), [showError]);
-  const filesOnly = !contextRequested && (initialTab === "files" || initialTask === "files");
   const readView = useCallback(
-    () => (filesOnly ? api.workspace.getFiles(caseId) : api.workspace.get(caseId)),
-    [caseId, filesOnly],
+    () =>
+      tab === "files" && !contextRequested
+        ? api.workspace.getFiles(caseId)
+        : api.workspace.get(caseId),
+    [caseId, tab, contextRequested],
   );
   const load = useCallback(async () => {
     const serial = ++latest.current;
@@ -537,7 +356,7 @@ function WorkspaceContent({
       if (serial !== latest.current || !(await verify())) return false;
       if (current(epoch) && serial === latest.current) {
         apply(next);
-        if (!filesOnly) setContextLoaded(true);
+        if (tab !== "files" || contextRequested) setContextLoaded(true);
         setUploadReadbackPending(false);
         // A fresh read resolves its own error, not an earlier failed mutation.
         // If a failed mutation's 404 check was interrupted, this read now
@@ -556,7 +375,7 @@ function WorkspaceContent({
       if (alive(epoch) && serial === latest.current) showError(cause);
     }
     return false;
-  }, [readView, apply, verify, ticket, current, alive, showError, filesOnly]);
+  }, [readView, apply, verify, ticket, current, alive, showError, tab, contextRequested]);
   useEffect(() => {
     mounted.current = true;
     if (version && !lock.current) void load();
@@ -593,82 +412,18 @@ function WorkspaceContent({
     const file = view.files.find((file) => file.id === id);
     if (file && linkedFile.current !== key) {
       linkedFile.current = key;
-      filePreviewOrigin.current = null;
       setPreview(file);
     }
   }, [caseId, tab, ready, view]);
   useEffect(() => {
-    if (!messageText && !localAttachments.length && !chatAttachments.length && !selected.length)
-      return;
+    if (!draft.trim() && !localAttachments.length && !chatAttachments.length) return;
     const warn = (event: BeforeUnloadEvent) => {
-      if (leaveApproved.current) return;
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [messageText, localAttachments.length, chatAttachments.length, selected.length]);
-  const hasUnstoredWork =
-    !!messageText ||
-    localAttachments.length > 0 ||
-    chatAttachments.length > 0 ||
-    selected.length > 0 ||
-    reportDirty ||
-    reviewState.dirty;
-  useEffect(() => {
-    const navigate = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const link =
-        event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
-      if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self"))
-        return;
-      const url = new URL(link.href, window.location.href);
-      if (!["https:", "http:"].includes(url.protocol)) return;
-      const base = `/cases/${encodeURIComponent(caseId)}`;
-      if (url.origin === window.location.origin) {
-        const fileId = url.pathname === `${base}/files` ? url.searchParams.get("file") : null;
-        if (fileId) {
-          event.preventDefault();
-          linkedReview.current(fileId, link);
-          return;
-        }
-        const task =
-          url.pathname === base
-            ? "chat"
-            : url.pathname === `${base}/files` && !url.search
-              ? "files"
-              : url.pathname === `${base}/reports`
-                ? url.hash === "#document-drafts"
-                  ? "drafts"
-                  : "reports"
-                : null;
-        if (task) {
-          event.preventDefault();
-          navigateTask(task);
-          return;
-        }
-        if (
-          url.pathname === window.location.pathname &&
-          url.search === window.location.search &&
-          url.hash
-        )
-          return;
-      }
-      if (!hasUnstoredWork) return;
-      event.preventDefault();
-      setLeaveTarget(url.href);
-    };
-    document.addEventListener("click", navigate);
-    return () => document.removeEventListener("click", navigate);
-  }, [caseId, hasUnstoredWork, navigateTask]);
+  }, [draft, localAttachments.length, chatAttachments.length]);
   const latestMessage = view?.messages.at(-1);
   const latestMessageContent = latestMessage
     ? `${latestMessage.id}:${latestMessage.status}:${latestMessage.text}`
@@ -702,10 +457,6 @@ function WorkspaceContent({
     window.addEventListener("resize", fit);
     window.visualViewport?.addEventListener("resize", fit);
     const style = new MutationObserver(fit);
-    const resize = new ResizeObserver(fit);
-    // CSS zoom can change the root layout without a window/visualViewport resize.
-    // Observe that layout as well as style mutations while this modal is mounted.
-    resize.observe(document.documentElement);
     style.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["style", "class"],
@@ -714,7 +465,6 @@ function WorkspaceContent({
       window.removeEventListener("resize", fit);
       window.visualViewport?.removeEventListener("resize", fit);
       style.disconnect();
-      resize.disconnect();
     };
   }, [preview, deleteFile, entry]);
 
@@ -1084,29 +834,18 @@ function WorkspaceContent({
     chooseAttachments(files);
     draftInput.current?.focus();
   }
-  function openConversationFile(
-    fileId: string,
-    origin?: HTMLElement,
-    reference?: Extract<V2FactReference, { kind: "user_material" }>,
-  ) {
+  function openConversationFile(fileId: string, origin?: HTMLElement) {
     const file = view?.files.find((file) => file.id === fileId);
     if (!file) {
       showError({ code: "NOT_FOUND", message: "자료가 삭제됐거나 현재 확인할 수 없어요." }, true);
       return;
     }
-    // The access preflight disables the opener before showModal can remember it.
-    const destination = origin
-      ? { element: origin, task: activeTaskRef.current, url: window.location.href }
-      : null;
-    origin?.focus({ preventScroll: true });
-    void run("file-preview", async (epoch) => {
-      filePreviewOrigin.current = destination ? { ...destination, epoch } : null;
+    origin?.focus();
+    void run("file-preview", async () => {
       setPreview(file);
-      setSourceReference(reference);
       setOriginal(null);
     });
   }
-  linkedReview.current = openConversationFile;
   async function send(event: SyntheticEvent) {
     event.preventDefault();
     if (
@@ -1134,7 +873,7 @@ function WorkspaceContent({
             item,
             state,
             epoch,
-            messageText || materialReflectionRequest,
+            draft.trim() || materialReflectionRequest,
             [...new Set([...selected, ...chatAttachments.map((f) => f.id)])],
           );
           prepared = true;
@@ -1160,7 +899,7 @@ function WorkspaceContent({
       setQueuedSend(true);
       return;
     }
-    const text = messageText || materialReflectionRequest;
+    const text = draft.trim() || materialReflectionRequest;
     const fileIds = [...new Set([...selected, ...chatAttachments.map((file) => file.id)])];
     followingChat.current = true;
     await run("send", async (epoch) => {
@@ -1246,7 +985,6 @@ function WorkspaceContent({
       sendAttempt.current = null;
       queuedUpload.current = null;
       setDraft("");
-      setReportQuestion(null);
       setSelected([]);
       setChatAttachments([]);
     });
@@ -1298,18 +1036,24 @@ function WorkspaceContent({
       const next = await api.workspace.sendMessage(caseId, sendAttempt.current);
       if (!(await verify()) || !current(epoch)) return;
       sendAttempt.current = null;
-      apply(next);
-      setContextLoaded(true);
-      setPreview(null);
-      setOriginal(null);
-      navigateTask("chat");
-      setNotice(
-        "자료 내용을 대화에 반영하고 있어요. 확인된 결과가 나오면 이어서 검토할 수 있어요.",
-      );
+      if (tab === "chat") {
+        apply(next);
+        setPreview(null);
+        setOriginal(null);
+        setNotice(
+          "자료 내용을 대화에 반영하고 있어요. 확인된 결과가 나오면 이어서 검토할 수 있어요.",
+        );
+      } else window.location.assign(base);
     });
   }
   async function upload(files: FileList | File[] | null, forConversation = tab === "chat") {
-    if (!uploadConsent || view?.case.stage !== "active" || lock.current || !files?.length) return;
+    if (
+      (tab === "chat" && !uploadConsent) ||
+      view?.case.stage !== "active" ||
+      lock.current ||
+      !files?.length
+    )
+      return;
     uploadForConversation.current = forConversation;
     const chosen = Array.from(files);
     let complete = false;
@@ -1431,7 +1175,6 @@ function WorkspaceContent({
     reviewDirty.current = false;
     setTimelineRecovery(false);
     setPreview(null);
-    setSourceReference(undefined);
     setDeleteFile(null);
     setEntry(null);
     setOriginal(null);
@@ -1498,15 +1241,7 @@ function WorkspaceContent({
       ...(view?.messages
         .filter((message) => message.role === "assistant" && message.status === "complete")
         .flatMap((message) => message.references ?? []) ?? []),
-    ].flatMap((ref) =>
-      ref.kind === "user_material" &&
-      view?.files.some(
-        (file) =>
-          file.id === ref.fileId && file.status === "ready" && file.revision === ref.fileRevision,
-      )
-        ? [ref.fileId]
-        : [],
-    ),
+    ].flatMap((ref) => (ref.kind === "user_material" ? [ref.fileId] : [])),
   );
   const pendingResponse = view?.messages.some((message) => message.status === "pending");
   const contextSummary = view ? (
@@ -1588,12 +1323,7 @@ function WorkspaceContent({
                     </a>
                   </li>
                 </ul>
-                <CaseMaterials
-                  caseId={caseId}
-                  files={view.files}
-                  facts={view.facts}
-                  onReviewFile={openConversationFile}
-                />
+                <CaseMaterials caseId={caseId} files={view.files} facts={view.facts} />
               </section>
               {!!view.notices?.length && (
                 <div className="workspace-context-notices">
@@ -1610,28 +1340,8 @@ function WorkspaceContent({
       </details>
     </aside>
   ) : null;
-  const accessChangeFeedback = accessChanged ? (
-    <>
-      <p>계정 또는 접근 상태가 변경됐어요.</p>
-      <p>
-        이전 작업의 미저장 내용과 첨부 선택을 비웠어요. 현재 계정의 권한으로 다시 확인해 주세요.
-      </p>
-      {!error && ready && view && (
-        <Button
-          variant="outline"
-          onClick={() => {
-            setAccessChanged(false);
-            navigateTask(activeTask ?? "chat");
-          }}
-        >
-          현재 계정으로 다시 열기
-        </Button>
-      )}
-    </>
-  ) : null;
   const errorFeedback = error ? (
     <section className="workspace-error" role="alert">
-      {accessChangeFeedback}
       <strong>{error.message}</strong>
       <p>
         {error.code === "CONFLICT"
@@ -1673,10 +1383,6 @@ function WorkspaceContent({
         )}
       </div>
     </section>
-  ) : accessChanged ? (
-    <section className="workspace-error" role="alert">
-      {accessChangeFeedback}
-    </section>
   ) : null;
   const uploadRecovery =
     ready && retryUploads.length > 0 ? (
@@ -1701,24 +1407,23 @@ function WorkspaceContent({
       readonly={readonly}
       ready={ready}
       evidenceIds={evidenceIds}
-      facts={view.facts ?? []}
       selected={selected}
       selectionDisabled={queuedSend || !!pendingResponse}
-      onSelect={(id, checked) =>
-        setSelected((ids) =>
-          checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id),
-        )
-      }
-      onAsk={(file) => {
-        if (queuedSend || pendingResponse || busy || readonly) return;
-        setSelected((ids) => [...new Set([...ids, file.id])]);
-        navigateTask("chat");
-        setNotice(
-          "자료를 다음 메시지에 사용할 수 있도록 선택했어요. 작성 중인 입력을 확인한 뒤 보내기를 눌러주세요.",
-        );
-        requestAnimationFrame(() => draftInput.current?.focus({ preventScroll: true }));
+      {...(tab === "chat"
+        ? {
+            onSelect: (id: string, checked: boolean) =>
+              setSelected((ids) =>
+                checked ? [...new Set([...ids, id])] : ids.filter((value) => value !== id),
+              ),
+          }
+        : {})}
+      onReview={(file, origin) => {
+        origin.focus();
+        void run("file-preview", async () => {
+          setPreview(file);
+          setOriginal(null);
+        });
       }}
-      onReview={(file, origin) => openConversationFile(file.id, origin)}
       onDelete={(file, origin) => {
         origin.focus();
         setDeleteFile(file);
@@ -1726,22 +1431,13 @@ function WorkspaceContent({
       onRetry={(id) => void retryFile(id)}
       acceptedFileRetries={acceptedFileRetries}
       report={conversationState?.report ?? null}
-      standalone
-      onReportRefresh={() =>
-        void run("refresh", async (epoch) => {
-          try {
-            const progress = await api.rework.getConversationProgress(caseId, {
-              expectedOwner: access.ownerId() ?? "",
-            });
-            if (!(await verify()) || !current(epoch)) return;
-            setConversationState(progress.state);
-          } catch (cause) {
-            if (current(epoch)) setConversationState(null);
-            throw cause;
-          }
-        })
-      }
+      standalone={tab === "files"}
+      {...(tab === "chat"
+        ? { onReportRefresh: () => setConversationRefresh((value) => value + 1) }
+        : {})}
     >
+      {tab === "chat" && materialsOpen && errorFeedback}
+      {tab === "chat" && materialsOpen && uploadRecovery}
       {conversationState?.snapshot &&
         !["stale", "pending", "running"].includes(conversationState.analysis.status) && (
           <div {...privateContent}>
@@ -1813,7 +1509,10 @@ function WorkspaceContent({
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            if (!busy && !readonly) chooseAttachments(Array.from(event.dataTransfer.files));
+            if (!busy && !readonly) {
+              if (tab === "chat") chooseAttachments(Array.from(event.dataTransfer.files));
+              else void upload(event.dataTransfer.files);
+            }
           }}
         >
           <span className="workspace-upload-icon">
@@ -1854,8 +1553,7 @@ function WorkspaceContent({
   ) : null;
   return (
     <div
-      ref={root}
-      className={`workspace workspace--${activeTask ?? tab}${activeTask === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
+      className={`workspace workspace--${tab}${tab === "chat" && view && !view.messages.length ? " workspace--empty" : ""}`}
     >
       {/* Keep the chooser's original node attached during temporary access checks. */}
       <input
@@ -1876,14 +1574,14 @@ function WorkspaceContent({
             return;
           }
           uploadChooserScope.current = null;
-          chooseAttachments(Array.from(event.target.files ?? []));
-          event.target.value = "";
+          if (tab === "chat") {
+            chooseAttachments(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          } else void upload(event.target.files);
         }}
       />
       <CaseWorkspaceFrame
-        kind={
-          activeTask === "chat" ? "conversation" : activeTask === "files" ? "compare" : "document"
-        }
+        kind={tab === "chat" ? "conversation" : "document"}
         header={
           <CaseNavigation
             caseId={caseId}
@@ -1891,18 +1589,19 @@ function WorkspaceContent({
               (ready ? view?.case.title : null) ??
               (error ? "사건을 확인할 수 없어요" : "사건을 불러오는 중")
             }
-            active={activeTask ?? tab}
-            {...(activeTask ? { activeTask } : {})}
-            onNavigate={navigateTask}
+            active={tab}
             fileCount={ready ? view?.files.length : undefined}
           />
         }
+        {...(tab === "chat" && view
+          ? { panel: materialsPanel, panelOpen: materialsOpen, onPanelOpenChange: setMaterialsOpen }
+          : {})}
       >
         <div className="workspace-feedback" aria-live="polite" aria-atomic="true">
           {notice || (busy === "file-retry" ? "자료 처리 요청을 확인하고 있어요…" : "")}
         </div>
-        {errorFeedback}
-        {uploadRecovery}
+        {!(tab === "chat" && materialsOpen) && errorFeedback}
+        {!(tab === "chat" && materialsOpen) && uploadRecovery}
         {!error && !busy && (acceptedFileRetries.length > 0 || uploadReadbackPending) && (
           <Button
             variant="outline"
@@ -1992,23 +1691,9 @@ function WorkspaceContent({
               </section>
             )}
             <div className="workspace-grid">
-              <section
-                className="workspace-main"
-                aria-label={
-                  activeTask === "reports"
-                    ? "리포트"
-                    : activeTask === "drafts"
-                      ? "문서 초안"
-                      : tabLabels[tab]
-                }
-              >
-                {chatVisited && (
-                  <div
-                    data-workspace-task="chat"
-                    hidden={activeTask !== "chat"}
-                    inert={activeTask !== "chat"}
-                    style={{ display: activeTask !== "chat" ? "none" : undefined }}
-                  >
+              <section className="workspace-main" aria-label={tabLabels[tab]}>
+                {tab === "chat" && (
+                  <>
                     {!!view.messages.length && (
                       <div className="workspace-chat-heading">
                         <h2>이어서 대화하기</h2>
@@ -2023,7 +1708,6 @@ function WorkspaceContent({
                       aria-label="사건 대화"
                       aria-live="polite"
                       onScroll={(event) => {
-                        if (activeTaskRef.current !== "chat") return;
                         const messages = event.currentTarget;
                         followingChat.current =
                           messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 96;
@@ -2042,9 +1726,7 @@ function WorkspaceContent({
                                   variant="outline"
                                   disabled={!!busy || readonly}
                                   onClick={() => {
-                                    setDraft((existing) =>
-                                      existing.trim() ? `${existing}\n${prompt}` : prompt,
-                                    );
+                                    setDraft(prompt);
                                     draftInput.current?.focus();
                                   }}
                                 >
@@ -2147,7 +1829,7 @@ function WorkspaceContent({
                                       href={`${base}/files?file=${encodeURIComponent(ref.fileId)}`}
                                       onClick={(event) => {
                                         event.preventDefault();
-                                        openConversationFile(ref.fileId, event.currentTarget, ref);
+                                        openConversationFile(ref.fileId, event.currentTarget);
                                       }}
                                     >
                                       {view.files.find((f) => f.id === ref.fileId)?.name ??
@@ -2185,7 +1867,6 @@ function WorkspaceContent({
                         <ConversationAgent
                           key={`${caseId}:${ticket()}`}
                           workspace={view}
-                          active={activeTask === "chat"}
                           client={api.rework}
                           access={{ ready, canMutate, ticket, current, verify }}
                           incomingMessageIds={incomingActionMessages}
@@ -2229,33 +1910,6 @@ function WorkspaceContent({
                       }}
                     >
                       <div className="workspace-composer-surface">
-                        {reportQuestion && (
-                          <section
-                            className="workspace-report-question"
-                            aria-label="질문용 리포트 참조"
-                          >
-                            <strong>{reportQuestion.sectionTitle} · 리포트에서 읽은 내용</strong>
-                            <p>{reportQuestion.excerpt}</p>
-                            <p>
-                              궁금한 점을 적고 보내기를 눌러주세요. 참조를 준비해도 메시지는 보내지
-                              않아요.
-                            </p>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              disabled={!!busy || queuedSend}
-                              onClick={() => setReportQuestion(null)}
-                            >
-                              질문용 참조 제외
-                            </Button>
-                          </section>
-                        )}
-                        {messageTooLong && (
-                          <p role="alert">
-                            리포트 참조와 메시지를 합쳐 10,000자까지 보낼 수 있어요. 입력이나 질문용
-                            참조를 줄여주세요.
-                          </p>
-                        )}
                         <ChatAttachments
                           local={localAttachments}
                           uploaded={chatAttachments}
@@ -2460,57 +2114,10 @@ function WorkspaceContent({
                         </div>
                       </div>
                     </form>
-                  </div>
+                  </>
                 )}
-                {filesVisited && (
-                  <div
-                    data-workspace-task="files"
-                    id="case-materials-panel"
-                    hidden={activeTask !== "files"}
-                    inert={activeTask !== "files"}
-                    style={{ display: activeTask !== "files" ? "none" : undefined }}
-                  >
-                    {materialsPanel}
-                  </div>
-                )}
-                {reportVisited && (
-                  <div
-                    data-workspace-task="reports"
-                    hidden={activeTask !== "reports" && activeTask !== "drafts"}
-                    inert={activeTask !== "reports" && activeTask !== "drafts"}
-                    style={{
-                      display:
-                        activeTask !== "reports" && activeTask !== "drafts" ? "none" : undefined,
-                    }}
-                  >
-                    <Suspense fallback={<p role="status">저장된 리포트 화면을 불러오고 있어요.</p>}>
-                      <RetainedReportReview
-                        caseId={caseId}
-                        rework
-                        embedded
-                        active={ready && (activeTask === "reports" || activeTask === "drafts")}
-                        initialSection={reportSection}
-                        onNavigateTask={navigateTask}
-                        onDirtyChange={setReportDirty}
-                        onAskAboutReport={(context) => {
-                          if (
-                            reportQuestion &&
-                            !window.confirm(
-                              "질문용으로 준비한 리포트 참조를 새 내용으로 바꿀까요? 작성 중인 메시지는 그대로 남아요.",
-                            )
-                          )
-                            return;
-                          setReportQuestion(context);
-                          navigateTask("chat");
-                          setNotice(
-                            "리포트 내용을 질문용으로 준비했어요. 작성 중인 메시지는 그대로예요. 확인한 뒤 보내기를 눌러주세요.",
-                          );
-                        }}
-                      />
-                    </Suspense>
-                  </div>
-                )}
-                {!activeTask && tab === "timeline" && (
+                {tab === "files" && materialsPanel}
+                {tab === "timeline" && (
                   <>
                     <div className="workspace-section-heading">
                       <div>
@@ -2564,9 +2171,6 @@ function WorkspaceContent({
                                 files={view.files}
                                 facts={view.facts}
                                 base={base}
-                                onReviewFile={(id, reference) =>
-                                  openConversationFile(id, undefined, reference)
-                                }
                               />
                             </div>
                             <Button
@@ -2589,7 +2193,7 @@ function WorkspaceContent({
                     </ol>
                   </>
                 )}
-                {!activeTask && tab === "actions" && (
+                {tab === "actions" && (
                   <>
                     <div className="workspace-section-heading">
                       <div>
@@ -2657,9 +2261,7 @@ function WorkspaceContent({
                     </ul>
                     <div className="workspace-next">
                       <h3>정리한 내용을 다음 단계로</h3>
-                      <p>
-                        리포트에서 정리한 내용과 아직 확인할 일을 살펴보고 사건 준비를 이어가세요.
-                      </p>
+                      <p>리포트를 검토하고 필요한 준비나 상담을 이어가세요.</p>
                       <div className="workspace-buttons">
                         <ButtonLink href={`${base}/reports`}>리포트 열기</ButtonLink>
                       </div>
@@ -2667,68 +2269,11 @@ function WorkspaceContent({
                   </>
                 )}
               </section>
-              {!activeTask && tab !== "chat" && contextSummary}
+              {tab !== "chat" && contextSummary}
             </div>
           </div>
         )}
       </CaseWorkspaceFrame>
-      <Dialog
-        open={!!leaveTarget}
-        title="작성 중인 내용을 두고 이동할까요?"
-        onOpenChange={(open) => {
-          if (!open) setLeaveTarget(null);
-        }}
-      >
-        <p>
-          이 사건의 네 작업 사이에서는 작성 내용을 유지해요. 다른 페이지로 이동하면 아직 보내지 않은
-          메시지·자료 선택과 저장하지 않은 편집은 남지 않을 수 있어요.
-        </p>
-        {localAttachments.length > 0 && (
-          <>
-            <p>
-              아직 업로드하지 않은 파일 {localAttachments.length}개는 이동 후 다시 선택해야 해요.
-              파일명만으로 복원하거나 자동으로 업로드하지 않아요.
-            </p>
-            <ul>
-              {localAttachments.map((file) => (
-                <li key={`${file.name}:${file.size}:${file.lastModified}`}>{file.name}</li>
-              ))}
-            </ul>
-          </>
-        )}
-        <div className="workspace-buttons">
-          <Button variant="outline" onClick={() => setLeaveTarget(null)}>
-            이 화면에서 계속 작성
-          </Button>
-          {localAttachments.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setLeaveTarget(null);
-                navigateTask("files");
-              }}
-            >
-              자료에서 업로드 준비
-            </Button>
-          )}
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (!leaveTarget) return;
-              leaveApproved.current = true;
-              window.location.assign(leaveTarget);
-              // A browser-level unsaved report warning may still cancel the transition.
-              // Never clear the actual input/File handles before a navigation succeeds.
-              setTimeout(() => {
-                leaveApproved.current = false;
-                setLeaveTarget(null);
-              }, 0);
-            }}
-          >
-            미저장 내용과 첨부 선택을 버리고 이동
-          </Button>
-        </div>
-      </Dialog>
       {lookupOpen && (
         <LookupDialog
           key={caseId}
@@ -2744,30 +2289,6 @@ function WorkspaceContent({
       <dialog
         ref={dialog}
         className={`workspace-dialog${preview ? " workspace-dialog--material" : ""}`}
-        onClose={(event) => {
-          // A queued close may arrive after another preview has already opened.
-          if (event.currentTarget.open) return;
-          const origin = filePreviewOrigin.current;
-          filePreviewOrigin.current = null;
-          if (
-            !origin ||
-            !current(origin.epoch) ||
-            origin.task !== activeTaskRef.current ||
-            origin.url !== window.location.href
-          )
-            return;
-          const element = origin.element;
-          if (
-            !element.isConnected ||
-            element.matches(":disabled") ||
-            element.closest("[hidden], [inert], [aria-hidden='true']") ||
-            !element.getClientRects().length ||
-            getComputedStyle(element).visibility !== "visible"
-          )
-            return;
-          const activeModal = document.querySelector("dialog:modal");
-          if (!activeModal || activeModal.contains(element)) element.focus({ preventScroll: true });
-        }}
         onCancel={(event) => {
           event.preventDefault();
           closeDialog();
@@ -2819,7 +2340,6 @@ function WorkspaceContent({
               onDirtyChange={fileReviewDirtyChanged}
               onBusyChange={fileReviewBusyChanged}
               refreshVersion={`${view?.case.revision ?? 0}:${preview.status}`}
-              sourceReference={sourceReference}
             />
             {preview.status === "ready" && (
               <div className="workspace-material-apply">

@@ -61,8 +61,10 @@ test("long review sheets scroll internally, keep 44px controls and return focus 
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width ?? 320);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(height ?? 480);
-    // Dialog is centred at every width; the distinct Sheet component owns edge anchoring.
-    const verticalAnchor = bounds.y + bounds.height / 2 - (height ?? 480) / 2;
+    const verticalAnchor =
+      (width ?? 320) <= 760
+        ? bounds.y + bounds.height - (height ?? 480)
+        : bounds.y + bounds.height / 2 - (height ?? 480) / 2;
     expect(Math.abs(verticalAnchor)).toBeLessThan(2);
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
     const close = dialog.getByRole("button", { name: "닫기", exact: true });
@@ -243,7 +245,7 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await expect(opener).toBeFocused();
 });
 
-test("four visible tasks and secondary tools retain every existing route", async ({ page }) => {
+test("case tools replace six tabs and retain every existing route", async ({ page }) => {
   await seed(page);
   await page.goto("/");
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
@@ -256,22 +258,12 @@ test("four visible tasks and secondary tools retain every existing route", async
     ["타임라인", "timeline"],
     ["다음 행동", "actions"],
     ["유사 판례", "precedents"],
+    ["자료", "files"],
+    ["리포트 보기", "reports"],
   ] as const) {
-    await expect(tools.getByRole("link", { name: label, exact: true })).toHaveAttribute(
+    await expect(tools.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
       "href",
       `/cases/shell-case/${suffix}`,
-    );
-  }
-  const tasks = page.getByRole("navigation", { name: "사건 작업", exact: true });
-  for (const [label, suffix] of [
-    ["대화", ""],
-    ["자료", "/files"],
-    ["리포트", "/reports"],
-    ["문서 초안", "/reports#document-drafts"],
-  ] as const) {
-    await expect(tasks.getByRole("link", { name: label, exact: label !== "자료" })).toHaveAttribute(
-      "href",
-      `/cases/shell-case${suffix}`,
     );
   }
   await page.keyboard.press("Escape");
@@ -286,16 +278,7 @@ test("sidebar collapse keeps role navigation, recent management and resize focus
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   const sidebar = page.locator(".sidebar-desktop");
-  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "href",
-    "/cases",
-  );
-  await expect(sidebar.getByRole("link", { name: "내 사건", exact: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(sidebar.getByRole("link", { name: "변호사 프로필", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "설정", exact: true })).toBeVisible();
   await expect(sidebar.locator(".sidebar-story")).toHaveAttribute("aria-current", "page");
@@ -304,7 +287,6 @@ test("sidebar collapse keeps role navigation, recent management and resize focus
   await sidebar.getByRole("button", { name: "최근 사건 열기" }).click();
   const drawer = page.getByRole("dialog", { name: "메뉴", exact: true });
   await expect(drawer.locator(".sidebar-story")).toBeVisible();
-  await expect(drawer.getByRole("link", { name: "내 사건", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sidebar.getByRole("button", { name: "최근 사건 열기" })).toBeFocused();
   await page.reload();
@@ -383,8 +365,8 @@ test("200% zoom and keyboard focus keep compact navigation reachable", async ({ 
   });
   await page.locator(".case-tools > summary").press("Enter");
   const link = page
-    .getByRole("navigation", { name: "사건 작업", exact: true })
-    .getByRole("link", { name: "리포트", exact: true });
+    .getByRole("navigation", { name: "사건 도구", exact: true })
+    .getByRole("link", { name: "리포트 보기", exact: true });
   await link.focus();
   await expect(link).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
@@ -575,85 +557,6 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
   ).toBe(true);
   await expect(page.locator(".app-frame")).toHaveCSS("--app-viewport-height", "450px");
   await expect(page.locator(".app-frame")).toHaveAttribute("data-viewport-writes", "1");
-  const header = page.getByRole("region", { name: "사건 제목과 작업", exact: true });
-  expect(await header.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
-  await page.keyboard.press("Tab");
-  await header.focus();
-  await expect(header).toHaveCSS("box-shadow", /inset/);
-  await page.keyboard.press("End");
-  await expect.poll(() => header.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await expect(header.getByRole("link", { name: "문서 초안", exact: true })).toBeInViewport({
-    ratio: 1,
-  });
-  const toolsTrigger = header.locator(".case-tools > summary");
-  await toolsTrigger.click();
-  const tools = header.getByRole("navigation", { name: "사건 도구", exact: true });
-  const expectToolsActionable = async () => {
-    await expect(tools.getByRole("link")).toHaveCount(4);
-    for (const link of await tools.getByRole("link").all()) {
-      await expect(link).toBeInViewport({ ratio: 1 });
-      const geometry = await tools.evaluate((nav) => ({
-        viewport: {
-          width: innerWidth,
-          height: innerHeight,
-          scrollY,
-          zoom: getComputedStyle(document.documentElement).zoom,
-        },
-        menu: nav.getBoundingClientRect().toJSON(),
-        trigger: nav.closest("details")?.querySelector("summary")?.getBoundingClientRect().toJSON(),
-        header: nav.closest(".case-workspace__header")?.getBoundingClientRect().toJSON(),
-        headerScroll: nav.closest(".case-workspace__header")?.scrollTop,
-      }));
-      await expect
-        .poll(
-          () =>
-            link.evaluate((node) => {
-              const menu = node.closest("nav")?.getBoundingClientRect();
-              const trigger = node
-                .closest("details")
-                ?.querySelector("summary")
-                ?.getBoundingClientRect();
-              const bounds = node.getBoundingClientRect();
-              if (!menu || !trigger) throw new Error("Case tools geometry missing");
-              const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-              return {
-                withinViewport:
-                  menu.left >= 0 &&
-                  menu.top >= 0 &&
-                  menu.right <= (visualViewport?.width ?? innerWidth) + 1 &&
-                  menu.bottom <= (visualViewport?.height ?? innerHeight) + 1,
-                aligned:
-                  menu.left <= trigger.right &&
-                  menu.right >= trigger.left &&
-                  ((menu.top >= trigger.bottom - 1 && menu.top - trigger.bottom <= 12 * zoom) ||
-                    (menu.bottom <= trigger.top + 1 && trigger.top - menu.bottom <= 12 * zoom)),
-                hit: node.contains(
-                  document.elementFromPoint(
-                    bounds.x + bounds.width / 2,
-                    bounds.y + bounds.height / 2,
-                  ),
-                ),
-              };
-            }),
-          { message: JSON.stringify(geometry) },
-        )
-        .toEqual({ withinViewport: true, aligned: true, hit: true });
-      await link.click({ trial: true });
-    }
-  };
-  await expectToolsActionable();
-  await header.press("Home");
-  await expectToolsActionable();
-  for (const width of [768, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expectToolsActionable();
-  }
-  await toolsTrigger.focus();
-  await page.keyboard.press("Tab");
-  await expect(tools.getByRole("link").first()).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(tools).not.toBeVisible();
-  await expect(toolsTrigger).toBeFocused();
   await page.screenshot({
     path: ".wrangler/ui01/followup-css-zoom-200.png",
     animations: "disabled",
@@ -666,32 +569,11 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     ),
   ).toBe(true);
   await panel.getByRole("button", { name: "자료 패널 닫기", exact: true }).click();
-  await toolsTrigger.click();
-  await toolsTrigger.focus();
-  await page.keyboard.press("Tab");
-  await expect(tools.getByRole("link").first()).toBeFocused();
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
   });
   await expect(page.locator(".app-frame")).toHaveCSS("--app-viewport-height", "900px");
   await expect(page.locator(".app-frame")).toHaveAttribute("data-viewport-writes", "2");
-  await expect(tools.getByRole("link").first()).toBeFocused();
-  await expectToolsActionable();
-  await page.keyboard.press("Escape");
-  await expect(tools).not.toBeVisible();
-  await expect(toolsTrigger).toBeFocused();
   await expect(composer).toBeInViewport({ ratio: 1 });
   await expect(composer).toHaveValue("확대 후에도 유지할 메시지");
-  await page.goto("/?document");
-  const readingHeader = page.getByRole("region", { name: "사건 제목과 작업", exact: true });
-  await expect(readingHeader).not.toHaveAttribute("tabindex");
-  await expect(readingHeader).toHaveCSS("max-height", "none");
-  await expect(readingHeader).toHaveCSS("overflow-y", "visible");
-  const readingDocument = page.locator(".shell-fixture-document");
-  await readingDocument.locator("p").last().scrollIntoViewIfNeeded();
-  await expect(readingDocument.locator("p").last()).toBeInViewport({ ratio: 1 });
-  expect(await readingDocument.evaluate((node) => node.scrollHeight <= node.clientHeight + 1)).toBe(
-    true,
-  );
-  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 });

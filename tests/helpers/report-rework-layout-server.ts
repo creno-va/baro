@@ -18,7 +18,7 @@ const portrait = await sharp("tests/fixtures/media/image-markers.jpg")
 const portraitData = `data:image/jpeg;base64,${portrait.toString("base64")}`;
 Bun.serve({
   hostname: "127.0.0.1",
-  port: Number(Bun.env.BARO_REPORT_LAYOUT_TEST_PORT ?? "4377"),
+  port: 4377,
   fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/fixture-photo-data")
