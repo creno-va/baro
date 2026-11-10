@@ -104,6 +104,8 @@ export default defineConfig({
     },
   },
   vite: {
+    // Keep SSR hooks and the renderer in one module graph during cold dev starts.
+    ssr: { noExternal: ["react", "react-dom", "lucide-react"] },
     define: {
       // Synthetic browser tests intercept the API after SSR; real deployments
       // always enforce the server session before rendering the application.

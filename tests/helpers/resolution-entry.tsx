@@ -112,7 +112,7 @@ function Host() {
         <span>{surface === "report" ? "합성 리포트" : "합성 대화"}</span>
       </nav>
       <FollowUpResolution
-        key={surface}
+        key={new URLSearchParams(location.search).has("retained") ? "retained" : surface}
         caseId="case"
         {...(new URLSearchParams(location.search).has("default")
           ? {}

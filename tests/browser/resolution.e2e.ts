@@ -221,7 +221,7 @@ test("scope edits hide old drafts and dirty path switches need explicit discard"
   await expect(page.getByLabel("선택 자료 1", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: /^직접 해결/ }).click();
   await page.getByRole("button", { name: "수정을 버리고 경로 변경" }).click();
-  await page.getByText("초안에 사용할 자료와 가림 범위", { exact: true }).click();
+  await expect(page.getByRole("group", { name: "사용할 자료와 가림 범위" })).toBeVisible();
   await page.getByLabel("선택 자료 1", { exact: true }).uncheck();
   await expect(page.getByLabel("초안 검토·수정")).toHaveCount(0);
   await page.getByRole("button", { name: "범위 적용" }).click();

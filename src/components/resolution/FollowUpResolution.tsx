@@ -17,6 +17,7 @@ import {
 import { downloadBlob } from "../reports/download";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import { draftReviewState } from "./draft-review";
 import {
   createResolutionSelectionFailureTracker,
   type ResolutionErrorDiagnostic,
@@ -152,6 +153,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const dirty = contentDirty || scopeDirty;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const reviewInProgress = useRef(false);
+  reviewInProgress.current = factsConfirmed || reviewed !== (state?.draft?.reviewed ?? false);
   const reportMismatch =
     !!state?.basis &&
     ((props.reportId !== undefined && props.reportId !== state.basis.reportId) ||
@@ -356,7 +359,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         changed();
     };
     const focus = () => {
-      if (!dirtyRef.current) void load();
+      if (!dirtyRef.current && !reviewInProgress.current) void load();
       else void verify(sequence.current).catch(() => undefined);
     };
     window.addEventListener("baro-session-changed", changed);
@@ -799,6 +802,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           {state.draft && (
             <div className="resolution-draft">
               <h3>{state.draft.title}</h3>
+              <p>{draftReviewState(state.draft, Boolean(draftCurrent), contentDirty, reviewed)}</p>
               <p>
                 기준 리포트 {state.draft.basis.reportRevision} ·{" "}
                 {state.draft.userEdited ? "사용자가 수정한 내용" : "근거에서 구성한 초안"}
