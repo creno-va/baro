@@ -1647,14 +1647,6 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
         className={`workspace-material-upload${view.files.length ? " workspace-material-upload--compact" : ""}`}
         {...privateContent}
       >
-        <EvidencePicker
-          scopeKey={`${caseId}:${ticket()}`}
-          photoOnly
-          compact
-          disabled={readonly || !!busy || retryUploads.length > 0}
-          onSelect={chooseConversationAttachments}
-          onError={fileReviewError}
-        />
         <ChatAttachments
           label="업로드할 자료"
           local={localAttachments}
@@ -1712,6 +1704,15 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
             {V2_LIMITS.mediaBytes / 1_000_000_000} GB까지
           </span>
         </ControlButton>
+        <EvidencePicker
+          scopeKey={`${caseId}:${ticket()}`}
+          photoOnly
+          compact
+          captureOnly
+          disabled={readonly || !!busy || retryUploads.length > 0}
+          onSelect={chooseConversationAttachments}
+          onError={fileReviewError}
+        />
         {busy === "upload" && (
           <div className="workspace-upload-progress" role="status">
             <p>

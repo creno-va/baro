@@ -17,7 +17,6 @@ function clock(value: number) {
 }
 const initial = {
   ready: false,
-  seekable: false,
   playing: false,
   duration: 0,
   time: 0,
@@ -57,7 +56,6 @@ export function MediaPlayer({
       setError("원본을 재생하지 못했어요. 다시 불러오거나 원본을 다운로드해 확인해 주세요.");
     setState({
       ready: node.readyState > 0,
-      seekable: node.seekable.length > 0,
       playing: !node.paused && !node.ended,
       duration: Number.isFinite(node.duration) ? node.duration : 0,
       time: Number.isFinite(node.currentTime) ? node.currentTime : 0,
@@ -120,7 +118,7 @@ export function MediaPlayer({
   }
   function seek(value: number) {
     const node = media.current;
-    if (!node || !enabled || !node.seekable.length || !Number.isFinite(node.duration)) return;
+    if (!node || !enabled || node.readyState === 0 || !Number.isFinite(node.duration)) return;
     node.currentTime = Math.max(0, Math.min(node.duration, value));
     sync();
   }
@@ -179,7 +177,7 @@ export function MediaPlayer({
           max={state.duration}
           valueText={clock(state.time) + " / " + clock(state.duration)}
           onChange={seek}
-          disabled={blocked || !state.seekable}
+          disabled={blocked || !state.ready}
         />
       ) : !error ? (
         <p className="ui-media__status" role="status">

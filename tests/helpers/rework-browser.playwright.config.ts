@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "../browser",
   testMatch: "rework-conversation.e2e.ts",
   workers: 1,
+  reporter: "list",
   timeout: 120000,
   use: { baseURL: "http://127.0.0.1:4396", trace: "off" },
   projects: [

@@ -1,5 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
+import { selectControl } from "../helpers/headless-controls";
+
+async function expectDocumentChoice(page: Page) {
+  const control = selectControl(page, { name: "문서 종류", exact: true });
+  await control.click();
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(control).toBeFocused();
+}
 
 test.beforeEach(async ({ request }) => {
   await request.post("/fixture/control", { data: { reset: true } });
@@ -136,7 +145,7 @@ test("limited official guide is a reading link without a verified claim; crimina
     44,
   );
   await expect(page.getByText("공식 근거 확인 · 사건에 맞는지 검토 필요")).toHaveCount(0);
-  await expect(page.getByRole("option")).toHaveCount(1);
+  await expectDocumentChoice(page);
   await expect(page.getByText(/확인 시점: 2026-11-01T10:00:00.000Z/)).toBeVisible();
   const before = await (await request.get("/fixture/counts")).json();
   const lawyer = page.getByRole("button", { name: /^변호사와 해결/ });
@@ -167,7 +176,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
       if (path === "직접 해결") {
         await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
         await expect(page.getByText("관할", { exact: true })).toBeVisible();
-        await expect(page.getByRole("option")).toHaveCount(1);
+        await expectDocumentChoice(page);
       } else if (path === "변호사와 해결") {
         const dialog = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
         await expect(dialog).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");

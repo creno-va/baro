@@ -49,3 +49,6 @@ Headless UI가 제공하지 않는 progress는 공통 ARIA progressbar로 표현
 업무 코드는 기존 권한·실행 경로를 유지한다. 양 테마·portal·모달 stack·리사이즈·owner 교체·
 미저장 취소·접근성·CSP·주요 사용자 흐름을 합성 입력으로 검증한다.
 Accepted는 검증/배포 완료를 뜻하지 않는다. 정확 SHA와 실제 결과는 #799에 기록한다.
+전체 browser 인수는 화면 두 묶음과 실제 통합 여정을 별도 checkout에서 실행한다.
+전체 corpus의 중복 없는 합집합과 각 60분/worker 1 한도를 보존하고 모든 묶음의
+동일 SHA/run/attempt 성공을 완료 receipt에서 확인한다.

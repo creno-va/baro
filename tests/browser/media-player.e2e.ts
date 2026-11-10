@@ -76,6 +76,11 @@ test("real playback, keyboard and pointer seeking, volume and speed use the orig
   await expect
     .poll(() => audio(page).evaluate((node: HTMLAudioElement) => node.currentTime))
     .toBe(20);
+  await expect
+    .poll(() => audio(page).evaluate((node: HTMLAudioElement) => node.seeking))
+    .toBe(false);
+  await expect(seek).toBeEnabled();
+  await seek.scrollIntoViewIfNeeded();
   const bounds = await seek.boundingBox();
   if (!bounds) throw new Error("Synthetic seek control missing");
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);

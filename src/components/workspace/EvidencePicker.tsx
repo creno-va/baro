@@ -16,6 +16,7 @@ export function EvidencePicker({
   onError,
   photoOnly = false,
   compact = false,
+  captureOnly = false,
   scopeKey = "",
 }: {
   disabled?: boolean;
@@ -23,6 +24,8 @@ export function EvidencePicker({
   onError?: (cause: unknown) => unknown;
   photoOnly?: boolean;
   compact?: boolean;
+  /** The parent already provides a general file picker. */
+  captureOnly?: boolean;
   /** Use caseId + session ticket/epoch, not a foreground refresh counter. */
   scopeKey?: string;
 }) {
@@ -100,15 +103,17 @@ export function EvidencePicker({
         onChange={(event) => void select(event.currentTarget)}
       />
       <div className="evidence-picker-actions">
-        <Button
-          variant="outline"
-          aria-describedby={description}
-          disabled={disabled}
-          onClick={() => open(false)}
-        >
-          <Paperclip size={18} aria-hidden="true" />
-          {photoOnly ? "사진 분석" : "파일 선택"}
-        </Button>
+        {!captureOnly && (
+          <Button
+            variant="outline"
+            aria-describedby={description}
+            disabled={disabled}
+            onClick={() => open(false)}
+          >
+            <Paperclip size={18} aria-hidden="true" />
+            {photoOnly ? "사진 분석" : "파일 선택"}
+          </Button>
+        )}
         <Button
           variant="outline"
           aria-describedby={description}
