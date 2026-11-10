@@ -193,7 +193,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       selection,
     );
     await page.setViewportSize({ width, height: 900 });
-    await panel.getByRole("button", { name: "자료 패널 닫기" }).click();
+    await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
     await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
     await expect(composer).toHaveValue("한글로 쓰던 메시지와 첨부 선택은 소비자가 보존합니다.");
     await page.getByRole("button", { name: "자료 열기", exact: true }).click();
@@ -202,7 +202,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       await correction.press("Escape");
       await expect(panel).not.toBeVisible();
       await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
-    } else await panel.getByRole("button", { name: "자료 패널 닫기" }).click();
+    } else await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
@@ -228,7 +228,7 @@ test("nested modal Escape and focus stay inside the materials overlay", async ({
   await expect(nested).not.toBeVisible();
   await expect(panel).toBeVisible();
   await expect(nestedOpener).toBeFocused();
-  const close = panel.getByRole("button", { name: "자료 패널 닫기" });
+  const close = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
   await close.focus();
   await page.keyboard.press("Shift+Tab");
   await expect(panel.getByRole("link", { name: "리포트 열기" })).toBeFocused();
@@ -436,7 +436,7 @@ for (const width of [390, 1440]) {
     if (width >= 1200) {
       await expect(page.getByRole("textbox", { name: "메시지 초안" })).toBeFocused();
     } else {
-      await expect(panel.getByRole("button", { name: "자료 패널 닫기" })).toBeFocused();
+      await expect(page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ })).toBeFocused();
     }
   });
 }
@@ -475,9 +475,9 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         expect(await review.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
           true,
         );
-        // Headless owns the nested stack while the parent follows its current viewport.
+        // Preserve the active review's modal ownership until that review closes.
         expect(await panel.evaluate((node) => node.getAttribute("aria-modal") === "true")).toBe(
-          to < 1200,
+          from < 1200,
         );
         await expect(editor).toBeFocused();
         await expect(editor).toHaveValue("화면을 바꿔도 보존할 자료 교정 초안");
@@ -501,7 +501,7 @@ for (const lifetime of ["mounted", "conditional"] as const) {
           to < 1200,
         );
         await expect(opener).toBeFocused();
-        await panel.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
+        await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
         await expect(panel).not.toBeVisible();
         await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
         const selector = topology === "sibling" ? "#sibling-review" : "#nested-review";
@@ -552,7 +552,7 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
       (node) => node.getBoundingClientRect().bottom <= (visualViewport?.height ?? innerHeight) + 1,
     ),
   ).toBe(true);
-  await panel.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
+  await page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ }).click();
   await page.evaluate(() => {
     document.documentElement.style.zoom = "1";
   });

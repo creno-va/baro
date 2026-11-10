@@ -47,6 +47,15 @@ export function CaseWorkspaceFrame({
   useEffect(() => {
     const query = matchMedia("(max-width: 1199px)");
     const update = () => {
+      const own = panelNode.current?.closest('[role="dialog"]');
+      // Activating a parent modal while a separate review owns focus would
+      // make that review inert. Apply the pending viewport mode after it closes.
+      if (
+        Array.from(
+          document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]'),
+        ).some((node) => node !== own && !node.hasAttribute("hidden"))
+      )
+        return;
       const active = document.activeElement;
       initialFocus.current =
         active instanceof HTMLElement && panelNode.current?.contains(active) ? active : null;
@@ -54,7 +63,17 @@ export function CaseWorkspaceFrame({
     };
     update();
     query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["aria-modal", "hidden", "open"],
+    });
+    return () => {
+      query.removeEventListener("change", update);
+      observer.disconnect();
+    };
   }, []);
   useEffect(() => {
     const frame = root.current?.closest<HTMLElement>("[data-app-workspace]");
