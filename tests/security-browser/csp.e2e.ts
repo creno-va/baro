@@ -23,7 +23,12 @@ test("built service focus feedback works under hash CSP", async ({ page }) => {
     if (path === "/help") {
       const summary = page.locator(".help-document [data-disclosure-button]").first();
       await summary.focus();
-      await expect(summary).toHaveCSS("outline-style", "solid");
+      await expect(summary).toHaveCSS("outline-style", "none");
+      await expect(summary).toHaveCSS("text-decoration-line", "underline");
+      await summary.press("Enter");
+      await expect(summary).toHaveAttribute("aria-expanded", "true");
+      await summary.press("Space");
+      await expect(summary).toHaveAttribute("aria-expanded", "false");
       await summary.click();
       await expect(page.locator(":root")).toHaveAttribute("data-focus-input", "pointer");
     }
@@ -301,6 +306,9 @@ test("normal deployment bundle excludes the synthetic UI fixture", async ({ requ
   for (const path of [
     "/__design-system",
     "/__design-foundation",
+    "/__media-player",
+    "/__synthetic-audio.wav",
+    "/__synthetic-media-control",
     "/__legacy-lawyer",
     "/__legacy-lawyers",
     "/__legacy-lawyers/synthetic-profile",
