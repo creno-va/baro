@@ -607,12 +607,6 @@
   background: var(--background);
   color: var(--foreground);
 }
-:root[data-baro-ui] .login-panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 32px;
-}
 :root[data-baro-ui][data-theme="dark"] .login-page {
   background: var(--background);
 }

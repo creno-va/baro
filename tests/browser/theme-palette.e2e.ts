@@ -153,3 +153,26 @@ test("saved document paper colors stay independent from the surrounding applicat
     await expect(paper.locator(".sheet")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   }
 });
+
+test("social login actions keep equal heights on narrow phones in both themes", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  const providers = page.locator(".login-provider");
+  await expect(providers).toHaveCount(3);
+  for (const provider of await providers.all()) await expect(provider).toBeEnabled();
+  for (const mode of ["light", "dark"] as const) {
+    await theme(page, mode);
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const heights = await providers.evaluateAll((buttons) =>
+        buttons.map((button) => Math.round(button.getBoundingClientRect().height)),
+      );
+      expect(new Set(heights).size).toBe(1);
+      expect(heights[0]).toBeGreaterThanOrEqual(44);
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+        .toBeLessThanOrEqual(0);
+    }
+  }
+});
