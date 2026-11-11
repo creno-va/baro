@@ -20,7 +20,7 @@ test("official CLI and forge registry bytes, actual consumers and retired vendor
   const manifest = await verifyUpstreamToolchain(root, inputs);
   expect(manifest.rawAuditRequired).toBe(true);
   expect(manifest.packages.map((p) => `${p.name}@${p.version}`)).toEqual([
-    "node-forge@1.4.2",
+    "node-forge@1.4.3",
     "@expo/cli@58.1.18",
   ]);
   expect(manifest.retired.map((p) => p.path)).toContain("patches/zod@3.25.76.patch");

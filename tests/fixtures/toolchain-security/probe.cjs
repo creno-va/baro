@@ -13,7 +13,7 @@ function loadBrowserDistribution(path) {
   browser.window = browser;
   browser.navigator = { userAgent: "BARO synthetic browser probe" };
   // forge.all captures jQuery for deferred form/network helpers. They are
-  // deliberately unavailable here; this probe checks the crypto API only.
+  // deliberately unavailable here; only crypto and in-memory protocol parsers run.
   browser.jQuery = new Proxy(
     () => {
       throw new Error("FORM_API_OUT_OF_SCOPE");
@@ -30,7 +30,9 @@ function loadBrowserDistribution(path) {
   return browser.forge;
 }
 const dependency =
-  mode === "forge-browser" ? loadBrowserDistribution(process.argv[3]) : require(process.argv[3]);
+  mode === "forge-browser" || mode === "forge-browser-security"
+    ? loadBrowserDistribution(process.argv[3])
+    : require(process.argv[3]);
 const outcome = (action) => {
   try {
     return action() === false ? "rejected" : "accepted";
@@ -190,6 +192,130 @@ if (mode === "deepmerge") {
   csr.sign(privateKey, forge.md.sha256.create());
   compatibility.certificateSigningRequest = csr.verify();
   console.log(JSON.stringify({ mode, malformed, compatibility }));
+} else if (mode === "forge-security" || mode === "forge-browser-security") {
+  const forge = dependency;
+  const decode = (hex) => forge.util.binary.hex.decode(hex);
+  const message = "BARO synthetic signature regression";
+  const forged = decode("01" + "00".repeat(63));
+  const security = {};
+  for (const [name, key] of [
+    ["identity", "01" + "00".repeat(31)],
+    ["noncanonicalIdentity", "ee" + "ff".repeat(30) + "7f"],
+  ]) {
+    security[name] = forge.ed25519.verify({
+      message,
+      encoding: "utf8",
+      signature: forged,
+      publicKey: decode(key),
+    })
+      ? "accepted"
+      : "rejected";
+  }
+  const pair = forge.ed25519.generateKeyPair({ seed: decode("07".repeat(32)) });
+  const signature = forge.ed25519.sign({ message, encoding: "utf8", privateKey: pair.privateKey });
+  security.validEdSignature = forge.ed25519.verify({
+    message,
+    encoding: "utf8",
+    signature,
+    publicKey: pair.publicKey,
+  });
+  security.changedMessageRejected = !forge.ed25519.verify({
+    message: message + " changed",
+    encoding: "utf8",
+    signature,
+    publicKey: pair.publicKey,
+  });
+
+  const version = forge.tls.Version;
+  const suite = forge.tls.CipherSuites.TLS_RSA_WITH_AES_128_CBC_SHA;
+  const record = (type, data) =>
+    String.fromCharCode(type, version.major, version.minor, data.length >>> 8, data.length & 255) +
+    data;
+  const serverHello = (compression) => {
+    const body =
+      String.fromCharCode(version.major, version.minor) +
+      "\0".repeat(32) +
+      String.fromCharCode(0, ...suite.id, compression);
+    return record(22, String.fromCharCode(2, 0, 0, body.length) + body);
+  };
+  const connection = () => {
+    const alerts = [];
+    const client = forge.tls.createConnection({
+      server: false,
+      caStore: [],
+      cipherSuites: [suite],
+      connected() {},
+      tlsDataReady() {},
+      dataReady() {},
+      closed() {},
+      error(_client, error) {
+        alerts.push(error.alert?.description);
+      },
+    });
+    return { client, alerts };
+  };
+  const malformed = connection();
+  malformed.client.handshake();
+  let threw = false;
+  try {
+    malformed.client.process(serverHello(127));
+  } catch {
+    threw = true;
+  }
+  security.unsupportedCompression = threw
+    ? "threw"
+    : malformed.alerts.includes(forge.tls.Alert.Description.illegal_parameter)
+      ? "rejected"
+      : "accepted";
+  const normal = connection();
+  normal.client.handshake();
+  normal.client.process(serverHello(0));
+  security.validServerHello = normal.alerts.length === 0 && normal.client.session !== null;
+  for (const phase of ["beforeSession", "closedSession", "peerClosedSession"]) {
+    const { client } = connection();
+    if (phase !== "beforeSession") {
+      client.handshake();
+      if (phase === "closedSession") client.close();
+      else client.process(record(21, String.fromCharCode(1, 0)));
+    }
+    if (client.session !== null) throw Error("SYNTHETIC_TLS_SESSION_NOT_CLOSED");
+    try {
+      client.process(serverHello(0));
+      security[phase] = "safe";
+    } catch {
+      security[phase] = "threw";
+    }
+  }
+
+  const http =
+    mode === "forge-security"
+      ? require(require("node:path").resolve(process.argv[3], "lib/http.js"))
+      : forge.http;
+  if (!http) security.http = "not-in-distribution";
+  else {
+    const value = "a" + " \t".repeat(160000) + "X";
+    const response = http.createResponse();
+    const input = forge.util.createBuffer(
+      "HTTP/1.1 200 OK\r\nX-Baro-Regression: " +
+        value +
+        " \t\r\nSet-Cookie: fixture=" +
+        value +
+        " \t\r\n\r\n",
+    );
+    const start = performance.now();
+    if (!response.readHeader(input)) throw Error("SYNTHETIC_HTTP_HEADER_INCOMPLETE");
+    const cookies = response.getCookies();
+    const elapsed = performance.now() - start;
+    if (
+      response.getField("X-Baro-Regression") !== value ||
+      cookies.length !== 1 ||
+      cookies[0].name !== "fixture" ||
+      cookies[0].value !== value
+    )
+      throw Error("SYNTHETIC_HTTP_TRIM_RESULT_CHANGED");
+    security.http = elapsed < 1000 ? "bounded" : "slow";
+  }
+  console.log(JSON.stringify({ mode, security }));
 } else {
   throw new Error("SYNTHETIC_PROBE_MODE_INVALID");
 }

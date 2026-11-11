@@ -85,7 +85,7 @@ export async function verifyUpstreamToolchain(
     packages: Record<string, unknown[]>;
     patchedDependencies?: Record<string, string>;
   };
-  const expected = { "node-forge": "1.4.2", "@expo/cli": "58.1.18" };
+  const expected = { "node-forge": "1.4.3", "@expo/cli": "58.1.18" };
   if (new Set(manifest.packages.map((p) => p.name)).size !== 2)
     throw Error("UPSTREAM_PACKAGE_SET_CHANGED");
   for (const item of manifest.packages) {
