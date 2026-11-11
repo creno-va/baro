@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, type Page, test } from "@playwright/test";
+import { closeWorkspaceMaterials } from "../helpers/workspace-navigation";
 
 const id = "synthetic-chat-attachment";
 const base = `/cases/${id}`;
@@ -65,8 +66,7 @@ async function seed(page: Page, faults: Record<string, string[]> = {}) {
   );
   await page.goto(base);
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
-  const closePanel = page.getByRole("button", { name: "자료 닫기", exact: true });
-  if (await closePanel.isVisible()) await closePanel.click();
+  await closeWorkspaceMaterials(page);
   await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toHaveAttribute(
     "aria-expanded",
     "false",
@@ -776,8 +776,8 @@ for (const viewport of [
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
     await page.setViewportSize({ width: 390, height: 844 });
-    const materialsClose = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
-    if (await materialsClose.isVisible()) await materialsClose.click();
+    await expect(page.locator(".ds-responsive-panel")).toHaveAttribute("data-mode", "sheet");
+    await closeWorkspaceMaterials(page);
     await page.locator(".case-tools > [data-popover-button]").click();
     await page
       .getByRole("navigation", { name: "사건 도구", exact: true })
@@ -788,8 +788,8 @@ for (const viewport of [
       await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY),
     ).not.toBe("hidden");
     await page.getByRole("link", { name: "대화로 돌아가기", exact: true }).click();
-    const closePanel = page.getByRole("button", { name: /^자료(?: 패널)? 닫기$/ });
-    if (await closePanel.isVisible()) await closePanel.click();
+    await expect(page.locator(".ds-responsive-panel")).toHaveAttribute("data-mode", "sheet");
+    await closeWorkspaceMaterials(page);
     await expect(log.locator("article")).toHaveCount(24);
     await expect(page.locator(".case-options")).toHaveCount(0);
   });
