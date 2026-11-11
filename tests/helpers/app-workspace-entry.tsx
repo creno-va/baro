@@ -5,7 +5,7 @@ import {
   Label as FieldLabel,
 } from "../../src/components/ui/form";
 import "./headless-experience";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { installAppFocus } from "../../src/client/app-focus";
 import { AppNavigation } from "../../src/components/ui/app-navigation";
@@ -65,6 +65,11 @@ function MaterialsFixture({
 }
 function Fixture() {
   const [open, setOpen] = useState(new URLSearchParams(location.search).has("open"));
+  useEffect(() => {
+    const reset = () => setOpen(false);
+    window.addEventListener("baro-fixture-panel-reset", reset);
+    return () => window.removeEventListener("baro-fixture-panel-reset", reset);
+  }, []);
   const [siblingReview, setSiblingReview] = useState(false);
   const documentMode = new URLSearchParams(location.search).has("document");
   const noPanel = new URLSearchParams(location.search).has("no-panel");

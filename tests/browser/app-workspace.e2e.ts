@@ -42,6 +42,31 @@ async function closeMaterials(page: Page) {
     .click();
 }
 
+test("an external panel reset preserves the case tools menu and its focused trigger", async ({
+  page,
+}) => {
+  await seed(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?open");
+  await expect(page.locator("#case-materials-panel")).toBeVisible();
+  const tools = page.getByRole("button", { name: "사건 도구", exact: true });
+  await tools.click();
+  const menu = page.getByRole("navigation", { name: "사건 도구", exact: true });
+  await expect(menu).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("baro-fixture-panel-reset")));
+  await expect(page.locator("#case-materials-panel")).toBeHidden();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  await expect(tools).toBeFocused();
+  await expect(menu).toBeVisible();
+  await menu.getByRole("link", { name: "타임라인", exact: true }).click();
+  await expect(page).toHaveURL(/\/cases\/shell-case\/timeline$/);
+});
+
 test("long review sheets scroll internally, keep 44px controls and return focus through each close path", async ({
   page,
 }) => {
