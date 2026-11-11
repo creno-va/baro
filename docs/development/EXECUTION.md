@@ -1,5 +1,20 @@
 # 에이전트 실행 기준
 
+## 2026-11-11 browser 화면 준비 경합 후속 (#799)
+
+PR #804/main `05835007e2f5c50128f14d2b9935bdfc2de3b9b5`의 full 42865375473은
+core/native/journeys 성공, screens 1/2 각 1건 실패, join skipped다. 앞선 미디어·workspace
+90개·공통 흐름 실패는 이 실행에서 통과했다. `codex/799-browser-readiness`는 viewport
+변경 뒤 sheet 전환을 기다리고 정확한 모바일/desktop 닫기 버튼으로 패널을 닫는다.
+CSP 검사는 SSR 비활성 로그인 버튼에 Enter를 보내지 않도록 island/활성화를 기다리고,
+실제 합성 auth 요청의 503 응답을 확인한 뒤 기존 오류·CSP 차단·허용 스크립트 검사를 유지한다.
+로컬 빌드와 CSP 8개(기존 test-build 전용 1 skip), 해당 CSP 과업 5회 반복은 성공했다.
+로컬 chat 검사는 과업 시작 전 개발 서버의 120초 준비 제한으로 실패했다. 생성 캐시를
+보존·재생성하고 Node를 CI의 24.22.1로 맞춰도 동일해, 제품 검사 통과로 표현하지 않는다.
+Linux 전체 workflow의 기존 시간 제한·동일 과업으로 실제 결과를 확인한다.
+제품 동작·실행 한도·시간 제한·랜딩·기존 실패 증거는 바꾸지 않는다. 새 main의 전체 구간 및
+join과 동일 SHA preview·제한 smoke가 모두 성공할 때까지 인수는 미완료다.
+
 ## 2026-11-11 제거된 변호사 연결 인수 정합성 (#799)
 
 PR #803/main `50f2a321cbdea279d9c9cc577c65c80ce9ba9126`의 full 42855198107은

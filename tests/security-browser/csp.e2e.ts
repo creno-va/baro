@@ -169,7 +169,15 @@ test("built Worker hash CSP blocks injected script while React and allowlisted T
     route.fulfill({ status: 503, json: {} }),
   );
   const button = page.getByRole("button", { name: /Google/ });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
+  await expect(button).toBeEnabled();
+  const rejected = page.waitForResponse(
+    (result) =>
+      new URL(result.url()).pathname === "/api/auth/sign-in/social" &&
+      result.request().method() === "POST",
+  );
   await button.press("Enter");
+  expect((await rejected).status()).toBe(503);
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(button).toBeEnabled();
   await page.evaluate(() => {
