@@ -4,9 +4,9 @@
   "packages": [
     {
       "name": "node-forge",
-      "version": "1.4.2",
-      "registryIntegrity": "sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==",
-      "treeSha256": "81ad44d22e1fb9b8ba39b2681b74044c51c1f2983b52d1f74f2565cb297ca4c7",
+      "version": "1.4.3",
+      "registryIntegrity": "sha512-P6wzfh6t70avmV8FrVEAd/36sOPJQ+hkaJVX1Laap9J/77m7M0eyozDvc8SwnDf4P7MP94gwbAAo0rg3YVXT+g==",
+      "treeSha256": "4bcdd9dc93a158af4a3209c2f36fc6f71819173270a79c8811a7bb62d16880b3",
       "licenseSha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
       "entryPoint": "lib/index.js",
       "consumers": [

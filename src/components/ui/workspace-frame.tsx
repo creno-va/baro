@@ -35,13 +35,21 @@ export function CaseWorkspaceFrame({
   const toggle = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const previousOpen = useRef(panelOpen);
+  const returnFocusRequested = useRef(false);
   const initialFocus = useRef<HTMLElement | null>(null);
   const [sheet, setSheet] = useState(false);
   const present = panel !== undefined && panel !== null;
+  const requestPanelOpen = (open: boolean) => {
+    returnFocusRequested.current = !open;
+    onPanelOpenChange?.(open);
+  };
   useEffect(() => {
     const closed = previousOpen.current && !panelOpen;
     previousOpen.current = panelOpen;
     if (!closed) return;
+    const requested = returnFocusRequested.current;
+    returnFocusRequested.current = false;
+    if (!requested) return;
     const frame = requestAnimationFrame(() => {
       if (toggle.current?.isConnected) toggle.current.focus({ preventScroll: true });
     });
@@ -134,7 +142,7 @@ export function CaseWorkspaceFrame({
             aria-expanded={panelOpen}
             aria-label={panelLabel + (panelOpen ? " 닫기" : " 열기")}
             disabled={!onPanelOpenChange}
-            onClick={() => onPanelOpenChange?.(!panelOpen)}
+            onClick={() => requestPanelOpen(!panelOpen)}
           >
             {panelOpen ? (
               <PanelRightClose size={18} aria-hidden="true" />
@@ -153,7 +161,7 @@ export function CaseWorkspaceFrame({
         <HeadlessDialog
           static
           open={sheet && panelOpen}
-          onClose={() => onPanelOpenChange?.(false)}
+          onClose={() => requestPanelOpen(false)}
           initialFocus={initialFocus.current ? initialFocus : closeButton}
           className="ds-responsive-panel baro-workbench"
           data-mode={sheet ? "sheet" : "inline"}
@@ -176,7 +184,7 @@ export function CaseWorkspaceFrame({
                 variant="ghost"
                 size="icon"
                 aria-label={panelLabel + " 패널 닫기"}
-                onClick={() => onPanelOpenChange?.(false)}
+                onClick={() => requestPanelOpen(false)}
               >
                 <X size={18} aria-hidden="true" />
               </Button>

@@ -1,5 +1,25 @@
 # 에이전트 실행 기준
 
+## 2026-11-11 외부 자료 패널 reset의 포커스 경합 (#799)
+
+full 42963053886의 screens 1은 customer recovery의 초기 사건 도구 열기에서 실패했다.
+자료 패널의 외부 상태 reset이 닫기 버튼으로 포커스를 보내 열린 사건 도구를 닫는 동작을
+독립 실제 shell fixture로 재현했다. 기존 코드에서 재현 과업은 포커스/메뉴 보존 실패다.
+사용자의 명시적 패널 닫기에서만 트리거 포커스를 복귀시키고 외부 reset은 현재 작업의
+포커스를 보존한다. 기존 desktop/mobile/중첩 검토의 닫기 경로와 새 reset 회귀를 함께 검증한다.
+이 #799 수리는 #806 감사 수정과 함께 최종 전체 검증을 수행하며 완료 증거를 구분한다.
+
+## 2026-11-11 raw audit node-forge 후속 (#806 / #799)
+
+main `6565328f8ca264a140e3ecbcda8bec72a2b3835a`의 full 42963053886 core는
+단위·빌드·built Worker 검사 뒤 unfiltered bun audit에서 node-forge 1.4.2의 4건으로 실패했다.
+`codex/806-forge-audit`는 공식 1.4.3으로 root override/lock을 갱신하며 Expo58.0.17,
+CLI58.1.18, RN과 제품·공급자·비용 정책은 유지한다. 독립 npm tarball의 SHA512 integrity,
+전체 package-owned tree·license·실제 소비자 resolution과 CJS/두 UMD를 검증한다.
+기존 RSA/certificate/CSR와 새 Ed25519 작은 차수 키, TLS hello/닫힌 session,
+HTTP header/cookie trimming 검사를 합성 입력으로 수행한다. 기존 retired patch 증거와
+raw audit 요구는 보존한다. 새 main 전체 구간/join 및 동일 SHA preview smoke까지 미완료다.
+
 ## 2026-11-11 browser 화면 준비 경합 후속 (#799)
 
 PR #804/main `05835007e2f5c50128f14d2b9935bdfc2de3b9b5`의 full 42865375473은
