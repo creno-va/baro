@@ -48,9 +48,15 @@
   },
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
     "logs": {
       "enabled": true,
-      "invocation_logs": false
+      "head_sampling_rate": 1,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
     }
   },
   "vars": {
@@ -231,9 +237,9 @@
           "instance_type": "standard-2",
           "max_instances": 1,
           "observability": {
-            "enabled": false,
+            "enabled": true,
             "logs": {
-              "enabled": false
+              "enabled": true
             }
           }
         }
@@ -363,9 +369,9 @@
           "instance_type": "standard-2",
           "max_instances": 1,
           "observability": {
-            "enabled": false,
+            "enabled": true,
             "logs": {
-              "enabled": false
+              "enabled": true
             }
           }
         }
@@ -405,9 +411,9 @@
       "instance_type": "standard-2",
       "max_instances": 1,
       "observability": {
-        "enabled": false,
+        "enabled": true,
         "logs": {
-          "enabled": false
+          "enabled": true
         }
       }
     }

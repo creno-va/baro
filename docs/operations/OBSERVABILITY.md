@@ -21,6 +21,25 @@ errorCode, policyFindingCode, citationCount
 치환한다. 사건 원문·답변·결과·검색어·prompt·이메일·IP·cookie·token·외부 응답 body는
 로그하지 않는다. 예상하지 못한 Error 객체도 sanitize한 allowlist만 serialize한다.
 
+## 상세 Worker·Container 로그
+
+`wrangler.jsonc`는 Worker invocation 로그와 trace를 각각 100% sampling으로 수집하도록
+설정한다. 기본 설정은 `preview`와 `production`에 상속되며, 각 환경의 file processor
+Container stdout/stderr 로그도 활성화한다. 로그·trace 수집량과 비용이 증가할 수 있다.
+
+`redact_query_string=true`로 플랫폼 로그·trace의 요청 URL에서 query string을 제거한다.
+이 설정은 URL path의 식별자나 임의의 console 출력까지 익명화하지 않는다. 위 application
+allowlist와 원문·token·parser 출력 금지, 운영자 접근 제한은 그대로 유지한다.
+
+설정은 해당 환경을 [기존 수동 배포 절차](./DEPLOYMENT-OPERATIONS.md#로컬-명령으로-수동-배포)로
+재배포한 뒤 새 호출에 적용된다. 저장 로그·trace는 Cloudflare 대시보드의
+Workers & Pages → 해당 Worker → Observability에서 확인한다. Worker 실시간 JSON 로그:
+
+```bash
+bunx wrangler tail --config wrangler.jsonc --env preview --format json
+bunx wrangler tail --config wrangler.jsonc --env production --format json
+```
+
 ## 핵심 지표
 
 - HTTP: request count, 4xx/5xx, p50/p95/p99 latency by route template
@@ -70,6 +89,7 @@ errorCode, policyFindingCode, citationCount
 ## 참고
 
 - [Cloudflare Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+- [Cloudflare Workers Traces](https://developers.cloudflare.com/workers/observability/traces/)
 - [AI Gateway logging](https://developers.cloudflare.com/ai-gateway/observability/logging/)
 
 ## v2 구현 목표와 증거 경계
