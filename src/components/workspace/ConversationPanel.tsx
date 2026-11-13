@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef } from "react";
 import { Button } from "../ui/button";
 
 /** One inline work area, with the conversation and composer kept in place. */
@@ -28,7 +28,7 @@ export function ConversationPanel({
       busy ||
       !heading.current?.isConnected ||
       document.activeElement !== document.body ||
-      document.querySelector("dialog[open]") ||
+      document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') ||
       (restore.current && !restore.current())
     )
       return;
@@ -36,7 +36,8 @@ export function ConversationPanel({
     // reading target only if no other control or modal owns the user's focus.
     heading.current.focus({ preventScroll: true });
   }, [busy]);
-  useEffect(() => {
+  // Refresh the ancestor's key handler before idle controls become interactive.
+  useLayoutEffect(() => {
     const messages = heading.current?.closest<HTMLElement>(".workspace-messages");
     if (!messages) return;
     const handleScrollEscape = (event: KeyboardEvent) => {
@@ -45,7 +46,7 @@ export function ConversationPanel({
         event.key !== "Escape" ||
         event.defaultPrevented ||
         busy ||
-        document.querySelector("dialog[open]") ||
+        document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') ||
         (restore.current && !restore.current())
       )
         return;
@@ -85,7 +86,9 @@ export function ConversationPanel({
       const visible =
         focusable && target.isConnected && target.getClientRects().length > 0
           ? target
-          : target?.closest("details")?.querySelector<HTMLElement>("summary");
+          : target
+              ?.closest("[data-disclosure]")
+              ?.querySelector<HTMLElement>("[data-disclosure-button]");
       (
         visible ?? document.querySelector<HTMLTextAreaElement>("#workspace-message:not(:disabled)")
       )?.focus({ preventScroll: true });
@@ -97,7 +100,8 @@ export function ConversationPanel({
       aria-labelledby={id}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented || busy) return;
-        if ((event.target as Element).closest("dialog[open]")) return;
+        if ((event.target as Element).closest('dialog[open], [role="dialog"][aria-modal="true"]'))
+          return;
         event.preventDefault();
         onClose();
       }}

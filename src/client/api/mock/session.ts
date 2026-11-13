@@ -6,7 +6,13 @@ import { readStore, registerMockHandlers, writeStore } from "./runtime";
 const empty: SessionView = { user: null, needsConsent: false };
 registerMockHandlers({
   "session.get": () => readStore("session", empty),
-  "session.signIn": ({ accountType }: { accountType: AccountType }) => {
+  "session.signIn": ({ accountType }: { accountType?: AccountType }) => {
+    if (accountType === undefined) {
+      const current = readStore<SessionView>("session", empty);
+      if (current.user && !readStore<string[]>("deletedAccountIds", []).includes(current.user.id))
+        return current;
+      accountType = "customer";
+    }
     if (accountType !== "customer" && accountType !== "lawyer")
       throw new ApiError("VALIDATION_ERROR", "이용 유형을 선택해 주세요.");
     const accounts = readStore<Record<string, string>>("accounts", {});

@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { answerDiscard } from "../helpers/headless-controls";
 
 function gate() {
   let release = () => {};
@@ -270,12 +271,14 @@ test("a revision conflict requires explicit replacement and keeps drafts until c
   const replace = page.getByRole("button", { name: "최신 내용 불러오기", exact: true });
   await expect(replace).toBeEnabled();
   await expect(fields.first()).toHaveValue("충돌 뒤에도 보존할 교정");
-  page.once("dialog", (dialog) => dialog.dismiss());
+  const keepEditing = answerDiscard(page, false);
   await replace.click();
+  await keepEditing;
   await expect(fields.first()).toHaveValue("충돌 뒤에도 보존할 교정");
   expect(state.reads).toHaveLength(2);
-  page.once("dialog", (dialog) => dialog.accept());
+  const discardChanges = answerDiscard(page, true);
   await replace.click();
+  await discardChanges;
   await expect(fields.first()).toHaveValue("synthetic-file-a 합성 원본 0");
   expect(state.reads.map((r) => r.after)).toEqual([-1, 0, -1]);
   expect(state.writes).toBe(0);

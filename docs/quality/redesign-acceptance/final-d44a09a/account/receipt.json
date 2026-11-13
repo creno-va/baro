@@ -1,0 +1,113 @@
+{
+  "productSha": "d44a09a50d55132f9d035fead54b61a2c305a4cd",
+  "environment": "Actual Astro; real client with intercepted synthetic HTTP/local SQL; no external provider calls",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d44a09a/account/results.json",
+  "rawSha256": "bd80f10f7dc00336bc60b2cdcedaa5405003e0bc8e23156e4c43ebe37de3287d",
+  "metadata": {
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:23:46.021Z",
+    "duration": 21342.379999999997,
+    "expected": 15,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "settings loads customer resources and offers legacy cases their existing detail",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "settings loads lawyer resources and offers legacy cases their existing detail",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "failed common OAuth start clears stale selection without rewriting the existing account",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "common OAuth return preserves an existing lawyer account and returnTo without any role write",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a temporary session lookup outage preserves report edits and explicit signout clears them",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "normal OAuth state/callback and SQL preserve an existing lawyer account on common login",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a confirmed account change clears the report draft and explains why",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a superseded failure focus response preserves the current report draft",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "a superseded signed-out focus response preserves the current report draft",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "obsolete settings session failure preserves the recovered view: http",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "obsolete settings session failure preserves the recovered view: network",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "obsolete settings session failure preserves the recovered view: invalid-json",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "current settings access failure stays visible and permits retry: initial",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "current settings access failure stays visible and permits retry: recheck",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "current settings access failure stays visible and permits retry: parallel-owner",
+      "project": "",
+      "status": "passed",
+      "errors": []
+    }
+  ],
+  "testSources": {
+    "tests/browser/account-session-recovery.e2e.ts": "07982c91e6c7206bf9e1479012f7de06c26fc0e1c104eeffb34c015995bb5abd",
+    "tests/browser/account-session-recovery.config.ts": "47fa07e306801a745284a8c267d7de50794a27f67a1073a1d4fc608f1bf40e42"
+  }
+}

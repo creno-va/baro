@@ -1,5 +1,6 @@
 import type { CaseView } from "../../client/api/types";
 import type { V2Summary, V2SummaryReconciliationProposal } from "../../contracts/v2";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { FactAnswer } from "./FactAnswer";
 
 type ReadingProps = {
@@ -78,10 +79,10 @@ export function SummaryChanges({
         ))}
       </ul>
       <div className="summary-comparison">
-        <details>
-          <summary>변경 전 전체 내용</summary>
+        <Disclosure>
+          <DisclosureSummary>변경 전 전체 내용</DisclosureSummary>
           <SummaryReading summary={proposal.before} base={base} context={context} files={files} />
-        </details>
+        </Disclosure>
         <div className="summary-candidate">
           <h3>변경 후 제안</h3>
           <SummaryReading summary={proposal.after} base={base} context={context} files={files} />

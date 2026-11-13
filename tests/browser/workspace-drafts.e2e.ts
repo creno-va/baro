@@ -7,6 +7,7 @@ import {
   userMessage,
   workspace,
 } from "../fixtures/contracts/v2";
+import { chooseOption } from "../helpers/headless-controls";
 
 const id = "synthetic-draft-case";
 const base = `/cases/${id}`;
@@ -85,7 +86,9 @@ test("an open timeline retains its revision across peer refresh and repeated con
     ],
   };
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("heading", { name: "Peer correction" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Peer correction", includeHidden: true }),
+  ).toHaveText("Peer correction");
   await page.getByRole("button", { name: "타임라인 저장", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("alert")).toBeVisible();
   await page.getByRole("button", { name: "타임라인 저장", exact: true }).click();
@@ -113,14 +116,15 @@ test("date precision and long valid timeline titles remain editable", async ({ p
   await page.getByRole("button", { name: "편집", exact: true }).click();
   const title = page.getByLabel("어떤 일이 있었나요?");
   await expect(title).toHaveValue("가".repeat(400));
-  await title.press("End");
+  // macOS uses Command+Right for the input's line end; End scrolls the document.
+  await title.press(process.platform === "darwin" ? "Meta+ArrowRight" : "End");
   await title.press("Backspace");
   await expect(title).toHaveValue("가".repeat(399));
   expect(await title.evaluate((input: HTMLInputElement) => input.validity.tooLong)).toBe(false);
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-06");
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("month");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "month");
   await expect(page.getByLabel("날짜 (모르면 비워 두세요)")).toHaveValue("2026-10");
   await title.fill("😀".repeat(1999));
   await page.getByLabel("상세 내용").fill("내용");
@@ -202,7 +206,8 @@ test("chat attachment chooser keeps the unsent message in the conversation", asy
   await page.goto(base);
   await page.getByLabel("추가 사실 또는 질문").fill("미전송 합성 초안");
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "사진·파일 첨부", exact: true }).click();
+  await page.locator(".composer-add-menu > [data-disclosure-button]").click();
+  await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles({
     name: "합성.txt",
     mimeType: "text/plain",

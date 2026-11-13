@@ -1,5 +1,11 @@
 # BARO 문서 지도
 
+현재 전면 웹 리디자인은 [ADR-0021](./adr/0021-case-workbench-and-web-design-system.md)과
+[설계·소유권·인수 계약](./development/REDESIGN-EXECUTION.md)을 따른다. 아래 앱 개편 기록은 이전 인수 이력이다.
+
+2026-11-08 로그인 이후 앱 개편의 단일 설계·소유권·인수 기록은
+[앱 작업공간·고객용 리포트](./development/APP-WORKSPACE-REWORK.md)와 #751을 따른다.
+
 [PRD](./PRD.md)는 현재 고객/변호사 MVP 범위다. 통합된 v2 구현, 보존된 v1 계약과
 실제 외부 인수를 구분한다. 현재 공개 서비스를 유지하며 [ADR-0015](./adr/0015-maintenance-and-operating-policy.md)의
 비용·릴리스·검색·문서 정비를 우선한다. 정책 초안 인수와 법률 승인은 별개다.

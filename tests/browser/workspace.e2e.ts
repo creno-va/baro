@@ -1,6 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { captureCaseViewports } from "../helpers/case-ui-capture";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
+import {
+  closeWorkspaceMaterials,
+  openCaseTool,
+  returnToWorkspace,
+} from "../helpers/workspace-navigation";
 
 // This isolated C contract suite also runs before A's shared facade is available.
 // Enable with: BARO_C_TEST_API=true bunx playwright test --config tests/helpers/workspace.playwright.config.ts
@@ -63,6 +69,7 @@ test("readiness offers one next action and keeps the composer visible after an a
     { width: 320, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
+    await closeWorkspaceMaterials(page);
     await page.evaluate(() => {
       window.scrollTo(0, 0);
       window.dispatchEvent(new Event("resize"));
@@ -78,7 +85,7 @@ test("readiness offers one next action and keeps the composer visible after an a
   }
 });
 
-test("materials, review and preparation continue inside the actual workspace route", async ({
+test("conversation material review stays inline and standalone review retains mobile actions", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
@@ -87,7 +94,7 @@ test("materials, review and preparation continue inside the actual workspace rou
   await expect(actions).toBeVisible();
   await actions.getByText("다른 작업", { exact: true }).click();
   await actions.getByRole("button", { name: "자료 추가·검토", exact: true }).click();
-  const panel = page.getByRole("region", { name: "자료 추가와 검토", exact: true });
+  const panel = page.locator("#case-materials-panel");
   await expect(panel).toBeVisible();
   const chooser = page.waitForEvent("filechooser");
   await panel.getByRole("button", { name: "파일 선택", exact: true }).click();
@@ -96,6 +103,7 @@ test("materials, review and preparation continue inside the actual workspace rou
     mimeType: "text/plain",
     buffer: Buffer.from("합성 계약 원금 300만원. 반환 약속 날짜 미확인."),
   });
+  await closeWorkspaceMaterials(page);
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
     "conversation-contract.txt",
   );
@@ -106,7 +114,19 @@ test("materials, review and preparation continue inside the actual workspace rou
     .getByRole("link", { name: "conversation-contract.txt" });
   await expect(attachment).toBeVisible();
   await attachment.click();
-  const dialog = page.getByRole("dialog");
+  const inlineReview = page.getByRole("dialog", { name: "자료 확인", exact: true });
+  await expect(
+    inlineReview.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
+  ).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(base);
+  await page.keyboard.press("Escape");
+  await expect(inlineReview).toBeHidden();
+  await closeWorkspaceMaterials(page);
+  await expect(page.getByRole("button", { name: "자료 열기", exact: true })).toBeFocused();
+  await openCaseTool(page, "자료 1");
+  const standaloneReview = page.getByRole("button", { name: "자료 확인", exact: true });
+  await standaloneReview.click();
+  const dialog = page.locator(".workspace-dialog");
   await expect(
     dialog.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
   ).toBeVisible();
@@ -174,12 +194,12 @@ test("materials, review and preparation continue inside the actual workspace rou
   expect(footerGeometry.at(-1)!.lastBodyBottom).toBeLessThanOrEqual(
     footerGeometry.at(-1)!.footerTop + 1,
   );
-  expect(new URL(page.url()).pathname).toBe(base);
+  expect(new URL(page.url()).pathname).toBe(`${base}/files`);
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
-  await page.getByRole("button", { name: "대화 작업 닫기", exact: true }).click();
-  await expect(actions.getByText("다른 작업", { exact: true })).toBeFocused();
-  await expect(actions.getByText("다른 작업", { exact: true })).toBeInViewport();
+  await expect(standaloneReview).toBeFocused();
+  await returnToWorkspace(page);
+  await expect(attachment).toBeVisible();
   const preparation = actions.getByRole("button", { name: "타임라인·다음 행동 확인", exact: true });
   if (!(await preparation.isVisible()))
     await actions.getByText("다른 작업", { exact: true }).click();
@@ -197,7 +217,7 @@ test("a selected photo is previewed and removable before explicit consent/upload
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.goto(`${base}/files`);
-  await expect(page.getByRole("button", { name: "사진 분석", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "촬영해서 추가", exact: true })).toBeEnabled();
   await page.evaluate(async () => {
     const path = "/tests/helpers/workspace-client-fixture.ts";
     const { api } = (await import(path)) as typeof import("../helpers/workspace-client-fixture");
@@ -215,12 +235,12 @@ test("a selected photo is previewed and removable before explicit consent/upload
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
     "base64",
   );
-  const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "사진 분석", exact: true }).click();
-  await (await chooser).setFiles([
-    { name: "remove-photo.png", mimeType: "image/png", buffer: bytes },
-    { name: "keep-photo.png", mimeType: "image/png", buffer: bytes },
-  ]);
+  for (const name of ["remove-photo.png", "keep-photo.png"]) {
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "촬영해서 추가", exact: true }).click();
+    await (await chooser).setFiles({ name, mimeType: "image/png", buffer: bytes });
+    await expect(page.getByAltText(`${name} 미리보기`)).toBeVisible();
+  }
   await expect(page.getByAltText("keep-photo.png 미리보기")).toBeVisible();
   await page.getByRole("button", { name: "remove-photo.png 첨부 제거", exact: true }).click();
   await expect(page.getByAltText("remove-photo.png 미리보기")).toHaveCount(0);
@@ -250,7 +270,9 @@ for (const width of [320, 390, 768, 1440]) {
     await page.goto(base);
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
-    const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+    await closeWorkspaceMaterials(page);
+    await page.locator(".case-tools > [data-popover-button]").click();
+    const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const links = navigation.getByRole("link");
     await expect(links).toHaveCount(6);
     for (const link of await links.all()) {
@@ -261,23 +283,20 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
+    await page.locator(".case-tools > [data-popover-button]").click();
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
     ).toBeGreaterThanOrEqual(16);
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    const controls = [
-      page.getByRole("button", { name: "사진·파일 첨부", exact: true }),
-      page.getByRole("button", { name: "외부 조회", exact: true }),
-      send,
-    ];
+    const controls = [page.locator(".composer-add-menu > [data-disclosure-button]"), send];
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
     const first = boxes[0];
     if (!first) throw new Error("Attachment control is missing its box");
     for (const box of boxes) {
       if (!box) throw new Error("Composer control is missing its box");
-      expect(box.height).toBeGreaterThanOrEqual(44);
-      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(width < 768 ? 44 : 36);
+      expect(box.width).toBeGreaterThanOrEqual(36);
       expect(box.y).toBeCloseTo(first.y, 0);
     }
     expect(
@@ -351,13 +370,19 @@ test("explicit lookup has bounded mobile inputs, fresh recipient consent and no 
     }),
   );
   await page.goto(base);
+  const composerMenu = page.getByRole("button", { name: "자료 추가 및 멘션", exact: true });
+  await composerMenu.click();
   const opener = page.getByRole("button", { name: "외부 조회", exact: true });
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "공공·외부 정보 조회" });
   const target = dialog.getByRole("textbox", { name: "사업자등록번호" });
   const consent = dialog.getByRole("checkbox", { name: "위 조회 대상의 외부 전송에 동의합니다." });
   const submit = dialog.getByRole("button", { name: "동의하고 조회 요청" });
-  await expect(dialog.getByRole("option")).toHaveCount(1);
+  const tools = selectControl(dialog, { name: "조회 서비스", exact: true });
+  await tools.click();
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(tools).toBeFocused();
   await expect(dialog.getByText("수신 서비스: 국세청", { exact: true })).toBeVisible();
   await expect(submit).toBeDisabled();
   await target.fill("1111111111");
@@ -369,7 +394,8 @@ test("explicit lookup has bounded mobile inputs, fresh recipient consent and no 
   await page.screenshot({ path: "test-results/lookup-dialog-mobile.png" });
   await page.screenshot({ path: "test-results/lookup-dialog-mobile.png" });
   await dialog.getByRole("button", { name: "닫기", exact: true }).last().click();
-  await expect(opener).toBeFocused();
+  await expect(composerMenu).toBeFocused();
+  await composerMenu.click();
   await opener.click();
   await expect(target).toHaveValue("");
   await expect(consent).not.toBeChecked();
@@ -404,6 +430,7 @@ test("lookup without configured tools displays availability without a target or 
     route.fulfill({ json: { schemaVersion: "2", tools: [] } }),
   );
   await page.goto(base);
+  await page.getByRole("button", { name: "자료 추가 및 멘션", exact: true }).click();
   await page.getByRole("button", { name: "외부 조회", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "공공·외부 정보 조회" });
   await expect(dialog.getByRole("status")).toHaveText("아직 연결된 조회 서비스가 없어요.");
@@ -503,6 +530,7 @@ test("successful chat hides lookup diagnostics and user statement labels while k
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
+    await closeWorkspaceMaterials(page);
     const composer = page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true });
     await expect(composer).toBeVisible();
     const box = await composer.boundingBox();
@@ -658,9 +686,9 @@ test("persisted format refusal remains clear after reload and account re-entry",
   await page.reload();
   await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
   await rejected.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.getByRole("dialog").getByText(/등록 거절 ·/)).toBeVisible();
+  await expect(page.locator(".workspace-dialog").getByText(/등록 거절 ·/)).toBeVisible();
   await expect(
-    page.getByRole("dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
+    page.locator(".workspace-dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
   ).toBeDisabled();
 });
 
@@ -778,7 +806,7 @@ for (const scenario of [
       expect(await opener.getAttribute("aria-label")).toBeNull();
     }
     expect(await reads()).toEqual([]);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     if (["drag", "pointer-cancel"].includes(scenario)) {
       if (scenario === "pointer-cancel") await opener.dispatchEvent("pointercancel");
       await page.mouse.move(0, 0);
@@ -793,7 +821,7 @@ for (const scenario of [
         ),
       );
     expect(await reads()).toEqual([]);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     await page.evaluate((scenario) => {
       (window as unknown as { releasePreviewCheck: (result: string) => void }).releasePreviewCheck(
         scenario,
@@ -801,7 +829,7 @@ for (const scenario of [
     }, scenario);
     const accepted = ["normal", "focus", "consent", "double"].includes(scenario);
     if (accepted) {
-      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.locator(".workspace-dialog")).toBeVisible();
       await expect(
         page
           .getByRole("dialog")
@@ -814,7 +842,7 @@ for (const scenario of [
           page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
         ).toBeVisible();
       else await expect(page.getByRole("alert").first()).toBeVisible();
-      await expect(page.getByRole("dialog")).not.toBeVisible();
+      await expect(page.locator(".workspace-dialog")).not.toBeVisible();
       expect(await reads()).toEqual([]);
     }
     if (scenario === "pointer-down-only") {
@@ -1442,8 +1470,12 @@ test("partial upload readback failure retries only the unaccepted remainder", as
     page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
+  await expect(page.locator(".workspace-dialog")).toBeVisible();
+  await page
+    .locator(".workspace-dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   const retry = page.getByRole("button", { name: "업로드 다시 시도", exact: true });
   await expect(retry).toBeVisible();
@@ -1920,7 +1952,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     });
     await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.locator(".workspace-dialog")).toBeVisible();
     let session = await page.evaluate((key) => {
       const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
       saved.caseOwners = { "synthetic-case": saved.session.user.id };
@@ -1981,7 +2013,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
       { key, session },
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(2);
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     if (outcome !== "lawyer")
       await expect(page.getByText("private-session-original.txt", { exact: true })).toHaveCount(0);
     await expect(
@@ -1993,7 +2025,7 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(afterDenial);
     if (outcome !== "lawyer") await expect(page.getByRole("alert").first()).toBeVisible();
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
     expect(downloads).toEqual([]);
     expect(
       await page.evaluate(() => (window as unknown as { originalReads: number }).originalReads),
@@ -2236,35 +2268,40 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await page.getByRole("button", { name: "응답 다시 시도" }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await openCaseTool(page, "다음 행동");
   const first = page.getByRole("checkbox").first();
   await first.check();
   await expect(first).toBeChecked();
   await expect(first).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await expect(
+    page.locator(".workspace-next").getByRole("link", { name: "리포트 열기", exact: true }),
+  ).toHaveAttribute("href", `${base}/reports`);
+  await expect(
+    page.locator(".workspace-next").getByRole("link", { name: "변호사 찾기", exact: true }),
+  ).toHaveCount(0);
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 날짜 확인");
   await page.getByLabel("상세 내용").fill("원본 메시지를 검토할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await page.getByRole("button", { name: "편집", exact: true }).click();
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
-  await expect(page.getByRole("link", { name: "리포트 보기" }).first()).toHaveAttribute(
-    "href",
-    `${base}/reports`,
-  );
-  await expect(page.getByRole("link", { name: /변호사 탐색/ }).first()).toHaveAttribute(
-    "href",
-    "/lawyers",
-  );
+  await page.locator(".case-tools > [data-popover-button]").click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "사건 도구", exact: true })
+      .getByRole("link", { name: "리포트 보기", exact: true }),
+  ).toHaveAttribute("href", `${base}/reports`);
+  await expect(page.getByRole("link", { name: /변호사 탐색/ })).toHaveCount(0);
 });
 test("file processing failure, retry, extracted text, original bytes, cancellation and deletion persist", async ({
   page,
@@ -2300,12 +2337,16 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.getByRole("dialog").locator("details p").filter({ hasText: text }),
+    page.locator(".workspace-dialog").locator("[data-disclosure] p").filter({ hasText: text }),
   ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   expect((await download).suggestedFilename()).toBe("synthetic.txt");
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).last().click();
+  await page
+    .locator(".workspace-dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .last()
+    .click();
   await page.getByRole("button", { name: "삭제", exact: true }).click();
   await page.getByRole("button", { name: "취소", exact: true }).click();
   await expect(page.getByRole("heading", { name: "synthetic.txt" })).toBeVisible();
@@ -2330,16 +2371,16 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByRole("link", { name: "사용량 확인" })).toBeVisible();
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("합성 한도 요청");
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".workspace-dialog")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await expect(page.getByRole("button", { name: "일정 추가" })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await openCaseTool(page, "자료 0");
   const bytes = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=",
     "base64",
@@ -2376,7 +2417,7 @@ test("changing the shared mock owner hides the previous workspace and open edito
     window.dispatchEvent(new Event("focus"));
   }, key);
   await expect(page.getByRole("alert")).toContainText("사건 또는 자료를 찾을 수 없어요.");
-  await expect(page.getByRole("dialog")).not.toBeVisible();
+  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).not.toBeVisible();
   await expect(page.getByLabel("어떤 일이 있었나요?")).not.toBeVisible();
 });
@@ -2386,10 +2427,13 @@ test("workspace panels keep their navigation, readable layouts and accessible co
 }) => {
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
-  const navigation = page.getByRole("navigation", { name: "사건 메뉴" });
+  await closeWorkspaceMaterials(page);
+  await page.locator(".case-tools > [data-popover-button]").click();
+  const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
   await expect(navigation.getByRole("link")).toHaveCount(6);
+  await expect(page.locator(".workspace-tabs")).toHaveCount(0);
   for (const [name, path] of [
-    ["대화", ""],
+    ["요약 보기 · 재확인", "/summary"],
     ["자료 0", "/files"],
     ["타임라인", "/timeline"],
     ["다음 행동", "/actions"],
@@ -2400,6 +2444,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
       "href",
       `${base}${path}`,
     );
+  await page.locator(".case-tools > [data-popover-button]").click();
   await captureCaseViewports(page, "chat-welcome");
   await page
     .getByLabel("추가 사실 또는 질문")
@@ -2407,7 +2452,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
   await captureCaseViewports(page, "chat");
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  await openCaseTool(page, "자료 0");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ }).click();
   await (await chooser).setFiles({
@@ -2417,21 +2462,25 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   });
   await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await captureCaseViewports(page, "files");
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
   await page.getByLabel("어떤 일이 있었나요?").fill("반환 약속 메시지를 받음");
-  await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption("day");
+  await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), "day");
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.locator(".workspace-dialog")).toBeHidden();
   await expect(page.getByRole("heading", { name: "사건의 흐름" })).toBeVisible();
   await captureCaseViewports(page, "timeline");
-  await page.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await openCaseTool(page, "다음 행동");
   await page.getByRole("checkbox").first().check();
   await expect(page.getByRole("progressbar", { name: "다음 행동 완료 현황" })).toHaveAttribute(
-    "value",
-    "1",
+    "aria-valuetext",
+    "1 / 3",
+  );
+  await expect(page.getByRole("progressbar", { name: "다음 행동 완료 현황" })).toHaveAttribute(
+    "aria-valuenow",
+    "33.333",
   );
   await captureCaseViewports(page, "actions");
 });

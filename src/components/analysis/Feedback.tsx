@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { accessHref } from "../../client/return-path";
 import { errorResponseSchema } from "../../contracts";
 import { trackCase } from "../../server/modules/analytics/browser";
+import { ActionButton as ControlButton } from "../ui/button";
 export function Feedback({ caseId, analysisId }: { caseId: string; analysisId: string }) {
   const [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
@@ -46,12 +47,12 @@ export function Feedback({ caseId, analysisId }: { caseId: string; analysisId: s
         선택 사항이에요. 도움 여부만 사건과 함께 보관하며 사건 삭제 시 지워져요. 원문이나 자유
         의견은 수집하지 않아요.
       </p>
-      <button type="button" disabled={busy} onClick={() => void save(true)}>
+      <ControlButton type="button" disabled={busy} onClick={() => void save(true)}>
         도움이 됐어요
-      </button>
-      <button type="button" disabled={busy} onClick={() => void save(false)}>
+      </ControlButton>
+      <ControlButton type="button" disabled={busy} onClick={() => void save(false)}>
         도움이 되지 않았어요
-      </button>
+      </ControlButton>
       <p aria-live="polite">{busy ? "도움 여부 저장 중" : message}</p>
     </section>
   );

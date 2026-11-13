@@ -1,4 +1,4 @@
-export {};
+import sharp from "sharp";
 
 const build = await Bun.build({
   entrypoints: ["tests/helpers/report-rework-layout-entry.tsx"],
@@ -9,18 +9,28 @@ const script = await build.outputs[0].text();
 const css =
   (await Bun.file("src/styles/global.css").text())
     .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "") + (await Bun.file("src/styles/reports.css").text());
+    .replace(/@theme inline\s*\{[^}]*\}/s, "") +
+  (await Bun.file("src/styles/design-system.css").text()) +
+  (await Bun.file("src/styles/reports.css").text());
 const photo = `data:image/jpeg;base64,${Buffer.from(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer()).toString("base64")}`;
+const portrait = await sharp("tests/fixtures/media/image-markers.jpg")
+  .resize(700, 1000, { fit: "contain", background: "white" })
+  .jpeg()
+  .toBuffer();
+const portraitData = `data:image/jpeg;base64,${portrait.toString("base64")}`;
 Bun.serve({
   hostname: "127.0.0.1",
   port: 4377,
   fetch(request) {
     const path = new URL(request.url).pathname;
-    if (path === "/fixture-photo-data") return Response.json(photo);
+    if (path === "/fixture-photo-data")
+      return Response.json({ landscape: photo, portrait: portraitData });
     if (path === "/app.js")
       return new Response(script, { headers: { "content-type": "text/javascript" } });
     if (path === "/app.css") return new Response(css, { headers: { "content-type": "text/css" } });
     if (path.startsWith("/fonts/")) return new Response(Bun.file(`public${path}`));
+    if (path.endsWith("/photos/synthetic-rework-portrait"))
+      return new Response(portrait, { headers: { "content-type": "image/jpeg" } });
     if (path.endsWith("/photos/synthetic-rework-photo"))
       return new Response(Bun.file("tests/fixtures/media/image-markers.jpg"), {
         headers: { "content-type": "image/jpeg" },

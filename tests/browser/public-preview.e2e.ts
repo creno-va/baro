@@ -1,53 +1,7 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { goToCaseTool, returnToCaseConversation } from "../helpers/case-navigation";
 import { openReportEditor } from "../helpers/report-controls";
-
-const origin = "http://127.0.0.1:4362";
-test.use({ baseURL: origin });
-let server: ChildProcess;
-
-test.beforeAll(async () => {
-  test.setTimeout(120_000);
-  server = spawn(
-    "bun",
-    ["run", "dev", "--", "--ignore-lock", "--host", "127.0.0.1", "--port", "4362"],
-    {
-      cwd: fileURLToPath(new URL("../..", import.meta.url)),
-      env: {
-        ...process.env,
-        CLOUDFLARE_ENV: "",
-        BARO_UI_TEST_FIXTURE: "true",
-        PUBLIC_API_MODE: "mock",
-        ASTRO_TELEMETRY_DISABLED: "1",
-        WRANGLER_LOG_PATH: "/tmp/baro-public-preview-wrangler.log",
-      },
-      stdio: "ignore",
-    },
-  );
-  let failed = false;
-  server.once("error", () => {
-    failed = true;
-  });
-  await expect
-    .poll(
-      async () => {
-        if (failed || server.exitCode !== null) throw new Error("Public preview harness exited");
-        try {
-          return (await fetch(`${origin}/login`, { signal: AbortSignal.timeout(3000) })).status;
-        } catch {
-          return 0;
-        }
-      },
-      { timeout: 110_000, intervals: [250, 500, 1000] },
-    )
-    .toBe(200);
-});
-
-test.afterAll(() => {
-  server?.kill();
-});
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -65,12 +19,12 @@ test.beforeEach(async ({ page }) => {
 
 test("app opens directly without launch notice on desktop and 320px", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   const modal = page.getByRole("dialog", { name: "BARO를 먼저 만나보세요" });
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   await expect(modal).toHaveCount(0);
   await expect(page.getByText(/2026\.11\.(01|10)/)).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "변호사 찾기", exact: true })).toBeVisible();
+  await expect(page.locator('a[href="/lawyers"], a[href="/lawyer"]')).toHaveCount(0);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "/tmp/baro-public-preview-desktop.png",
@@ -91,16 +45,13 @@ test("app opens directly without launch notice on desktop and 320px", async ({ p
   });
 });
 
-test("intake opens an active workspace with lawyer navigation and report controls", async ({
+test("intake opens the restored workspace and report controls without lawyer contact navigation", async ({
   page,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/app");
-  await expect(page.getByRole("link", { name: "변호사 찾기", exact: true })).toHaveAttribute(
-    "href",
-    "/lawyers",
-  );
+  await page.goto("/new");
+  await expect(page.locator('a[href="/lawyers"], a[href="/lawyer"]')).toHaveCount(0);
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill(
@@ -128,27 +79,35 @@ test("intake opens an active workspace with lawyer navigation and report control
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeDisabled();
   await page.getByRole("textbox", { name: "추가 사실 또는 질문" }).fill("합성 추가 사실입니다.");
   await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
-  const tabs = page.getByRole("navigation", { name: "사건 메뉴" });
-  await tabs.getByRole("link", { name: /^자료/ }).click();
+  const casePath = new URL(page.url()).pathname;
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(`${casePath}/files`);
   await expect(page.getByRole("button", { name: /^(파일 선택|파일 추가)$/ })).toBeEnabled();
   await expect(page.getByLabel("업로드할 파일 선택", { exact: true })).toBeEnabled();
-  await tabs.getByRole("link", { name: "타임라인", exact: true }).click();
+  await goToCaseTool(page, "timeline");
+  await expect(page).toHaveURL(`${casePath}/timeline`);
   await expect(page.getByRole("button", { name: "일정 추가" })).toBeEnabled();
-  await tabs.getByRole("link", { name: "다음 행동", exact: true }).click();
+  await goToCaseTool(page, "actions");
+  await expect(page).toHaveURL(`${casePath}/actions`);
   await expect(page.getByRole("heading", { name: "다음 행동", exact: true })).toBeVisible();
-  await expect(page.locator(".workspace-action-list input").first()).toBeEnabled();
-  await tabs.getByRole("link", { name: "리포트 보기" }).click();
+  await expect(page.locator('.workspace-action-list [role="checkbox"]').first()).toBeEnabled();
+  await goToCaseTool(page, "reports");
+  await expect(page).toHaveURL(`${casePath}/reports`);
   const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });
   await expect(preparation).toBeVisible();
   await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeEnabled();
   await openReportEditor(page);
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toBeEnabled();
-  await expect(page.getByRole("button", { name: "수정 마치기" })).toBeEnabled();
+  const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toBeDisabled();
+  await editor.fill(`${await editor.inputValue()}\n합성 검토 내용을 보완합니다.`);
+  await expect(page.getByRole("button", { name: "수정 내용 저장" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장" })).toHaveCount(0);
   await expect(page.getByLabel("내용·식별정보·선택한 사진을 확인했어요")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드" })).toBeEnabled();
   await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
-  await tabs.getByRole("link", { name: "대화", exact: true }).click();
+  await returnToCaseConversation(page);
+  await expect(page).toHaveURL(casePath);
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
 });

@@ -165,7 +165,15 @@ test("settings uses real signed session, OAuth state/callback, SQL account delet
     });
     await page.goto("/settings");
     await openAccountDeletion(page);
+    const providerNavigation = page.waitForURL(
+      (url) => url.origin === "https://accounts.google.com",
+      { waitUntil: "commit" },
+    );
     await page.getByRole("button", { name: "Google로 재인증" }).click();
+    await providerNavigation;
+    await page.waitForURL((url) => url.origin === baseURL && url.pathname === "/settings", {
+      waitUntil: "load",
+    });
     const confirmation = page.getByLabel("삭제 확인 — DELETE 입력");
     await expect(confirmation).toBeEnabled();
     await confirmation.fill("DELETE");
@@ -224,6 +232,9 @@ test("settings reauth needs a newer callback for same owner and a fresh explicit
   await auth.focus();
   await page.keyboard.press("Enter");
   await expect.poll(() => stamp).not.toBeNull();
+  await page.waitForURL((url) => url.pathname === "/settings" && !url.searchParams.has("reauth"), {
+    waitUntil: "load",
+  });
   await expect(confirm).toBeEnabled();
   await expect(confirm).toBeFocused();
   await page.screenshot({ path: ".wrangler/settings-320.png", fullPage: true });

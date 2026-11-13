@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { DirectoryItem, DirectoryPage } from "../../src/contracts/v2";
 import { publicLawyer } from "../fixtures/contracts/v2";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 const directoryLawyer: DirectoryItem = {
   id: publicLawyer.id,
@@ -22,25 +24,29 @@ const directoryPage = (items: DirectoryItem[] = []): DirectoryPage => ({
   rotation: { day: "2026-10-14", algorithm: "daily_sha256_pivot_v1" },
 });
 
-test("profile round trip retains applied search filters after reload and ignores unrelated return parameters", async ({
-  page,
-}) => {
-  await page.route("**/api/v2/lawyers**", (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.startsWith("/api/v2/lawyers/self-service/"))
-      return route.fulfill({ status: 404, json: {} });
-    if (path === "/api/v2/lawyers/directory")
-      return route.fulfill({ json: directoryPage([directoryLawyer]) });
-    if (path.includes("/assets/")) return route.fulfill({ status: 404 });
-    return route.fulfill({ json: publicLawyer });
-  });
-  const filters = new URLSearchParams({
-    name: directoryLawyer.name,
-    region: "seoul",
-    legalField: "company",
-  });
-  const listPath = `/lawyers?${filters}`;
-  for (const width of [320, 390, 768, 1024, 1440]) {
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
+
+for (const width of [320, 390, 768, 1024, 1440]) {
+  test(`profile round trip retains applied filters and safe returns at ${width}px`, async ({
+    page,
+  }) => {
+    await page.route("**/api/v2/lawyers**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.startsWith("/api/v2/lawyers/self-service/"))
+        return route.fulfill({ status: 404, json: {} });
+      if (path === "/api/v2/lawyers/directory")
+        return route.fulfill({ json: directoryPage([directoryLawyer]) });
+      if (path.includes("/assets/")) return route.fulfill({ status: 404 });
+      return route.fulfill({ json: publicLawyer });
+    });
+    const filters = new URLSearchParams({
+      name: directoryLawyer.name,
+      region: "seoul",
+      legalField: "company",
+    });
+    const listPath = `/lawyers?${filters}`;
     await page.setViewportSize({ width, height: 760 });
     await page.goto(listPath);
     const profile = page.locator("a.directory-profile");
@@ -48,7 +54,7 @@ test("profile round trip retains applied search filters after reload and ignores
     await expect(page.getByText("Preview 환경 · 실제 API에 연결합니다.")).toHaveCount(0);
     const controls = await page
       .getByRole("form", { name: "변호사 검색" })
-      .locator("input, select, button[type=submit]")
+      .locator('input:not([type="hidden"]), [data-slot="select"], button[type=submit]')
       .evaluateAll((elements) =>
         elements.map((element) => {
           const { height, bottom } = element.getBoundingClientRect();
@@ -61,9 +67,22 @@ test("profile round trip retains applied search filters after reload and ignores
     for (const field of controls.slice(0, 3)) {
       expect(Math.abs(field.height - button.height)).toBeLessThanOrEqual(1);
     }
-    expect(controls.slice(0, 3).some((field) => Math.abs(field.bottom - button.bottom) <= 1)).toBe(
-      true,
-    );
+    if (width > 600)
+      expect(
+        controls.slice(0, 3).some((field) => Math.abs(field.bottom - button.bottom) <= 1),
+      ).toBe(true);
+    else {
+      const lastField = controls[2];
+      if (!lastField) throw new Error("Search filter is missing");
+      expect(button.bottom - button.height).toBeGreaterThan(lastField.bottom);
+      const formWidth = await page
+        .locator(".directory-search__form")
+        .evaluate((form) => form.getBoundingClientRect().width);
+      const buttonWidth = await page
+        .getByRole("button", { name: "검색", exact: true })
+        .evaluate((button) => button.getBoundingClientRect().width);
+      expect(Math.abs(buttonWidth - formWidth)).toBeLessThanOrEqual(1);
+    }
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
@@ -88,17 +107,23 @@ test("profile round trip retains applied search filters after reload and ignores
     await expect(page.getByLabel("이름 또는 사무실", { exact: true })).toHaveValue(
       directoryLawyer.name,
     );
-    await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("seoul");
-    await expect(page.getByRole("combobox", { name: "분야", exact: true })).toHaveValue("company");
-  }
-  await page.goto(
-    `/lawyers/${directoryLawyer.id}?region=seoul&returnTo=https://example.com&unknown=secret&legalField=invalid`,
-  );
-  await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
-    "href",
-    "/lawyers?region=seoul",
-  );
-});
+    await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+      "data-value",
+      "seoul",
+    );
+    await expect(selectControl(page, { name: "분야", exact: true })).toHaveAttribute(
+      "data-value",
+      "company",
+    );
+    await page.goto(
+      `/lawyers/${directoryLawyer.id}?region=seoul&returnTo=https://example.com&unknown=secret&legalField=invalid`,
+    );
+    await expect(page.getByRole("link", { name: "변호사 목록으로", exact: true })).toHaveAttribute(
+      "href",
+      "/lawyers?region=seoul",
+    );
+  });
+}
 
 test("directory filters, empty supply, approved detail and office-only contact work at 320px", async ({
   page,
@@ -135,14 +160,17 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await expect(page.getByRole("heading", { name: "변호사 찾기", exact: true })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await expect(page.locator("a.directory-profile")).toBeVisible();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("jeju");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "jeju");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("jeju");
+  await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+    "data-value",
+    "jeju",
+  );
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await page.locator("a.directory-profile").click({ position: { x: 12, y: 12 } });
   await expect(
@@ -152,6 +180,7 @@ test("directory filters, empty supply, approved detail and office-only contact w
   await expect(page.getByRole("heading", { name: "소개", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /소개와 분야|직접 연락/ })).toHaveCount(0);
   const contact = page.getByRole("button", { name: "연락처 보기", exact: true });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await contact.click();
   const dialog = page.getByRole("dialog", { name: "연락처", exact: true });
   await expect(dialog).toBeVisible();
@@ -173,7 +202,7 @@ test("directory filters, empty supply, approved detail and office-only contact w
         getComputedStyle(card.querySelector(".ui-card__content")!).paddingLeft,
       ),
     }));
-  expect(cardStyles.radius).toBeGreaterThanOrEqual(16);
+  expect(cardStyles.radius).toBe(14);
   expect(cardStyles.padding).toBeGreaterThanOrEqual(20);
   for (const name of ["네이버 지도", "카카오맵", "Google 길찾기"]) {
     const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
@@ -239,7 +268,10 @@ test("URL restores before input; a slow initial response cannot erase fast edits
   await expect(page.getByText("조건에 맞는 공개 프로필이 없어요.")).toBeVisible();
   await page.goBack();
   await expect(name).toHaveValue("URL 초기 조건");
-  await expect(page.getByRole("combobox", { name: "지역", exact: true })).toHaveValue("busan");
+  await expect(selectControl(page, { name: "지역", exact: true })).toHaveAttribute(
+    "data-value",
+    "busan",
+  );
   await page.goForward();
   await expect(name).toHaveValue("빠른 입력 유지");
   await page.getByRole("button", { name: "조건 초기화" }).focus();

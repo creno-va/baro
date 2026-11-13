@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../ui/button";
+import { MessageContent } from "./MessageContent";
 
 /** Presentation of an already validated, durably published answer. No provider
  * drafts, thought tokens or partially parsed model JSON reach this component. */
@@ -76,11 +77,9 @@ export function ProgressiveReply({
   const typing = animate && shown < graphemes.length;
   return (
     <>
-      <p aria-busy={typing} data-reply-revealing={typing || undefined}>
-        {graphemes.slice(0, shown).join("")}
-      </p>
       {typing && (
         <Button
+          className="workspace-reply-skip"
           size="sm"
           variant="ghost"
           onClick={() => {
@@ -90,6 +89,7 @@ export function ProgressiveReply({
           답변 전체 바로 보기
         </Button>
       )}
+      <MessageContent text={graphemes.slice(0, shown).join("")} revealing={typing} />
     </>
   );
 }

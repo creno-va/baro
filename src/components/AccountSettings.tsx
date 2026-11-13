@@ -16,8 +16,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../client/api";
 import { accountDeleted } from "../server/modules/analytics/browser";
 import { ProviderIcon } from "./AuthButtons";
+import { LegacyProfileAssets } from "./lawyers/LegacyProfileAssets";
 import { ConfirmDialog } from "./reports/ConfirmDialog";
+import { ActionButton as ControlButton } from "./ui/button";
+import { Disclosure, DisclosureSummary } from "./ui/disclosure";
+import { Input as ControlInput, Label as FieldLabel } from "./ui/form";
 import { LoadingContent, Spinner } from "./ui/loading";
+import { Progress } from "./ui/progress";
 
 const markerKey = "baro.account-reauth.v1";
 const providerNames = { google: "Google", naver: "네이버", kakao: "카카오" };
@@ -35,11 +40,15 @@ export function AccountSettings() {
   const [notice, setNotice] = useState("");
   const [target, setTarget] = useState<"account" | null>(null);
   const [confirmation, setConfirmation] = useState("");
+  const confirmationField = useRef<HTMLInputElement | null>(null);
   const [deleted, setDeleted] = useState(false);
   const lock = useRef(false);
   const loadSequence = useRef(0);
   const owner = useRef<string | null>(null);
   const [checking, setChecking] = useState(true);
+  useEffect(() => {
+    if (target && ready && !busy && !checking) confirmationField.current?.focus();
+  }, [target, ready, busy, checking]);
   const clearOwnerState = useCallback(() => {
     ++loadSequence.current;
     lock.current = false;
@@ -296,11 +305,10 @@ export function AccountSettings() {
     <div className="account-settings" aria-busy={Boolean(busy) || checking}>
       <header className="settings-heading">
         <div>
-          <span className="settings-eyebrow">내 계정</span>
           <h1>설정과 사용량</h1>
           <p>이용 현황과 계정 정보를 관리해요.</p>
         </div>
-        <button
+        <ControlButton
           className="settings-refresh"
           aria-busy={Boolean(busy) || checking}
           type="button"
@@ -308,7 +316,7 @@ export function AccountSettings() {
           onClick={() => void load()}
         >
           {busy || checking ? <Spinner /> : <RefreshCw aria-hidden="true" size={16} />} 다시 확인
-        </button>
+        </ControlButton>
       </header>
       {(busy || checking) && (
         <p className="settings-loading settings-progress" role="status">
@@ -369,7 +377,7 @@ export function AccountSettings() {
                     / {count.limit} {unit}
                   </span>
                 </p>
-                <progress
+                <Progress
                   aria-label={label}
                   value={Math.min(count.used, count.limit)}
                   max={count.limit}
@@ -412,8 +420,8 @@ export function AccountSettings() {
             </p>
           )}
         </div>
-        <details className="settings-usage-guide">
-          <summary>파일별 한도와 처리 안내</summary>
+        <Disclosure className="settings-usage-guide">
+          <DisclosureSummary>파일별 한도와 처리 안내</DisclosureSummary>
           <p className="settings-muted">
             사건별 원본은 최대 100개·5GB예요. 문서·이미지 100MB, 음성·영상 1GB, PDF 500쪽, 미디어
             60분 한도를 적용해요. 실제 처리 용량이나 서비스 장애로 자동 처리가 대기할 수 있어요.
@@ -421,7 +429,7 @@ export function AccountSettings() {
           <a className="settings-text-link" href="/help#limits">
             한도와 대기 도움말 <ChevronRight size={16} aria-hidden="true" />
           </a>
-        </details>
+        </Disclosure>
       </section>
       <div className="settings-details-grid">
         <section className="settings-card settings-help" aria-labelledby="settings-help-title">
@@ -452,10 +460,10 @@ export function AccountSettings() {
               <ChevronRight size={18} aria-hidden="true" />
             </a>
           </nav>
-          <p className="settings-policy-note">
-            서비스 이용 조건과 정보 처리 방식, AI의 한계를 확인할 수 있어요.
-          </p>
         </section>
+      </div>
+      <div data-legacy-assets>
+        <LegacyProfileAssets />
       </div>
       <section className="settings-card settings-danger" aria-labelledby="settings-danger-title">
         <div className="settings-section-heading">
@@ -467,7 +475,7 @@ export function AccountSettings() {
           </div>
         </div>
         <div className="settings-danger-content">
-          <button
+          <ControlButton
             type="button"
             className="danger-button"
             disabled={Boolean(busy) || checking || !access}
@@ -477,7 +485,7 @@ export function AccountSettings() {
             }}
           >
             계정과 모든 사건 삭제
-          </button>
+          </ControlButton>
         </div>
       </section>
       {target && (
@@ -493,7 +501,7 @@ export function AccountSettings() {
               <p>안전한 삭제를 위해 이 계정에 연결된 로그인 수단으로 다시 인증해 주세요.</p>
               <div className="settings-provider-list">
                 {access?.providers.map((provider) => (
-                  <button
+                  <ControlButton
                     key={provider}
                     type="button"
                     className={`settings-provider settings-provider--${provider}`}
@@ -503,7 +511,7 @@ export function AccountSettings() {
                     <ProviderIcon provider={provider} />
                     <span>{providerNames[provider]}로 재인증</span>
                     <ChevronRight size={16} aria-hidden="true" />
-                  </button>
+                  </ControlButton>
                 ))}
               </div>
               {access && !access.providers.length && (
@@ -519,9 +527,10 @@ export function AccountSettings() {
                 원격 자료 정리가 진행돼요. 이미 다운로드하거나 외부에 전달한 파일은 삭제할 수
                 없어요.
               </p>
-              <label htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</label>
-              <input
+              <FieldLabel htmlFor="delete-confirmation">삭제 확인 — DELETE 입력</FieldLabel>
+              <ControlInput
                 id="delete-confirmation"
+                ref={confirmationField}
                 autoComplete="off"
                 value={confirmation}
                 disabled={Boolean(busy) || checking}
@@ -536,22 +545,22 @@ export function AccountSettings() {
           )}
           <div className="settings-actions deletion-dialog-actions">
             {ready && (
-              <button
+              <ControlButton
                 type="button"
                 className="danger-button"
                 disabled={Boolean(busy) || checking || !ready || confirmation !== "DELETE"}
                 onClick={() => void remove()}
               >
                 {busy ? "삭제 요청 중…" : "삭제 요청 확인"}
-              </button>
+              </ControlButton>
             )}
-            <button
+            <ControlButton
               type="button"
               disabled={Boolean(busy) || checking}
               onClick={() => setTarget(null)}
             >
               취소
-            </button>
+            </ControlButton>
           </div>
         </ConfirmDialog>
       )}

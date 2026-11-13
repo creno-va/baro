@@ -3,6 +3,8 @@
 import { AuthButtons } from "../components/AuthButtons";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { ThemeToggle } from "../components/ui/theme-toggle";
 // biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
 import BaseLayout from "../layouts/BaseLayout.astro";
 import "../styles/login.css";
@@ -30,7 +32,7 @@ const errorMessage = oauthErrors.includes("account_not_linked")
           <path d="m12 5-7 7 7 7M5 12h15" />
         </svg>
       </a>
-      <span>로그인 · 회원가입</span>
+      <span>로그인 · 회원가입</span><ThemeToggle client:load />
     </nav>
     <div class="login-content">
       <header class="login-intro">
@@ -40,7 +42,7 @@ const errorMessage = oauthErrors.includes("account_not_linked")
       </header>
       <section class="login-panel" aria-labelledby="login-title">
         <h1 id="login-title">로그인 · 회원가입</h1>
-        <p class="login-panel__description">이용 유형을 선택하고 소셜 계정으로 시작하세요.</p>
+        <p class="login-panel__description">소셜 계정으로 내 사건 정리를 시작하세요.</p>
         {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
         <AuthButtons client:load />
         <footer class="login-footer">

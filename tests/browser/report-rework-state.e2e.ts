@@ -1,11 +1,17 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
   type V2ConversationState,
   type V2LegalAnalysisSnapshot,
   v2LegalAnalysisSnapshotSchema,
 } from "../../src/contracts/v2";
 import type { V2ResolutionState } from "../../src/contracts/v2/resolution";
+
+async function openPreparation(page: Page) {
+  const detail = page.locator(".report-preparation > [data-disclosure]");
+  if ((await detail.count()) && (await detail.getAttribute("data-open")) === null)
+    await detail.locator("[data-disclosure-button]").click();
+}
 
 const basis = {
   researchRevision: 7,
@@ -197,7 +203,10 @@ for (const refresh of ["focus", "status"] as const)
     const refreshMetadata = async () => {
       const before = reads;
       if (refresh === "focus") await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-      else await page.getByRole("button", { name: "상태 확인", exact: true }).click();
+      else {
+        await openPreparation(page);
+        await page.getByRole("button", { name: "상태 확인", exact: true }).click();
+      }
       await expect.poll(() => reads).toBeGreaterThan(before);
       await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
     };
@@ -322,6 +331,7 @@ test("slow status reads finish once and release terminal report controls without
   });
   await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
   expect(maximumInFlight).toBe(1);
+  await openPreparation(page);
   await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeEnabled();
   slow = false;
   await page.getByRole("button", { name: "새 리포트 열기", exact: true }).click();
@@ -559,6 +569,7 @@ test("report evidence uses the real upload and review components, requests case 
   });
   await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
   const upload = page.getByRole("region", { name: "새 증거 추가", exact: true });
+  await page.getByText("자료 추가와 사건 반영", { exact: true }).click();
   await expect(upload.getByRole("button", { name: "촬영해서 추가", exact: true })).toBeEnabled();
   const chooser = page.waitForEvent("filechooser");
   await upload.getByRole("button", { name: "파일 선택", exact: true }).click();
@@ -736,6 +747,7 @@ test("rework entry only reads; explicit preparation and scope save use the displ
   expect(legacyReads).toBe(0);
   expect(preparations).toBe(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
+  await openPreparation(page);
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "법적 쟁점과 법 조항", exact: true }),
@@ -818,14 +830,17 @@ test("a failed preparation stays failed, retries only on request, and pending da
   await expect(page.getByText(/분석 서비스를 지금 이용할 수 없어요/)).toBeVisible();
   await expect(page.locator("body")).not.toContainText("MODEL_UNAVAILABLE");
   expect(requests).toBe(0);
+  await openPreparation(page);
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("요청을 완료하지 못했어요");
   await expect(page.locator(".report-reading")).toHaveCount(0);
   expect(requests).toBe(1);
+  await openPreparation(page);
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
   ).toBeVisible();
+  await openPreparation(page);
   await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeDisabled();
   expect(requests).toBe(2);
   expect(requestIds[1]).toBe(requestIds[0]);
@@ -838,6 +853,7 @@ test("a failed preparation stays failed, retries only on request, and pending da
   };
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("heading", { name: "분석을 완료하지 못했어요" })).toBeVisible();
+  await openPreparation(page);
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "법 조항과 판례를 확인하고 있어요" }),
@@ -1005,11 +1021,13 @@ for (const side of ["prepare_claim", "respond_to_claim"] as const)
         await expect(page.getByText("관할", { exact: true })).toBeVisible();
         expect(updates).toBe(1);
       } else if (choice === "변호사와 해결") {
-        await expect(page.getByRole("link", { name: "변호사 목록·프로필 보기" })).toHaveAttribute(
-          "href",
-          "/lawyers",
-        );
-        expect(updates).toBe(1);
+        const dialog = page.getByRole("dialog", { name: "아직 지원하지 않는 기능이에요" });
+        await expect(dialog).toContainText("현재 변호사 연결 기능은 제공하지 않습니다.");
+        await expect(dialog.getByRole("button")).toHaveCount(1);
+        await expect(dialog.getByRole("link")).toHaveCount(0);
+        await dialog.getByRole("button", { name: "확인", exact: true }).click();
+        await expect(button).toBeFocused();
+        expect(updates).toBe(0);
       } else {
         await expect(page.locator(".resolution").getByRole("alert")).toContainText(
           "완료하지 못했어요",
@@ -1076,6 +1094,7 @@ test("report assembly failure remains visible over an existing report with ready
   });
   await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
   await expect(page.getByRole("heading", { name: "새 리포트를 완성하지 못했어요" })).toBeVisible();
+  await openPreparation(page);
   await expect(
     page.getByText(/리포트 저장을 완료하지 못했어요. 기존 리포트는 보존돼요/),
   ).toBeVisible();
@@ -1170,6 +1189,7 @@ for (const outcome of ["lost_ack", "rejected"] as const)
       return route.fulfill({ status: 404, json: {} });
     });
     await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
+    await openPreparation(page);
     await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     expect(requests).toHaveLength(1);
@@ -1183,6 +1203,7 @@ for (const outcome of ["lost_ack", "rejected"] as const)
     // A failed assertion still releases the fixture's in-flight response below.
     void retryResponse.catch(() => {});
     try {
+      await openPreparation(page);
       await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
       // prepareReport refreshes revision 8 before its session-fenced POST. A
       // running heading alone is not evidence that the second request arrived.

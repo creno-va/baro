@@ -52,7 +52,7 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto(`${seed.origin}/cases/${seed.caseId}/reports`);
     await openReportEditor(page);
-    const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
+    const editor = page.getByRole("textbox", { name: /^(?:내 사건 한눈에|사건 개요) 수정$/ });
     await expect(editor).toBeVisible();
     const paragraphs = Array.from(
       { length: 80 },
@@ -76,10 +76,10 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
         "합성 마지막 문장 · 모든 내용과 출처를 확인한 뒤 사용자가 직접 전달합니다.",
       ].join("\n"),
     );
-    await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+    await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
     await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
-    // Read the internal HTML preview endpoint; user saving exposes PDF only.
+    // Compare the saved HTML endpoint with the file received through the owner-checked UI.
     const savedReport = (await (
       await page.request.get(`${seed.origin}/api/v2/cases/${seed.caseId}/reports`)
     ).json()) as { id: string };

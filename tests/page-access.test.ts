@@ -57,7 +57,7 @@ test("anonymous GET and HEAD app entries redirect on the server, including norma
   const database = await createTestDatabase();
   databases.push(database);
   const env = testEnvironment(database.binding);
-  for (const path of ["/app", "/app/", "/%61pp", "//app", "/%2fapp", "/app%2f", "/%5capp"])
+  for (const path of ["/new", "/new/", "/%6eew", "//new", "/%2fnew", "/new%2f", "/%5cnew"])
     for (const method of ["GET", "HEAD"])
       await expectRedirect(
         await application().request(`http://localhost:4321${path}`, { method }, env),
@@ -75,15 +75,15 @@ test("authenticated login redirects before HTML and both account types retain co
       fixture.env,
     );
   for (const path of ["/login", "/login/", "/%6cogin", "//login", "/login%2f"])
-    for (const method of ["GET", "HEAD"]) await expectRedirect(await read(path, method), "/app");
-  await expectRedirect(await read("/login?returnTo=https://foreign.test&error=oauth"), "/app");
-  await expectRedirect(await read("/app"), "/consent");
+    for (const method of ["GET", "HEAD"]) await expectRedirect(await read(path, method), "/new");
+  await expectRedirect(await read("/login?returnTo=https://foreign.test&error=oauth"), "/new");
+  await expectRedirect(await read("/new"), "/consent");
   fixture.consent();
   await saveAccountType(fixture.env.DB, fixture.userId, "lawyer");
-  await expectRedirect(await read("/login"), "/app");
-  expect((await read("/app")).status).toBe(200);
+  await expectRedirect(await read("/login"), "/new");
+  expect((await read("/new")).status).toBe(200);
   await saveAccountType(fixture.env.DB, fixture.userId, "customer");
-  expect((await read("/app")).status).toBe(200);
+  expect((await read("/new")).status).toBe(200);
 });
 
 test("anonymous login stays available before OAuth configuration and never caches HTML", async () => {
@@ -131,14 +131,14 @@ test("missing, empty and unrelated cookies reach login even before OAuth is conf
     "better-auth.session_token_backup=unrelated",
   ])
     await expectRedirect(
-      await application().request("/app", { headers: { cookie } }, { APP_ENV: "local" } as Env),
+      await application().request("/new", { headers: { cookie } }, { APP_ENV: "local" } as Env),
       "/login",
     );
 });
 
 test("other methods cannot render the application or bypass its GET and HEAD guard", async () => {
   for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-    for (const path of ["/app", "/app/", "/%61pp", "/login", "/login/", "/%6cogin"]) {
+    for (const path of ["/new", "/new/", "/%6eew", "/login", "/login/", "/%6cogin"]) {
       const response = await application().request(path, { method }, { APP_ENV: "local" } as Env);
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("GET, HEAD");
@@ -150,7 +150,7 @@ test("other methods cannot render the application or bypass its GET and HEAD gua
 test("a consenting customer or lawyer reaches app HTML; consent remains mandatory", async () => {
   const fixture = await signedIn();
   const app = application();
-  const read = (path = "/app", method = "GET") =>
+  const read = (path = "/new", method = "GET") =>
     app.request(path, { method, headers: { cookie: fixture.cookie } }, fixture.env);
   await expectRedirect(await read(), "/consent");
   await saveAccountType(fixture.env.DB, fixture.userId, "lawyer");
@@ -158,7 +158,7 @@ test("a consenting customer or lawyer reaches app HTML; consent remains mandator
   fixture.consent();
   expect((await read()).status).toBe(200);
   await saveAccountType(fixture.env.DB, fixture.userId, "customer");
-  for (const path of ["/app", "/app/"])
+  for (const path of ["/new", "/new/"])
     for (const method of ["GET", "HEAD"]) {
       const response = await read(path, method);
       expect(response.status).toBe(200);
@@ -168,7 +168,7 @@ test("a consenting customer or lawyer reaches app HTML; consent remains mandator
         method === "HEAD" ? "" : "<h1>Synthetic application reached</h1>",
       );
     }
-  await expectRedirect(await read("/%61pp?returnTo=https://foreign.test"), "/app");
+  await expectRedirect(await read("/%6eew?returnTo=https://foreign.test"), "/new");
   fixture.database.sqlite.exec("UPDATE user_consents SET privacy_version='superseded'");
   await expectRedirect(await read(), "/consent");
 });
@@ -178,7 +178,7 @@ test("expired, tampered and deleted-account sessions never reach the application
   fixture.consent();
   const app = application();
   const read = (cookie = fixture.cookie, method = "GET") =>
-    app.request("/app", { method, headers: { cookie } }, fixture.env);
+    app.request("/new", { method, headers: { cookie } }, fixture.env);
   await expectRedirect(await read("better-auth.session_token=forged-cookie"), "/login");
   fixture.database.sqlite
     .query("INSERT INTO v2_tombstones(target_kind,target_id,deleted_at) VALUES('account',?,?)")
@@ -203,14 +203,14 @@ test("secure OAuth cookies retain the same consent and customer boundary in open
   const app = application();
   await expectRedirect(
     await app.request("/login", { headers: { cookie: fixture.cookie } }, env),
-    "/app",
+    "/new",
   );
   await expectRedirect(
-    await app.request("/app", { headers: { cookie: fixture.cookie } }, env),
+    await app.request("/new", { headers: { cookie: fixture.cookie } }, env),
     "/consent",
   );
   fixture.consent();
-  expect((await app.request("/app", { headers: { cookie: fixture.cookie } }, env)).status).toBe(
+  expect((await app.request("/new", { headers: { cookie: fixture.cookie } }, env)).status).toBe(
     200,
   );
 });
@@ -219,7 +219,7 @@ test("sliding session cookies survive login and consent redirects and successful
   const fixture = await signedIn();
   const app = application();
   for (const consented of [false, true])
-    for (const path of ["/login", "/app"]) {
+    for (const path of ["/login", "/new"]) {
       if (consented) fixture.consent();
       const now = Date.now();
       fixture.database.sqlite
@@ -233,8 +233,8 @@ test("sliding session cookies survive login and consent redirects and successful
         { headers: { cookie: fixture.cookie } },
         fixture.env,
       );
-      expect(response.status).toBe(path === "/app" && consented ? 200 : 302);
-      if (path === "/login") expect(response.headers.get("location")).toBe("/app");
+      expect(response.status).toBe(path === "/new" && consented ? 200 : 302);
+      if (path === "/login") expect(response.headers.get("location")).toBe("/new");
       expect(response.headers.get("cache-control")).toContain("private, no-store");
       const refreshed = response.headers
         .getSetCookie()
@@ -256,13 +256,19 @@ test("OAuth configuration and database failures return safe 503s without login l
   } as unknown as D1Database);
   const cookie = await signedSessionCookie("synthetic-token", unavailable.BETTER_AUTH_SECRET);
   for (const env of [misconfigured, unavailable]) {
-    for (const path of ["/app", "/login"]) {
+    for (const path of ["/new", "/login"]) {
       const response = await application().request(path, { headers: { cookie } }, env);
       expect(response.status).toBe(503);
       expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("retry-after")).toBe("30");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       expect(response.headers.get("cache-control")).toContain("private, no-store");
       const body = await response.text();
       expect(body).toContain("로그인 상태를 확인할 수 없어요.");
+      expect(body).toContain("<style>");
+      expect(body).toContain('href="/new"');
+      expect(body).toContain('href="/"');
+      expect(body).not.toContain("<script");
       expect(body).not.toMatch(/SQL|credential|synthetic-token|BETTER_AUTH_SECRET/);
       expect(body).not.toContain("Synthetic application reached");
     }
@@ -273,7 +279,7 @@ test("a consent-store failure after valid authentication also fails closed", asy
   const fixture = await signedIn();
   fixture.database.sqlite.exec("DROP TABLE user_consents");
   const response = await application().request(
-    "/app",
+    "/new",
     { headers: { cookie: fixture.cookie } },
     fixture.env,
   );
@@ -285,9 +291,9 @@ test("a consent-store failure after valid authentication also fails closed", asy
 
 test("the explicit build fixture bypass is local-only and request input cannot enable it", async () => {
   const local = { APP_ENV: "local" } as Env;
-  expect((await application(true).request("/app", undefined, local)).status).toBe(200);
+  expect((await application(true).request("/new", undefined, local)).status).toBe(200);
   for (const APP_ENV of ["preview", "production"] as const) {
-    const response = await application(true).request("/app", undefined, {
+    const response = await application(true).request("/new", undefined, {
       APP_ENV,
       PUBLIC_BETA_ENABLED: "true",
     } as Env);
@@ -297,7 +303,7 @@ test("the explicit build fixture bypass is local-only and request input cannot e
   databases.push(database);
   const env = testEnvironment(database.binding);
   const response = await application().request(
-    "/app?BARO_UI_TEST_FIXTURE=true&PUBLIC_API_MODE=mock&returnTo=https://foreign.test",
+    "/new?BARO_UI_TEST_FIXTURE=true&PUBLIC_API_MODE=mock&returnTo=https://foreign.test",
     {
       headers: {
         "x-baro-ui-test-fixture": "true",
@@ -313,10 +319,48 @@ test("the explicit build fixture bypass is local-only and request input cannot e
 test("closed production stays unavailable before auth and public pages remain unaffected", async () => {
   const closed = { APP_ENV: "production", PUBLIC_BETA_ENABLED: "false" } as Env;
   const app = application(true);
-  const response = await app.request("/app", undefined, closed);
+  const response = await app.request("/new", undefined, closed);
   expect(response.status).toBe(503);
   expect(response.headers.get("cache-control")).toContain("private, no-store");
   expect(await response.text()).toContain("공개 베타를 준비하고 있어요.");
   for (const path of ["/", "/login", "/consent", "/lawyers", "/app-icon.svg"])
     expect((await app.request(path, undefined, closed)).status).toBe(200);
+});
+
+test("legacy app bookmarks keep authentication/consent gates and then redirect to new", async () => {
+  const fixture = await signedIn();
+  const app = application();
+  for (const path of ["/app", "/app/", "/%61pp", "//app", "/%2fapp", "/app%2f", "/%5capp"]) {
+    for (const method of ["GET", "HEAD"]) {
+      await expectRedirect(
+        await app.request(`http://localhost:4321${path}`, { method }, fixture.env),
+        "/login",
+      );
+      await expectRedirect(
+        await app.request(
+          `http://localhost:4321${path}`,
+          { method, headers: { cookie: fixture.cookie } },
+          fixture.env,
+        ),
+        "/consent",
+      );
+    }
+  }
+  fixture.consent();
+  for (const path of ["/app", "/app/", "/%61pp", "/%6eew", "/%2fnew", "/%5cnew"]) {
+    for (const method of ["GET", "HEAD"]) {
+      await expectRedirect(
+        await app.request(path, { method, headers: { cookie: fixture.cookie } }, fixture.env),
+        "/new",
+      );
+    }
+  }
+  expect(
+    (await application(true).request("/app", undefined, { APP_ENV: "local" } as Env)).headers.get(
+      "location",
+    ),
+  ).toBe("/new");
+  for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+    expect((await app.request("/app", { method }, fixture.env)).status).toBe(405);
+  }
 });

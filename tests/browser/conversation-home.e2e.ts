@@ -22,7 +22,7 @@ test("a customer starts directly on home and reaches adaptive questions without 
 }) => {
   await setSession(page, customer);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/app");
+  await page.goto("/new");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
   const submit = page.getByRole("button", { name: "저장하고 계속" });
@@ -66,7 +66,7 @@ test("a short account is accepted and recent-story deletion requires explicit co
 }) => {
   await setSession(page, customer);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill("폭행을 당했습니다.");
   await page.getByRole("button", { name: "저장하고 계속" }).click();
   await expect(page).toHaveURL(/\/intake/);
@@ -78,11 +78,13 @@ test("a short account is accepted and recent-story deletion requires explicit co
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "사건 삭제", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "사건 삭제", exact: true }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await expect(page.locator(".sidebar-story-row")).toHaveCount(0);
 });
 
-test("help and policy profile entries follow the current role", async ({ page }) => {
+test("help and policy keep account settings available without restoring lawyer profile navigation", async ({
+  page,
+}) => {
   await setSession(page, customer);
   for (const url of ["/help", "/policies/ai"]) {
     await page.goto(url);
@@ -93,7 +95,13 @@ test("help and policy profile entries follow the current role", async ({ page })
       localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(s));
       window.dispatchEvent(new Event("baro-session-changed"));
     });
-    await expect(page.locator('a[href="/lawyer"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/lawyer"]')).toHaveCount(0);
+    await expect(page.locator('.sidebar-desktop .sidebar-profile[href="/settings"]')).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.accountType,
+      ),
+    ).toBe("lawyer");
     await page.evaluate(() => {
       const s = JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}");
       s.user.accountType = "customer";
@@ -108,14 +116,14 @@ test("app redirects missing access and permits the shared composer for both acco
   page,
 }) => {
   const cases: { session: SessionView; path: string }[] = [
-    { session: { user: null, needsConsent: false }, path: "/login?returnTo=%2Fapp" },
-    { session: { ...customer, needsConsent: true }, path: "/consent?returnTo=%2Fapp" },
+    { session: { user: null, needsConsent: false }, path: "/login?returnTo=%2Fnew" },
+    { session: { ...customer, needsConsent: true }, path: "/consent?returnTo=%2Fnew" },
     {
       session: {
         user: { id: "conversation-lawyer", name: "합성 변호사", accountType: "lawyer" },
         needsConsent: false,
       },
-      path: "/app",
+      path: "/new",
     },
   ];
   for (const item of cases) {
@@ -123,9 +131,9 @@ test("app redirects missing access and permits the shared composer for both acco
     await page.evaluate((session) => {
       localStorage.setItem("baro-api-mock-v1:session", JSON.stringify(session));
     }, item.session);
-    await page.goto("/app");
+    await page.goto("/new");
     await expect(page).toHaveURL(new URL(item.path, page.url()).href);
-    if (item.path === "/app") {
+    if (item.path === "/new") {
       await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
       await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeVisible();
     } else {
@@ -140,19 +148,19 @@ test("an example only fills the composer and home remains usable at enlarged tex
   page,
 }) => {
   await setSession(page, customer);
-  await page.goto("/app");
+  await page.goto("/new");
   await page.setViewportSize({ width: 390, height: 844 });
   const example = page.getByRole("button", { name: "빌려준 돈을 못 받았어요" });
   await expect(example).toBeEnabled();
   const targetHeights = await page
-    .locator(".conversation-home button, .conversation-context label")
+    .locator(".conversation-home button:not([role=radio]), .conversation-context label")
     .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
   expect(targetHeights.every((height) => height >= 44)).toBe(true);
   await example.click();
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toHaveValue(/약속한 날짜/);
   await expect(narrative).toBeFocused();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   expect(await page.evaluate(() => localStorage.getItem("baro-api-mock-v1:cases"))).toBeNull();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => {
@@ -168,7 +176,7 @@ test("conversation screens remain accessible and responsive from home through ch
   await page.emulateMedia({ reducedMotion: "reduce" });
   await setSession(page, customer);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({ path: ".wrangler/ui-review/home-desktop.png", fullPage: true });
@@ -214,7 +222,7 @@ test("conversation screens remain accessible and responsive from home through ch
 
 test("recent case titles clear when another tab changes the active account", async ({ page }) => {
   await setSession(page, customer);
-  await page.goto("/app");
+  await page.goto("/new");
   await page
     .getByRole("textbox", { name: "지금까지 있었던 일" })
     .fill("이전 사용자에게만 보여야 하는 합성 사건 제목입니다. 지인에게 돈을 빌려줬어요.");
@@ -231,7 +239,9 @@ test("recent case titles clear when another tab changes the active account", asy
     );
     window.dispatchEvent(new StorageEvent("storage", { key: "baro-api-mock-v1:session" }));
   });
-  await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
+  ).toBeVisible();
   await expect(recent).toHaveCount(0);
 });
 
@@ -259,7 +269,7 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
   context,
 }) => {
   await setSession(page, customer);
-  await page.goto("/app");
+  await page.goto("/new");
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await expect(narrative).toBeEnabled();
   await narrative.fill(
@@ -278,7 +288,9 @@ test("a peer-tab owner switch clears the home draft before any case can be creat
       }),
     );
   });
-  await expect(page.getByRole("link", { name: "다른 합성 고객 나의 BARO" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "다른 합성 고객 · 계정 관리", exact: true }),
+  ).toBeVisible();
   await expect(narrative).toHaveValue("");
   await expect(page.getByRole("radio", { name: "고소 준비", exact: true })).toBeChecked();
   await expect(page.getByRole("button", { name: "저장하고 계속" })).toBeEnabled();

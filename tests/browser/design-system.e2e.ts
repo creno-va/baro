@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { chooseOption } from "../helpers/headless-controls";
 
 async function openInteractiveFixture(
   page: Page,
@@ -25,7 +26,7 @@ async function openInteractiveFixture(
   await page.goto("/__design-system");
   await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
   // SSR buttons are visible before their React handlers are attached.
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
 }
 
 test("application, login and case screens share local brand and remain usable at 320px", async ({
@@ -48,7 +49,7 @@ test("application, login and case screens share local brand and remain usable at
   await page.route("**/api/me/consent", (route) =>
     route.fulfill({ json: { needsConsent: false } }),
   );
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await expect(page.locator(".app-frame--product")).toHaveCount(0);
@@ -57,7 +58,7 @@ test("application, login and case screens share local brand and remain usable at
   await expect(page.getByRole("button", { name: "Google로 계속하기" })).toBeVisible();
   await page.screenshot({ path: ".wrangler/login-desktop.png", fullPage: true });
   await page.setViewportSize({ width: 320, height: 760 });
-  for (const path of ["/app", "/login", "/cases", "/cases/new"]) {
+  for (const path of ["/new", "/login", "/cases", "/cases/new"]) {
     await page.goto(path);
     await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
     await expect(page.locator(".brand img").first()).toHaveAttribute("src", "/brand/logo.svg");
@@ -88,18 +89,18 @@ test("synthetic role menus omit dormant routes; form and keyboard tabs remain ac
   await openInteractiveFixture(page, () => accountType);
   const navigation = page.getByRole("navigation", { name: "주 메뉴", exact: true });
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveAttribute("href", "/lawyers");
+  await expect(page.getByRole("link", { name: "변호사 찾기" })).toHaveCount(0);
   accountType = "lawyer";
-  await page.getByLabel("메뉴 예시 역할").selectOption("lawyer");
+  await chooseOption(page.getByLabel("메뉴 예시 역할"), "lawyer");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "새 사건 입력", exact: true })).toBeVisible();
-  await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "변호사 프로필" })).toHaveCount(0);
   await expect(page.locator(".sidebar-desktop .sidebar-profile")).toHaveAttribute(
     "href",
     "/settings",
   );
   accountType = null;
-  await page.getByLabel("메뉴 예시 역할").selectOption("moderator");
+  await chooseOption(page.getByLabel("메뉴 예시 역할"), "moderator");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(navigation.getByRole("link", { name: "계정 설정" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "검토 대기" })).toHaveCount(0);
@@ -185,9 +186,7 @@ test("modal traps focus, closes with Escape, restores opener and uses visible fo
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  expect(await opener.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
-    "none",
-  );
+  await expect(opener).toHaveCSS("box-shadow", /inset/);
 });
 
 for (const activation of ["pointer", "keyboard"] as const)

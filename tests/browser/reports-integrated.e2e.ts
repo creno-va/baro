@@ -28,7 +28,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   await page.locator('astro-island[component-export="AuthButtons"]:not([ssr])').waitFor();
-  await page.getByRole("radio", { name: /^고객/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   const policyOpened = context.waitForEvent("page");
@@ -45,7 +45,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   const ownerId = await page.evaluate(
     () => JSON.parse(localStorage.getItem("baro-api-mock-v1:session") ?? "{}").user.id as string,
   );
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   async function completeIntake(narrative: string) {
     await page.getByRole("textbox", { name: "지금까지 있었던 일" }).fill(narrative);
     await page.getByRole("button", { name: "저장하고 계속" }).click();
@@ -93,7 +93,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
-  await page.getByRole("button", { name: "수정 마치기", exact: true }).click();
+  await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
   await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await openReportEditor(page);
@@ -155,7 +155,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     .getByRole("dialog", { name: "이 사건을 삭제할까요?" })
     .getByRole("button", { name: "사건 삭제", exact: true })
     .click();
-  await expect(page).toHaveURL("/app");
+  await expect(page).toHaveURL("/new");
   await expect(removeCase).toHaveCount(0);
   await page.reload();
   await expect(removeCase).toHaveCount(0);
@@ -313,13 +313,13 @@ test("oversized mock source shows first-report recovery and preserves the full o
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "사건 개요 수정", exact: true })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "내 사건 한눈에 수정", exact: true })).toHaveValue(
     /자료를 제외한 리포트입니다/,
   );
   await expect(
     page
       .getByRole("region", { name: "리포트 이후 해결 방법", exact: true })
-      .getByRole("heading", { name: "다음으로 어떻게 진행할까요?", exact: true }),
+      .getByRole("heading", { name: "이해한 내용을 다음 준비로 이어가요", exact: true }),
   ).toBeVisible();
   await page.reload();
   await openReportEditor(page);
@@ -389,10 +389,11 @@ test("regeneration after focus refresh cannot replace an unseen peer report", as
     return { id: report.id, revision: report.revision, content: report.content };
   });
   await expect(editor).toHaveValue(displayed);
+  await page.getByRole("button", { name: "편집 취소", exact: true }).click();
   await page.getByRole("button", { name: "새 버전 만들기" }).click();
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(editor).toHaveValue(displayed);
+  await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toContainText(displayed);
   const current = await page.evaluate(
     () =>
       JSON.parse(localStorage.getItem("baro-api-mock-v1:reports") ?? "{}")[

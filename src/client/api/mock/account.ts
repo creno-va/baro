@@ -72,6 +72,7 @@ function eraseCase(state: ReportMockState, id: string) {
     if (report.caseId === id) {
       delete state.reportHistory?.[reportId];
       delete state.reportSources?.[reportId];
+      delete state.reportSourceHashes?.[reportId];
     }
   for (const [archiveId, archive] of Object.entries(state.reportZips ?? {}))
     if (archive.caseId === id) delete state.reportZips?.[archiveId];

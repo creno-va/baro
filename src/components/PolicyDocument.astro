@@ -1,7 +1,5 @@
 ---
 import * as drafts from "../content/policy-drafts";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the role-aware link.
-import { LawyerProfileLink } from "./lawyers/LawyerProfileLink";
 
 interface Props {
   kind: keyof typeof drafts.policyDrafts;
@@ -15,5 +13,5 @@ const version = drafts.POLICY_VERSIONS[kind];
 <article class="policy-document">
   <header class="policy-heading"><span class="policy-eyebrow">이용 안내 · {version}</span><h1>{policy.title}</h1><p>{policy.description}</p></header>
   {policy.sections.map((section) => <section class="policy-card" id={section.id}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</section>)}
-  <nav class="policy-links" aria-label="다른 이용 안내"><a href="/help">도움말</a><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a><LawyerProfileLink client:load>내 프로필</LawyerProfileLink></nav>
+  <nav class="policy-links" aria-label="다른 이용 안내"><a href="/help">도움말</a><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a><a href="/settings">설정</a></nav>
 </article>

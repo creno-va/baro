@@ -3,6 +3,7 @@ import type { FileView, TimelineView } from "../../client/api/types";
 import type { V2Fact } from "../../contracts/v2";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { positionLabel } from "./source-label";
 import { timelineEvidence } from "./timeline-evidence";
 
@@ -45,10 +46,10 @@ export function TimelineEvidence({
         )}
       </div>
       {evidence.materials.length > 0 && (
-        <details className="timeline-evidence-sources">
-          <summary>
+        <Disclosure className="timeline-evidence-sources">
+          <DisclosureSummary>
             연결 자료 {new Set(evidence.materials.map((item) => item.reference.fileId)).size}개
-          </summary>
+          </DisclosureSummary>
           <div className="timeline-evidence-links">
             {evidence.materials.map(({ reference, file, current }) => (
               <div key={JSON.stringify(reference)}>
@@ -80,7 +81,7 @@ export function TimelineEvidence({
               </div>
             ))}
           </div>
-        </details>
+        </Disclosure>
       )}
     </div>
   );

@@ -2,12 +2,19 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api } from "../../client/api";
 import { ApiError } from "../../client/api/core";
 import type { FileReviewProgress, FileReviewView } from "../../client/api/types";
+import { confirmAction } from "../../client/confirm";
 import { accessHref } from "../../client/return-path";
 import type { V2Coverage } from "../../contracts/v2";
 import { secondsLabel } from "../../utils/time";
 import { ErrorPanel } from "../intake/common";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { Button } from "../ui/button";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import {
+  Input as ControlInput,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
 import { observationKind, observationKindLabels } from "./evidence-state";
 import { positionLabel } from "./source-label";
 import "../../styles/evidence.css";
@@ -248,14 +255,16 @@ export function FileReview({
       {error ? (
         <ErrorPanel
           error={error}
-          retry={() => {
+          retry={async () => {
+            const confirmEpoch = ticket();
             const replace = (error as { code?: string })?.code === "CONFLICT";
             if (
               replace &&
               draftDirty.current &&
-              !window.confirm("저장하지 않은 교정 내용을 버리고 최신 내용을 불러올까요?")
+              !(await confirmAction("저장하지 않은 교정 내용을 버리고 최신 내용을 불러올까요?"))
             )
               return;
+            if (!current(confirmEpoch)) return;
             void load(replace ? -1 : (failedReadAfter.current ?? -1), replace);
           }}
           disabled={busy || loadingAfter !== null}
@@ -293,8 +302,8 @@ export function FileReview({
           )}
           {canMutate && !canEdit && <p>자료 교정은 사건 요약을 확인한 뒤 진행할 수 있어요.</p>}
           {review.recovery && <p role="status">{review.recovery.message}</p>}
-          <details>
-            <summary>페이지·시간별 처리 범위 ({rows.length}개)</summary>
+          <Disclosure>
+            <DisclosureSummary>페이지·시간별 처리 범위 ({rows.length}개)</DisclosureSummary>
             {rows.length ? (
               <ul>
                 {rows.slice(0, limit).map((row) => (
@@ -309,7 +318,7 @@ export function FileReview({
                 처리 범위 100개 더 보기 ({rows.length - limit}개 남음)
               </Button>
             )}
-          </details>
+          </Disclosure>
           {review.observations.map(({ value, original, ordinal }) => {
             const draft = drafts[value.id] ?? value;
             const update = (next: { text: string; included: boolean }) =>
@@ -339,12 +348,14 @@ export function FileReview({
                   observationKind(value) !== "uncertain" && (
                     <p className="evidence-hint">불확실한 관찰 · 원본 확인 필요</p>
                   )}
-                <details>
-                  <summary>원본 추출 내용</summary>
+                <Disclosure>
+                  <DisclosureSummary>원본 추출 내용</DisclosureSummary>
                   <p style={{ whiteSpace: "pre-wrap" }}>{original.text}</p>
-                </details>
-                <label htmlFor={`${fieldPrefix}-observation-${ordinal}`}>확인·교정한 내용</label>
-                <textarea
+                </Disclosure>
+                <FieldLabel htmlFor={`${fieldPrefix}-observation-${ordinal}`}>
+                  확인·교정한 내용
+                </FieldLabel>
+                <ControlTextarea
                   rows={Math.min(10, Math.max(2, Math.ceil(draft.text.length / 45)))}
                   id={`${fieldPrefix}-observation-${ordinal}`}
                   value={draft.text}
@@ -353,14 +364,14 @@ export function FileReview({
                 {[...draft.text].length > 5000 && (
                   <p role="alert">교정 내용은 5,000자 이내로 작성해 주세요.</p>
                 )}
-                <label>
-                  <input
+                <FieldLabel>
+                  <ControlInput
                     type="checkbox"
                     checked={draft.included}
                     onChange={(e) => update({ text: draft.text, included: e.target.checked })}
                   />
                   사건 정리와 새 리포트에 포함
-                </label>
+                </FieldLabel>
                 {!draft.included && <p>원본은 보관하고 AI 처리·새 리포트에서 제외합니다.</p>}
                 {value.userEdited && <p>사용자가 교정한 내용</p>}
               </fieldset>

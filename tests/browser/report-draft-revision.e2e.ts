@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openReportEditor } from "../helpers/report-controls";
+import { openReportEditor, openReportGeneration } from "../helpers/report-controls";
 import { preparationRead } from "../helpers/report-rework-reads";
 
 const progressReport = {
@@ -205,7 +205,7 @@ test("report generation shows the actual elapsed request inside its confirmation
       });
     },
   });
-  await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();
+  await openReportGeneration(page);
   await page.getByRole("button", { name: "새 버전 생성", exact: true }).click();
   await expect.poll(() => generations).toBe(1);
   await page.clock.fastForward(48000);
@@ -279,10 +279,13 @@ test("focus refresh preserves unsaved text and generation refreshes material cho
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toHaveValue("저장된 합성 본문 1");
   await editor.fill("저장하지 않은 독립 상담 질문");
+  await expect(page.getByRole("button", { name: "새 버전 만들기", exact: true })).toHaveCount(0);
   stale = true;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeDisabled();
   await expect(editor).toHaveValue("저장하지 않은 독립 상담 질문");
+  await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "검토 내용 저장", exact: true })).toHaveCount(0);
   peerFile = true;
   await page.getByRole("button", { name: "새 버전 만들기", exact: true }).click();

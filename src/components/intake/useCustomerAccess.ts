@@ -28,6 +28,8 @@ export function useCustomerAccess(
   const alive = useCallback((value: number) => mounted.current && epoch.current === value, []);
   const current = useCallback((value: number) => alive(value) && allowed.current, [alive]);
   const revoke = useCallback(() => {
+    if (allowed.current || owner.current !== null)
+      window.dispatchEvent(new Event("baro-access-revoked"));
     ++epoch.current;
     allowed.current = false;
     owner.current = null;

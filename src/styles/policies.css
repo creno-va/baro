@@ -26,7 +26,7 @@
 .policy-card {
   margin-block: 1rem;
   padding: clamp(1rem, 3vw, 1.75rem);
-  border: 1px solid #dce5f1;
+  border: 1px solid var(--accent);
   border-radius: 1.25rem;
   background: var(--color-card);
 }
@@ -46,18 +46,18 @@
 }
 .policy-document a,
 .help-document a {
-  color: #1858b1;
+  color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
-.help-document details {
+.help-document [data-disclosure] {
   border-top: 1px solid var(--color-border);
   padding-block: 0.8rem;
 }
-.help-document summary {
+.help-document [data-disclosure-button] {
   cursor: pointer;
   font-weight: 600;
 }
-.help-document details p {
+.help-document [data-disclosure] p {
   margin-top: 0.75rem;
 }

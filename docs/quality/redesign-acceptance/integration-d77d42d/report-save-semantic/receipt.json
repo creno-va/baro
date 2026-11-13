@@ -1,0 +1,35 @@
+{
+  "productSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+  "environment": "Actual Astro 7.3.5; synthetic local mock",
+  "sourceRawJson": "/private/tmp/baro-ux05-raw/final-d77d42d/report-save-semantic/results.json",
+  "rawSha256": "2f352d78addca8880efec92cd196c4564a9fe232e8debf5c76a8f0aa1ce96254",
+  "metadata": {
+    "inspectedProductSha": "d77d42d198b9d6509f333b4880243aa267ca9d39",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "3b2294b14c897bf262466c90b115c7f0be285219218a3117cb30613403fec0fa",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T11:19:19.140Z",
+    "duration": 8444.692,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "failed report save preserves the correction and cancelled reload before an explicit retry",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

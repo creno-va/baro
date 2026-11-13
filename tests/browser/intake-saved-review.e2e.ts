@@ -394,7 +394,7 @@ test("case purpose and context keep visible inset keyboard focus without pointer
   browserName,
 }) => {
   await savedIntake(page, { failed: false });
-  await page.goto("/app");
+  await page.goto("/new");
   const nextControlKey =
     browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
   for (const name of ["고소 준비"]) {
@@ -427,7 +427,7 @@ test("resume later saves the current draft before leaving and never generates", 
     await dialog.dismiss();
     throw new Error("Acknowledged answers must not trigger a leave warning");
   });
-  await page.route("**/app", (route) =>
+  await page.route("**/new", (route) =>
     route.fulfill({ contentType: "text/html", body: "<main>합성 사건 목록</main>" }),
   );
   await page.evaluate(async () => {
@@ -453,7 +453,7 @@ test("resume later saves the current draft before leaving and never generates", 
   await expect.poll(() => page.evaluate(() => Reflect.get(window, "resumeSaveStarted"))).toBe(true);
   await expect(page).toHaveURL(/\/intake/);
   await page.evaluate(() => Reflect.get(window, "releaseSyntheticResume")());
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   expect(await calls(page)).toEqual({ advance: 0, save: 1 });
   expect(
     await page.evaluate(

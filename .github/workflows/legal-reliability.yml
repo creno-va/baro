@@ -21,6 +21,8 @@ on:
       - "src/contracts/v2/sources.ts"
       - "src/components/workspace/PrecedentResearch.tsx"
       - "src/components/workspace/PrecedentComparisonPanel.tsx"
+      - "src/styles/case-workbench.css"
+      - "src/layouts/CaseWorkbenchLayout.astro"
       - "packages/api-client/src/precedents.ts"
       - "apps/mobile/src/features/precedents/**"
       - "scripts/benchmarks/retrieval/**"

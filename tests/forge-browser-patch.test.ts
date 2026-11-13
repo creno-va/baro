@@ -30,6 +30,7 @@ async function probe(mode: string, path: string) {
       mode: string;
       malformed: Record<string, string>;
       compatibility: Record<string, string | boolean>;
+      security?: Record<string, string | boolean>;
     };
   } finally {
     clearTimeout(timer);
@@ -38,7 +39,7 @@ async function probe(mode: string, path: string) {
 
 test("official forge includes both browser distributions and preserves the historical vendor patch evidence", async () => {
   const manifest = await verifyUpstreamToolchain(root, inputs);
-  expect(manifest.packages.find((p) => p.name === "node-forge")?.version).toBe("1.4.2");
+  expect(manifest.packages.find((p) => p.name === "node-forge")?.version).toBe("1.4.3");
   expect(manifest.retired.map((p) => p.path)).toContain("patches/node-forge@1.4.0.patch");
   expect(manifest.retired.map((p) => p.path)).toContain("patches/archive/2026-10-27-manifest.json");
 });
@@ -61,6 +62,29 @@ test("official CJS and both browser distributions reject every retained ASN.1 at
       "md5:omitted": "rejected",
       selfSignedCertificate: true,
       certificateSigningRequest: true,
+    });
+  }
+}, 30000);
+
+test("official CJS and UMD distributions reject small-order signatures and malformed TLS while HTTP trimming stays bounded", async () => {
+  const installed = resolve(root, "node_modules/node-forge");
+  for (const [mode, path, http] of [
+    ["forge-security", installed, "bounded"],
+    ["forge-browser-security", resolve(installed, "dist/forge.min.js"), "not-in-distribution"],
+    ["forge-browser-security", resolve(installed, "dist/forge.all.min.js"), "bounded"],
+  ] as const) {
+    const result = await probe(mode, path);
+    expect(result.security).toEqual({
+      identity: "rejected",
+      noncanonicalIdentity: "rejected",
+      validEdSignature: true,
+      changedMessageRejected: true,
+      unsupportedCompression: "rejected",
+      validServerHello: true,
+      beforeSession: "safe",
+      closedSession: "safe",
+      peerClosedSession: "safe",
+      http,
     });
   }
 }, 30000);

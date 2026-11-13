@@ -33,7 +33,7 @@ test("web and saved HTML limit links to source sections and retain edited/uncert
     createElement(ReportReading, { content: officialSourceReport.content }),
   );
   for (const value of [web, html]) {
-    expect((value.match(/<a /g) ?? []).length).toBe(3);
+    expect((value.match(/<a [^>]*href="https:\/\//g) ?? []).length).toBe(3);
     expect(value).toContain("원문을 다시 확인해 주세요.");
     expect(value).not.toContain("<script");
     expect(value).not.toContain('href="https://evil');

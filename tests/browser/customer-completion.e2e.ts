@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { answerDiscard, chooseOption } from "../helpers/headless-controls";
 
 const base = "/cases/completion-case";
 const storage = "baro-api-mock-v1:";
@@ -141,23 +142,24 @@ test("answer evidence opens source correction, exclusion and exact coverage pers
     "https://www.law.go.kr/법령/민법",
   );
   await page.getByRole("link", { name: "합성 원본.txt · 1쪽", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByText("페이지·시간별 처리 범위 (1개)", { exact: true }).click();
-  await expect(page.getByText("1쪽 · 처리됨", { exact: true })).toBeVisible();
-  await page.getByLabel("확인·교정한 내용").fill("사용자가 원본을 보고 교정한 합성 문장");
-  await page.getByLabel("사건 정리와 새 리포트에 포함").uncheck();
-  await page.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
-  await expect(page.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();
+  const review = page.getByRole("dialog", { name: "자료 확인", exact: true });
+  await expect(review).toBeVisible();
+  await review.getByText("페이지·시간별 처리 범위 (1개)", { exact: true }).click();
+  await expect(review.getByText("1쪽 · 처리됨", { exact: true })).toBeVisible();
+  await review.getByLabel("확인·교정한 내용").fill("사용자가 원본을 보고 교정한 합성 문장");
+  await review.getByLabel("사건 정리와 새 리포트에 포함").uncheck();
+  await review.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
+  await expect(review.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();
   await page.reload();
-  // Source review is inline: reconnect the saved source instead of assuming
-  // an ephemeral dialog remains open across a document reload.
+  // Reopen the saved material after a document reload.
   await page.getByRole("link", { name: "합성 원본.txt · 1쪽", exact: true }).click();
-  await expect(page.getByLabel("확인·교정한 내용")).toHaveValue(
+  await expect(review).toBeVisible();
+  await expect(review.getByLabel("확인·교정한 내용")).toHaveValue(
     "사용자가 원본을 보고 교정한 합성 문장",
   );
-  await expect(page.getByLabel("사건 정리와 새 리포트에 포함")).not.toBeChecked();
-  await page.getByText("원본 추출 내용", { exact: true }).click();
-  await expect(page.getByText("원본 추출 내용의 합성 문장", { exact: true })).toBeVisible();
+  await expect(review.getByLabel("사건 정리와 새 리포트에 포함")).not.toBeChecked();
+  await review.getByText("원본 추출 내용", { exact: true }).click();
+  await expect(review.getByText("원본 추출 내용의 합성 문장", { exact: true })).toBeVisible();
 });
 
 test("year, month, day and unknown precision survive actual editor reconnect", async ({ page }) => {
@@ -170,7 +172,7 @@ test("year, month, day and unknown precision survive actual editor reconnect", a
   ]) {
     await page.goto(`${base}/timeline`);
     await page.getByRole("button", { name: "일정 추가" }).click();
-    await page.getByLabel("날짜를 얼마나 기억하시나요?").selectOption(precision ?? "unknown");
+    await chooseOption(page.getByLabel("날짜를 얼마나 기억하시나요?"), precision ?? "unknown");
     if (date) await page.getByLabel("날짜 (모르면 비워 두세요)").fill(date);
     await page.getByLabel("어떤 일이 있었나요?").fill(`정밀도 ${precision}`);
     await page.getByRole("button", { name: "타임라인 저장" }).click();
@@ -227,7 +229,7 @@ test("login preserves a permitted path and rejects an external return destinatio
   await expect(page).toHaveURL(`${base}/timeline`);
   await page.goto("/login?returnTo=https%3A%2F%2Fexample.com%2Fevil");
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
 });
 
 test("summary explanations and file corrections retain their base revision across a peer edit", async ({
@@ -290,8 +292,9 @@ test("summary explanations and file corrections retain their base revision acros
   const panel = page.getByRole("region", { name: "자료 내용 검토" });
   await expect(panel.getByRole("alert")).toBeVisible();
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("저장하지 않은 자료 교정 초안");
-  page.once("dialog", (confirmation) => confirmation.accept());
+  const discardChanges = answerDiscard(page, true);
   await panel.getByRole("button", { name: "최신 내용 불러오기", exact: true }).click();
+  await discardChanges;
   await expect(page.getByLabel("확인·교정한 내용")).toHaveValue("다른 탭의 자료 교정");
 });
 

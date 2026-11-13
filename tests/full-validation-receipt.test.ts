@@ -38,7 +38,7 @@ test("the receipt requires exactly three successful needs results", () => {
 test("all completed section jobs must belong to the same run, attempt and dispatcher", () => {
   const f = joinedFullFixture();
   expect(() => verifyFullValidationJobs(f.run, f.jobs)).not.toThrow();
-  for (const role of [0, 1, 2]) {
+  for (const role of [0, 1, 2, 4, 5]) {
     const mutations: ((f: ReturnType<typeof joinedFullFixture>) => void)[] = [
       (f) => {
         f.jobs.jobs.splice(role, 1);

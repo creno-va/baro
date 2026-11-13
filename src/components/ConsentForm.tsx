@@ -3,6 +3,8 @@ import { api, apiMode } from "../client/api";
 import { ApiError } from "../client/api/errors";
 import { accessHref, returnPathFromLocation, sessionDestination } from "../client/return-path";
 import { CURRENT_POLICY_VERSIONS } from "../contracts/consent";
+import { ActionButton as ControlButton } from "./ui/button";
+import { Input as ControlInput, Label as FieldLabel } from "./ui/form";
 
 type ConsentState = "loading" | "required" | "redirecting";
 
@@ -90,9 +92,13 @@ export function ConsentForm() {
         <p className="form-error" role="alert">
           {error}
         </p>
-        <button className="primary-action" type="button" onClick={() => window.location.reload()}>
+        <ControlButton
+          className="primary-action"
+          type="button"
+          onClick={() => window.location.reload()}
+        >
           다시 불러오기
-        </button>
+        </ControlButton>
       </div>
     ) : (
       <p className="consent-status" role="status">
@@ -123,10 +129,10 @@ export function ConsentForm() {
           동의를 마치면 이용하던 화면으로 이어집니다.
         </p>
       </header>
-      <form className="consent-form" onSubmit={submit} aria-busy={submitting}>
+      <form noValidate className="consent-form" onSubmit={submit} aria-busy={submitting}>
         {apiMode === "mock" && <p className="case-muted">API 예시 모드 · 합성 동의 기록입니다.</p>}
-        <label>
-          <input
+        <FieldLabel>
+          <ControlInput
             checked={accepted}
             disabled={submitting}
             onChange={(event) => setAccepted(event.currentTarget.checked)}
@@ -138,7 +144,7 @@ export function ConsentForm() {
               이용약관, 개인정보 처리방침, AI 이용 고지를 확인하고 동의합니다.
             </span>
           </span>
-        </label>
+        </FieldLabel>
         <nav className="consent-policy-links" aria-label="정책 원문">
           <a href="/policies/terms" target="_blank" rel="noopener noreferrer">
             이용약관<span className="sr-only"> (새 창)</span>
@@ -150,14 +156,14 @@ export function ConsentForm() {
             AI 이용 고지<span className="sr-only"> (새 창)</span>
           </a>
         </nav>
-        <button
+        <ControlButton
           className="primary-action"
           ref={submitButton}
           disabled={!accepted || submitting}
           type="submit"
         >
           {submitting ? "저장 중…" : "동의하고 계속하기"}
-        </button>
+        </ControlButton>
         {error ? (
           <p className="form-error" role="alert">
             {error}

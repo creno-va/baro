@@ -62,6 +62,38 @@ export default defineConfig({
                     new URL("./tests/helpers/design-system-page.astro", import.meta.url),
                   ),
                 });
+                injectRoute({
+                  pattern: "/__design-foundation",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/foundation-page.astro", import.meta.url),
+                  ),
+                });
+                injectRoute({
+                  pattern: "/__media-player",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/media-player-page.astro", import.meta.url),
+                  ),
+                });
+                for (const pattern of ["/__synthetic-audio.wav", "/__synthetic-media-control"])
+                  injectRoute({
+                    pattern,
+                    entrypoint: fileURLToPath(
+                      new URL("./tests/helpers/media-player-endpoint.ts", import.meta.url),
+                    ),
+                  });
+                // Existing ownership/asset recovery regressions remain test-only after retirement.
+                for (const [pattern, entrypoint] of [
+                  ["/__legacy-lawyer", "lawyer"],
+                  ["/__legacy-lawyers", "directory"],
+                  ["/__legacy-lawyers/[id]", "profile"],
+                ]) {
+                  injectRoute({
+                    pattern: pattern as string,
+                    entrypoint: fileURLToPath(
+                      new URL(`./tests/helpers/retired-web/${entrypoint}.astro`, import.meta.url),
+                    ),
+                  });
+                }
               },
             },
           },
@@ -85,6 +117,8 @@ export default defineConfig({
     },
   },
   vite: {
+    // Keep SSR hooks and the renderer in one module graph during cold dev starts.
+    ssr: { noExternal: ["react", "react-dom", "lucide-react"] },
     define: {
       // Synthetic browser tests intercept the API after SSR; real deployments
       // always enforce the server session before rendering the application.

@@ -50,10 +50,16 @@ test("desktop and mobile complete topic, result and original flow without overfl
   page,
 }) => {
   await seed(page);
-  await expect(page.getByRole("link", { name: "유사 판례", exact: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  const tools = page.locator(".case-tools > [data-popover-button]");
+  await tools.click();
+  const currentTool = page
+    .getByRole("navigation", { name: "사건 도구", exact: true })
+    .getByRole("link", { name: "유사 판례", exact: true });
+  await expect(currentTool).toHaveAttribute("aria-current", "page");
+  await currentTool.focus();
+  await page.keyboard.press("Escape");
+  await expect(currentTool).not.toBeVisible();
+  await expect(tools).toBeFocused();
   await expect(page.getByRole("checkbox", { name: /임대차.*추천/ })).toBeChecked();
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   const list = page.getByRole("list", { name: "관련 판례 목록" });
@@ -219,26 +225,33 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
   await expect(list.getByText(/관련 주제/)).toHaveCount(0);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    const layout = await list.locator(".precedent-card").evaluateAll((cards) =>
-      cards.map((card) => {
-        const rect = card.getBoundingClientRect();
-        return {
-          height: rect.height,
-          titleHeight: card.querySelector("h4")?.getBoundingClientRect().height ?? 0,
-          metadataTop:
-            (card.querySelector(".precedent-metadata")?.getBoundingClientRect().top ?? 0) -
-            rect.top,
-        };
-      }),
-    );
-    for (const property of ["height", "titleHeight", "metadataTop"] as const)
-      expect(
-        Math.max(...layout.map((item) => item[property])) -
-          Math.min(...layout.map((item) => item[property])),
-      ).toBeLessThan(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    await page.evaluate(() => document.fonts.ready);
+    await expect
+      .poll(async () => {
+        const layout = await list.locator(".precedent-card").evaluateAll((cards) =>
+          cards.map((card) => {
+            const rect = card.getBoundingClientRect();
+            return {
+              height: rect.height,
+              titleHeight: card.querySelector("h4")?.getBoundingClientRect().height ?? 0,
+              metadataTop:
+                (card.querySelector(".precedent-metadata")?.getBoundingClientRect().top ?? 0) -
+                rect.top,
+            };
+          }),
+        );
+        return Math.max(
+          ...(["height", "titleHeight", "metadataTop"] as const).map(
+            (property) =>
+              Math.max(...layout.map((item) => item[property])) -
+              Math.min(...layout.map((item) => item[property])),
+          ),
+        );
+      })
+      .toBeLessThan(1);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+      .toBeLessThanOrEqual(0);
     await page.screenshot({
       path: `.wrangler/precedent-feedback-list-${width}.png`,
       fullPage: true,
@@ -668,11 +681,12 @@ test("comparison survives foreground during admission, renders fixed indicators 
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(region.locator("progress")).toHaveAttribute("value", "25");
+  await expect(region.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
   await expect(region.locator(".precedent-body")).toHaveCount(1);
   await expect(region.getByRole("button", { name: /유사 · \+12.5점/ })).toHaveCount(2);
   await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);
-  await region.locator(".comparison-highlight").first().click();
+  const reasonOpener = region.locator(".comparison-highlight").first();
+  await reasonOpener.click();
   const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });
   await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
   await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
@@ -685,11 +699,47 @@ test("comparison survives foreground during admission, renders fixed indicators 
   );
   expect((await reason.boundingBox())?.width).toBeGreaterThan(700);
   await page.screenshot({ path: ".wrangler/comparison-reason-desktop.png" });
-  await page.setViewportSize({ width: 390, height: 900 });
-  expect((await reason.boundingBox())?.width).toBeLessThanOrEqual(358);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await reason.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(901);
+    expect(await reason.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
+    await expect(reason.locator(".comparison-reason")).toHaveCount(2);
+    for (const block of await reason.locator(".comparison-reason").all()) {
+      const explanation = block.locator(":scope > p");
+      await explanation.scrollIntoViewIfNeeded();
+      await expect(explanation).toBeInViewport();
+      for (const quote of await block.locator("blockquote").all()) {
+        expect((await quote.innerText()).trim().length).toBeGreaterThan(0);
+        await quote.scrollIntoViewIfNeeded();
+        await expect(quote).toBeInViewport();
+      }
+    }
+    const close = reason.getByRole("button", { name: "닫기", exact: true });
+    await close.scrollIntoViewIfNeeded();
+    await expect(close).toBeInViewport({ ratio: 1 });
+    const closeBounds = await close.boundingBox();
+    expect(closeBounds!.width).toBeGreaterThanOrEqual(44);
+    expect(closeBounds!.height).toBeGreaterThanOrEqual(44);
+    if (width === 390) {
+      await close.click();
+      await expect(reason).not.toBeVisible();
+      await expect(reasonOpener).toBeFocused();
+      await reasonOpener.click();
+      await expect(reason).toBeVisible();
+    }
+  }
   await page.screenshot({ path: ".wrangler/comparison-reason-mobile.png" });
   await page.keyboard.press("Escape");
   await expect(reason).not.toBeVisible();
+  await expect(reasonOpener).toBeFocused();
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await expect

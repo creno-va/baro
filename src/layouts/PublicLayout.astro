@@ -1,0 +1,37 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the component.
+import { Brand } from "../components/ui/brand";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
+import { ThemeToggle } from "../components/ui/theme-toggle";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
+import BaseLayout from "./BaseLayout.astro";
+import "../styles/public-compat.css";
+
+interface Props {
+  title: string;
+  description: string;
+  showStart?: boolean;
+}
+// biome-ignore lint/correctness/noUnusedVariables: Astro reads the template props.
+const { title, description, showStart = true } = Astro.props;
+---
+<BaseLayout title={title} description={description}>
+  <div class="public-layout">
+    <header class="public-header">
+      <Brand />
+      <nav aria-label="서비스 안내"><ThemeToggle client:load />
+        <a class="ui-link" href="/help">도움말</a>
+        {showStart && <a class="ui-button ui-button--primary" href="/new">사건 준비 시작</a>}
+      </nav>
+    </header>
+    <main id="main-content" tabindex="-1" class="public-main"><slot /></main>
+    <footer class="public-footer">
+      <span>BARO · 사건을 이해하고 준비하는 도구</span>
+      <nav aria-label="서비스 정책">
+        <a href="/policies/terms">이용약관</a>
+        <a href="/policies/privacy">개인정보 처리방침</a>
+        <a href="/policies/ai">AI 이용 고지</a>
+      </nav>
+    </footer>
+  </div>
+</BaseLayout>

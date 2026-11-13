@@ -76,27 +76,27 @@ body {
   padding: 12px 15px;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #586478;
+  color: var(--muted-foreground);
 }
 .app-frame .app-nav__link[aria-current="page"] {
-  background: #e7eefb;
-  color: #235cba;
+  background: var(--accent);
+  color: var(--secondary-foreground);
   font-weight: 650;
 }
 .app-frame .app-nav__link--new {
   margin: 5px 0 17px;
-  background: #eaf0fa;
-  color: #285dba;
+  background: var(--accent);
+  color: var(--secondary-foreground);
 }
 .app-frame .app-nav__link:hover {
-  background: #edf1f7;
+  background: var(--muted);
 }
 /* Recent stories share the index page's quiet type, soft surfaces and blue accent. */
 .sidebar-recent {
   min-width: 0;
   margin: 28px 0 24px;
   padding-top: 22px;
-  border-top: 1px solid #e9edf2;
+  border-top: 1px solid var(--border);
 }
 .sidebar-recent__all {
   display: inline-flex;
@@ -151,7 +151,7 @@ body {
   width: 32px;
   height: 36px;
   color: var(--muted-foreground);
-  background: #eef1f5;
+  background: var(--muted);
   border-radius: 10px;
 }
 .sidebar-story__copy {
@@ -182,14 +182,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .sidebar-story:hover {
-  background: #edf1f7;
+  background: var(--muted);
 }
 .sidebar-story[aria-current="page"] {
   background: var(--secondary);
   color: var(--secondary-foreground);
 }
 .sidebar-story[aria-current="page"] .sidebar-story__icon {
-  background: #dce8ff;
+  background: var(--accent);
   color: var(--primary);
 }
 .sidebar-empty {
@@ -204,7 +204,7 @@ body {
 .sidebar-empty > svg {
   flex-shrink: 0;
   margin-top: 3px;
-  color: #8b95a1;
+  color: var(--muted-foreground);
 }
 .sidebar-empty p {
   margin: 0;
@@ -214,7 +214,7 @@ body {
   margin: auto 14px 35px;
   padding-top: 40px;
   font-size: 0.78rem;
-  color: #626d80;
+  color: var(--muted-foreground);
 }
 @media (max-height: 780px) and (min-width: 901px) {
   .sidebar-note {
@@ -223,7 +223,7 @@ body {
 }
 .sidebar-note > :where(span) {
   font-weight: 600;
-  color: #616d7e;
+  color: var(--muted-foreground);
 }
 .sidebar-note p {
   margin: 7px 0 0;
@@ -240,7 +240,7 @@ body {
   padding: 10px 14px;
   font-size: 0.8rem;
   text-decoration: none;
-  color: #626d80;
+  color: var(--muted-foreground);
 }
 .sidebar-account__row {
   display: flex;
@@ -270,7 +270,7 @@ body {
 .sidebar-profile small {
   display: block;
   font-size: 0.69rem;
-  color: #626d80;
+  color: var(--muted-foreground);
   margin-top: 2px;
 }
 .sidebar-avatar {
@@ -279,8 +279,8 @@ body {
   width: 35px;
   height: 35px;
   border-radius: 50%;
-  color: #2463b9;
-  background: #e4eeff;
+  color: var(--secondary-foreground);
+  background: var(--accent);
   font-size: 0.85rem;
   flex-shrink: 0;
 }
@@ -305,7 +305,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #7594bf;
+  background: var(--primary);
 }
 .app-surface {
   position: relative;
@@ -320,7 +320,12 @@ body {
   inset: 0 0 auto;
   height: 680px;
   max-height: 100dvh;
-  background: radial-gradient(ellipse at 46% 37%, #edf5ff 0%, #f5f9ff 25%, var(--card) 67%);
+  background: radial-gradient(
+    ellipse at 46% 37%,
+    var(--accent) 0%,
+    var(--muted) 25%,
+    var(--card) 67%
+  );
   opacity: 0.5;
 }
 .app-surface main {
@@ -338,9 +343,9 @@ body {
   opacity: 1;
   background: radial-gradient(
     ellipse 44% 38% at 49% 47%,
-    #dcecff 0%,
-    #edf5ff 46%,
-    #f9fbff 78%,
+    var(--accent) 0%,
+    var(--accent) 46%,
+    var(--muted) 78%,
     var(--card) 100%
   );
 }
@@ -359,7 +364,7 @@ body {
   margin: 6px auto 0;
   border: 0;
   background: none;
-  color: #626d80;
+  color: var(--muted-foreground);
   font-size: 0.72rem;
   text-align: center;
   line-height: 1.65;
@@ -370,13 +375,18 @@ body {
   width: 100%;
   padding: 36px clamp(24px, 5vw, 72px) 60px;
   gap: 70px;
-  background: radial-gradient(ellipse at 50% 35%, #e3efff 0%, #f5f9ff 40%, var(--card) 72%);
+  background: radial-gradient(
+    ellipse at 50% 35%,
+    var(--accent) 0%,
+    var(--muted) 40%,
+    var(--card) 72%
+  );
 }
 .auth-card {
   border: 1px solid var(--card);
   border-radius: 28px;
   padding: 38px;
-  box-shadow: 0 18px 70px #295ca60b;
+  box-shadow: 0 18px 70px var(--shadow-soft-color);
 }
 .auth-card .eyebrow {
   font-size: 0.75rem;
@@ -414,7 +424,7 @@ body {
     padding: 4px 8px;
     margin-left: auto;
     font-size: 0.75rem;
-    color: #526d92;
+    color: var(--muted-foreground);
     background: var(--secondary);
     border-radius: 7px;
   }
@@ -425,9 +435,9 @@ body {
   .app-frame .app-header {
     width: 100%;
     bottom: auto;
-    background: #ffffffed;
+    background: color-mix(in srgb, var(--card) 93%, transparent);
     backdrop-filter: blur(16px);
-    border-bottom: 1px solid #eef1f5;
+    border-bottom: 1px solid var(--muted);
   }
   .app-frame .app-header__inner {
     padding: 12px 22px;
@@ -445,7 +455,7 @@ body {
     margin-left: auto;
     margin-right: 12px;
     font-size: 0.75rem;
-    color: #626d80;
+    color: var(--muted-foreground);
   }
   .app-surface {
     min-height: calc(100dvh - 72px);

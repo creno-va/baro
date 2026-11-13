@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { validateSelfPhoto } from "../../src/server/modules/lawyers/self-profile";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { chooseOption, selectControl } from "../helpers/headless-controls";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 
 function readyProfile(id: string, name = "합성 변호사") {
   return {
@@ -30,6 +32,10 @@ test.beforeEach(async ({ page }) => {
       },
     }),
   );
+});
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
 });
 
 test("portal saves one portfolio file without header actions or a sticky divider at 320px", async ({
@@ -137,8 +143,8 @@ test("portal saves one portfolio file without header actions or a sticky divider
     const actual = await page.locator("#lawyer-profile-form").evaluate((form) => {
       const name = form.querySelector('[aria-label="이름"]');
       const intro = form.querySelector("textarea");
-      const select = form.querySelector(".lawyer-select select");
-      const arrow = form.querySelector(".lawyer-select > svg");
+      const select = form.querySelector('.lawyer-select [data-slot="select"]');
+      const arrow = form.querySelector('.lawyer-select [data-slot="select"] > svg');
       if (!name || !intro || !select || !arrow) throw new Error("Missing synthetic profile inputs");
       const properties = [
         "background-color",
@@ -156,6 +162,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
         styles,
         appearance: getComputedStyle(select).appearance,
         paddingRight: getComputedStyle(select).paddingRight,
+        borderRight: getComputedStyle(select).borderRightWidth,
         rightGap: rect.right - icon.right,
         centerDelta: rect.top + rect.height / 2 - icon.top - icon.height / 2,
       };
@@ -163,8 +170,11 @@ test("portal saves one portfolio file without header actions or a sticky divider
     expect(actual.styles[0]).toEqual(actual.styles[1]);
     expect(actual.styles[2]).toEqual(actual.styles[1]);
     expect(actual.appearance).toBe("none");
-    expect(actual.paddingRight).toBe("48px");
-    expect(actual.rightGap).toBe(16);
+    expect(actual.paddingRight).toBe(actual.styles[0]?.[3]);
+    expect(actual.rightGap).toBeCloseTo(
+      parseFloat(actual.paddingRight) + parseFloat(actual.borderRight),
+      1,
+    );
     expect(Math.abs(actual.centerDelta)).toBeLessThan(1);
     const layout = await page.locator("#lawyer-profile-form").evaluate((form) => {
       const card = form.querySelector(".lawyer-editor-sections");
@@ -194,7 +204,7 @@ test("portal saves one portfolio file without header actions or a sticky divider
   await page.getByLabel("사무실 이름").fill("예시 사무실");
   await page.getByLabel("소개", { exact: true }).fill("사실관계 정리를 돕는 합성 소개");
   await page.getByLabel("민사", { exact: true }).check();
-  await page.getByRole("combobox", { name: "지역", exact: true }).selectOption("seoul");
+  await chooseOption(selectControl(page, { name: "지역", exact: true }), "seoul");
   await page.getByLabel("사무실 주소").fill("서울 서초구 합성로 1");
   await page.getByLabel("이메일", { exact: true }).fill("lawyer@example.invalid");
   await page.getByLabel("전화번호").fill("02-000-0000");

@@ -2,6 +2,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { WorkspaceView } from "../../client/api/types";
+import { confirmAction } from "../../client/confirm";
 import { startForegroundPolling } from "../../client/foreground-poll";
 import type {
   V2ConversationActionRequest,
@@ -10,7 +11,9 @@ import type {
   V2ConversationProgress,
   V2ConversationState,
 } from "../../contracts/v2";
-import { Button } from "../ui/button";
+import { Button, ButtonLink } from "../ui/button";
+import type { DisclosureHandle } from "../ui/disclosure";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { ConversationAnalysis } from "./ConversationAnalysis";
 import { ConversationPanel } from "./ConversationPanel";
 import { observeReportContinuation, type ReportConfirmation } from "./conversation-progress";
@@ -83,6 +86,9 @@ export function ConversationAgent({
   onPaneOpen,
   refreshKey = 0,
   queuedWork = false,
+  onStateChange,
+  onOpenMaterials,
+  reportHref,
 }: {
   workspace: WorkspaceView;
   client: ConversationClient;
@@ -103,6 +109,9 @@ export function ConversationAgent({
   onPaneOpen?: () => void;
   refreshKey?: number;
   queuedWork?: boolean;
+  onStateChange?: (state: V2ConversationState | null) => void;
+  onOpenMaterials?: () => void;
+  reportHref?: string;
 }) {
   const caseId = workspace.case.id;
   const { ready, canMutate, ticket, current, verify } = access;
@@ -132,6 +141,9 @@ export function ConversationAgent({
     [],
   );
   const stateIsCurrent = state?.workspaceRevision === workspace.case.revision;
+  useEffect(() => {
+    onStateChange?.(ready && stateIsCurrent && !readFailures ? state : null);
+  }, [state, ready, stateIsCurrent, readFailures, onStateChange]);
   const backgroundBusy =
     (queuedWork &&
       (acceptedRefresh !== refreshKey ||
@@ -164,10 +176,16 @@ export function ConversationAgent({
   const processed = useRef(new Set<string>());
   const origin = useRef<HTMLElement | null>(null);
   const paneEpoch = useRef(ticket());
-  const menu = useRef<HTMLDetailsElement>(null);
+  const menu = useRef<DisclosureHandle>(null);
   const attempt = useRef<{ identity: string; input: V2ConversationActionRequest } | null>(null);
-  const callbacks = useRef({ onChanged, onBusyChange });
-  callbacks.current = { onChanged, onBusyChange };
+  const callbacks = useRef({ onChanged, onBusyChange, onOpenMaterials });
+  callbacks.current = { onChanged, onBusyChange, onOpenMaterials };
+  const choosePane = useCallback((nextPane: ConversationPane) => {
+    if (nextPane === "materials" && callbacks.current.onOpenMaterials) {
+      callbacks.current.onOpenMaterials();
+      setPane(null);
+    } else setPane(nextPane);
+  }, []);
   useEffect(() => {
     callbacks.current.onBusyChange(busy || paneBusy || backgroundBusy);
   }, [busy, paneBusy, backgroundBusy]);
@@ -388,32 +406,38 @@ export function ConversationAgent({
     }
     return null;
   }, [load, ticket, current]);
-  const close = useCallback(() => {
+  const close = useCallback(async () => {
+    const confirmEpoch = ticket();
     if (locked.current || paneLocked.current) return;
     if (
       dirty.current &&
-      !window.confirm("저장하지 않은 입력이 있어요. 내용을 버리고 대화로 돌아갈까요?")
+      !(await confirmAction("저장하지 않은 입력이 있어요. 내용을 버리고 대화로 돌아갈까요?"))
     )
       return;
+    if (!current(confirmEpoch) || !mounted.current) return;
     dirty.current = false;
     setHasDraft(false);
     setReportRequested(false);
     setPane(null);
     setResult(null);
-  }, []);
+  }, [ticket, current]);
   const execute = useCallback(
     async (action: V2ConversationIntent, requestId?: string) => {
       if (disabled || !stateIsCurrent || locked.current || paneLocked.current) return;
+      const epoch = ticket();
       if (
         dirty.current &&
-        !window.confirm("저장하지 않은 입력이 있어요. 내용을 버리고 다른 작업을 열까요?")
+        !(await confirmAction("저장하지 않은 입력이 있어요. 내용을 버리고 다른 작업을 열까요?"))
       )
         return;
-      const epoch = ticket();
+      if (!current(epoch) || !mounted.current || locked.current || paneLocked.current) return;
       const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      origin.current = active?.closest("details")?.querySelector<HTMLElement>("summary") ?? active;
+      origin.current =
+        active
+          ?.closest("[data-disclosure]")
+          ?.querySelector<HTMLElement>("[data-disclosure-button]") ?? active;
       paneEpoch.current = epoch;
-      if (menu.current) menu.current.open = false;
+      if (menu.current) menu.current.close();
       locked.current = true;
       setBusy(true);
       setError("");
@@ -453,7 +477,7 @@ export function ConversationAgent({
           attempt.current = null;
           dirty.current = false;
           setResult(null);
-          setPane(conversationReadPanes[action]);
+          choosePane(conversationReadPanes[action]);
           await changed();
           return;
         }
@@ -494,7 +518,7 @@ export function ConversationAgent({
         dirty.current = false;
         setHasDraft(false);
         setResult(next);
-        setPane(next.pane);
+        choosePane(next.pane);
         await changed();
       } catch (cause) {
         if (!current(epoch) || !mounted.current) return;
@@ -540,6 +564,7 @@ export function ConversationAgent({
       stateIsCurrent,
       workspace.case.revision,
       observeProgress,
+      choosePane,
     ],
   );
   useEffect(() => {
@@ -689,20 +714,26 @@ export function ConversationAgent({
           )}
           <fieldset className="conversation-agent-actions">
             <legend className="workspace-sr-only">대화에서 이어갈 작업</legend>
-            <Button
-              type="button"
-              variant="default"
-              disabled={disabled || !stateIsCurrent || busy || paneBusy}
-              loading={busy}
-              onClick={(event) => {
-                event.currentTarget.focus();
-                if (next) void execute(next);
-              }}
-            >
-              {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
-            </Button>
-            <details ref={menu}>
-              <summary>다른 작업</summary>
+            {reportHref && next === "prepare_report" && state.report.status === "ready" ? (
+              <ButtonLink href={reportHref}>
+                리포트 열기 <ArrowRight size={16} aria-hidden="true" />
+              </ButtonLink>
+            ) : (
+              <Button
+                type="button"
+                variant="default"
+                disabled={disabled || !stateIsCurrent || busy || paneBusy}
+                loading={busy}
+                onClick={(event) => {
+                  event.currentTarget.focus();
+                  if (next) void execute(next);
+                }}
+              >
+                {next && conversationActionLabels[next]} <ArrowRight size={16} aria-hidden="true" />
+              </Button>
+            )}
+            <Disclosure ref={menu}>
+              <DisclosureSummary>다른 작업</DisclosureSummary>
               <fieldset
                 className="conversation-agent-menu"
                 disabled={disabled || !stateIsCurrent || busy || paneBusy}
@@ -710,22 +741,32 @@ export function ConversationAgent({
                 <legend className="workspace-sr-only">다른 사건 작업</legend>
                 {(Object.keys(conversationActionLabels) as V2ConversationIntent[])
                   .filter((action) => action !== next)
-                  .map((action) => (
-                    <Button
-                      type="button"
-                      key={action}
-                      variant="ghost"
-                      size="sm"
-                      onClick={(event) => {
-                        event.currentTarget.focus();
-                        void execute(action);
-                      }}
-                    >
-                      {conversationActionLabels[action]}
-                    </Button>
-                  ))}
+                  .map((action) =>
+                    reportHref &&
+                    (["save_report", "resolve_followup", "open_lawyers"].includes(action) ||
+                      (action === "prepare_report" && state.report.status === "ready")) ? (
+                      <ButtonLink key={action} href={reportHref} variant="ghost" size="sm">
+                        {action === "prepare_report"
+                          ? "리포트 열기"
+                          : conversationActionLabels[action]}
+                      </ButtonLink>
+                    ) : (
+                      <Button
+                        type="button"
+                        key={action}
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => {
+                          event.currentTarget.focus();
+                          void execute(action);
+                        }}
+                      >
+                        {conversationActionLabels[action]}
+                      </Button>
+                    ),
+                  )}
               </fieldset>
-            </details>
+            </Disclosure>
           </fieldset>
         </>
       )}

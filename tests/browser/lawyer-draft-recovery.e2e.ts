@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { emptySelfProfile } from "../../src/server/modules/lawyers/self-profile-contract";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("profile save replaces separate publication controls and preserves edits", async ({
   page,

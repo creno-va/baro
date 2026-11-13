@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "7236c14f88f21a64c5fe916a90779d7c238fff6d",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "b47b8dfcd1786c6352bd4eadc2529fde8b0e937b031a6f5d1b22e5a5baebaab0",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:37:40.153Z",
+    "duration": 16835.752,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  },
+  "rawResultSha256": "dc4da68c192cf10e9f95eb54f7d153b419fdeea84b138fc5f6997565d7162389",
+  "results": [
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\u001b[22m\n\n\n  87 |   });\n  88 |   const dialog = page.getByRole(\"dialog\", { name: \"아직 지원하지 않는 기능이에요\", exact: true });\n> 89 |   await expect(dialog).toBeVisible();\n     |                        ^\n  90 |   await expect(dialog).toContainText(\"현재 변호사 연결 기능은 제공하지 않습니다.\");\n  91 |   await dialog.getByRole(\"button\", { name: \"확인\", exact: true }).click();\n  92 |   await expect(lawyer).toBeFocused();\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:89:24"
+      ]
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "failed",
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\u001b[22m\n\n\n  87 |   });\n  88 |   const dialog = page.getByRole(\"dialog\", { name: \"아직 지원하지 않는 기능이에요\", exact: true });\n> 89 |   await expect(dialog).toBeVisible();\n     |                        ^\n  90 |   await expect(dialog).toContainText(\"현재 변호사 연결 기능은 제공하지 않습니다.\");\n  91 |   await dialog.getByRole(\"button\", { name: \"확인\", exact: true }).click();\n  92 |   await expect(lawyer).toBeFocused();\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:89:24"
+      ]
+    }
+  ]
+}

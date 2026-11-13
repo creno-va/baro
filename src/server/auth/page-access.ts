@@ -1,12 +1,13 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { drizzle } from "drizzle-orm/d1";
 import type { Context, MiddlewareHandler } from "hono";
+import { renderUnavailableDocument } from "../../components/ui/unavailable-document";
 import type { ApiEnvironment } from "../api/errors";
 import * as schema from "../db/schema";
 import { hasCurrentConsent } from "../modules/consent/service";
 import { getSession } from "./session";
 
-function isPage(path: string, page: "/app" | "/login"): boolean {
+function isPage(path: string, page: "/app" | "/new" | "/login"): boolean {
   try {
     // Match aliases before Astro decodes/renders them, including encoded or repeated slashes.
     const decoded = decodeURIComponent(path).replaceAll("\\", "/").replace(/\/+/g, "/");
@@ -19,10 +20,7 @@ function isPage(path: string, page: "/app" | "/login"): boolean {
 
 function unavailable(context: Context<ApiEnvironment>, betaClosed = false) {
   context.header("retry-after", "30");
-  return context.html(
-    `<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"><title>잠시 후 다시 시도해 주세요 — BARO</title></head><body><main><h1>${betaClosed ? "공개 베타를 준비하고 있어요." : "로그인 상태를 확인할 수 없어요."}</h1><p>잠시 후 다시 시도해 주세요.</p><a href="/app">다시 시도하기</a> · <a href="/">서비스 소개로 돌아가기</a></main></body></html>`,
-    503,
-  );
+  return context.html(renderUnavailableDocument(betaClosed), 503);
 }
 
 async function activeSession(context: Context<ApiEnvironment>) {
@@ -40,7 +38,7 @@ async function activeSession(context: Context<ApiEnvironment>) {
 
 async function loginEntry(context: Context<ApiEnvironment>) {
   try {
-    if (await activeSession(context)) return context.redirect("/app", 302);
+    if (await activeSession(context)) return context.redirect("/new", 302);
   } catch {
     return unavailable(context);
   }
@@ -61,7 +59,7 @@ async function appEntry(context: Context<ApiEnvironment>, syntheticFixture: bool
       return unavailable(context);
     }
   }
-  if (path !== "/app" && path !== "/app/") return context.redirect("/app", 302);
+  if (path !== "/new" && path !== "/new/") return context.redirect("/new", 302);
   return undefined;
 }
 
@@ -74,7 +72,7 @@ export function createPageAccess({
   return async (context, next) => {
     const path = new URL(context.req.url).pathname;
     const loginPage = isPage(path, "/login");
-    if (!loginPage && !isPage(path, "/app")) {
+    if (!loginPage && !isPage(path, "/new") && !isPage(path, "/app")) {
       await next();
       return;
     }

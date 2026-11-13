@@ -1,0 +1,8 @@
+/* Test-only presentation snapshot. Never imported by product routes. */
+@import "./global.css";
+@import "./shell.css";
+@import "./product.css";
+@import "./app-experience.css";
+@import "./product-refresh.css";
+@import "./app-workspace.css";
+@import "./lawyers.css";

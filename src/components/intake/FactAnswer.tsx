@@ -1,5 +1,6 @@
 import { factQuestionPrompts, type IntakeQuestionContext } from "@baro/client-core";
 import type { V2Fact } from "../../contracts/v2";
+import { Disclosure, DisclosureSummary } from "../ui/disclosure";
 import { referenceLabel } from "../workspace/source-label";
 
 export function FactAnswer({
@@ -33,8 +34,8 @@ export function FactAnswer({
             .join(" · ")}
         </p>
       )}
-      <details className="fact-answer__sources">
-        <summary>출처와 확인 상태</summary>
+      <Disclosure className="fact-answer__sources">
+        <DisclosureSummary>출처와 확인 상태</DisclosureSummary>
         <p>
           {fact.attribution === "user_statement"
             ? "사용자 진술"
@@ -66,7 +67,7 @@ export function FactAnswer({
             )}
           </p>
         ))}
-      </details>
+      </Disclosure>
     </div>
   );
 }

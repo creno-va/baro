@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { answerDiscard } from "../helpers/headless-controls";
 
 test("320px inline work stays on the conversation, protects dirty input and restores keyboard focus", async ({
   page,
@@ -15,11 +16,14 @@ test("320px inline work stays on the conversation, protects dirty input and rest
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading", { name: "리포트 준비와 검토" })).toBeFocused();
   await panel.getByLabel("검토 중인 입력").fill("보존할 합성 초안");
-  page.once("dialog", (dialog) => dialog.dismiss());
+  const keepEditing = answerDiscard(page, false);
   await page.keyboard.press("Escape");
+  await keepEditing;
   await expect(panel.getByLabel("검토 중인 입력")).toHaveValue("보존할 합성 초안");
-  page.once("dialog", (dialog) => dialog.accept());
+  await expect(panel.getByLabel("검토 중인 입력")).toBeFocused();
+  const discardChanges = answerDiscard(page, true);
   await page.keyboard.press("Escape");
+  await discardChanges;
   await expect(panel).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: "이후 해결 방법 선택", exact: true }),

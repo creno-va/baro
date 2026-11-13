@@ -1,9 +1,9 @@
 .resolution {
-  color: var(--foreground, #191f28);
+  color: var(--foreground);
   font-family: inherit;
   min-width: 0;
   padding-block: 24px;
-  border-top: 1px solid var(--border, #edf0f4);
+  border-top: 1px solid var(--border);
 }
 .resolution h2 {
   font-size: 20px;
@@ -19,7 +19,7 @@
   margin: 0 0 8px;
 }
 .resolution p {
-  color: var(--muted-foreground, #667085);
+  color: var(--muted-foreground);
   line-height: 1.7;
   margin: 8px 0 12px;
 }
@@ -55,11 +55,11 @@
   font-size: 13px;
   line-height: 1.6;
   font-weight: 400;
-  color: var(--muted-foreground, #667085);
+  color: var(--muted-foreground);
 }
 .resolution-path[aria-pressed="true"] {
-  border-color: var(--primary, #2364e8);
-  background: var(--accent, #f6f8fb);
+  border-color: var(--primary);
+  background: var(--accent, var(--background));
 }
 .resolution-body {
   max-width: 840px;
@@ -79,7 +79,7 @@
   line-height: 1.7;
 }
 .resolution-checks small {
-  color: var(--muted-foreground, #667085);
+  color: var(--muted-foreground);
 }
 .resolution a {
   overflow-wrap: anywhere;
@@ -89,10 +89,10 @@
   display: flex;
   align-items: center;
   min-height: 44px;
-  color: var(--primary, #2364e8);
+  color: var(--primary);
 }
 .resolution-scope {
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
   margin-block: 20px;
@@ -112,11 +112,11 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.resolution input[type="checkbox"] {
+.resolution [role="checkbox"] {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  accent-color: var(--primary, #2364e8);
+  accent-color: var(--primary);
 }
 .resolution select {
   display: block;
@@ -126,9 +126,9 @@
   margin-top: 8px;
   font: inherit;
   color: inherit;
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--background, white);
+  background: var(--background);
 }
 .resolution textarea {
   display: block;
@@ -141,7 +141,7 @@
   font-size: 14px;
   line-height: 1.8;
   color: inherit;
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 8px;
   resize: vertical;
 }
@@ -149,11 +149,11 @@
 .resolution-error {
   padding: 14px 16px;
   border-radius: 10px;
-  background: var(--muted, #f6f8fb);
+  background: var(--muted, var(--background));
   margin-block: 16px;
 }
 .resolution-error {
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
 }
 .resolution-actions {
   display: flex;

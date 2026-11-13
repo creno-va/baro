@@ -10,7 +10,7 @@ import type { AccountType, Provider, SessionView } from "./types";
 export { notifySessionChanged } from "../session-events";
 
 export const roleStart = (session: SessionView) =>
-  !session.user ? "/login" : session.needsConsent ? "/consent" : "/app";
+  !session.user ? "/login" : session.needsConsent ? "/consent" : "/new";
 let pendingSelection: { attempt: string; ownerId: string; promise: Promise<unknown> } | undefined;
 let pendingRead: Promise<SessionView> | undefined;
 const wireSession = createSessionClient((options) => request("session.http", undefined, options));
@@ -91,23 +91,28 @@ export const sessionApi = {
     }
     return session;
   },
-  async signIn(provider: Provider, accountType: AccountType): Promise<SessionView | undefined> {
+  async signIn(provider: Provider, accountType?: AccountType): Promise<SessionView | undefined> {
     if (apiMode === "mock") {
       const session = await request<SessionView>("session.signIn", { provider, accountType });
       notifySessionChanged();
       return session;
     }
     pendingSelection = undefined;
-    const attempt = crypto.randomUUID();
-    sessionStorage.setItem(
-      "baro-account-type",
-      JSON.stringify({ accountType, attempt, createdAt: Date.now() }),
-    );
+    // Common sign-in preserves the server's existing account identity/type.
+    // New accounts already resolve to customer; a role write is unnecessary.
+    // Explicit role selection remains available to existing installed callers.
+    sessionStorage.removeItem("baro-account-type");
+    const attempt = accountType ? crypto.randomUUID() : null;
+    if (accountType && attempt)
+      sessionStorage.setItem(
+        "baro-account-type",
+        JSON.stringify({ accountType, attempt, createdAt: Date.now() }),
+      );
     const callback = new URL(
       accessHref("consent", returnPathFromLocation() ?? undefined),
       window.location.origin,
     );
-    callback.searchParams.set("loginAttempt", attempt);
+    if (attempt) callback.searchParams.set("loginAttempt", attempt);
     const result = await authClient.signIn
       .social({
         provider,

@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "inspectedProductSha": "7236c14f88f21a64c5fe916a90779d7c238fff6d",
+  "metadata": {
+    "inspectedProductSha": "7236c14f88f21a64c5fe916a90779d7c238fff6d",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "c46f660a5bc798e1752a366b0d40a470a2143c6587b9fbb899a5f5b019fe9755",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:33:41.722Z",
+    "duration": 74735.295,
+    "expected": 22,
+    "skipped": 0,
+    "unexpected": 6,
+    "flaky": 0
+  },
+  "rawResultSha256": "59c443df9dad57d6e12c626f060eec36e455242b171d02a5aaa258d145448352",
+  "results": [
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 427,
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "chromium",
+      "status": "failed",
+      "durationMs": 7765,
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\u001b[22m\n\n\n  78 |   });\n  79 |   const dialog = page.getByRole(\"dialog\", { name: \"아직 지원하지 않는 기능이에요\", exact: true });\n> 80 |   await expect(dialog).toBeVisible();\n     |                        ^\n  81 |   await expect(dialog).toContainText(\"현재 변호사 연결 기능은 제공하지 않습니다.\");\n  82 |   await dialog.getByRole(\"button\", { name: \"확인\", exact: true }).click();\n  83 |   await expect(lawyer).toBeFocused();\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:80:24"
+      ]
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "chromium",
+      "status": "failed",
+      "durationMs": 7426,
+      "errors": [
+        "Error: 대화 must be a directly available case task\n\n\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true }))\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - 대화 must be a directly available case task getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true })) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true }))\u001b[22m\n\n\n   97 |       .getByRole(\"link\", { name, exact: true })\n   98 |       .or(page.getByRole(\"button\", { name, exact: true }));\n>  99 |     await expect(task, `${name} must be a directly available case task`).toBeVisible();\n      |                                                                          ^\n  100 |   }\n  101 | });\n  102 |\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:99:74"
+      ]
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "chromium",
+      "status": "failed",
+      "durationMs": 10456,
+      "errors": [
+        "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('link', { name: '자료', exact: true }).or(getByRole('button', { name: '자료', exact: true }))\u001b[22m\n\n\n  122 |       .getByRole(\"link\", { name, exact: true })\n  123 |       .or(page.getByRole(\"button\", { name, exact: true }))\n> 124 |       .click();\n      |        ^\n  125 |   }\n  126 |   expect(warnings).toEqual([]);\n  127 |   await expect(input).toHaveValue(unsentMessage);\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:124:8"
+      ]
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 756,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 636,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 654,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 626,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 643,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 646,
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 566,
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 408,
+      "errors": []
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 684,
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "chromium",
+      "status": "passed",
+      "durationMs": 397,
+      "errors": []
+    },
+    {
+      "title": "reading the report route does not generate or save a report",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 989,
+      "errors": []
+    },
+    {
+      "title": "lawyer action only opens the exact unsupported modal and preserves selection",
+      "project": "webkit",
+      "status": "failed",
+      "durationMs": 7955,
+      "errors": [
+        "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true }) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('dialog', { name: '아직 지원하지 않는 기능이에요', exact: true })\u001b[22m\n\n\n  78 |   });\n  79 |   const dialog = page.getByRole(\"dialog\", { name: \"아직 지원하지 않는 기능이에요\", exact: true });\n> 80 |   await expect(dialog).toBeVisible();\n     |                        ^\n  81 |   await expect(dialog).toContainText(\"현재 변호사 연결 기능은 제공하지 않습니다.\");\n  82 |   await dialog.getByRole(\"button\", { name: \"확인\", exact: true }).click();\n  83 |   await expect(lawyer).toBeFocused();\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:80:24"
+      ]
+    },
+    {
+      "title": "all four case tasks remain discoverable with materials closed",
+      "project": "webkit",
+      "status": "failed",
+      "durationMs": 8044,
+      "errors": [
+        "Error: 대화 must be a directly available case task\n\n\u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true }))\nExpected: visible\nTimeout: 7000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - 대화 must be a directly available case task getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true })) with timeout 7000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('link', { name: '대화', exact: true }).or(getByRole('button', { name: '대화', exact: true }))\u001b[22m\n\n\n   97 |       .getByRole(\"link\", { name, exact: true })\n   98 |       .or(page.getByRole(\"button\", { name, exact: true }));\n>  99 |     await expect(task, `${name} must be a directly available case task`).toBeVisible();\n      |                                                                          ^\n  100 |   }\n  101 | });\n  102 |\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:99:74"
+      ]
+    },
+    {
+      "title": "switching case tasks keeps unsent text and unuploaded bytes",
+      "project": "webkit",
+      "status": "failed",
+      "durationMs": 11323,
+      "errors": [
+        "TimeoutError: locator.click: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('link', { name: '자료', exact: true }).or(getByRole('button', { name: '자료', exact: true }))\u001b[22m\n\n\n  122 |       .getByRole(\"link\", { name, exact: true })\n  123 |       .or(page.getByRole(\"button\", { name, exact: true }))\n> 124 |       .click();\n      |        ^\n  125 |   }\n  126 |   expect(warnings).toEqual([]);\n  127 |   await expect(input).toHaveValue(unsentMessage);\n    at /Users/hwang-eunchan/Desktop/baro/redesign-05-review/tests/browser/redesign-acceptance.e2e.ts:124:8"
+      ]
+    },
+    {
+      "title": "actual pages remain operable at 320px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1448,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 390px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1009,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 768px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1009,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1024px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1005,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1440px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1047,
+      "errors": []
+    },
+    {
+      "title": "actual pages remain operable at 1920px",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 986,
+      "errors": []
+    },
+    {
+      "title": "unuploaded attachment and unsent message survive material-panel round trip without submission",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 847,
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 800,
+      "errors": []
+    },
+    {
+      "title": "conversation entry has no serious accessibility violations",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1236,
+      "errors": []
+    },
+    {
+      "title": "existing lawyer account can use its own ordinary case",
+      "project": "webkit",
+      "status": "passed",
+      "durationMs": 1166,
+      "errors": []
+    }
+  ],
+  "evidence": [
+    {
+      "path": "evidence/conversation-1440.png",
+      "sha256": "941dd241d6b312e444a205123c9babd39a14fc3e60834ff6d1de77371b42090c"
+    },
+    {
+      "path": "evidence/conversation-390.png",
+      "sha256": "e16e8f9dff1b896cf6ac531cf59f62255865e259409685c77548117f6c3f6541"
+    },
+    {
+      "path": "evidence/lawyer-action.png",
+      "sha256": "a1c451a36ae8bb231302eeb10fe053a21c72f3c4bfac6f62b66bf0e59e6ea393"
+    },
+    {
+      "path": "evidence/missing-tasks.png",
+      "sha256": "90069b3e809707fca9ae505df26a19b2ca5c19bf846017bb2017fdbb708d3be4"
+    },
+    {
+      "path": "evidence/saved-fact-draft.txt",
+      "sha256": "69da1a2ba688d69261cb12980825c91dac00a4e82c89fb14a9f2a2017ad2b136"
+    },
+    {
+      "path": "evidence/selection-before-after.json",
+      "sha256": "9235abfde29d3f213f0dd5702f6aa71f74ee2ecfd41f6668148596714810b7e7"
+    }
+  ]
+}

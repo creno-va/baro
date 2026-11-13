@@ -9,7 +9,7 @@ import { accessHref } from "../../client/return-path";
 import type { V2CaseContext } from "../../contracts/v2";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink } from "../ui/button";
-import { Textarea } from "../ui/form";
+import { Input as ControlInput, Label as FieldLabel, RadioGroup, Textarea } from "../ui/form";
 import { LoadingContent } from "../ui/loading";
 import { StatePanel } from "../ui/state-panel";
 import { CaseContextNote } from "./CaseContextNote";
@@ -533,7 +533,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
       // Navigation can run before React commits the acknowledged answer.
       if (draftSnapshot.current) draftSnapshot.current.dirty = false;
     }
-    window.location.assign("/app");
+    window.location.assign("/new");
   }
   async function advance() {
     if (!canMutate || !result || pending.current || result.processing) return;
@@ -790,6 +790,7 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 )
               ) : (
                 <form
+                  noValidate
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (requiresAdvanceRetry || pending.current) return;
@@ -804,14 +805,26 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                 >
                   <div className="intake-scene-composer">
                     {question.kind === "choice" && (
-                      <fieldset
+                      <RadioGroup
+                        as="fieldset"
+                        value={customAnswer ? "__custom__" : value}
+                        onChange={(next) => {
+                          if (next === "__custom__") {
+                            setCustomQuestionId(question.id);
+                            changeAnswer(customAnswer ? value : "", "answered");
+                          } else {
+                            setCustomQuestionId(null);
+                            setComposing(false);
+                            changeAnswer(String(next), "answered");
+                          }
+                        }}
                         className="intake-options"
                         disabled={locked}
                         aria-labelledby="question-heading"
                       >
                         <legend className="sr-only">답변 선택</legend>
                         {question.options?.map((option) => (
-                          <label
+                          <FieldLabel
                             key={option}
                             className={
                               !customAnswer && answerState === "answered" && value === option
@@ -819,45 +832,36 @@ export function IntakeQuestions({ caseId }: { caseId: string }) {
                                 : ""
                             }
                           >
-                            <input
+                            <ControlInput
                               type="radio"
                               name={question.id}
                               value={option}
                               checked={
                                 !customAnswer && answerState === "answered" && value === option
                               }
-                              onChange={() => {
-                                setCustomQuestionId(null);
-                                setComposing(false);
-                                changeAnswer(option, "answered");
-                              }}
                             />
                             <span>{option}</span>
-                          </label>
+                          </FieldLabel>
                         ))}
-                        <label
+                        <FieldLabel
                           className={customAnswer && answerState === "answered" ? "selected" : ""}
                         >
-                          <input
+                          <ControlInput
                             type="radio"
                             name={question.id}
-                            value=""
+                            value="__custom__"
                             checked={customAnswer && answerState === "answered"}
                             aria-controls={customAnswer ? "question-answer" : undefined}
-                            onChange={() => {
-                              setCustomQuestionId(question.id);
-                              changeAnswer(customAnswer ? value : "", "answered");
-                            }}
                           />
                           <span>직접 입력</span>
-                        </label>
-                      </fieldset>
+                        </FieldLabel>
+                      </RadioGroup>
                     )}
                     {(question.kind !== "choice" || customAnswer) && (
                       <>
-                        <label className="sr-only" htmlFor="question-answer">
+                        <FieldLabel className="sr-only" htmlFor="question-answer">
                           {question.kind === "choice" ? "직접 입력 답변" : "답변"}
-                        </label>
+                        </FieldLabel>
                         <Textarea
                           id="question-answer"
                           className={

@@ -54,7 +54,8 @@ jobs:
       - name: Install pinned secret scanner
         shell: bash
         run: |
-          curl --fail --silent --show-error --location https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz --output /tmp/gitleaks.tar.gz
+          # Unmodified official v8.30.1 Linux x64 asset; verify before extracting or executing.
+          cp .github/tools/gitleaks_8.30.1_linux_x64.tar.gz /tmp/gitleaks.tar.gz
           echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check
           mkdir /tmp/baro-gitleaks
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp/baro-gitleaks
@@ -74,12 +75,23 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   browser:
-    name: Full browser validation
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: screens-1
+            name: Full browser validation (screens 1)
+          - part: screens-2
+            name: Full browser validation (screens 2)
+          - part: journeys
+            name: Full browser validation (journeys)
     env:
       TARGET_SHA: ${{ inputs.target_sha }}
+      BARO_FULL_BROWSER_PART: ${{ matrix.part }}
     steps:
       - name: Validate explicit candidate input
         run: '[[ "$TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
@@ -116,7 +128,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: rework-journeys-${{ inputs.target_sha }}
+          name: rework-journeys-${{ matrix.part }}-${{ inputs.target_sha }}
           path: |
             /tmp/baro-625-journeys/**/protocol.json
             /tmp/baro-625-journeys/**/report.pdf
@@ -131,6 +143,17 @@ jobs:
             /tmp/baro-625-journeys/**/report-visual.json
             /tmp/baro-625-journeys/**/followup.png
             /tmp/baro-625-journeys/**/followup-visual.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Retain independent synthetic acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: redesign-acceptance-${{ matrix.part }}-${{ inputs.target_sha }}
+          path: |
+            .wrangler/redesign-results.json
+            .wrangler/redesign-acceptance/**
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
   native:

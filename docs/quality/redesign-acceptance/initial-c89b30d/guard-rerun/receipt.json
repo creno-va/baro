@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "c89b30d789af5123a2735b6ca81c957c8365794b",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "8aedc351616c461988ed18989b2e2b6b8591f27f1721b09a30f6ee40023c13a8",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:53:01.251Z",
+    "duration": 3267.562,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "rawResultSha256": "1e3e4cd0fdb72a6c3b125e4b98223e008f69d7e43dd8ec062ba36d0b58748d55",
+  "results": [
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "cancelled page navigation preserves the unsent message",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

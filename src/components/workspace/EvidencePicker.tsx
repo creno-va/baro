@@ -2,6 +2,7 @@ import { Camera, Paperclip } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { validateUpload } from "../../client/api/files";
 import { Button } from "../ui/button";
+import { Input as ControlInput } from "../ui/form";
 import "../../styles/evidence.css";
 
 const acceptedFiles =
@@ -15,6 +16,7 @@ export function EvidencePicker({
   onError,
   photoOnly = false,
   compact = false,
+  captureOnly = false,
   scopeKey = "",
 }: {
   disabled?: boolean;
@@ -22,6 +24,8 @@ export function EvidencePicker({
   onError?: (cause: unknown) => unknown;
   photoOnly?: boolean;
   compact?: boolean;
+  /** The parent already provides a general file picker. */
+  captureOnly?: boolean;
   /** Use caseId + session ticket/epoch, not a foreground refresh counter. */
   scopeKey?: string;
 }) {
@@ -78,7 +82,7 @@ export function EvidencePicker({
   };
   return (
     <div className={`evidence-picker${compact ? " evidence-picker--compact" : ""}`}>
-      <input
+      <ControlInput
         ref={fileInput}
         type="file"
         hidden
@@ -88,7 +92,7 @@ export function EvidencePicker({
         disabled={disabled}
         onChange={(event) => void select(event.currentTarget)}
       />
-      <input
+      <ControlInput
         ref={cameraInput}
         type="file"
         hidden
@@ -99,15 +103,17 @@ export function EvidencePicker({
         onChange={(event) => void select(event.currentTarget)}
       />
       <div className="evidence-picker-actions">
-        <Button
-          variant="outline"
-          aria-describedby={description}
-          disabled={disabled}
-          onClick={() => open(false)}
-        >
-          <Paperclip size={18} aria-hidden="true" />
-          {photoOnly ? "사진 분석" : "파일 선택"}
-        </Button>
+        {!captureOnly && (
+          <Button
+            variant="outline"
+            aria-describedby={description}
+            disabled={disabled}
+            onClick={() => open(false)}
+          >
+            <Paperclip size={18} aria-hidden="true" />
+            {photoOnly ? "사진 분석" : "파일 선택"}
+          </Button>
+        )}
         <Button
           variant="outline"
           aria-describedby={description}
@@ -118,7 +124,7 @@ export function EvidencePicker({
           촬영해서 추가
         </Button>
       </div>
-      <p id={description} className="evidence-hint">
+      <p id={description} className={compact ? "sr-only" : "evidence-hint"}>
         모바일에서는 촬영을 요청해요. 촬영이 지원되지 않거나 권한을 거절했다면 파일 선택으로 추가해
         주세요.
       </p>

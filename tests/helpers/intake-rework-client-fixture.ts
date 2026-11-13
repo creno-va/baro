@@ -172,6 +172,13 @@ const request: OperationRequest = async <T>(
     const item = casesMockHandlers["cases.get"]({ id });
     const contexts = readStore<Record<string, V2CaseContext>>("reworkContexts", {});
     if (options.method === "PUT") {
+      const attempts = readStore("syntheticEntryAttempts", { create: 0, context: 0 });
+      writeStore("syntheticEntryAttempts", { ...attempts, context: attempts.context + 1 });
+      const entryFault = localStorage.getItem("synthetic-entry-context-fault");
+      if (entryFault === "before") {
+        localStorage.removeItem("synthetic-entry-context-fault");
+        throw new ApiError("UNAVAILABLE", "합성 분류 저장 실패", true);
+      }
       const update = v2CaseContextUpdateSchema.parse(input);
       if (update.expectedRevision !== item.revision)
         throw new ApiError("CONFLICT", "합성 context CAS 충돌");
@@ -186,6 +193,10 @@ const request: OperationRequest = async <T>(
       writeStore("cases", records);
       writeStore("reworkContexts", contexts);
       writeStore("syntheticStaleAnalysis", id);
+      if (entryFault === "after") {
+        localStorage.removeItem("synthetic-entry-context-fault");
+        throw new ApiError("UNAVAILABLE", "합성 분류 저장 응답 유실", true);
+      }
     }
     return {
       contractVersion: v2ReworkVersionSchema.value,
@@ -198,6 +209,8 @@ const request: OperationRequest = async <T>(
     } as T;
   }
   if (path === "/api/v2/cases/rework" && options.method === "POST") {
+    const attempts = readStore("syntheticEntryAttempts", { create: 0, context: 0 });
+    writeStore("syntheticEntryAttempts", { ...attempts, create: attempts.create + 1 });
     const body = v2ReworkCreateCaseRequestSchema.parse(input);
     if (!session.user) throw new Error("Missing synthetic owner");
     const item = casesMockHandlers["cases.create"](

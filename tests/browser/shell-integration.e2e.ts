@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
+import { goToCaseTool } from "../helpers/case-navigation";
+import { installLegacyLawyerPages } from "../helpers/legacy-lawyer-pages";
 import { openReportEditor, openReportOptions } from "../helpers/report-controls";
+
+test.beforeEach(async ({ page }) => {
+  await installLegacyLawyerPages(page);
+});
 
 test("long service content fits narrow screens and the menu stays closable after scrolling in landscape", async ({
   page,
@@ -69,7 +75,7 @@ test("long service content fits narrow screens and the menu stays closable after
     for (const [key, value] of Object.entries(values))
       localStorage.setItem(`baro-api-mock-v1:${key}`, JSON.stringify(value));
   });
-  for (const width of [320, 901, 1024]) {
+  for (const width of [320, 901, 1024, 1440]) {
     await page.setViewportSize({ width, height: 760 });
     for (const path of [
       "/cases",
@@ -90,6 +96,33 @@ test("long service content fits narrow screens and the menu stays closable after
             .getByText(/SYNTHETIC-LONG-CONTENT-/)
             .first(),
         ).toBeVisible();
+      if (path === "/cases/responsive-long-case") {
+        const messages = page.locator(".workspace-messages");
+        const header = page.locator(".case-workspace__header");
+        const composer = page.locator(".workspace-composer");
+        await expect(messages).toBeVisible();
+        await expect
+          .poll(() => messages.evaluate((node) => node.scrollHeight - node.clientHeight))
+          .toBeGreaterThan(0);
+        const fixed = {
+          header: await header.boundingBox(),
+          composer: await composer.boundingBox(),
+        };
+        expect(fixed.header).not.toBeNull();
+        expect(fixed.composer).not.toBeNull();
+        await messages.hover();
+        await page.mouse.wheel(0, -100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBe(0);
+        await page.mouse.wheel(0, 100000);
+        await expect.poll(() => messages.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+        await expect
+          .poll(async () => ({
+            header: await header.boundingBox(),
+            composer: await composer.boundingBox(),
+          }))
+          .toEqual(fixed);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      }
       if (path === "/cases")
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
@@ -146,14 +179,14 @@ test("customer login consent logout share the product shell without external API
   await page.goto("/login?error=access_denied");
   await expect(page.getByRole("alert")).toContainText("로그인을 취소");
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await page.getByRole("radio", { name: /고객/ }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Naver로 계속하기" }).click();
   await expect(page).toHaveURL(/\/consent$/);
   await expect(page.getByRole("button", { name: "동의하고 계속하기" })).toBeDisabled();
   await expect(page.getByRole("checkbox")).toHaveCount(1);
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
@@ -162,7 +195,7 @@ test("customer login consent logout share the product shell without external API
     .getByRole("button", { name: "로그아웃", exact: true })
     .click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
   expect(requests).toEqual([]);
 });
 
@@ -182,7 +215,7 @@ test("customer completes intake workspace original PDF report and cascading dele
   await page.getByRole("button", { name: "Google로 계속하기" }).click();
   await page.getByRole("checkbox", { name: /이용약관, 개인정보/ }).check();
   await page.getByRole("button", { name: "동의하고 계속하기" }).click();
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
   await page
     .getByLabel("지금까지 있었던 일")
     .fill("합성 시연 사건입니다. 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.");
@@ -202,10 +235,8 @@ test("customer completes intake workspace original PDF report and cascading dele
     .fill("합성 추가 사실입니다. 반환 약속 메시지를 자료로 보관했습니다.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.getByText("이 응답은 합성 API 예시", { exact: false })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "사건 메뉴" })
-    .getByRole("link", { name: /^자료/ })
-    .click();
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(`${casePath}/files`);
   await expect(page.getByRole("button", { name: "파일 선택", exact: true })).toBeEnabled();
   await page.getByLabel("업로드할 파일 선택", { exact: true }).setInputFiles({
     name: "합성증거.txt",
@@ -214,13 +245,25 @@ test("customer completes intake workspace original PDF report and cascading dele
   });
   await expect(page.getByRole("heading", { name: "합성증거.txt" })).toBeVisible();
   await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("link", { name: "타임라인", exact: true }).click();
+  await goToCaseTool(page, "timeline");
+  await expect(page).toHaveURL(`${casePath}/timeline`);
   await page.getByRole("button", { name: "일정 추가" }).click();
   for (const viewport of [
     { width: 320, height: 760 },
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    // Resizing into the mobile breakpoint starts the bottom-sheet entrance.
+    // Verify its settled geometry without disabling the customer's animation.
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -263,6 +306,15 @@ test("customer completes intake workspace original PDF report and cascading dele
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    await expect
+      .poll(async () => {
+        const bounds = await page.getByRole("dialog").last().boundingBox();
+        if (!bounds) return Number.POSITIVE_INFINITY;
+        return viewport.width <= 760
+          ? Math.abs(bounds.y + bounds.height - viewport.height)
+          : Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2);
+      })
+      .toBeLessThan(2);
     const modal = await page.getByRole("dialog").last().boundingBox();
     expect(modal).not.toBeNull();
     expect(Math.abs((modal?.x ?? 0) + (modal?.width ?? 0) / 2 - viewport.width / 2)).toBeLessThan(
@@ -305,7 +357,7 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
   ]) {
     await page.setViewportSize(viewport);
     for (const path of [
-      "/app",
+      "/new",
       "/cases",
       "/cases/new",
       "/lawyers",
@@ -315,7 +367,7 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
     ]) {
       await page.goto(path);
       await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-      if (path === "/app" || path === "/cases/new")
+      if (path === "/new" || path === "/cases/new")
         await expect(page.getByLabel("지금까지 있었던 일")).toBeEnabled();
       if (path === "/lawyers")
         await expect(page.getByRole("link", { name: "김예시", exact: true })).toBeVisible();
@@ -329,10 +381,16 @@ test("service screens reflow at phone, tablet and desktop widths", async ({ page
       ).toBe(true);
     }
     await page.goto("/help#limits");
-    if (viewport.width <= 900) {
-      const target = await page.locator("#limits").boundingBox();
-      const header = await page.locator(".app-header").boundingBox();
+    const target = await page.locator("#limits").boundingBox();
+    const header = await page.locator(".app-header").boundingBox();
+    expect(target).not.toBeNull();
+    expect(header).not.toBeNull();
+    if (viewport.width < 768) {
       expect(target?.y).toBeGreaterThanOrEqual((header?.y ?? 0) + (header?.height ?? 0));
+    } else {
+      // Tablet and desktop navigation occupies the left edge rather than the top.
+      expect(target?.x).toBeGreaterThanOrEqual((header?.x ?? 0) + (header?.width ?? 0));
+      expect(target?.y).toBeGreaterThanOrEqual(0);
     }
   }
 });
@@ -348,7 +406,7 @@ async function openCustomerHome(page: Page) {
     );
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/app");
+  await page.goto("/new");
   await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
 }
 async function logoutFromMenu(page: Page) {
@@ -368,13 +426,13 @@ test("peer logout clears the draft and opens plain login in both tabs", async ({
   await draft.fill("로그아웃하면 사라져야 하는 합성 사건 초안입니다.");
   const peer = await context.newPage();
   await peer.setViewportSize({ width: 390, height: 844 });
-  await peer.goto("/app");
+  await peer.goto("/new");
   await expect(peer.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
   await logoutFromMenu(peer);
   await expect(peer).toHaveURL(/\/login$/);
   await expect(page).toHaveURL(/\/login$/);
   await expect(draft).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
 });
 
 test("expired session retains the safe return path instead of explicit logout behavior", async ({
@@ -390,7 +448,7 @@ test("expired session retains the safe return path instead of explicit logout be
     const { notifySessionChanged } = await import(modulePath);
     notifySessionChanged();
   });
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Fapp$/);
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fnew$/);
 });
 
 test("logout invalidates pending session reads before an old authenticated result resolves", async ({
@@ -441,7 +499,9 @@ test("failed logout keeps the session and draft without broadcasting a successfu
   });
   await logoutFromMenu(page);
   await expect(page.getByRole("alert")).toContainText("로그아웃하지 못했어요");
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/new$/);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "메뉴", exact: true })).toBeHidden();
   await expect(draft).toHaveValue("로그아웃 실패 시 유지할 합성 사건 초안입니다.");
   expect(await page.evaluate(() => localStorage.getItem("baro-session-changed"))).toBeNull();
 });
@@ -459,7 +519,7 @@ test("same-tab logout still navigates when cross-tab notification storage is una
   });
   await logoutFromMenu(page);
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("radio", { name: /고객/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Google로 계속하기", exact: true })).toBeVisible();
 });
 
 async function prepareReport(page: Page) {
@@ -468,7 +528,11 @@ async function prepareReport(page: Page) {
   await expect
     .poll(async () => (await reading.isVisible()) || (await preparation.isVisible()))
     .toBe(true);
-  if (await preparation.isVisible())
-    await preparation.getByRole("button", { name: "리포트 준비", exact: true }).click();
+  if (await preparation.isVisible()) {
+    const prepare = preparation.getByRole("button", { name: "리포트 준비", exact: true });
+    if (!(await prepare.isVisible()))
+      await preparation.locator("[data-disclosure] > [data-disclosure-button]").click();
+    await prepare.click();
+  }
   await expect(reading).toBeVisible();
 }

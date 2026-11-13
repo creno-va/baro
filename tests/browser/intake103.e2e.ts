@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { QuestionsResult } from "../../src/client/api/cases";
 import type { CaseView, WorkspaceView } from "../../src/client/api/types";
+import { goToCaseTool, openCaseTools } from "../helpers/case-navigation";
 import { settleIntakeSave } from "../helpers/intake-autosave";
 
 type IntakePostflightRegression = {
@@ -336,7 +337,10 @@ test("pending workspace files keep polling after a transient failure and stop on
   page,
 }) => {
   await recoveryWorkspace(page);
-  await page.getByRole("link", { name: "자료 0", exact: true }).click();
+  const tools = await openCaseTools(page);
+  await expect(tools.getByRole("link", { name: "자료 0", exact: true })).toBeVisible();
+  await goToCaseTool(page, "files");
+  await expect(page).toHaveURL(/\/files$/);
   await expect(page.getByRole("heading", { name: "사건 자료", exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const modulePath = "/src/client/api/index.ts";
@@ -766,7 +770,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.getByRole("button", { name: "저장하고 다음 질문" }).click();
   await expectAnswerNavigation(page);
   await expect(page.getByRole("button", { name: "나중에 이어하기" })).toHaveCount(0);
-  await page.goto("/app");
+  await page.goto("/new");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
   await page
     .getByRole("dialog", { name: "메뉴", exact: true })

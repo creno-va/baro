@@ -1,10 +1,24 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
-import { Directory } from "../../components/lawyers/Directory";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
-import AppLayout from "../../layouts/AppLayout.astro";
-import "../../styles/lawyers.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
+import { ButtonLink } from "../../components/ui/button";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
+import { PageHeader } from "../../components/ui/page-header";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
+import { ReadingContent } from "../../components/ui/reading-content";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
+import { ActionGroup } from "../../components/ui/section";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
+import { StatePanel } from "../../components/ui/state-panel";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
+import PublicLayout from "../../layouts/PublicLayout.astro";
+
+Astro.response.status = 410;
 ---
-<AppLayout title="변호사 찾기" description="분야와 지역으로 공개 프로필을 살펴보고 직접 연락하세요." role="visitor" availableRoutes={["/", "/lawyers"]}>
-  <Directory client:load />
-</AppLayout>
+<PublicLayout title="기능 이용 안내 · BARO" description="변호사 연결 기능의 이용 상태와 기존 계정 이용을 안내합니다.">
+  <ReadingContent className="ui-stack">
+    <PageHeader title="기능 이용 안내" />
+    <StatePanel variant="empty" title="현재 변호사 연결 기능은 제공하지 않습니다." description="변호사 목록·공개 프로필·전용 프로필 화면의 제공을 종료했어요. 기존 계정의 본인 사건·자료·리포트는 계속 이용할 수 있어요." />
+    <ActionGroup><ButtonLink href="/new">내 사건으로</ButtonLink><ButtonLink href="/help" variant="secondary">도움말</ButtonLink></ActionGroup>
+
+  </ReadingContent>
+</PublicLayout>

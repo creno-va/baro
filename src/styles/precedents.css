@@ -20,7 +20,7 @@
   padding: 24px;
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: var(--card, #fff);
+  background: var(--card);
 }
 .precedent-workspace .precedent-search fieldset {
   min-width: 0;
@@ -57,10 +57,10 @@
   margin: 0;
   line-height: 1.6;
 }
-.precedent-topic:has(:checked) {
-  background: #eff6ff;
+.precedent-topic:has([data-checked]) {
+  background: var(--accent);
   border-color: var(--primary);
-  color: #1e40af;
+  color: var(--primary);
 }
 .precedent-topic:has(:disabled:not(:checked)) {
   opacity: 0.55;
@@ -76,10 +76,10 @@
 .precedent-topic small {
   margin-left: auto;
   font-size: 0.68rem;
-  color: #2563eb;
+  color: var(--primary);
   white-space: nowrap;
 }
-.precedent-search summary {
+.precedent-search [data-disclosure-button] {
   cursor: pointer;
   min-height: 44px;
   padding-block: 16px;
@@ -108,7 +108,7 @@
 .precedent-workspace button {
   min-height: 44px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--card);
   border-radius: 8px;
   padding: 10px 16px;
   font: inherit;
@@ -127,7 +127,7 @@
   gap: 8px;
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--primary-foreground);
   flex-shrink: 0;
 }
 .precedent-scope {
@@ -136,7 +136,7 @@
 .precedent-notice {
   padding: 18px 20px;
   margin-block: 20px;
-  background: #f4f7fb;
+  background: var(--accent);
   border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 0.9rem;
@@ -217,7 +217,7 @@
 }
 .precedent-card {
   height: 100%;
-  background: var(--card, #fff);
+  background: var(--card);
 }
 .precedent-card h4 {
   margin: 0 0 16px;
@@ -254,7 +254,7 @@
 .precedent-card-footer .precedent-card-topics {
   flex-basis: 100%;
   margin-top: 4px;
-  color: #2463b9;
+  color: var(--primary);
   font-size: 12px;
 }
 .precedent-metadata {
@@ -455,7 +455,7 @@
   display: grid;
   gap: 12px;
 }
-.precedent-comparison summary {
+.precedent-comparison [data-disclosure-button] {
   min-height: 44px;
   cursor: pointer;
 }
@@ -576,11 +576,11 @@
   border: 0;
   border-radius: 999px;
   overflow: hidden;
-  background: #dce5f2;
+  background: var(--accent);
   accent-color: var(--primary);
 }
 .comparison-result progress::-webkit-progress-bar {
-  background: #dce5f2;
+  background: var(--accent);
   border-radius: 999px;
 }
 .comparison-result progress::-webkit-progress-value {
@@ -656,7 +656,7 @@
   margin-left: 0;
 }
 .precedent-workspace .comparison-indicator:hover {
-  border-color: #9aabc3;
+  border-color: var(--border);
 }
 .comparison-indicator strong {
   color: var(--muted-foreground);
@@ -664,26 +664,26 @@
   font-weight: 500;
 }
 .precedent-workspace .comparison-indicator--yes {
-  border-color: #b4d0fc;
-  background: #eff6ff;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 .comparison-indicator--yes strong {
-  color: #1855b3;
+  color: var(--primary);
 }
 .precedent-workspace .comparison-indicator--no {
-  border-color: #e7d6b7;
-  background: #fffaf1;
+  border-color: var(--warning);
+  background: var(--warning-soft);
 }
 .comparison-indicator--no strong {
-  color: #946215;
+  color: var(--warning);
 }
 .precedent-workspace .comparison-indicator--unknown {
-  background: #f8fafc;
+  background: var(--accent);
 }
 .comparison-method {
   margin-top: 12px;
 }
-.comparison-method > summary {
+.comparison-method > [data-disclosure-button] {
   width: fit-content;
   min-height: 0;
   padding: 4px 0;
@@ -713,8 +713,8 @@
   margin: 0;
   border: 0;
   border-radius: 3px;
-  color: #174b9b;
-  background: #dbeafe;
+  color: var(--primary);
+  background: var(--accent);
   font: inherit;
   line-height: inherit;
   text-align: left;
@@ -722,7 +722,7 @@
   box-decoration-break: clone;
 }
 .precedent-workspace .comparison-highlight:hover {
-  background: #bfdbfe;
+  background: var(--accent);
 }
 .precedent-workspace .precedent-comparison .ui-dialog {
   width: min(820px, calc(100vw - 32px));
@@ -763,12 +763,12 @@
   line-height: 1.6;
 }
 .comparison-verdict--yes {
-  background: #eaf2ff;
-  color: #1855b3;
+  background: var(--accent);
+  color: var(--primary);
 }
 .comparison-verdict--no {
-  background: #fff5e4;
-  color: #946215;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .comparison-reason > p {
   margin: 12px 0 20px;
@@ -814,8 +814,8 @@
   color: inherit;
 }
 .comparison-reason .comparison-match {
-  background: #dbeafe;
-  color: #174b9b;
+  background: var(--accent);
+  color: var(--primary);
 }
 @media (max-width: 480px) {
   .precedent-workspace .comparison-indicators,
@@ -865,8 +865,8 @@
   background: var(--card);
 }
 .precedent-workspace button.precedent-card:hover:not(:disabled) {
-  border-color: #a5b9d6;
-  background: #fbfcfe;
+  border-color: var(--border);
+  background: var(--accent);
 }
 .precedent-card > .precedent-metadata {
   display: flex;
@@ -882,8 +882,8 @@
 .precedent-card-topics > span {
   padding: 3px 9px;
   border-radius: 6px;
-  background: #edf4ff;
-  color: #2463b9;
+  background: var(--accent);
+  color: var(--primary);
   font-size: 12px;
   line-height: 1.6;
 }

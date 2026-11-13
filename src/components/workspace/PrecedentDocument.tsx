@@ -1,6 +1,7 @@
 import { precedentHighlights } from "../../client/precedent-highlights";
 import type { V2PrecedentComparison } from "../../contracts/v2/precedent-comparison";
 import { precedentDisplayParts } from "../../utils/precedent-document";
+import { ActionButton as ControlButton } from "../ui/button";
 
 export function PrecedentDocument({
   text,
@@ -22,7 +23,7 @@ export function PrecedentDocument({
               startUtf16: startUtf16 + part.start,
             }).map((segment) =>
               segment.metrics.length ? (
-                <button
+                <ControlButton
                   key={segment.start}
                   type="button"
                   className="comparison-highlight"
@@ -30,7 +31,7 @@ export function PrecedentDocument({
                   aria-label={`${segment.text} · 유사한 이유 보기`}
                 >
                   {segment.text}
-                </button>
+                </ControlButton>
               ) : (
                 <span key={segment.start}>{segment.text}</span>
               ),

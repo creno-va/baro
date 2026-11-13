@@ -23,7 +23,7 @@ if (!script) throw new Error("Synthetic evidence script missing");
 const global = (await Bun.file(`${root}/src/styles/global.css`).text())
   .replace(/^@import .*;$/gm, "")
   .replace(/@theme inline\s*\{[^}]*\}/s, "");
-const css = `${global}\n${await Bun.file(`${root}/src/styles/workspace.css`).text()}\n${await Bun.file(`${root}/src/styles/evidence.css`).text()}\nmain{max-width:840px;margin:auto;padding:16px}`;
+const css = `${global}\n${await Bun.file(`${root}/src/styles/design-system.css`).text()}\n${await Bun.file(`${root}/src/styles/workspace.css`).text()}\n${await Bun.file(`${root}/src/styles/evidence.css`).text()}\nmain{max-width:840px;margin:auto;padding:16px}`;
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(Bun.env.BARO_EVIDENCE_TEST_PORT ?? 4364),

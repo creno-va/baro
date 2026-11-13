@@ -1,150 +1,5 @@
 /* biome-ignore-all lint/style/noDescendingSpecificity: Domain sections intentionally scope separate components; responsive rules follow their base rules. */
-/* Application refresh. Scoped to AppLayout; the landing and login keep their design.
-   These rules compose the existing domain components, without changing PDF styles. */
-.app-frame[data-product-ui="refresh"] {
-  --app-canvas: #f7f8fa;
-  --app-line: #e7eaf0;
-  --product-line: #e7eaf0;
-  --product-ink: #1c2533;
-  --product-subtle: #f5f6f8;
-  --product-blue: #2563eb;
-  --primary: #2563eb;
-  --muted: #f2f4f7;
-  --muted-foreground: #697586;
-  --border: #e7eaf0;
-  --product-radius: 18px;
-  --refresh-space: clamp(20px, 3vw, 36px);
-  color: var(--product-ink);
-}
-.app-frame[data-product-ui="refresh"] .app-surface {
-  background: var(--app-canvas);
-}
-.app-frame[data-product-ui="refresh"] .app-header {
-  background: #fff;
-  border-right: 1px solid var(--app-line);
-}
-.app-frame[data-product-ui="refresh"] .app-header__inner {
-  min-height: 88px;
-  padding-inline: 24px;
-}
-.app-frame[data-product-ui="refresh"] .sidebar-desktop {
-  padding-inline: 12px;
-}
-.app-frame[data-product-ui="refresh"] .app-nav__link {
-  border-radius: 10px;
-  min-height: 46px;
-  padding-inline: 14px;
-  gap: 12px;
-}
-.app-frame[data-product-ui="refresh"] .sidebar-recent {
-  border-top: 0;
-  padding-top: 6px;
-}
-.app-frame[data-product-ui="refresh"] .sidebar-recent nav {
-  gap: 3px;
-}
-.app-frame[data-product-ui="refresh"] .sidebar-account {
-  border-color: var(--app-line);
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .app-surface > main {
-  width: calc(100% - 80px);
-  max-width: 1240px;
-  margin-inline: auto;
-  padding-top: 36px;
-  padding-bottom: 48px;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product
-  :is(
-    .workspace,
-    .case-shell,
-    .report-review,
-    .account-settings,
-    .lawyer-editor,
-    .lawyer-directory,
-    .lawyer-public-detail
-  ) {
-  width: 100%;
-  max-width: none;
-  min-width: 0;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product
-  :is(.page-header, .settings-heading, .workspace-section-heading) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px 24px;
-  margin: 0 0 28px;
-  padding: 0;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product
-  :is(.page-header h1, .settings-heading h1, .policy-heading h1, .lawyer-editor-heading h1) {
-  margin: 0;
-  font-size: clamp(27px, 2.5vw, 34px);
-  line-height: 1.35;
-  letter-spacing: -0.045em;
-  font-weight: 740;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product
-  :is(.page-header p, .settings-heading p, .policy-heading p) {
-  margin: 10px 0 0;
-  color: var(--muted-foreground);
-  font-size: 15px;
-  line-height: 1.65;
-}
-.app-frame[data-product-ui="refresh"] :is(.eyebrow, .settings-eyebrow, .policy-eyebrow) {
-  display: block;
-  margin: 0 0 10px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 550;
-  letter-spacing: 0;
-}
-.app-frame[data-product-ui="refresh"]
-  :is(.ui-button, .settings-refresh, .primary-action, .secondary-action) {
-  min-height: 46px;
-  border-radius: 11px;
-  padding: 11px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  gap: 8px;
-  box-shadow: none;
-}
-.app-frame[data-product-ui="refresh"] .ui-button--icon {
-  width: 44px;
-  min-width: 44px;
-  padding: 10px;
-}
-.app-frame[data-product-ui="refresh"] .ui-button--sm {
-  min-height: 40px;
-  padding: 9px 14px;
-  font-size: 13px;
-}
-.app-frame[data-product-ui="refresh"]
-  :is(.ui-button--primary, .primary-action):hover:not(:disabled) {
-  box-shadow: none;
-}
-.app-frame[data-product-ui="refresh"] :is(.ui-button--outline, .settings-refresh) {
-  border: 1px solid var(--app-line);
-  color: #4b586b;
-  background: #fff;
-}
-.app-frame[data-product-ui="refresh"]
-  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select) {
-  font-size: 15px;
-  line-height: 1.65;
-  border-radius: 12px;
-}
-.app-frame[data-product-ui="refresh"] :is(textarea, .ui-textarea) {
-  resize: none;
-}
-.app-frame[data-product-ui="refresh"] :is(input[type="checkbox"], input[type="radio"]) {
-  accent-color: var(--primary);
-  flex-shrink: 0;
-}
-.app-frame[data-product-ui="refresh"] :is(.ui-card, .intake-card, .settings-card) {
-  box-shadow: none;
-}
+/* Domain composition only. Shell geometry and common controls live in app-workspace.css. */
 /* One starting point: purpose lives in the composer, examples follow that choice. */
 .app-frame[data-product-ui="refresh"] .app-surface main.conversation-main {
   width: min(820px, calc(100% - 64px));
@@ -156,7 +11,7 @@
   width: 100%;
 }
 .app-frame[data-product-ui="refresh"] .conversation-greeting {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .app-frame[data-product-ui="refresh"] .conversation-emblem {
   margin-bottom: 20px;
@@ -183,7 +38,7 @@
   box-shadow: 0 8px 36px rgb(37 99 235 / 4%);
 }
 .app-frame[data-product-ui="refresh"] .conversation-composer #narrative {
-  min-height: 132px;
+  min-height: 128px;
   resize: none;
   padding: 4px 2px 16px;
   border: 0;
@@ -211,7 +66,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 38px;
+  min-height: 44px;
   padding: 8px 12px;
   border-radius: 9px;
   font-size: 13px;
@@ -225,10 +80,10 @@
 }
 .app-frame[data-product-ui="refresh"] .conversation-context-hint {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-frame[data-product-ui="refresh"] .conversation-subject-help {
-  font-size: 12px;
+  font-size: 13px;
   margin-top: 10px;
 }
 .app-frame[data-product-ui="refresh"] .conversation-primary-action {
@@ -313,54 +168,6 @@
   font-size: 16px;
   line-height: 1.85;
 }
-/* Case navigation shares one baseline. Tabs remain comfortably reachable on phones. */
-.app-frame[data-product-ui="refresh"].app-frame--product .case-navigation {
-  margin: 0 0 28px;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-header {
-  margin: 0 0 22px;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-header h1 {
-  font-size: clamp(23px, 2.3vw, 30px);
-  font-weight: 720;
-  line-height: 1.4;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-tabs {
-  gap: 4px;
-  border-bottom: 1px solid var(--app-line);
-  padding: 0;
-  scrollbar-width: none;
-}
-.app-frame[data-product-ui="refresh"] .workspace-tabs::-webkit-scrollbar {
-  display: none;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-tabs a {
-  flex: 0 0 100px;
-  min-width: 100px;
-  min-height: 48px;
-  padding: 12px 10px;
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 14px;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-tabs a[aria-current] {
-  color: var(--primary);
-  background: transparent;
-}
-.app-frame[data-product-ui="refresh"].app-frame--product .workspace-tabs a[aria-current]::after {
-  display: block;
-  inset-inline: 14px;
-  bottom: 0;
-  height: 3px;
-}
-.app-frame[data-product-ui="refresh"] .workspace-tabs a > span {
-  min-width: 18px;
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--muted);
-  font-size: 11px;
-}
 .app-frame[data-product-ui="refresh"].app-frame--product .workspace-section-heading h2 {
   margin: 0;
   font-size: 23px;
@@ -390,22 +197,55 @@
 }
 .app-frame[data-product-ui="refresh"].app-frame--product .workspace-context-content {
   padding-block: 8px 28px;
-  gap: 36px 40px;
+  gap: 32px 40px;
 }
 .app-frame[data-product-ui="refresh"] .workspace-context-content > section > h2 {
   margin: 0 0 14px;
   font-size: 17px;
 }
 .app-frame[data-product-ui="refresh"] .workspace-context-content p {
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: 15px;
+  line-height: 1.8;
 }
 .app-frame[data-product-ui="refresh"] .workspace-context-content ul li + li {
   margin-top: 10px;
 }
-.app-frame[data-product-ui="refresh"] .workspace-context-footer {
-  padding-block: 14px;
-  border-top: 1px solid var(--app-line);
+/* Keep the title, its action and the supporting line on a predictable grid. */
+.app-frame[data-product-ui="refresh"].app-frame--product
+.workspace-section-heading:has(> .workspace-section-actions) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+}
+.app-frame[data-product-ui="refresh"]
+  .workspace-section-heading:has(> .workspace-section-actions)
+  > div:first-child {
+  display: contents;
+}
+.app-frame[data-product-ui="refresh"] .workspace-section-heading h2 {
+  grid-column: 1;
+  grid-row: 1;
+}
+.app-frame[data-product-ui="refresh"] .workspace-section-heading p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+}
+.app-frame[data-product-ui="refresh"] .workspace-section-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+.app-frame[data-product-ui="refresh"] .workspace-next h3 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.app-frame[data-product-ui="refresh"] .workspace-next p {
+  margin: 0 0 18px;
+  font-size: 15px;
+  line-height: 1.8;
 }
 .app-frame[data-product-ui="refresh"].app-frame--product .workspace--chat .workspace-main {
   min-height: 0;
@@ -488,8 +328,8 @@
   line-height: 1.6;
 }
 .app-frame[data-product-ui="refresh"] .workspace-action-list small {
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: 15px;
+  line-height: 1.8;
 }
 .app-frame[data-product-ui="refresh"].app-frame--product .workspace-timeline > li {
   padding: 20px;
@@ -530,8 +370,8 @@
 }
 .app-frame[data-product-ui="refresh"] .precedent-workspace .precedent-card {
   width: 100%;
-  height: 206px;
-  min-height: 206px;
+  height: 204px;
+  min-height: 204px;
   padding: 22px;
   border: 1px solid var(--app-line);
   border-radius: 16px;
@@ -555,7 +395,7 @@
 }
 .app-frame[data-product-ui="refresh"] .precedent-metadata {
   gap: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-frame[data-product-ui="refresh"] .precedent-card-topics {
   margin-top: 14px;
@@ -581,70 +421,6 @@
   margin: 28px 0 12px;
   font-size: 18px;
   font-weight: 700;
-}
-/* Reports read as one document, with restrained controls outside the paper. */
-.app-frame[data-product-ui="refresh"] .report-workspace .report-heading {
-  margin: 0 0 24px;
-  padding: 0;
-  border: 0;
-  gap: 16px;
-}
-.app-frame[data-product-ui="refresh"] .report-heading-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-left: auto;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-reading {
-  width: 100%;
-  padding: clamp(22px, 4vw, 48px);
-  gap: 32px;
-  border: 1px solid var(--app-line);
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: none;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section {
-  padding-top: 28px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section > header {
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section h3 {
-  font-size: 19px;
-  line-height: 1.5;
-  font-weight: 700;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section > header > span {
-  min-width: 32px;
-  min-height: 32px;
-  background: #edf3ff;
-  border-radius: 9px;
-  font-size: 16px;
-}
-.app-frame[data-product-ui="refresh"] .report-reading-section :is(p, li) {
-  font-size: 15px;
-  line-height: 1.9;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-reading-section textarea {
-  border: 1px solid var(--app-line);
-  background: var(--muted);
-  border-radius: 12px;
-  padding: 16px;
-  font-size: 16px;
-  line-height: 1.8;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-export {
-  padding: 0;
-  margin-top: 24px;
-  border: 0;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-export .report-actions > button {
-  width: 100%;
-  min-height: 56px;
-  border-radius: 14px;
-  font-size: 16px;
 }
 /* Directory and profile forms use the same surfaces as case work. */
 .app-frame[data-product-ui="refresh"].app-frame--product .directory-search {
@@ -673,12 +449,12 @@
   transform: none;
 }
 .app-frame[data-product-ui="refresh"] .directory-profile__identity h3 {
-  font-size: 21px;
+  font-size: 20px;
   line-height: 1.4;
 }
 .app-frame[data-product-ui="refresh"] .directory-profile__introduction {
-  font-size: 14px;
-  line-height: 1.8;
+  font-size: 15px;
+  line-height: 1.75;
 }
 .app-frame[data-product-ui="refresh"] .directory-profile__fields {
   gap: 6px;
@@ -728,7 +504,7 @@
   font-weight: 700;
 }
 .app-frame[data-product-ui="refresh"] .lawyer-editor .lawyer-field > span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 550;
   margin-bottom: 6px;
 }
@@ -817,7 +593,7 @@
 .app-frame[data-product-ui="refresh"] .settings-usage-notes p {
   margin: 6px 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-frame[data-product-ui="refresh"] .settings-links {
   gap: 8px;
@@ -841,7 +617,7 @@
 }
 .app-frame[data-product-ui="refresh"] .policy-heading {
   padding: 0;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 .app-frame[data-product-ui="refresh"] .policy-card {
   padding: 28px;
@@ -855,8 +631,8 @@
   font-size: 19px;
 }
 .app-frame[data-product-ui="refresh"] .policy-card p {
-  font-size: 14px;
-  line-height: 1.9;
+  font-size: 15px;
+  line-height: 1.85;
   color: #586476;
 }
 /* A single dialog spacing model. Native dialog retains focus, Escape and backdrop semantics. */
@@ -988,22 +764,7 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   padding-block: 8px;
   gap: 8px 16px;
 }
-.app-frame[data-product-ui="refresh"] :is(.report-preparation, .report-scope, .resolution) {
-  padding: 24px;
-  border: 1px solid var(--app-line);
-  border-radius: 18px;
-  background: #fff;
-}
-.app-frame[data-product-ui="refresh"] .report-preparation h3 {
-  font-size: 19px;
-  font-weight: 700;
-}
-.app-frame[data-product-ui="refresh"] .report-workspace .report-canvas {
-  width: 100%;
-  max-width: none;
-}
-.app-frame[data-product-ui="refresh"] .report-evidence-entry {
-  margin-top: 24px;
+.app-frame[data-product-ui="refresh"] .resolution {
   padding: 24px;
   border: 1px solid var(--app-line);
   border-radius: 18px;
@@ -1032,43 +793,6 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   font-size: 15px;
   line-height: 1.85;
 }
-@media (max-width: 1100px) {
-  .app-frame[data-product-ui="refresh"] .app-header {
-    border-right: 0;
-  }
-  .app-frame[data-product-ui="refresh"].app-frame--product .app-surface > main {
-    width: calc(100% - 48px);
-    padding-top: 28px;
-  }
-}
-@media (max-width: 1100px) {
-  .app-frame[data-product-ui="refresh"] {
-    padding-left: 0;
-    padding-top: 64px;
-  }
-  .app-frame[data-product-ui="refresh"] .app-header {
-    width: 100%;
-    height: 64px;
-    bottom: auto;
-    border-bottom: 1px solid var(--app-line);
-  }
-  .app-frame[data-product-ui="refresh"] .app-header__inner {
-    width: 100%;
-    min-height: 64px;
-    height: 64px;
-    padding: 10px 20px;
-    justify-content: space-between;
-  }
-  .app-frame[data-product-ui="refresh"] .sidebar-desktop {
-    display: none;
-  }
-  .app-frame[data-product-ui="refresh"] .app-menu-trigger {
-    display: inline-flex;
-  }
-  .app-frame[data-product-ui="refresh"] .app-surface {
-    min-height: calc(100dvh - 64px);
-  }
-}
 @media (max-width: 760px) {
   .app-frame[data-product-ui="refresh"].app-frame--product .app-surface > main {
     width: calc(100% - 40px);
@@ -1085,13 +809,8 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
     :is(.page-header, .settings-heading, .workspace-section-heading) {
     margin-bottom: 24px;
   }
-  .app-frame[data-product-ui="refresh"].app-frame--product
-    .workspace-section-heading:has(.workspace-section-actions) {
-    flex-direction: row;
-    align-items: center;
-  }
   .app-frame[data-product-ui="refresh"] .workspace-section-actions .ui-button {
-    min-height: 42px;
+    min-height: 44px;
     padding: 10px 12px;
     font-size: 13px;
   }
@@ -1165,7 +884,7 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
     padding: 18px 20px 0;
   }
   .app-frame[data-product-ui="refresh"] .ui-dialog:not(.ui-sheet) .ui-dialog__content {
-    padding: 18px 20px 0;
+    padding: 18px 20px 1px;
     overflow-y: auto;
     scrollbar-gutter: auto;
   }
@@ -1195,7 +914,7 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
     border-radius: 18px;
   }
   .app-frame[data-product-ui="refresh"] .conversation-composer #narrative {
-    min-height: 160px;
+    min-height: 136px;
   }
   .app-frame[data-product-ui="refresh"] .conversation-context {
     gap: 2px;
@@ -1206,9 +925,8 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
     font-size: 12px;
   }
   .app-frame[data-product-ui="refresh"] .conversation-context-hint {
-    width: 100%;
-    margin: 0;
-    font-size: 11px;
+    margin-left: auto;
+    font-size: 12px;
     text-align: right;
   }
   .app-frame[data-product-ui="refresh"] .conversation-examples {
@@ -1220,17 +938,18 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
     font-size: 13px;
     min-height: 44px;
   }
+  .app-frame[data-product-ui="refresh"].app-frame--product
+    .workspace--timeline
+    .workspace-section-heading:has(> .workspace-section-actions) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-frame[data-product-ui="refresh"] .workspace--timeline .workspace-section-actions {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: end;
+  }
   .app-frame[data-product-ui="refresh"].app-frame--product .intake-scene-nav {
     margin-bottom: 24px;
-  }
-  .app-frame[data-product-ui="refresh"].app-frame--product
-    .workspace-section-heading:has(.workspace-section-actions) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 14px;
-  }
-  .app-frame[data-product-ui="refresh"] .workspace-section-actions {
-    align-self: flex-end;
   }
   .app-frame[data-product-ui="refresh"] .workspace-message--user {
     max-width: 92%;
@@ -1253,8 +972,8 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   }
   .app-frame[data-product-ui="refresh"] .precedent-workspace .precedent-card {
     padding: 20px;
-    height: 206px;
-    min-height: 206px;
+    height: 204px;
+    min-height: 204px;
   }
   .app-frame[data-product-ui="refresh"] .precedent-result-heading {
     align-items: center;
@@ -1263,30 +982,6 @@ body:has(.app-frame[data-product-ui="refresh"] dialog:modal) {
   }
   .app-frame[data-product-ui="refresh"] .precedent-result-heading time {
     font-size: 11px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-heading-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .app-frame[data-product-ui="refresh"] .report-workspace .report-reading {
-    padding: 20px;
-    gap: 26px;
-    border-radius: 16px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section {
-    padding-top: 24px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section h3 {
-    font-size: 17px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section > header > span {
-    min-width: 28px;
-    min-height: 28px;
-    font-size: 14px;
-  }
-  .app-frame[data-product-ui="refresh"] .report-reading-section :is(p, li) {
-    font-size: 14px;
-    line-height: 1.9;
   }
   .app-frame[data-product-ui="refresh"].app-frame--product .directory-search .ui-card__content {
     padding: 16px;

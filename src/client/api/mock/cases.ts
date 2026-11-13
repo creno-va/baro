@@ -119,24 +119,44 @@ export function makeMockQuestions(
 function makeDeeperQuestions(value: Intake): QuestionView[] {
   const context = [value.narrative, ...value.questions.map((q) => q.answer ?? "")].join(" ");
   const money = /돈|송금|대금|빌려|보증금|급여|월급/.test(context);
-  return [
+  // Match only the fixed mock templates, not the meaning of arbitrary user text.
+  // A question remains asked when its answer is unknown/skipped or says "미확인".
+  const normalize = (text: string) => text.normalize("NFKC").replace(/[\s\p{P}]/gu, "");
+  const asked = new Set(value.questions.map((question) => normalize(question.text)));
+  const allegation = [
+    "상대방은 어떤 내용을 주장하나요?",
+    "상대방은 이 일에 대해 뭐라고 했나요?",
+  ].map(normalize);
+  if (allegation.some((prompt) => asked.has(prompt)))
+    for (const prompt of allegation) asked.add(prompt);
+  const candidates: Omit<QuestionView, "id">[] = [
     {
-      id: crypto.randomUUID(),
       kind: "text",
       text: money ? "상대방과 어떤 약속을 했나요?" : "상대방은 이 일에 대해 뭐라고 했나요?",
     },
     {
-      id: crypto.randomUUID(),
       kind: "choice",
       text: "확인할 수 있는 자료가 있나요?",
       options: ["계약서나 문서가 있어요", "문자·메신저·녹음이 있어요", "현재 자료가 없어요"],
     },
     {
-      id: crypto.randomUUID(),
       kind: "text",
       text: "내 입장에 불리하거나, 서로 다르게 기억하는 내용이 있나요?",
     },
+    { kind: "text", text: "이 일에 대해 이미 답하거나 대응한 일이 있나요?" },
+    { kind: "text", text: "이 일을 직접 보거나 들은 사람이 있나요?" },
+    { kind: "text", text: "말씀하신 내용 중 직접 겪은 일과 전해 들은 일이 있다면 구분해 주세요." },
   ];
+  // Pick before assigning IDs; never rewrite saved questions/answers or add a round.
+  return candidates
+    .filter((question) => {
+      const prompt = normalize(question.text);
+      if (asked.has(prompt)) return false;
+      asked.add(prompt);
+      return true;
+    })
+    .slice(0, V2_INTAKE_POLICY.questionsPerBatch)
+    .map((question) => ({ ...question, id: crypto.randomUUID() }));
 }
 export const casesMockHandlers = {
   "cases.rename": (raw: unknown, context: { key: string }) =>

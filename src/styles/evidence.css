@@ -32,7 +32,7 @@
   white-space: normal;
 }
 .evidence-hint {
-  color: var(--muted-foreground, #616b7a);
+  color: var(--muted-foreground);
   font-size: 0.8125rem;
   line-height: 1.65;
   margin-block: 8px;
@@ -40,7 +40,7 @@
 .evidence-upload > h3,
 .evidence-requirements > h3,
 .evidence-file-review > h3 {
-  color: var(--foreground, #191f28);
+  color: var(--foreground);
   margin-block: 8px;
   font-size: 1rem;
 }
@@ -67,7 +67,7 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   padding-block: 12px;
-  border-top: 1px solid var(--border, #edf0f4);
+  border-top: 1px solid var(--border);
 }
 .evidence-file-list > li > div:first-child {
   flex: 1 1 180px;
@@ -78,7 +78,7 @@
   display: block;
 }
 .evidence-file-list span {
-  color: var(--muted-foreground, #616b7a);
+  color: var(--muted-foreground);
   font-size: 0.8125rem;
   margin-top: 4px;
 }
@@ -100,12 +100,12 @@
 .evidence-review {
   margin-block: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--border, #edf0f4);
+  border-top: 1px solid var(--border);
 }
 .evidence-observation-kind {
   display: inline-block;
-  color: var(--primary, #2364e8);
-  background: var(--muted, #f6f8fb);
+  color: var(--primary);
+  background: var(--muted, var(--background));
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 0.8125rem;
@@ -115,14 +115,14 @@
 .evidence-coverage-warning {
   padding: 12px;
   border-radius: 12px;
-  background: var(--muted, #f6f8fb);
+  background: var(--muted, var(--background));
   font-size: 0.875rem;
 }
 .evidence-file-review .file-review-item {
   margin-block: 12px;
   padding: 12px;
   min-width: 0;
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 .evidence-file-review textarea {
@@ -133,14 +133,14 @@
   resize: vertical;
   font: inherit;
   line-height: 1.65;
-  color: var(--foreground, #191f28);
-  background: var(--card, #fff);
+  color: var(--foreground);
+  background: var(--card);
   padding: 10px 12px;
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 .evidence-file-review textarea:focus-visible {
-  outline: 2px solid var(--primary, #2364e8);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 .evidence-file-review .file-review-item > label {
@@ -149,7 +149,7 @@
   gap: 8px;
   min-height: 44px;
 }
-.evidence-file-review details > summary {
+.evidence-file-review [data-disclosure] > [data-disclosure-button] {
   min-height: 44px;
   padding-block: 10px;
   cursor: pointer;
@@ -165,7 +165,7 @@
   align-items: center;
   min-width: 0;
   padding: 8px;
-  border: 1px solid var(--border, #edf0f4);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 .evidence-upload .workspace-chat-attachments > li > img,

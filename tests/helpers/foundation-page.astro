@@ -1,0 +1,9 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
+import AppLayout from "../../src/layouts/AppLayout.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the fixture.
+import { FoundationFixture } from "./foundation-fixture";
+---
+<AppLayout title="공통 기반 대표 화면 · BARO" description="합성 데이터로 확인하는 디자인 기반" role="user" availableRoutes={["/new", "/cases", "/settings"]}>
+  <FoundationFixture client:load />
+</AppLayout>

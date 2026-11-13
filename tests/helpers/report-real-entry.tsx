@@ -1,3 +1,4 @@
+import "./headless-experience";
 import { createRoot } from "react-dom/client";
 import { ReportReview } from "../../src/components/reports/ReportReview";
 

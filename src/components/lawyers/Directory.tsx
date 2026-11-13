@@ -4,6 +4,7 @@ import { api, LawyerApiError, lawyerErrorMessage } from "../../client/api/lawyer
 import type { DirectoryItem } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Input as ControlInput, Select as ControlSelect, Label as FieldLabel } from "../ui/form";
 import { LoadingContent, Spinner } from "../ui/loading";
 import { PageHeader } from "../ui/page-header";
 import { StatePanel } from "../ui/state-panel";
@@ -134,7 +135,6 @@ export function Directory() {
     <div className="lawyer-directory">
       <div className="directory-intro">
         <PageHeader
-          eyebrow="내 기준으로 선택하는 전문가"
           title="변호사 찾기"
           description="분야와 지역을 살펴보고, 원하는 변호사에게 직접 연락하세요."
         />
@@ -142,6 +142,7 @@ export function Directory() {
       <Card className="directory-search">
         <CardContent>
           <form
+            noValidate
             aria-label="변호사 검색"
             className="directory-search__form"
             onSubmit={(event) => {
@@ -159,11 +160,11 @@ export function Directory() {
               void load(params);
             }}
           >
-            <label className="directory-search__field">
+            <FieldLabel className="directory-search__field">
               <span>이름 또는 사무실</span>
               <span className="directory-search__input">
                 <Search size={19} aria-hidden="true" />
-                <input
+                <ControlInput
                   placeholder="이름 또는 사무실명 입력"
                   maxLength={100}
                   disabled={!ready}
@@ -171,12 +172,12 @@ export function Directory() {
                   onChange={(event) => setFilters({ ...filters, name: event.target.value })}
                 />
               </span>
-            </label>
+            </FieldLabel>
             <div className="directory-search__filters">
-              <label className="directory-search__field">
+              <FieldLabel className="directory-search__field">
                 <span>지역</span>
                 <span className="directory-search__select">
-                  <select
+                  <ControlSelect
                     disabled={!ready}
                     value={filters.region}
                     onChange={(event) => setFilters({ ...filters, region: event.target.value })}
@@ -187,14 +188,13 @@ export function Directory() {
                         {label}
                       </option>
                     ))}
-                  </select>
-                  <ChevronDown size={18} aria-hidden="true" />
+                  </ControlSelect>
                 </span>
-              </label>
-              <label className="directory-search__field">
+              </FieldLabel>
+              <FieldLabel className="directory-search__field">
                 <span>분야</span>
                 <span className="directory-search__select">
-                  <select
+                  <ControlSelect
                     disabled={!ready}
                     value={filters.legalField}
                     onChange={(event) => setFilters({ ...filters, legalField: event.target.value })}
@@ -205,10 +205,9 @@ export function Directory() {
                         {label}
                       </option>
                     ))}
-                  </select>
-                  <ChevronDown size={18} aria-hidden="true" />
+                  </ControlSelect>
                 </span>
-              </label>
+              </FieldLabel>
             </div>
             <div className="directory-search__submit">
               <Button
@@ -226,10 +225,8 @@ export function Directory() {
         </CardContent>
       </Card>
       <div className="directory-results-heading">
-        <h2>공개 프로필</h2>
-        {!busy && !error && items.length > 0 && (
-          <p role="status">공개 프로필 {items.length}개를 불러왔어요.</p>
-        )}
+        <h2>변호사 목록</h2>
+        {!busy && !error && items.length > 0 && <p role="status">{items.length}명</p>}
       </div>
       {error && (
         <StatePanel

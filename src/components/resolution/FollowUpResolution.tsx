@@ -12,12 +12,18 @@ import {
   resolutionDocumentLabels,
   resolutionDraftIsCurrent,
   resolutionGuideTextParts,
-  resolutionReadingLinks,
   sameResolutionFiles,
 } from "../../utils/resolution";
 import { downloadBlob } from "../reports/download";
-import { Button, ButtonLink } from "../ui/button";
+import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
+import { draftReviewState } from "./draft-review";
 import {
   createResolutionSelectionFailureTracker,
   type ResolutionErrorDiagnostic,
@@ -70,13 +76,13 @@ const paths = [
   {
     id: "self",
     label: "직접 해결",
-    description: "준비할 절차와 자료를 확인하고 초안을 검토해요.",
+    description: "확인된 준비 항목과 절차의 조건을 살펴보고 초안을 검토해요.",
     Icon: FilePenLine,
   },
   {
     id: "lawyer",
     label: "변호사와 해결",
-    description: "상담 준비사항과 전달할 범위를 확인해요.",
+    description: "현재 지원 여부를 확인해요.",
     Icon: Scale,
   },
   {
@@ -121,6 +127,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const client = props.client ?? browserClient;
   const [state, setState] = useState<V2ResolutionState | null>(null);
   const [selected, setSelected] = useState<"self" | "lawyer" | "save_report" | null>(null);
+  const [lawyerNoticeOpen, setLawyerNoticeOpen] = useState(false);
+  const lawyerTrigger = useRef<HTMLButtonElement>(null);
   const [files, setFiles] = useState<{ id: string; name: string }[]>([]);
   const [report, setReport] = useState<ReportIdentity | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -142,6 +150,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     owner = useRef<string | null>(null),
     lock = useRef<number | null>(null);
   const hasState = useRef(false);
+  const loadFailed = useRef(false);
   const controller = useRef(new AbortController());
   const reloadRequested = useRef(false);
   const reload = useRef<() => void>(() => undefined);
@@ -151,6 +160,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   const dirty = contentDirty || scopeDirty;
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const reviewInProgress = useRef(false);
+  reviewInProgress.current = factsConfirmed || reviewed !== (state?.draft?.reviewed ?? false);
   const reportMismatch =
     !!state?.basis &&
     ((props.reportId !== undefined && props.reportId !== state.basis.reportId) ||
@@ -192,6 +203,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     owner.current = null;
     setNeedsConsent(false);
     hasState.current = false;
+    loadFailed.current = false;
     setState(null);
     setSelected(null);
     setFiles([]);
@@ -253,6 +265,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   );
   const accept = useCallback((next: V2ResolutionState) => {
     hasState.current = true;
+    loadFailed.current = false;
     setLoadError("");
     setLoadDiagnostic(null);
     setActionDiagnostic(null);
@@ -288,6 +301,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     }
     const epoch = sequence.current;
     lock.current = epoch;
+    loadFailed.current = false;
     setBusy(true);
     setError("");
     setLoadError("");
@@ -312,6 +326,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       if (epoch === sequence.current) accept(next);
     } catch (e) {
       if (epoch === sequence.current) {
+        loadFailed.current = true;
         const code = (e as { code?: string })?.code;
         if (
           !hasState.current &&
@@ -355,7 +370,13 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
         changed();
     };
     const focus = () => {
-      if (!dirtyRef.current) void load();
+      if (
+        !dirtyRef.current &&
+        !reviewInProgress.current &&
+        lock.current === null &&
+        !loadFailed.current
+      )
+        void load();
       else void verify(sequence.current).catch(() => undefined);
     };
     window.addEventListener("baro-session-changed", changed);
@@ -400,6 +421,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
   }
   async function choose(choice: NonNullable<typeof selected>) {
     if (props.disabled || busy) return;
+    if (choice === "lawyer") {
+      setLawyerNoticeOpen(true);
+      return;
+    }
     if (choice === "save_report") {
       setSelected(choice);
       await run(async () => {
@@ -456,6 +481,10 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
     );
   }
   function requestChoice(choice: NonNullable<typeof selected>) {
+    if (choice === "lawyer") {
+      setLawyerNoticeOpen(true);
+      return;
+    }
     if (dirty) {
       setPendingChoice(choice);
       return;
@@ -512,8 +541,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       <legend>사용할 자료와 가림 범위</legend>
       {files.length ? (
         files.map((file, index) => (
-          <label key={file.id}>
-            <input
+          <FieldLabel key={file.id}>
+            <ControlInput
               type="checkbox"
               checked={ids.includes(file.id)}
               onChange={(event) => {
@@ -525,13 +554,13 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
               }}
             />
             {mask ? `선택 자료 ${index + 1}` : file.name}
-          </label>
+          </FieldLabel>
         ))
       ) : (
         <p>선택한 자료가 없어요. 사건 사실만 사용할 수 있어요.</p>
       )}
-      <label>
-        <input
+      <FieldLabel>
+        <ControlInput
           type="checkbox"
           checked={mask}
           disabled={!!report?.maskIdentifiers}
@@ -542,7 +571,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           }}
         />
         식별정보 가리기
-      </label>
+      </FieldLabel>
       <p>가림 후에도 이름·주소·내용을 직접 확인해 주세요. 원본은 첨부하거나 전송하지 않아요.</p>
       {contentDirty && <p>수정한 초안을 먼저 저장한 뒤 자료 범위를 바꿔 주세요.</p>}
       {scopeDirty && (
@@ -577,13 +606,17 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       aria-label="리포트 이후 해결 방법"
     >
       <div className="resolution-heading">
-        <h2>다음으로 어떻게 진행할까요?</h2>
-        <p>필요한 방법을 선택하고 언제든 바꿀 수 있어요.</p>
+        <h2>이해한 내용을 다음 준비로 이어가요</h2>
+        <p>
+          직접 준비할 범위, 전문가 도움이 필요한 부분, 보관 중에서 선택할 수 있어요. 절차와 서식의
+          미확인 사항은 선택 뒤에도 구분해 보여드려요.
+        </p>
       </div>
       <div className="resolution-paths">
         {paths.map(({ id, label, description, Icon }) => (
           <Button
             key={id}
+            ref={id === "lawyer" ? lawyerTrigger : undefined}
             variant="outline"
             className="resolution-path"
             aria-pressed={selected === id}
@@ -638,8 +671,8 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
       )}
       {state?.status === "not_ready" && (
         <p>
-          아직 연결할 현재 리포트·분석이 없어요. 리포트를 확인해 주세요. 변호사 목록과 기존 리포트
-          저장은 이용할 수 있어요.
+          아직 연결할 현재 리포트·분석이 없어요. 리포트를 확인해 주세요. 기존 리포트 저장은 이용할
+          수 있어요.
         </p>
       )}
       {state?.status === "paused" && (
@@ -723,9 +756,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           )}
           {scope}
           <div className="resolution-draft-controls">
-            <label>
+            <FieldLabel>
               문서 종류
-              <select
+              <ControlSelect
                 value={kind}
                 disabled={busy || blocked}
                 onChange={(event) => setKind(event.target.value as V2ResolutionDocumentKind)}
@@ -735,21 +768,21 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                     {resolutionDocumentLabels[value]}
                   </option>
                 ))}
-              </select>
-            </label>
+              </ControlSelect>
+            </FieldLabel>
             <p>
               절차·서식의 공식 근거가 없으면 사실 정리 초안만 제공해요. 방어 선택만으로 항소를
               권하지 않아요.
             </p>
-            <label className="resolution-checkbox">
-              <input
+            <FieldLabel className="resolution-checkbox">
+              <ControlInput
                 type="checkbox"
                 checked={factsConfirmed}
                 onChange={(event) => setFactsConfirmed(event.target.checked)}
                 disabled={busy || blocked}
               />
               현재 리포트의 사실과 사용할 자료를 확인했어요.
-            </label>
+            </FieldLabel>
             <Button
               variant="outline"
               disabled={
@@ -786,6 +819,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           {state.draft && (
             <div className="resolution-draft">
               <h3>{state.draft.title}</h3>
+              <p>{draftReviewState(state.draft, Boolean(draftCurrent), contentDirty, reviewed)}</p>
               <p>
                 기준 리포트 {state.draft.basis.reportRevision} ·{" "}
                 {state.draft.userEdited ? "사용자가 수정한 내용" : "근거에서 구성한 초안"}
@@ -797,9 +831,9 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                 </p>
               ) : (
                 <>
-                  <label>
+                  <FieldLabel>
                     초안 검토·수정
-                    <textarea
+                    <ControlTextarea
                       value={content}
                       maxLength={20000}
                       disabled={busy || blocked || state.status === "paused"}
@@ -808,17 +842,17 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
                         setReviewed(false);
                       }}
                     />
-                  </label>
+                  </FieldLabel>
                   <p>미입력 항목: {state.draft.missingFields.join(" · ")}</p>
-                  <label className="resolution-checkbox">
-                    <input
+                  <FieldLabel className="resolution-checkbox">
+                    <ControlInput
                       type="checkbox"
                       checked={reviewed}
                       disabled={busy || blocked}
                       onChange={(event) => setReviewed(event.target.checked)}
                     />
                     사실·증거·미입력 항목과 수정한 내용을 검토했어요.
-                  </label>
+                  </FieldLabel>
                   <div className="resolution-actions">
                     <Button
                       variant="outline"
@@ -851,66 +885,7 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           )}
         </div>
       )}
-      {selected === "lawyer" && (
-        <div className="resolution-body">
-          <h3>상담 준비와 공유 범위</h3>
-          {scope}
-          {scopeDirty ? (
-            <p>변경한 범위를 적용하면 상담 준비사항을 다시 보여드려요.</p>
-          ) : (
-            <ul>
-              {[...new Set(state?.consultationPreparation ?? [])].map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-          )}
-          <ButtonLink variant="outline" href="/lawyers">
-            변호사 목록·프로필 보기
-          </ButtonLink>
-          <p>프로필에서 연락 방법을 골라 직접 연락해 주세요. 사건 자료는 자동 전송하지 않아요.</p>
-          {state?.procedureChecks
-            .filter((c) => c.id === "public-defender")
-            .map((check) => (
-              <div className="resolution-notice" key={check.id}>
-                <h4>{check.label}</h4>
-                <p>{check.detail}</p>
-                <p>
-                  일반 변호사 찾기와 국선변호 절차는 별개예요. 자격·선정·선임을 보장하지 않아요.
-                </p>
-                <div className="resolution-actions">
-                  {state?.basis?.procedure.kind === "criminal" && (
-                    <ButtonLink
-                      variant="outline"
-                      href={resolutionReadingLinks.publicDefender}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      국선변호인제도 공식 안내
-                    </ButtonLink>
-                  )}
-                  <ButtonLink
-                    variant="outline"
-                    href={resolutionReadingLinks.legalAid}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    법률구조제도 공식 안내
-                  </ButtonLink>
-                </div>
-                <p>공식 원문의 최신 내용과 이 사건의 대상 여부·신청 절차는 기관에 확인해 주세요.</p>
-                {check.sourceClaimIds.map((id) => {
-                  const claim = state.sourceClaims.find((c) => c.id === id);
-                  const citation = state.citations.find((c) => c.id === claim?.citationId);
-                  return citation ? (
-                    <a key={id} href={citation.url} target="_blank" rel="noreferrer">
-                      {citation.title} · 공식 안내 확인
-                    </a>
-                  ) : null;
-                })}
-              </div>
-            ))}
-        </div>
-      )}
+
       {state && selected && selected !== "save_report" && (
         <div className="resolution-actions">
           <Button
@@ -937,6 +912,16 @@ export function FollowUpResolution(props: FollowUpResolutionProps) {
           )}
         </div>
       )}
+      <Dialog
+        open={lawyerNoticeOpen}
+        onOpenChange={setLawyerNoticeOpen}
+        title="아직 지원하지 않는 기능이에요"
+        description="현재 변호사 연결 기능은 제공하지 않습니다."
+        returnFocusRef={lawyerTrigger}
+        showCloseButton={false}
+      >
+        <Button onClick={() => setLawyerNoticeOpen(false)}>확인</Button>
+      </Dialog>
       <Dialog
         open={pendingChoice !== null}
         onOpenChange={(open) => {

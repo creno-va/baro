@@ -123,7 +123,7 @@ test("current chat facts/people and reconfirmed corrections propagate to reports
   });
   for (const text of [fact.text, party.label, timeline.event])
     expect(afterChat.content).toContain(text);
-  expect(afterChat.content).not.toContain(action.title);
+  expect(afterChat.content).toContain(action.title);
   expect(
     (await createV2ReportsRepository(f.core).read(f.actor, afterChat.id))?.body.actions,
   ).toContainEqual(action);

@@ -107,7 +107,7 @@ for (const role of ["customer", "lawyer"] as const) {
   });
 }
 
-test("failed OAuth start clears the selected role without rewriting an existing customer session", async ({
+test("failed common OAuth clears a stale role selection without rewriting the customer session", async ({
   page,
 }) => {
   let writes = 0;
@@ -133,16 +133,18 @@ test("failed OAuth start clears the selected role without rewriting an existing 
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login");
-  await page.getByRole("radio", { name: "변호사", exact: true }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.evaluate(() => sessionStorage.setItem("baro-account-type", "stale-role-selection"));
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("로그인을 시작하지 못했어요");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
-  await page.goto("/lawyer");
-  await expect(page.getByText("변호사 역할로 로그인해 주세요.", { exact: true })).toBeVisible();
+  const retired = await page.goto("/lawyer");
+  expect(retired?.status()).toBe(410);
+  await expect(page.getByText("현재 변호사 연결 기능은 제공하지 않습니다.")).toBeVisible();
   expect(writes).toBe(0);
 });
 
-test("successful OAuth return consumes its selected role once and preserves returnTo", async ({
+test("common OAuth return preserves returnTo and never writes an account role", async ({
   page,
 }) => {
   let writes = 0;
@@ -180,15 +182,16 @@ test("successful OAuth return consumes its selected role once and preserves retu
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/login?returnTo=/settings");
-  await page.getByRole("radio", { name: "변호사", exact: true }).check();
+  await expect(page.getByRole("radio")).toHaveCount(0);
   await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
   // A returnTo=/settings query also ends with /settings. Wait for the actual
   // destination pathname before reloading so callback navigation can finish.
   await page.waitForURL((url) => url.pathname === "/settings", { waitUntil: "load" });
   await expect(page).toHaveURL((url) => url.pathname === "/settings");
-  await expect.poll(() => writes).toBe(1);
+  expect(writes).toBe(0);
   expect(new URL(callback, "http://localhost").searchParams.get("returnTo")).toBe("/settings");
-  expect(role).toBe("lawyer");
+  expect(new URL(callback, "http://localhost").searchParams.has("loginAttempt")).toBe(false);
+  expect(role).toBe("customer");
   expect(await page.evaluate(() => sessionStorage.getItem("baro-account-type"))).toBeNull();
   const after = writes;
   await page.reload();
@@ -273,14 +276,14 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await expect(editor).toHaveCount(0);
 });
 
-test("normal OAuth state/callback and SQL session apply the chosen lawyer role on return", async ({
+test("common OAuth callback preserves an existing lawyer account through real SQL and consent", async ({
   page,
   context,
   baseURL,
 }) => {
   const child = spawn(
     "bun",
-    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account"],
+    ["tests/helpers/browser-session-server.ts", baseURL ?? "", "account-lawyer"],
     { stdio: ["pipe", "pipe", "pipe"] },
   );
   try {
@@ -310,7 +313,7 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
     });
     // Start signed out: authenticated visits now redirect before the login form.
     // The callback establishes the browser session; the seeded SQL session below
-    // independently verifies that the same account receives the selected role.
+    // independently verifies that the same legacy account keeps its identity.
     await page.route("**/api/**", async (route) => {
       const request = route.request(),
         url = new URL(request.url());
@@ -334,9 +337,10 @@ test("normal OAuth state/callback and SQL session apply the chosen lawyer role o
       });
     });
     await page.goto("/login?returnTo=/settings");
-    await page.getByRole("radio", { name: "변호사", exact: true }).check();
+    await expect(page.getByRole("radio")).toHaveCount(0);
     await page.getByRole("button", { name: "Google로 계속하기", exact: true }).click();
-    await expect(page).toHaveURL(/\/consent\?.*loginAttempt=/);
+    await expect(page).toHaveURL((url) => url.pathname === "/consent");
+    expect(new URL(page.url()).searchParams.has("loginAttempt")).toBe(false);
     await expect
       .poll(async () => {
         const response = await context.request.get(`${seed.origin}/api/me/session`, {
@@ -487,7 +491,9 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       // Explicit owner revocation below must still purge it completely.
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(editor).toBeDisabled();
-      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeDisabled();
+      await expect(
+        page.getByRole("button", { name: "수정 내용 저장", exact: true }),
+      ).toBeDisabled();
       phase = "current";
       // An explicit peer invalidation bypasses the old pending read. Focus alone
       // cannot create a newer authoritative response while that read is pending.
@@ -500,7 +506,7 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
         ),
       );
       await expect.poll(() => fresh).toBeGreaterThan(0);
-      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeEnabled();
       release();
       await expect.poll(() => settled).toBe(1);
       await expect.poll(async () => (await sessionReads()).pending).toBe(0);
@@ -512,20 +518,22 @@ for (const lateResponse of ["failure", "signed-out"] as const) {
       );
       await expect(editor).toHaveValue("Unsaved current report correction");
       await expect(page.getByRole("alert")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeEnabled();
       const recoveredReads = fresh;
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect.poll(() => fresh).toBeGreaterThan(recoveredReads);
       await expect.poll(async () => (await sessionReads()).pending).toBe(0);
       await expect(editor).toHaveValue("Unsaved current report correction");
-      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toBeEnabled();
       // Sharing is limited to in-flight reads: a later real owner change still
       // revokes the editor rather than reusing the recovered owner's permission.
       ownerId = "synthetic-next-owner";
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(editor).toHaveCount(0);
       await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경됐어요.");
-      await expect(page.getByRole("button", { name: "수정 마치기", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "수정 내용 저장", exact: true })).toHaveCount(
+        0,
+      );
     } finally {
       release();
     }

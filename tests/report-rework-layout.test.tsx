@@ -19,11 +19,14 @@ for (const side of ["claim", "response"] as const) {
       "긴 조항 검증 35",
       "생략되지 않은 원본 대화",
       "실제 공급자 호출이나 법률 검토 승인",
+      "비교 항목 55",
     ]) {
       expect(web).toContain(text);
       expect(html).toContain(text);
     }
     expect(html).not.toContain("<script");
+    expect(html).toContain('<th scope="col">확인할 항목</th>');
+    expect(web).toContain('<th scope="col">확인할 항목</th>');
     expect(fixture.report.content.length).toBeLessThan(30000);
   });
 }

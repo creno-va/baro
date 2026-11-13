@@ -25,6 +25,7 @@ const css =
   (await Bun.file(`${root}/src/styles/global.css`).text())
     .replace(/^@import .*;$/gm, "")
     .replace(/@theme inline\s*\{[^}]*\}/s, "") +
+  (await Bun.file(`${root}/src/styles/design-system.css`).text()) +
   (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
   "main{max-width:840px;margin:auto;padding:20px}nav{display:flex;gap:20px;align-items:center}nav button{min-height:44px}";
 let h = resolutionHarness(),

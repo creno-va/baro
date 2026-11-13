@@ -1,0 +1,68 @@
+{
+  "head": "ebf2d71294acae940265eef803e779c3e1b9b492",
+  "base": "96ff9355db02c361c129d0d5c7fbec4b7d053c85",
+  "node": "v24.22.1",
+  "bun": "1.4.0",
+  "results": [
+    {
+      "suite": "ci",
+      "exitCode": 0,
+      "seconds": 0.15
+    },
+    {
+      "suite": "quick",
+      "exitCode": 0,
+      "seconds": 98.71
+    },
+    {
+      "suite": "cases",
+      "exitCode": 0,
+      "seconds": 12.36,
+      "expected": 5,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "design-system",
+      "exitCode": 0,
+      "seconds": 8.96,
+      "expected": 8,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "app-experience",
+      "exitCode": 0,
+      "seconds": 15.36,
+      "expected": 11,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "intake-reconfirmation",
+      "exitCode": 0,
+      "seconds": 35.77,
+      "expected": 53,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "frame",
+      "exitCode": 0,
+      "seconds": 10.7,
+      "expected": 26,
+      "unexpected": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "build",
+      "exitCode": 0,
+      "seconds": 8.53
+    }
+  ]
+}

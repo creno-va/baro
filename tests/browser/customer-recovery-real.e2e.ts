@@ -49,7 +49,11 @@ async function expectConfirmedWorkspace(page: Page, id: string) {
   const panel = page.getByRole("complementary", { name: "사건 요약 및 준비 현황" });
   await expect(panel).toBeVisible();
   const disclosure = panel.getByText("사건 요약과 준비 현황", { exact: true });
-  if (!(await disclosure.evaluate((element) => element.closest("details")?.hasAttribute("open"))))
+  if (
+    !(await disclosure.evaluate((element) =>
+      element.closest("[data-disclosure]")?.hasAttribute("data-open"),
+    ))
+  )
     await disclosure.click();
   await expect(panel.getByText(originalSummary, { exact: true })).toBeVisible();
 }

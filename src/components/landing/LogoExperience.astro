@@ -68,13 +68,13 @@ const features = [
   },
   {
     id: "lawyers",
-    label: "변호사 찾기",
-    title: "내게 필요한 전문가,\n내 기준으로.",
-    body: "분야와 지역으로 공개된 프로필을 살펴보세요. 누구에게 연락할지 직접 선택하고 이야기할 수 있어요.",
+    label: "사건 준비",
+    title: "내 사건의 다음 준비,\n내 기준으로.",
+    body: "정리한 사실과 자료, 아직 확인하지 못한 내용을 살펴보세요. 리포트를 다시 확인하며 사건을 준비할 수 있어요.",
     benefit: "선택에 필요한 정보를 살펴봐요",
     icon: Search,
     demo: null,
-    cta: "변호사 프로필 살펴보기",
+    cta: "내 사건 준비하기",
   },
   {
     id: "review",
@@ -135,11 +135,11 @@ const features = [
                   {feature.id === "files" && <div class="logo-preview-files"><div><FileText size={23} /><span>계좌 이체 내역.pdf<small>대여 사실과 연결</small></span><Check size={15} /></div><div><Image size={23} /><span>주고받은 대화.png<small>반환 약속 확인</small></span><Check size={15} /></div><div><Mic size={23} /><span>통화 녹음.m4a<small>함께 확인할 자료</small></span><Check size={15} /></div></div>}
                   {feature.id === "timeline" && <ol class="logo-preview-timeline"><li><time>03.12</time><div><strong>돈을 빌려줬어요</strong><span>계좌 이체 내역과 함께</span></div><i>자료 연결</i></li><li><time>04.12</time><div><strong>약속한 날짜가 지났어요</strong><span>대화에 남은 반환 예정일</span></div></li><li><time>다음</time><div><strong>추가 대화를 확인해요</strong><span>아직 확인이 필요한 내용</span></div></li></ol>}
                   {feature.id === "report" && <div class="logo-preview-report"><div class="logo-preview-report-head"><FileText size={30} /><span>나의 상담 준비 리포트<small>내가 검토한 사실과 선택한 자료</small></span></div><div><CheckCheck size={15} />사건의 흐름<Check size={14} /></div><div><FolderOpen size={15} />확인한 사실과 자료<Check size={14} /></div><div><MessageCircle size={15} />상담에서 확인할 질문<Check size={14} /></div></div>}
-                  {feature.id === "lawyers" && <div class="logo-preview-lawyers"><div class="logo-preview-filters"><span><MapPin size={12} />지역</span><span>대여금</span><span>임대차</span><span>근로</span></div><div class="logo-preview-profile"><span><Search size={27} /></span><div><strong>공개된 프로필을 살펴봐요</strong><p>활동 지역 · 주요 분야 · 연락 방법</p></div></div><p class="logo-preview-lawyers-note">프로필 탐색<ArrowRight size={13} />내가 선택<ArrowRight size={13} />직접 연락</p></div>}
+                  {feature.id === "lawyers" && <div class="logo-preview-lawyers"><div class="logo-preview-filters"><span><MapPin size={12} />사건 분야</span><span>대여금</span><span>임대차</span><span>근로</span></div><div class="logo-preview-profile"><span><Search size={27} /></span><div><strong>정리한 사실을 다시 확인해요</strong><p>사실과 자료 · 확인할 근거 · 다음 준비</p></div></div><p class="logo-preview-lawyers-note">리포트 확인<ArrowRight size={13} />자료 보완<ArrowRight size={13} />직접 검토</p></div>}
                   {feature.id === "review" && <div class="logo-preview-review"><p><ShieldCheck size={20} /><span>공유 전에, 한 번 더 확인해요</span></p><div><span class="logo-preview-checkbox"><Check size={12} /></span><strong>직접 확인한 리포트</strong><span>선택</span></div><div><span class="logo-preview-checkbox"><Check size={12} /></span><strong>계좌 이체 내역.pdf</strong><span>선택</span></div><div><span class="logo-preview-checkbox is-empty"></span><strong>추가 개인 메모</strong><span>제외</span></div></div>}
                 </div>
                 <p class="logo-feature-benefit"><Check size={15} aria-hidden="true" />{feature.benefit}</p>
-                <a class="logo-feature-cta" href={feature.demo ? "#try-baro" : "/lawyers"} data-logo-demo={feature.demo ?? undefined}>{feature.cta}<ArrowRight size={17} aria-hidden="true" /></a>
+                <a class="logo-feature-cta" href={feature.demo ? "#try-baro" : "/new"} data-logo-demo={feature.demo ?? undefined}>{feature.cta}<ArrowRight size={17} aria-hidden="true" /></a>
               </article>
             ))}
           </div>

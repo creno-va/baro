@@ -1,0 +1,80 @@
+{
+  "sha": "396927f876fdf73f2527bd5faf3897f75fa90050",
+  "worktree": "/Users/hwang-eunchan/Desktop/baro/redesign-03-final-check",
+  "branch": "codex/765-reports-frozen-check",
+  "sourceChanged": false,
+  "runtime": {
+    "bun": "1.4.0",
+    "node": "24.22.1"
+  },
+  "sourceHashes": {
+    "bun.lock": "203abac9f3fea8eb7ad86e3898c8a4555135dd74da784914107d23ab3a57840f",
+    "tests/browser/report-rework-state.e2e.ts": "4d3052f495cd5abb21f8b897a8b39d2b28c7e7457fe107f751db95eb9a81ae18",
+    "tests/browser/report-rework-state.config.ts": "6cc823d877aa1b42218805e9523efdc9ec6b708bae6e645ce04985d9538ef1b4",
+    "tests/browser/resolution.e2e.ts": "3b4218197061adc204ab5fe0ed0d74969267afdcb2f57771c51e95d29027d0c9",
+    "tests/browser/resolution.config.ts": "90a0f961c20e308ad87ddcd6518230e0cee406423c8419380a795697334aa9e9",
+    "tests/browser/report-task-route.e2e.ts": "07bcf737c510d4c503be167866a28e90a2c3047fc9f9b8e47b227e24c0da1e14",
+    "tests/browser/report-task-route.config.ts": "7744cf4d7b5ee645cafce680878655d65b902ba19d1d741678040c7136993740"
+  },
+  "installation": {
+    "command": "bun ci",
+    "exitCode": 0,
+    "log": "install.log"
+  },
+  "workNext": {
+    "command": "bun run work:next",
+    "exitCode": 0,
+    "log": "work-next.log"
+  },
+  "checks": [
+    {
+      "name": "report-state",
+      "command": "BARO_REPORT_TEST_PORT=4638 bunx playwright test --config tests/browser/report-rework-state.config.ts",
+      "log": "report-state.log",
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "d4b3eb420e279193eb1f54479bec01d4903c1622c3287fa3c5e924b10fbe5c95"
+    },
+    {
+      "name": "resolution",
+      "command": "BARO_RESOLUTION_TEST_PORT=4636 bunx playwright test --config tests/browser/resolution.config.ts",
+      "log": "resolution.log",
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 98,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "80bcad79a191fb974693340a135fb026a07349bf5d34c318493b716a92e71110"
+    },
+    {
+      "name": "direct-url",
+      "command": "BARO_REPORT_TASK_ROUTE_PORT=4640 bunx playwright test --config tests/browser/report-task-route.config.ts",
+      "log": "direct-url.log",
+      "status": "passed",
+      "exitCode": 0,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "5eb635acdac129b4b6f75bd6dba3b2af90338226596c62921513aac9e5c83e5a"
+    }
+  ],
+  "executionPolicy": "Sequential servers in this checkout. No build, product changes, deployment or provider calls.",
+  "total": {
+    "passed": 127,
+    "failed": 0,
+    "skipped": 0
+  },
+  "finalSha": "396927f876fdf73f2527bd5faf3897f75fa90050",
+  "sourceHashesUnchanged": true,
+  "verifiedAssertions": [
+    "Report and draft navigation: writes=0 before explicit preparation/save.",
+    "Unsupported lawyer modal: captured requests=[], prior resolution selection/revision and unsaved edits preserved.",
+    "Local review check is retained but server draft.reviewed remains false until explicit reviewed save.",
+    "Inactive report stops ordinary polls and still purges revoked owner state.",
+    "Actual Astro direct routes retain query, report edits, unsent conversation and question context without automatic send.",
+    "Direct report/hash route denies foreign owner report exposure."
+  ]
+}

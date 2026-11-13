@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "inspectedProductSha": "c89b30d789af5123a2735b6ca81c957c8365794b",
+    "synthetic": true,
+    "provider": "explicit local mock; no OAuth, model, legal provider, or remote storage acceptance",
+    "testSourceSha256": "80e8240f211fe50e5394a16cd05c90f5e1a86f6a4755d933311eddbce79ac2ec",
+    "actualWorkers": 1
+  },
+  "stats": {
+    "startTime": "2026-11-08T10:58:36.232Z",
+    "duration": 12449.619,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "rawResultSha256": "ae00076dde50c20f25733251df21546ab315b0a84331c252fbe8beccc8024b88",
+  "results": [
+    {
+      "title": "민사 준비 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 대응 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 고소 준비 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 대응 starts from an explanation without requiring a document",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "message formatting displays synthetic input without executing injected HTML or URLs",
+      "project": "chromium",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 준비 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "민사 대응 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 고소 준비 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "형사 대응 starts from an explanation without requiring a document",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "title": "message formatting displays synthetic input without executing injected HTML or URLs",
+      "project": "webkit",
+      "status": "passed",
+      "errors": []
+    }
+  ]
+}

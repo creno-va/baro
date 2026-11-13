@@ -48,10 +48,10 @@ test("320px pages fit clientWidth including a classic vertical scrollbar gutter"
     route.fulfill({ json: syntheticConsentStatus(false) }),
   );
   await page.route("**/api/me", (route) => route.fulfill({ status: 401, json: {} }));
-  for (const path of ["/", "/app", "/login", "/cases", "/cases/new", "/settings"]) {
+  for (const path of ["/", "/new", "/login", "/cases", "/cases/new", "/settings"]) {
     await page.goto(path);
-    if (path === "/app") {
-      await expect(page).toHaveURL(/\/app$/);
+    if (path === "/new") {
+      await expect(page).toHaveURL(/\/new$/);
       await expect(page.getByRole("textbox", { name: "지금까지 있었던 일" })).toBeEnabled();
     }
     await reserveScrollbarGutter(page);
@@ -70,7 +70,7 @@ test("mobile menu keyboard flow and 200% fixture fit the available scrollbar wid
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/__design-system");
   await expect(page.getByRole("heading", { name: "공유 UI 구성 요소" })).toBeVisible();
-  await page.locator("astro-island[ssr]").waitFor({ state: "detached" });
+  await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
   await reserveScrollbarGutter(page);
   await expectAvailableWidth(page);
   const opener = page.getByRole("button", { name: "메뉴 열기" });

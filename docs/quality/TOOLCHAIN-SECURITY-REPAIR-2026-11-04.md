@@ -1,5 +1,24 @@
 # Toolchain security repair (#724)
 
+## 2026-11-11 follow-up (#806)
+
+Full validation42963053886 on main6565328f passed functional tests/build/compiled Worker checks,
+then raw `bun audit` reported four advisories against the pinned node-forge1.4.2. This is a new
+observation relative to the historical results below; those results remain unchanged.
+
+Official1.4.3 fixes [small-order Ed25519 keys](https://github.com/advisories/GHSA-6889-vf6x-f3g5),
+[unsupported TLS compression](https://github.com/advisories/GHSA-w4xr-hqv8-ch44),
+[HTTP header/cookie trimming](https://github.com/advisories/GHSA-6cv4-p8m7-4r25), and
+[TLS records without a session](https://github.com/advisories/GHSA-j8rw-jp99-435v).
+The root override and lock move only forge to1.4.3. SDK58.0.17/CLI58.1.18/RN and product behavior stay
+fixed. Independently downloaded npm1.4.2 and1.4.3 tarballs passed their published SHA512 integrity;
+the old tree matches its retained attestation. The1.4.3 tree is
+`4bcdd9dc93a158af4a3209c2f36fc6f71819173270a79c8811a7bb62d16880b3`; license bytes are unchanged.
+Existing malformed RSA and certificate/CSR checks remain, with synthetic Ed25519, TLS-state and
+bounded in-memory HTTP parser checks in CJS/available UMD surfaces. No socket or provider is used.
+Final raw audit/CI/full/preview evidence is recorded in #806/#799; no allowlist or deadline increase
+is introduced. The following sections preserve the earlier1.4.2 repair and observations.
+
 Refs #620/#621/#723. #339 CLOSED/NOT_PLANNED and its historical failure evidence remain unchanged.
 This repair does not deploy production or change the Expo SDK, React Native, providers, payment,
 cost observation policy, installed native application, or product authorization boundaries.

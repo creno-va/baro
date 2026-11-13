@@ -25,6 +25,8 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
     ["bun", "run", "security:patches"],
     ["bun", "run", "lint"],
     ["bun", "run", "typecheck"],
+    ["bun", "test", "tests/headless-ui-ssr.test.tsx"],
+    ["bun", "test", "tests/theme-palette.test.ts"],
     ["bun", "run", "mobile:check"],
     // Bounded rework domains; prefix filters automatically retain each later
     // adapter regression without promoting all tests into the quick profile.
@@ -60,6 +62,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/session-owner-fence.test.ts",
       "scripts/validate.test.ts",
       "scripts/development-checks.test.ts",
+      "scripts/full-browser.test.ts",
       "tests/full-validation-receipt.test.ts",
       "tests/release-receipts.test.ts",
       "scripts/deploy.test.ts",

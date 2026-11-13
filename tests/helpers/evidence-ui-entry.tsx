@@ -1,3 +1,5 @@
+import { ActionButton as ControlButton } from "../../src/components/ui/button";
+import "./headless-experience";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { FileView } from "../../src/client/api/types";
@@ -14,12 +16,12 @@ function Fixture() {
   const [visible, setVisible] = useState(true);
   return (
     <>
-      <button type="button" onClick={() => setDisabled((value) => !value)}>
+      <ControlButton type="button" onClick={() => setDisabled((value) => !value)}>
         합성 읽기 전용 전환
-      </button>
-      <button type="button" onClick={() => setVisible((value) => !value)}>
+      </ControlButton>
+      <ControlButton type="button" onClick={() => setVisible((value) => !value)}>
         합성 업로드 패널 전환
-      </button>
+      </ControlButton>
       {visible && (
         <EvidenceUpload
           caseId="synthetic-case"

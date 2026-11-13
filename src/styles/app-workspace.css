@@ -1,0 +1,644 @@
+/* AppLayout only. Public BaseLayout, landing/login and exported reports are independent.
+   This file owns shell geometry and shared app controls; domain styles own their content. */
+.app-frame[data-app-workspace] {
+  --app-sidebar-width: 256px;
+  --app-topbar-height: 0px;
+  --app-canvas: #f6f7f9;
+  --app-line: #e7eaf0;
+  --app-sidebar: #fff;
+  --app-text: #0f172a;
+  --app-secondary-text: #475569;
+  --app-reading-width: 800px;
+  --app-panel-width: 360px;
+  --refresh-space: clamp(16px, 2vw, 24px);
+  --primary: #2563eb;
+  --product-blue: #2563eb;
+  --product-ink: #0f172a;
+  --product-line: #e2e8f0;
+  --product-subtle: #f3f5f8;
+  --muted: #f1f5f9;
+  --muted-foreground: #667085;
+  --border: #e2e8f0;
+  --product-radius: 12px;
+  color: var(--app-text);
+  background: var(--app-canvas);
+  padding-left: var(--app-sidebar-width);
+  padding-top: var(--app-topbar-height);
+  min-width: 0;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.app-frame[data-app-workspace] :where(h1, h2, h3, p, li, button, a, label) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.app-frame[data-app-workspace] .app-surface {
+  min-width: 0;
+  min-height: calc(var(--app-viewport-height, 100dvh) - var(--app-topbar-height));
+  background: var(--app-canvas);
+}
+.app-frame[data-app-workspace] .app-surface::before,
+.app-frame[data-app-workspace] .app-surface::after {
+  display: none;
+}
+.app-frame[data-app-workspace] .app-surface:has(.conversation-main)::before,
+.app-frame[data-app-workspace] .app-surface:has(.conversation-main)::after {
+  display: block;
+  opacity: 0.65;
+}
+.app-frame[data-app-workspace].app-frame--product .app-surface > main {
+  width: min(1120px, calc(100% - 48px));
+  max-width: 1120px;
+  padding-block: 32px 48px;
+  margin-inline: auto;
+}
+.app-frame[data-app-workspace] .app-header {
+  width: var(--app-sidebar-width);
+  height: var(--app-viewport-height, 100dvh);
+  background: var(--app-sidebar);
+  border-right: 1px solid var(--app-line);
+}
+.app-frame[data-app-workspace] .app-header__inner {
+  display: flex;
+  justify-content: space-between;
+  min-height: 64px;
+  height: auto;
+  padding: 8px 12px;
+  gap: 4px;
+}
+.app-frame[data-app-workspace] .brand {
+  font-size: 17px;
+  gap: 8px;
+}
+.app-frame[data-app-workspace] .brand img {
+  width: 26px;
+  height: 30px;
+}
+.app-frame[data-app-workspace] .sidebar-desktop {
+  display: flex;
+  overflow: hidden;
+  gap: 16px;
+  padding: 0 8px max(12px, env(safe-area-inset-bottom));
+}
+.app-frame[data-app-workspace] .app-nav {
+  gap: 4px;
+}
+.app-frame[data-app-workspace] .app-nav__link {
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  gap: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--app-secondary-text);
+}
+.app-frame[data-app-workspace] .app-nav__link--new {
+  color: var(--app-text);
+  background: transparent;
+}
+.app-frame[data-app-workspace] .app-nav__link:hover {
+  background: #eaf0f6;
+}
+.app-frame[data-app-workspace] .app-nav__link[aria-current="page"] {
+  color: #1d4ed8;
+  background: #eaf1ff;
+}
+.app-frame[data-app-workspace] .sidebar-recent {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 1;
+  min-height: 0;
+}
+.app-frame[data-app-workspace] .sidebar-recent__heading {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--app-secondary-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.app-frame[data-app-workspace] .sidebar-story,
+.app-frame[data-app-workspace] .sidebar-story-row {
+  min-height: 44px;
+  border-radius: 8px;
+}
+.app-frame[data-app-workspace] .sidebar-story {
+  padding: 10px 12px;
+}
+.app-frame[data-app-workspace] .sidebar-story__copy strong {
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.5;
+}
+.app-frame[data-app-workspace] .sidebar-story[aria-current="page"] {
+  background: #eaf1ff;
+  color: #1d4ed8;
+}
+.app-frame[data-app-workspace] .sidebar-empty {
+  padding: 12px;
+  font-size: 13px;
+}
+.app-frame[data-app-workspace] .sidebar-account {
+  background: transparent;
+  border-top: 1px solid var(--app-line);
+  padding-top: 8px;
+}
+.app-frame[data-app-workspace] .sidebar-account__row {
+  margin: 0;
+  padding: 8px 4px;
+  border: 0;
+}
+.app-frame[data-app-workspace] .sidebar-profile {
+  min-height: 44px;
+}
+.app-frame[data-app-workspace] .sidebar-profile strong {
+  max-width: 120px;
+}
+.app-frame[data-app-workspace] .sidebar-collapse {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.app-frame[data-app-workspace] :is(.sidebar-history-trigger, .app-menu-trigger) {
+  display: none;
+}
+.app-frame[data-app-workspace] .ui-sheet {
+  inset: 0 auto 0 0;
+  width: min(320px, calc(100% - 24px));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--app-sidebar);
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__content {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-frame[data-app-workspace] .ui-sheet .sidebar-account {
+  margin-top: auto;
+}
+.app-frame[data-app-workspace] .ui-sheet .app-nav {
+  display: grid;
+}
+.app-frame[data-app-workspace]
+  :is(.ui-button, .settings-refresh, .primary-action, .secondary-action) {
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] .ui-button--icon {
+  width: 44px;
+  min-width: 44px;
+  padding: 10px;
+}
+.app-frame[data-app-workspace]
+  :is(
+    .page-header h1,
+    .settings-heading h1,
+    .policy-heading h1,
+    .lawyer-editor-heading h1,
+    .intake-scene-heading h1
+  ) {
+  font-size: clamp(26px, 2.5vw, 30px);
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+}
+.app-frame[data-app-workspace] :is(.page-header, .settings-heading, .intake-scene-heading) {
+  margin-bottom: 24px;
+}
+.app-frame[data-app-workspace]
+  :is(.ui-card, .intake-card, .settings-card, .summary-reading, .intake-answer-surface) {
+  border-radius: 12px;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace]
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select) {
+  font-size: 16px;
+  line-height: 1.7;
+  border-radius: 8px;
+}
+.app-frame[data-app-workspace] .app-surface main.conversation-main {
+  width: min(var(--app-reading-width), calc(100% - 40px));
+  padding-block: clamp(36px, 8dvh, 80px) 32px;
+}
+.app-frame[data-app-workspace] .conversation-greeting h1 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+.app-frame[data-app-workspace] .conversation-emblem {
+  display: none;
+}
+.app-frame[data-app-workspace] .conversation-composer {
+  border-radius: 16px;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] .conversation-primary-action > .ui-button {
+  min-height: 48px;
+  border-radius: 10px;
+}
+/* Legacy consumers receive the compact header immediately; every old route remains a tool link. */
+.app-frame[data-app-workspace] .case-header {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  margin: 0 0 16px;
+  padding: 0;
+}
+.app-frame[data-app-workspace] .case-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.app-frame[data-app-workspace] .case-header__identity > svg {
+  flex-shrink: 0;
+  color: var(--app-secondary-text);
+}
+.app-frame[data-app-workspace] .case-header h1 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.app-frame[data-app-workspace] .case-header__back {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--app-secondary-text);
+  border-radius: 8px;
+}
+.app-frame[data-app-workspace] .case-header__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.app-frame[data-app-workspace] .case-tools {
+  position: relative;
+}
+.app-frame[data-app-workspace] .case-tools > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--app-secondary-text);
+  font-size: 13px;
+  list-style: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app-frame[data-app-workspace] .case-tools > summary::-webkit-details-marker {
+  display: none;
+}
+.app-frame[data-app-workspace] .case-tools > summary:hover,
+.app-frame[data-app-workspace] .case-tools[open] > summary {
+  background: var(--muted);
+}
+.app-frame[data-app-workspace] .case-tools__menu {
+  position: absolute;
+  inset: calc(100% + 4px) 0 auto auto;
+  z-index: 15;
+  width: 216px;
+  max-width: calc(100vw - 32px);
+  max-height: min(420px, 65dvh);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 8%);
+}
+.app-frame[data-app-workspace] .case-tools__menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--app-secondary-text);
+  text-decoration: none;
+}
+.app-frame[data-app-workspace] .case-tools__menu a:hover {
+  background: var(--muted);
+}
+.app-frame[data-app-workspace] .case-tools__menu a[aria-current] {
+  color: #1d4ed8;
+  background: #eaf1ff;
+}
+/* Frame owns viewport/grid; consumers own messages/composer and their scroll position. */
+.app-frame[data-app-workspace] .case-workspace {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+.app-frame[data-app-workspace] .case-workspace--conversation {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(var(--app-viewport-height, 100dvh) - var(--app-topbar-height));
+}
+.app-frame[data-app-workspace] .case-workspace__header {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-inline: 16px;
+  border-bottom: 1px solid var(--app-line);
+  background: #fff;
+}
+.app-frame[data-app-workspace] .case-workspace__heading {
+  flex: 1;
+  min-width: 0;
+}
+.app-frame[data-app-workspace] .case-workspace__header .case-header {
+  margin: 0;
+}
+.app-frame[data-app-workspace] .case-workspace--document .case-workspace__header {
+  padding-inline: 0;
+  margin-bottom: 20px;
+  border: 0;
+  background: transparent;
+}
+.app-frame[data-app-workspace] .case-workspace__toggle {
+  flex-shrink: 0;
+}
+.app-frame[data-app-workspace] .case-workspace__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+.app-frame[data-app-workspace] .case-workspace[data-panel-open="true"] .case-workspace__body {
+  grid-template-columns: minmax(0, 1fr) var(--app-panel-width);
+}
+.app-frame[data-app-workspace] .case-workspace__content {
+  min-width: 0;
+  min-height: 0;
+}
+.app-frame[data-app-workspace] .case-workspace--conversation .case-workspace__content {
+  overflow: hidden;
+}
+/* Only the opted-in conversation fills the viewport. General pages/reports keep document scroll. */
+.app-frame[data-app-workspace].app-frame--product
+  .app-surface
+  > main:has(.case-workspace--conversation) {
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  height: calc(var(--app-viewport-height, 100dvh) - var(--app-topbar-height));
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.app-frame[data-app-workspace] main:has(.case-workspace--conversation) > astro-island,
+.app-frame[data-app-workspace] .workspace:has(.case-workspace--conversation) {
+  display: block;
+  min-height: 0;
+  height: 100%;
+}
+.app-frame[data-app-workspace]
+  main:has(.case-workspace--conversation)
+  .case-workspace--conversation {
+  height: 100%;
+}
+.app-frame[data-app-workspace] main:has(.case-workspace--conversation) > .case-notice {
+  margin: 0;
+  max-width: none;
+  padding: 4px 16px;
+  border-top: 1px solid var(--app-line);
+  background: #fff;
+  font-size: 11px;
+}
+/* Base dialog scroll lock is for modals. An inline desktop panel must allow document reading. */
+html:has(.app-frame[data-app-workspace] .case-workspace__panel[open]):not(:has(dialog:modal)) {
+  overflow: auto;
+}
+@media (min-width: 1200px) {
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"] {
+    --app-sidebar-width: 64px;
+  }
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"] .app-header__inner > .brand,
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"]
+    .sidebar-desktop
+    :is(.app-nav__link > span, .sidebar-recent, .sidebar-profile, .api-mode-notice) {
+    display: none;
+  }
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"]
+    :is(.app-header__inner, .sidebar-account__row) {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"] .sidebar-history-trigger {
+    display: inline-flex;
+  }
+  .app-frame[data-app-workspace][data-sidebar-collapsed="true"] .sidebar-desktop .app-nav__link {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+@media (min-width: 768px) and (max-width: 1199px) {
+  .app-frame[data-app-workspace] {
+    --app-sidebar-width: 64px;
+  }
+  .app-frame[data-app-workspace] .app-header__inner {
+    flex-direction: column;
+    padding-inline: 0;
+  }
+  .app-frame[data-app-workspace] .app-header__inner > .brand {
+    min-height: 44px;
+  }
+  .app-frame[data-app-workspace] .app-header__inner > .brand > span,
+  .app-frame[data-app-workspace] .sidebar-collapse,
+  .app-frame[data-app-workspace]
+    .sidebar-desktop
+    :is(.app-nav__link > span, .sidebar-recent, .sidebar-profile, .api-mode-notice) {
+    display: none;
+  }
+  .app-frame[data-app-workspace] :is(.app-menu-trigger, .sidebar-history-trigger) {
+    display: inline-flex;
+  }
+  .app-frame[data-app-workspace] .sidebar-desktop .app-nav__link,
+  .app-frame[data-app-workspace] .sidebar-account__row {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+@media (max-width: 1199px) {
+  .app-frame[data-app-workspace] .case-workspace[data-panel-open] .case-workspace__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .app-frame[data-app-workspace] {
+    --app-sidebar-width: 0px;
+    --app-topbar-height: 56px;
+  }
+  .app-frame[data-app-workspace] .app-header {
+    inset: 0 0 auto;
+    width: 100%;
+    height: 56px;
+    border-right: 0;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .app-frame[data-app-workspace] .app-header__inner {
+    width: 100%;
+    min-height: 56px;
+    height: 56px;
+    padding: 6px 12px;
+  }
+  .app-frame[data-app-workspace] :is(.sidebar-desktop, .sidebar-collapse) {
+    display: none;
+  }
+  .app-frame[data-app-workspace] .app-menu-trigger {
+    display: inline-flex;
+  }
+  .app-frame[data-app-workspace].app-frame--product .app-surface > main {
+    width: calc(100% - 32px);
+    padding-top: 16px;
+  }
+  .app-frame[data-app-workspace] .case-header {
+    gap: 4px;
+  }
+  .app-frame[data-app-workspace] .case-header__identity {
+    gap: 4px;
+  }
+  .app-frame[data-app-workspace] .case-header__identity > svg {
+    display: none;
+  }
+  .app-frame[data-app-workspace] .case-workspace__header {
+    padding-inline: 8px;
+    gap: 4px;
+  }
+  .app-frame[data-app-workspace] .case-workspace__toggle {
+    width: 44px;
+    padding-inline: 10px;
+  }
+  .app-frame[data-app-workspace] .case-workspace__toggle > span {
+    display: none;
+  }
+}
+.app-frame[data-app-workspace] .case-tools__menu a {
+  gap: 12px;
+}
+.app-frame[data-app-workspace] .case-tools__menu a small {
+  min-width: 24px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.app-frame[data-app-workspace] .case-tools__menu a[aria-current] {
+  font-weight: 600;
+}
+.app-frame[data-app-workspace] :is(.page-header, .settings-heading, .lawyer-editor-heading) {
+  margin-top: 0;
+  gap: 16px;
+}
+.app-frame[data-app-workspace] :is(.page-header, .settings-heading, .lawyer-editor-heading) p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+}
+.app-frame[data-app-workspace] :is(.ui-button, .settings-refresh) {
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition:
+    background-color 140ms,
+    border-color 140ms,
+    color 140ms;
+}
+.app-frame[data-app-workspace] .ui-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] :is(.ui-button--outline, .settings-refresh) {
+  background: #fff;
+  border-color: var(--app-line);
+  color: var(--app-secondary-text);
+}
+.app-frame[data-app-workspace] .ui-button:disabled {
+  cursor: not-allowed;
+}
+.app-frame[data-app-workspace] .ui-state {
+  padding: 24px;
+  gap: 16px;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.app-frame[data-app-workspace] .ui-state__title {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.app-frame[data-app-workspace] .ui-state__description {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.app-frame[data-app-workspace] .ui-state__action {
+  margin-top: 18px;
+}
+.app-frame[data-app-workspace] .ui-sheet {
+  border-radius: 0 20px 20px 0;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__header {
+  padding: 20px 20px 0;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__content {
+  padding: 16px 12px;
+}
+.app-frame[data-app-workspace] .ui-sheet .ui-dialog__content > .brand {
+  display: none;
+}
+.app-frame[data-app-workspace] .sidebar-story-row {
+  overflow: hidden;
+}
+.app-frame[data-app-workspace] :is(.sidebar-story-delete, .sidebar-story-edit) {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+@media (hover: none) {
+  .app-frame[data-app-workspace] :is(.sidebar-story-delete, .sidebar-story-edit) {
+    width: 44px;
+    min-width: 44px;
+  }
+  .app-frame[data-app-workspace] .sidebar-story {
+    padding-right: 94px;
+  }
+}
+@media (max-width: 767px) {
+  .app-frame[data-app-workspace] :is(.settings-heading, .page-header) {
+    align-items: flex-start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-frame[data-app-workspace] *,
+  .app-frame[data-app-workspace] *::before,
+  .app-frame[data-app-workspace] *::after {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
+  }
+}

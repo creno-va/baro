@@ -78,6 +78,31 @@ if (timeExperience) {
   }
 
   // Every update comes from navigation; there is no timer or background render loop.
+  root.addEventListener("focusin", (event) => {
+    if (
+      !animated ||
+      !(event.target instanceof HTMLElement) ||
+      !event.target.closest(".time-actions") ||
+      !event.target.matches(":focus-visible")
+    )
+      return;
+    // Native focus scrolling can move a sticky scene past its visible pin.
+    // Reveal the final message after that scroll, without moving focus again.
+    requestAnimationFrame(() => {
+      if (!animated || !pin || !root.contains(document.activeElement)) return;
+      pin.scrollTop = 0;
+      const top = Number.parseFloat(getComputedStyle(pin).top) || 0;
+      window.scrollTo({
+        top:
+          window.scrollY +
+          root.getBoundingClientRect().top -
+          top +
+          Math.max(0, root.offsetHeight - pin.offsetHeight),
+        behavior: "instant",
+      });
+      render();
+    });
+  });
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", configure, { passive: true });
   window.addEventListener("pageshow", configure);

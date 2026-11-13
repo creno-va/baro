@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { createAccountClient } from "../src/client/api/account";
 import { createAccountMockHandler } from "../src/client/api/mock/account";
 import { casesMockHandlers } from "../src/client/api/mock/cases";
-import { createReportsMockHandler, type ReportMockState } from "../src/client/api/mock/reports";
+import {
+  createReportsMockHandler,
+  mockReportSourceHash,
+  type ReportMockState,
+} from "../src/client/api/mock/reports";
 import { clearMockStore, readStore, writeStore } from "../src/client/api/mock/runtime";
 import {
   createReportsClient,
@@ -146,6 +150,42 @@ test("accepted deletion sends opaque shared invalidation; failed or ambiguous re
     else Reflect.deleteProperty(globalThis, "localStorage");
   }
 });
+for (const purpose of ["prepare_claim", "respond_to_claim"] as const) {
+  test(`customer mock ${purpose} retains the chosen purpose and prior edited snapshots without inventing legal completion`, async () => {
+    const f = fixture();
+    f.update((state) => {
+      state.reworkContexts = {
+        "case-demo": {
+          casePurpose: purpose,
+          subjectContext: "individual",
+          procedure: { kind: "unconfirmed", stage: "unconfirmed", description: null },
+        },
+      };
+    });
+    const first = await f.reports.get("case-demo");
+    expect(first.content).toContain("사용자가 정한 목적");
+    expect(first.content).toContain(
+      purpose === "prepare_claim" ? "고소·청구 준비" : "상대방 주장에 대응",
+    );
+    expect(first.content).toContain("절차 단계 미확인");
+    expect(first.content.indexOf("다음 행동과 필요 자료")).toBeLessThan(
+      first.content.indexOf("주요 사실"),
+    );
+    expect(first.content).toContain("실제 법률 분석을 실행하지 않은 합성 예시");
+    const edited = "사건 요약\n이미 보관한 직접 편집본";
+    const saved = await f.reports.save("case-demo", {
+      content: edited,
+      excludedFileIds: [],
+      maskIdentifiers: false,
+    });
+    expect((await createReportsClient(f.request).get("case-demo")).content).toBe(saved.content);
+    expect(saved.content).toBe(edited);
+    const next = await f.reports.generate("case-demo");
+    expect(next.content).toContain("내 사건 한눈에");
+    expect(f.read().reportHistory?.[saved.id]?.content).toBe(edited);
+  });
+}
+
 test("review edits and masking persist through storage reload; old versions retain their reviewed content", async () => {
   const f = fixture();
   const report = await f.reports.get("case-demo");
@@ -225,7 +265,8 @@ test("mock reports use current facts, people, actions and corrected observations
   for (const text of [
     "현재 교정한 사실",
     "현재 관계자",
-    "최신 행동 (완료)",
+    "최신 행동",
+    "저장 당시 상태 · 완료로 표시",
     "교정한 자료 관찰",
     "1.25–2.75초",
   ])
@@ -737,4 +778,116 @@ test("mock saved ZIP survives consent change and controller reload, then case de
   await f.account.deleteCase("case-demo", "DELETE");
   expect(Object.keys(f.read().reportZips ?? {})).toEqual([]);
   await expect(reloaded.savedZip(saved.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+
+test("private mock document hashes retain a saved source across body edits and detect same-revision evidence drift", async () => {
+  const f = fixture();
+  const original = await f.reports.get("case-demo");
+  const hash = f.read().reportSourceHashes?.[original.id];
+  expect(hash).toMatch(/^[a-f0-9]{64}$/);
+  const edited = await f.reports.save("case-demo", {
+    content: `${original.content}\n사용자 합성 메모`,
+    excludedFileIds: [],
+    maskIdentifiers: false,
+  });
+  expect(f.read().reportSourceHashes?.[edited.id]).toBe(hash);
+  expect((await f.reports.get("case-demo")).stale).toBe(false);
+  const revision = f.read().cases["case-demo"]?.revision;
+  f.update((state) => {
+    const file = state.files["case-demo"]?.[0];
+    if (file) file.extractedText = "동일 사건 revision에서 달라진 합성 자료 관찰";
+  });
+  expect(f.read().cases["case-demo"]?.revision).toBe(revision);
+  expect(mockReportSourceHash(f.read(), "case-demo")).not.toBe(hash);
+  expect((await f.reports.get("case-demo")).stale).toBe(true);
+  expect(f.read().reportHistory?.[original.id]?.content).toBe(original.content);
+  const regenerated = await f.reports.generate("case-demo", []);
+  expect(f.read().reportSourceHashes?.[regenerated.id]).toBe(
+    mockReportSourceHash(f.read(), "case-demo"),
+  );
+  expect((await f.reports.get("case-demo")).stale).toBe(false);
+  await f.account.deleteCase("case-demo", "DELETE");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toEqual([]);
+});
+
+test("legacy mock reports without a private hash keep their source revision through a body save", async () => {
+  const f = fixture();
+  const original = await f.reports.get("case-demo");
+  f.update((state) => {
+    delete state.reportSourceHashes;
+    const item = state.cases["case-demo"];
+    if (item) item.revision++;
+  });
+  const edited = await f.reports.save("case-demo", {
+    content: `${original.content}\n과거 기준 합성 메모`,
+    excludedFileIds: [],
+    maskIdentifiers: false,
+  });
+  expect(f.read().reportSourceHashes?.[edited.id]).toBeUndefined();
+  expect(f.read().reportSources?.[edited.id]).toBe(f.read().reportSources?.[original.id]);
+  expect((await f.reports.get("case-demo")).stale).toBe(true);
+});
+
+test("mock account deletion removes private document hashes with all owned snapshots", async () => {
+  const f = fixture();
+  await f.reports.get("case-demo");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toHaveLength(1);
+  await f.account.deleteAccount("DELETE");
+  expect(Object.keys(f.read().reportSourceHashes ?? {})).toEqual([]);
+});
+
+test("mock PDF masks the actual rasterized title and body, while an explicit unmasked version retains its original title", async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const rendered: string[] = [];
+  const jpeg = Buffer.from(
+    await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer(),
+  ).toString("base64");
+  const ctx = {
+    measureText: (text: string) => ({ width: text.length * 20 }),
+    fillRect: () => {},
+    fillText: (text: string) => rendered.push(text),
+  };
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      fonts: { load: async () => [], ready: Promise.resolve() },
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ctx,
+        toDataURL: () => `data:image/jpeg;base64,${jpeg}`,
+      }),
+    },
+  });
+  try {
+    const f = fixture();
+    f.update((state) => {
+      const item = state.cases["case-demo"];
+      if (item) item.title = "합성 사건 010-1234-5678";
+    });
+    const original = await f.reports.get("case-demo");
+    const masked = await f.reports.save("case-demo", {
+      content: original.content,
+      excludedFileIds: [],
+      maskIdentifiers: true,
+    });
+    const pdf = await f.reports.pdf(masked.id);
+    expect(new TextDecoder().decode(await pdf.slice(0, 5).arrayBuffer())).toBe("%PDF-");
+    expect(rendered).toContain("합성 사건 [전화번호 가림]");
+    expect(rendered.join("\n")).not.toContain("010-1234-5678");
+    const html = await f.reports.html(masked.id);
+    expect(await html.text()).not.toContain("010-1234-5678");
+    const unmasked = await f.reports.save("case-demo", {
+      content: original.content,
+      excludedFileIds: [],
+      maskIdentifiers: false,
+    });
+    rendered.length = 0;
+    await f.reports.pdf(unmasked.id);
+    expect(rendered).toContain(original.title);
+    expect(f.read().reportHistory?.[original.id]?.title).toBe(original.title);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous);
+    else Reflect.deleteProperty(globalThis, "document");
+  }
 });
