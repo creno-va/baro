@@ -42,6 +42,18 @@ async function commit(root: string) {
     "synthetic test",
   );
 }
+async function submittedPrecedentTest() {
+  const child = Bun.spawn(
+    ["git", "show", "92cb1add152b1144e2baba06d4011455c173f4dc:tests/browser/precedents.e2e.ts"],
+    { cwd: join(import.meta.dir, ".."), stdout: "pipe", stderr: "pipe" },
+  );
+  const [source, error] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  if ((await child.exited) !== 0) throw new Error(error || "VERIFIED_SUBMITTED_TEST_REQUIRED");
+  return source;
+}
 const baselinePackage = {
   name: "synthetic-material-research-phase",
   dependencies: { react: "19.3.0" },
@@ -308,6 +320,46 @@ describe("reviewed route, stylesheet and resolver integrations", () => {
 });
 
 describe("research consumers preserve document, zero-state and nonselector bytes", () => {
+  test("comparison geometry retains its exact role/name and assertions while targeting the actual dialog panel", async () => {
+    const path = "tests/browser/precedents.e2e.ts";
+    const before =
+      '  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });\nexpect(bounds.y + bounds.height).toBeLessThanOrEqual(901);';
+    const after = before.replace(
+      'name: "비교 근거와 이유" });',
+      'name: "비교 근거와 이유" }).locator("[data-dialog]");',
+    );
+    expect(migrateProductMaterialsSelectors(path, before)).toBe(after);
+    expect(await productMaterialsSelectorsAllowed(path, before, after)).toBe(true);
+    expect(await productMaterialsSelectorsAllowed(path, before, after.replace("901", "1001"))).toBe(
+      false,
+    );
+    expect(migrateProductMaterialsSelectors("tests/browser/product-ui.e2e.ts", before)).toBe(
+      before,
+    );
+  });
+
+  test("migrates only the real research spinner selector and preserves its busy action and count", async () => {
+    const source =
+      'const payload = ".ui-spinner";\nawait expect(page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }).locator(".ui-spinner")).toHaveCount(1);';
+    const expected = source.replace(
+      'locator(".ui-spinner")',
+      'locator("[data-product-research-spinner]")',
+    );
+    const path = "tests/browser/precedents.e2e.ts";
+    expect(migrateProductMaterialsSelectors(path, source)).toBe(expected);
+    expect(await productMaterialsSelectorsAllowed(path, source, expected)).toBe(true);
+    expect(
+      await productMaterialsSelectorsAllowed(
+        path,
+        source,
+        expected.replace("toHaveCount(1)", "toHaveCount(0)"),
+      ),
+    ).toBe(false);
+    expect(migrateProductMaterialsSelectors("tests/browser/product-ui.e2e.ts", source)).toBe(
+      source,
+    );
+  });
+
   test("changes only CSS selector literal arguments, leaving spread/API/RGB/geometry/call-count assertions untouched", async () => {
     const path = "tests/browser/precedents.e2e.ts";
     const expected = browserSource
@@ -374,6 +426,35 @@ describe("research consumers preserve document, zero-state and nonselector bytes
 });
 
 describe("material/research git-state preservation", () => {
+  test("only the exact prior submitted file may remain in HEAD/index; old working selectors and unknown staged bytes fail", async () => {
+    const { root, base } = await repository();
+    const path = "tests/browser/precedents.e2e.ts";
+    const submitted = await submittedPrecedentTest();
+    const working = migrateProductMaterialsSelectors(path, browserSource);
+    await file(root, path, submitted);
+    await git(root, "add", path);
+    await commit(root);
+    await file(root, path, working);
+    expect((await checkProductMaterialsPreservation(root, base)).findings).toEqual([]);
+    await file(root, path, browserSource);
+    expect((await checkProductMaterialsPreservation(root, base)).findings).toContainEqual({
+      path,
+      code: "unapproved_materials_integration_patch",
+    });
+    await file(root, path, submitted);
+    expect((await checkProductMaterialsPreservation(root, base)).findings).toContainEqual({
+      path,
+      code: "unapproved_materials_integration_patch",
+    });
+    await file(root, path, `${submitted}// unreviewed staged assertion change\n`);
+    await git(root, "add", path);
+    await file(root, path, working);
+    expect((await checkProductMaterialsPreservation(root, base)).findings).toContainEqual({
+      path,
+      code: "unapproved_materials_integration_patch",
+    });
+  });
+
   test("accepts reviewed integrations but catches an unsafe staged resolver and committed route hidden by approved working bytes", async () => {
     const { root, base } = await repository();
     for (const [path, fixture] of Object.entries(integrationFixtures))

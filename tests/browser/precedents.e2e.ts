@@ -366,7 +366,9 @@ test("peer sign-out removes case and rejects delayed search while focus preserve
     page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }),
   ).toHaveAttribute("aria-busy", "true");
   await expect(
-    page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }).locator(".ui-spinner"),
+    page
+      .getByRole("button", { name: "공식 원문 확인 중…", exact: true })
+      .locator("[data-product-research-spinner]"),
   ).toHaveCount(1);
   await expect(page.getByRole("button", { name: "검색 취소" })).toHaveCount(0);
   await page.evaluate(
@@ -698,7 +700,7 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);
   const reasonOpener = region.locator("[data-product-comparison-highlight]").first();
   await reasonOpener.click();
-  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });
+  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" }).locator("[data-dialog]");
   await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
   await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
   await expect(reason.locator("[data-product-comparison-reason]")).toHaveCount(2);

@@ -36,3 +36,5 @@
 - 새 evidence/research/보존/실제 fixture resolver 47 tests, 497 assertions 통과.
 - 앱·tools TypeScript, 보존 가드, 문서 검사 통과. API·DB·shared client·assets·dependencies/lock 변경 없음.
 - `validate:quick`, `validate:build` 통과. production bundle·Worker dry-run·anonymous login/protected shared503 built-runtime을 확인했다. 기존 Docker 의존4개 로컬 skip은 전체 성공으로 승격하지 않는다. 원격 CI의 실제 결과는 PR 본문에 확정한다.
+
+원격 판례 브라우저 회귀에서 확인한 표시 계약을 추가 보완했다. 카드 제목은2줄/56px, 더보기는 transparent ghost, 로딩 SVG는 새 data hook, native progress는 같은 percentage의 명시적0/100/now ARIA, 비교 근거 DialogPanel은 viewport 안의 높이·스크롤을 갖는다. 브라우저의 기존 값/RGB/위치/count/focus 단언은 유지하고 SVG selector와 실제 visible panel scope만 이관했다. 보완 후 집중88 tests/961 assertions·앱/tools/strict TSX·실제 가드·Biome를 통과했다. 실제15개 브라우저 인수의 완료 여부는 최종 원격 CI로 확인한다.

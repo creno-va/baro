@@ -272,6 +272,10 @@ describe("research read and explicit search boundaries", () => {
     const card = nodes(tree).find((node) => node.props["data-product-precedent-card"] === "");
     expect(card?.props.disabled).toBe(true);
     expect(button(tree, "공식 원문 확인 중…").props.disabled).toBe(true);
+    expect(renderResearch({ busy: true }).match(/data-product-research-spinner=""/g)).toHaveLength(
+      1,
+    );
+    expect(renderResearch()).not.toContain("data-product-research-spinner");
     const html = renderResearch();
     expect(html).toContain(item.citation.court);
     expect(html).toContain(item.citation.caseNumber);
@@ -428,6 +432,9 @@ describe("comparison basis, recovery and exact evidence", () => {
     expect(selected).toEqual([[1]]);
     const html = renderToStaticMarkup(tree);
     expect(html).toContain('value="13" max="100"');
+    expect(html).toContain('aria-valuemin="0"');
+    expect(html).toContain('aria-valuemax="100"');
+    expect(html).toContain('aria-valuenow="13"');
     expect(html).toContain("확인 불가 6");
     expect(html).toContain("차이 있음 · +0점");
   });

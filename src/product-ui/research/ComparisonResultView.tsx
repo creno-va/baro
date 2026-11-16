@@ -47,6 +47,9 @@ export function ComparisonResultView({
           value={comparison.percentage}
           max={100}
           aria-label="사실관계 유사도"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={comparison.percentage}
         />
         <p className="text-xs leading-6 text-[var(--pui-muted)]">
           유사 {comparison.matchedCount} · 차이 {comparison.knownCount - comparison.matchedCount} ·
@@ -112,7 +115,7 @@ export function ComparisonResultView({
         )}
       </section>
       <Dialog
-        className="max-w-4xl"
+        className="max-h-[calc(100dvh-3rem)] max-w-4xl overflow-y-auto"
         open={selected.length > 0}
         onClose={() => setSelected([])}
         title="비교 근거와 이유"

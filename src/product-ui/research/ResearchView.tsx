@@ -226,7 +226,9 @@ export function ResearchView({
                           }}
                           aria-label={`${item.citation.title} · ${item.citation.caseNumber}`}
                         >
-                          <h4>{item.citation.title}</h4>
+                          <h4 className="line-clamp-2 h-14 w-full shrink-0">
+                            {item.citation.title}
+                          </h4>
                           <div
                             data-product-precedent-metadata=""
                             className="flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-[var(--pui-muted)]"
@@ -248,7 +250,7 @@ export function ResearchView({
                 {result.nextCursor && (
                   <div className="flex justify-center">
                     <ControlButton
-                      variant="secondary"
+                      variant="ghost"
                       type="button"
                       disabled={busy || !sourceCurrent}
                       aria-busy={busy || undefined}
