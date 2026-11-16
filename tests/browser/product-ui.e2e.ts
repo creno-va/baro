@@ -27,7 +27,7 @@ test("existing lawyer account keeps case AI and history through general navigati
   await expect(page.getByText("공개 디렉터리", { exact: true })).toHaveCount(0);
   await expect(sidebar.locator(".sidebar-story")).toHaveCount(1);
   await page
-    .locator(".workspace-composer textarea")
+    .locator("[data-product-composer] textarea")
     .fill("변호사 계정으로 자료와 날짜를 함께 정리해 주세요.");
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   await expect(page.locator(".workspace-message--assistant")).toBeVisible();
@@ -698,14 +698,14 @@ test("mobile chat keeps the composer visible and every case destination reachabl
   await expect(selected).toBeInViewport({ ratio: 1 });
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
-  await expect(page.locator(".case-tools > [data-popover-button]")).toBeFocused();
+  await expect(page.locator("[data-product-case-navigation] [data-popover-button]")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(menu).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(menu.getByRole("link").first()).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(menu).not.toBeVisible();
-  await expect(page.locator(".case-tools > [data-popover-button]")).toBeFocused();
+  await expect(page.locator("[data-product-case-navigation] [data-popover-button]")).toBeFocused();
   await returnToCaseConversation(page);
   await expect(page).toHaveURL(base);
   await expect(page.locator(".case-options")).toHaveCount(0);
@@ -742,7 +742,7 @@ test("chat frame keeps its header and composer fixed when preparation expands an
       frame.evaluate((element) => {
         const chat = element.querySelector(".workspace-main");
         const header = element.querySelector(".case-workspace__header");
-        const composer = element.querySelector(".workspace-composer");
+        const composer = element.querySelector("[data-product-composer]");
         if (!chat || !header || !composer) throw new Error("Synthetic conversation frame missing");
         return {
           frameHeight: element.clientHeight,

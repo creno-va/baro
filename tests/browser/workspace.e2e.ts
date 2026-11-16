@@ -271,7 +271,7 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await closeWorkspaceMaterials(page);
-    await page.locator(".case-tools > [data-popover-button]").click();
+    await page.locator("[data-product-case-navigation] [data-popover-button]").click();
     const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const links = navigation.getByRole("link");
     await expect(links).toHaveCount(6);
@@ -283,13 +283,16 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.x + box.width).toBeLessThanOrEqual(width);
       expect(box.height).toBeGreaterThanOrEqual(44);
     }
-    await page.locator(".case-tools > [data-popover-button]").click();
+    await page.locator("[data-product-case-navigation] [data-popover-button]").click();
     const input = page.getByRole("textbox", { name: "추가 사실 또는 질문" });
     expect(
       await input.evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
     ).toBeGreaterThanOrEqual(16);
     const send = page.getByRole("button", { name: "보내기", exact: true });
-    const controls = [page.locator(".composer-add-menu > [data-disclosure-button]"), send];
+    const controls = [
+      page.locator("[data-product-composer-menu] > [data-disclosure-button]"),
+      send,
+    ];
     const boxes = await Promise.all(controls.map((control) => control.boundingBox()));
     const first = boxes[0];
     if (!first) throw new Error("Attachment control is missing its box");
@@ -2295,7 +2298,7 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
-  await page.locator(".case-tools > [data-popover-button]").click();
+  await page.locator("[data-product-case-navigation] [data-popover-button]").click();
   await expect(
     page
       .getByRole("navigation", { name: "사건 도구", exact: true })
@@ -2428,7 +2431,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.goto(base);
   await expect(page.getByRole("heading", { name: "이제, 하나씩 풀어가요." })).toBeVisible();
   await closeWorkspaceMaterials(page);
-  await page.locator(".case-tools > [data-popover-button]").click();
+  await page.locator("[data-product-case-navigation] [data-popover-button]").click();
   const navigation = page.getByRole("navigation", { name: "사건 도구", exact: true });
   await expect(navigation.getByRole("link")).toHaveCount(6);
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
@@ -2444,7 +2447,7 @@ test("workspace panels keep their navigation, readable layouts and accessible co
       "href",
       `${base}${path}`,
     );
-  await page.locator(".case-tools > [data-popover-button]").click();
+  await page.locator("[data-product-case-navigation] [data-popover-button]").click();
   await captureCaseViewports(page, "chat-welcome");
   await page
     .getByLabel("추가 사실 또는 질문")

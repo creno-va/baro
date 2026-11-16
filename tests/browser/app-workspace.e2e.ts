@@ -33,7 +33,7 @@ async function seed(page: Page, role: "customer" | "lawyer" = "customer", empty 
 
 async function closeMaterials(page: Page) {
   const sheet = await page.evaluate(() => matchMedia("(max-width: 1199px)").matches);
-  await expect(page.locator(".ds-responsive-panel")).toHaveAttribute(
+  await expect(page.locator("[data-product-workspace-panel]")).toHaveAttribute(
     "data-mode",
     sheet ? "sheet" : "inline",
   );
@@ -279,7 +279,7 @@ test("case tools replace six tabs and retain every existing route", async ({ pag
   await seed(page);
   await page.goto("/");
   await expect(page.locator(".workspace-tabs")).toHaveCount(0);
-  const trigger = page.locator(".case-tools > [data-popover-button]");
+  const trigger = page.locator("[data-product-case-navigation] [data-popover-button]");
   await trigger.focus();
   await page.keyboard.press("Enter");
   const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
@@ -385,7 +385,7 @@ test("200% zoom and keyboard focus keep compact navigation reachable", async ({ 
   await page.evaluate(() => {
     document.documentElement.style.zoom = "2";
   });
-  await page.locator(".case-tools > [data-popover-button]").press("Enter");
+  await page.locator("[data-product-case-navigation] [data-popover-button]").press("Enter");
   const link = page
     .getByRole("navigation", { name: "사건 도구", exact: true })
     .getByRole("link", { name: "리포트 보기", exact: true });
@@ -481,7 +481,7 @@ for (const lifetime of ["mounted", "conditional"] as const) {
         await seed(page);
         await page.setViewportSize({ width: from, height: 900 });
         await page.goto(`/?open${lifetime === "conditional" ? "&conditional" : ""}`);
-        const panel = page.locator(".ds-responsive-panel");
+        const panel = page.locator("[data-product-workspace-panel]");
         const opener = panel.getByRole("button", {
           name: topology === "sibling" ? "독립 자료 검토창" : "자료 확인창",
           exact: true,
@@ -574,7 +574,7 @@ test("200% CSS zoom keeps the composer and overlay within the visual viewport", 
     animations: "disabled",
   });
   await page.getByRole("button", { name: "자료 열기", exact: true }).click();
-  const panel = page.locator(".ds-responsive-panel");
+  const panel = page.locator("[data-product-workspace-panel]");
   expect(
     await panel.evaluate(
       (node) => node.getBoundingClientRect().bottom <= (visualViewport?.height ?? innerHeight) + 1,

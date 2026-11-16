@@ -80,7 +80,7 @@ async function messages(page: Page) {
 }
 async function attach(page: Page) {
   const chooser = page.waitForEvent("filechooser");
-  await page.locator(".composer-add-menu > [data-disclosure-button]").click();
+  await page.locator("[data-product-composer-menu] > [data-disclosure-button]").click();
   await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles(file);
 }
@@ -90,17 +90,17 @@ test("composer keeps text above the plus/send toolbar at phone and desktop width
 }, testInfo) => {
   await seed(page);
   const input = page.getByLabel("추가 사실 또는 질문", { exact: true });
-  const attach = page.locator(".composer-add-menu > [data-disclosure-button]");
+  const attach = page.locator("[data-product-composer-menu] > [data-disclosure-button]");
   await expect(attach).toHaveText("");
   await expect(page.locator(".workspace-message-length")).toHaveCount(0);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : 900 });
     await expect(input).toBeInViewport();
     const measure = () =>
-      page.locator(".workspace-composer-row").evaluate((row) => {
+      page.locator("[data-product-composer-row]").evaluate((row) => {
         const input = row.querySelector("textarea");
-        const attach = row.querySelector(".composer-add-menu > [data-disclosure-button]");
-        const send = row.querySelector(".workspace-send");
+        const attach = row.querySelector("[data-product-composer-menu] > [data-disclosure-button]");
+        const send = row.querySelector("[data-product-composer-send]");
         const surface = row.parentElement;
         if (!input || !attach || !send || !surface) throw new Error("Composer controls missing");
         const attachBox = attach.getBoundingClientRect();
@@ -128,7 +128,7 @@ test("composer keeps text above the plus/send toolbar at phone and desktop width
     expect((await measure()).height).toBe(46);
     await expect(page.getByRole("button", { name: "보내기", exact: true })).toBeEnabled();
     await page
-      .locator(".workspace-composer-surface")
+      .locator("[data-product-composer-surface]")
       .screenshot({ path: testInfo.outputPath(`compact-composer-${width}.png`) });
     await input.fill("");
   }
@@ -150,7 +150,7 @@ test("case header keeps a compact title and accessible tools while deletion stay
     { id, title },
   );
   await page.reload();
-  const nav = page.locator(".case-navigation");
+  const nav = page.locator("[data-product-case-navigation]");
   await expect(nav.getByRole("heading", { name: title, exact: true })).toBeVisible();
   await expect(nav.getByLabel("사건 관리")).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "사건 삭제", exact: true })).toHaveCount(0);
@@ -319,7 +319,7 @@ test("file-only send uploads once, waits for processing, saves attachment and su
   await seed(page);
   await attach(page);
   await page
-    .locator(".workspace-composer")
+    .locator("[data-product-composer]")
     .getByLabel("첨부한 파일의 자동 처리에 동의합니다.")
     .check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -375,7 +375,7 @@ test("upload failure preserves draft and same file retry without duplicate reser
   await attach(page);
   await page.getByLabel("추가 사실 또는 질문").fill("재시도할 합성 질문");
   await page
-    .locator(".workspace-composer")
+    .locator("[data-product-composer]")
     .getByLabel("첨부한 파일의 자동 처리에 동의합니다.")
     .check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -402,7 +402,7 @@ test("failed processing never sends the message and queued sending can be cancel
   await attach(page);
   await page.getByLabel("추가 사실 또는 질문").fill("실패 시 보존할 질문");
   await page
-    .locator(".workspace-composer")
+    .locator("[data-product-composer]")
     .getByLabel("첨부한 파일의 자동 처리에 동의합니다.")
     .check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
@@ -508,7 +508,7 @@ test("materials retain every attachment and mark actual evidence without filter 
     (await messages(page)).find((message: { role: string }) => message.role === "assistant")
       .references,
   ).toHaveLength(5);
-  await page.locator(".case-tools > [data-popover-button]").click();
+  await page.locator("[data-product-case-navigation] [data-popover-button]").click();
   await page
     .getByRole("navigation", { name: "사건 도구", exact: true })
     .getByRole("link", { name: "자료 2", exact: true })
@@ -523,7 +523,7 @@ test("materials retain every attachment and mark actual evidence without filter 
 
 test("dragged and pasted files stay local until consent and sending", async ({ page }) => {
   await seed(page);
-  await page.locator(".workspace-composer").evaluate((form) => {
+  await page.locator("[data-product-composer]").evaluate((form) => {
     const dropped = new DataTransfer();
     dropped.items.add(new File(["합성"], "끌어놓은.txt", { type: "text/plain" }));
     form.dispatchEvent(
@@ -533,7 +533,7 @@ test("dragged and pasted files stay local until consent and sending", async ({ p
   await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
     "끌어놓은.txt",
   );
-  await page.locator(".workspace-composer").evaluate((form) => {
+  await page.locator("[data-product-composer]").evaluate((form) => {
     const pasted = new DataTransfer();
     pasted.items.add(new File(["합성"], "붙여넣은.txt", { type: "text/plain" }));
     form.dispatchEvent(
@@ -724,7 +724,7 @@ for (const viewport of [
     await expect.poll(() => log.evaluate((node) => node.clientHeight)).toBeGreaterThan(200);
     await expect
       .poll(async () => {
-        const composer = await page.locator(".workspace-composer").boundingBox();
+        const composer = await page.locator("[data-product-composer]").boundingBox();
         return composer ? composer.y + composer.height : Infinity;
       })
       .toBeLessThanOrEqual(viewport.height + 1);
@@ -734,7 +734,7 @@ for (const viewport of [
     await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBe(0);
     const tabs = page.locator(".case-workspace__header");
     const before = await tabs.boundingBox();
-    const composer = await page.locator(".workspace-composer").boundingBox();
+    const composer = await page.locator("[data-product-composer]").boundingBox();
     const bounds = await log.boundingBox();
     const panel = await page.locator(".workspace-main").boundingBox();
     const documentScroll = await page.evaluate(() => scrollY);
@@ -746,7 +746,10 @@ for (const viewport of [
     await page.mouse.wheel(0, 600);
     await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBe(600);
     expect((await tabs.boundingBox())?.y).toBeCloseTo(before.y, 1);
-    expect((await page.locator(".workspace-composer").boundingBox())?.y).toBeCloseTo(composer.y, 1);
+    expect((await page.locator("[data-product-composer]").boundingBox())?.y).toBeCloseTo(
+      composer.y,
+      1,
+    );
     expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
     expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
     expect(
@@ -776,9 +779,12 @@ for (const viewport of [
     if (viewport.width === 390 || viewport.width === 1440)
       await page.screenshot({ path: `.wrangler/chat-scroll-${viewport.width}.png` });
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.locator(".ds-responsive-panel")).toHaveAttribute("data-mode", "sheet");
+    await expect(page.locator("[data-product-workspace-panel]")).toHaveAttribute(
+      "data-mode",
+      "sheet",
+    );
     await closeWorkspaceMaterials(page);
-    await page.locator(".case-tools > [data-popover-button]").click();
+    await page.locator("[data-product-case-navigation] [data-popover-button]").click();
     await page
       .getByRole("navigation", { name: "사건 도구", exact: true })
       .getByRole("link", { name: /타임라인/ })
@@ -788,7 +794,10 @@ for (const viewport of [
       await page.locator("body").evaluate((node) => getComputedStyle(node).overflowY),
     ).not.toBe("hidden");
     await page.getByRole("link", { name: "대화로 돌아가기", exact: true }).click();
-    await expect(page.locator(".ds-responsive-panel")).toHaveAttribute("data-mode", "sheet");
+    await expect(page.locator("[data-product-workspace-panel]")).toHaveAttribute(
+      "data-mode",
+      "sheet",
+    );
     await closeWorkspaceMaterials(page);
     await expect(log.locator("article")).toHaveCount(24);
     await expect(page.locator(".case-options")).toHaveCount(0);

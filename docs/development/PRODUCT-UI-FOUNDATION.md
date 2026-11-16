@@ -52,11 +52,13 @@ Dialog는 mount 뒤 렌더링하므로 JS가 없는 초기 응답에는 열린 d
 | 명령 | 확인 범위 |
 | --- | --- |
 | `bun test tests/product-ui-` | SSR·상태/캐시 분리·초기 단계 경계의 회귀 |
-| `bun run product-ui:check` | 검증된 초기 기반 대비 현재 제품 shell 단계의 변경·랜딩/API/DB 보존 경계 |
+| `bun run product-ui:check` | 현재 제품 이관 단계의 변경·랜딩/API/DB 보존 경계 |
 | `bun run product-ui:measure` | 합성 HTTP와 로컬 D1 adapter의 재현 가능한 호출 수. 실제 서비스 지연 제외 |
 | `bun run validate:quick` | 기존 필수 검사와 새 product-ui 테스트 |
 | `bun run validate:build` | production 번들·fixture 제외·Workers dry-run |
 
 초기 PR #810에서는 `product-ui:check`가 격리 전용 `scripts/check-product-ui-foundation.ts`를 실행한다.
 실제 제품 연결 단계에서는 `scripts/check-product-shell-preservation.ts`로 교체한다. 초기 격리의 import/CSS 제한을 실제 화면 이관을 막는 영구 정책으로 사용하지 않는다.
+대화·질문 이관 단계에서는 `scripts/check-product-workspace-preservation.ts`로 현재 명령을 교체하며 기존 단계 검사는 보존한다.
+그 범위와 실제 화면은 [대화·질문 이관 기록](./PRODUCT-CONVERSATION.md)을 따른다.
 호출 수의 기준과 후속 최적화 인수는 [조회 성능 계획](./WEB-QUERY-PERFORMANCE-PLAN.md)을 따른다.

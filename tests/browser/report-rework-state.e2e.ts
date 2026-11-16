@@ -907,7 +907,7 @@ test("embedded report preserves stale edits before generating a new snapshot and
   });
   await page.goto("/cases/synthetic-rework-case/reports?embedded=true");
   await expect(page.getByRole("heading", { name: "전달할 리포트를 준비해요" })).toHaveCount(0);
-  await expect(page.locator(".case-navigation")).toHaveCount(0);
+  await expect(page.locator("[data-product-case-navigation]")).toHaveCount(0);
   await page.getByRole("button", { name: "수정하기", exact: true }).click();
   await page
     .getByRole("textbox", { name: "사건 개요 수정" })

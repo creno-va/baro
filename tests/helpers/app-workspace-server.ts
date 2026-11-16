@@ -1,5 +1,6 @@
 // Standalone synthetic shell fixture. No application API, DB, provider or secret access.
 import { resolve } from "node:path";
+import { compileProductStyles } from "./product-styles";
 
 const root = resolve(import.meta.dir, "../..");
 const bundle = await Bun.build({
@@ -19,20 +20,8 @@ const bundle = await Bun.build({
 });
 if (!bundle.success) throw new Error("Shell fixture bundle failed");
 const script = await bundle.outputs[0]?.text();
-const names = [
-  "global",
-  "design-system",
-  "shell",
-  "app-focus",
-  "cases",
-  "workspace",
-  "case-workbench",
-];
 const css =
-  (await Promise.all(names.map((name) => Bun.file(`${root}/src/styles/${name}.css`).text())))
-    .join("\n")
-    .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "") +
+  (await compileProductStyles(root)) +
   `
 .shell-fixture-chat{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
 .shell-fixture-messages{overflow:auto;overscroll-behavior:contain;padding:24px;min-height:0}
@@ -55,7 +44,7 @@ const server = Bun.serve({
     if (path.startsWith("/brand/") || path.startsWith("/fonts/"))
       return new Response(Bun.file(`${root}/public${path}`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 공통 shell 합성 검증</title><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 공통 shell 합성 검증</title><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>',
       {
         headers: {
           "content-type": "text/html;charset=utf-8",

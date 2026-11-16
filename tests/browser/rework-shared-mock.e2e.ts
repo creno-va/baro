@@ -67,7 +67,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
     });
     await closeWorkspaceMaterials(page);
     await page
-      .locator(".workspace-composer")
+      .locator("[data-product-composer]")
       .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
       .check();
     await page.getByRole("button", { name: "보내기", exact: true }).click();

@@ -9,7 +9,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Send,
   Upload,
   X,
 } from "lucide-react";
@@ -41,6 +40,10 @@ import {
   type V2LookupRequest,
   type V2MessageRequest,
 } from "../../contracts/v2";
+import { Button as ComposerButton } from "../../product-ui/Button";
+import { ComposerAddMenu } from "../../product-ui/conversation/ComposerAddMenu";
+import { ConversationComposer } from "../../product-ui/conversation/ConversationComposer";
+import { GlobalProductTheme } from "../../product-ui/GlobalTheme";
 import { CaseDetail } from "../analysis/CaseDetail";
 import { useCustomerAccess } from "../intake/useCustomerAccess";
 import { downloadReviewedReport } from "../reports/download-reviewed";
@@ -48,8 +51,7 @@ import { FollowUpResolution } from "../resolution/FollowUpResolution";
 import { BrandMark } from "../ui/brand";
 import { Button, ButtonLink, ActionButton as ControlButton } from "../ui/button";
 import { Modal } from "../ui/dialog";
-import type { DisclosureHandle } from "../ui/disclosure";
-import { Disclosure, DisclosureSummary } from "../ui/disclosure";
+import { Disclosure, type DisclosureHandle, DisclosureSummary } from "../ui/disclosure";
 import {
   Input as ControlInput,
   Select as ControlSelect,
@@ -2128,284 +2130,278 @@ function WorkspaceContent({ caseId, tab = "chat", lookupAvailable = false }: Wor
                         />
                       )}
                     </div>
-                    <form
-                      noValidate
-                      className="workspace-composer"
-                      onSubmit={(event) => void send(event)}
-                      onDragOver={(event) => {
-                        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        if (event.dataTransfer.files.length) {
-                          event.preventDefault();
-                          if (!readonly) chooseAttachments(Array.from(event.dataTransfer.files));
+                    <GlobalProductTheme className="contents">
+                      <ConversationComposer
+                        formProps={{
+                          onSubmit: (event) => void send(event),
+                          onDragOver: (event) => {
+                            if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+                          },
+                          onDrop: (event) => {
+                            if (event.dataTransfer.files.length) {
+                              event.preventDefault();
+                              if (!readonly)
+                                chooseAttachments(Array.from(event.dataTransfer.files));
+                            }
+                          },
+                          onPaste: (event) => {
+                            if (event.clipboardData.files.length) {
+                              event.preventDefault();
+                              if (!readonly)
+                                chooseAttachments(Array.from(event.clipboardData.files));
+                            }
+                          },
+                        }}
+                        textareaProps={{
+                          ref: draftInput,
+                          id: "workspace-message",
+                          rows: 1,
+                          // Native maxlength counts UTF-16; handlers cap Unicode characters.
+                          maxLength: 20000,
+                          value: draft,
+                          disabled: readonly || busy === "send" || queuedSend,
+                          onChange: (event) => {
+                            const value = event.target.value;
+                            setDraft(
+                              draftComposing.current ? value : [...value].slice(0, 10000).join(""),
+                            );
+                          },
+                          onCompositionStart: () => {
+                            draftComposing.current = true;
+                          },
+                          onCompositionEnd: (event) => {
+                            draftComposing.current = false;
+                            setDraft([...event.currentTarget.value].slice(0, 10000).join(""));
+                          },
+                          placeholder: "사건에 대해 궁금한 점이나 추가할 내용을 적어 주세요",
+                          "aria-invalid": messageTooLong,
+                          onKeyDown: (event) => {
+                            if (
+                              event.key === "Enter" &&
+                              (event.metaKey || event.ctrlKey) &&
+                              !event.nativeEvent.isComposing &&
+                              !draftComposing.current &&
+                              event.nativeEvent.keyCode !== 229 &&
+                              !busy &&
+                              !pendingResponse &&
+                              !readonly &&
+                              !queuedSend &&
+                              (draft.trim() ||
+                                selected.length ||
+                                localAttachments.length ||
+                                chatAttachments.length) &&
+                              (!localAttachments.length || uploadConsent) &&
+                              !messageTooLong
+                            ) {
+                              event.preventDefault();
+                              event.currentTarget.form?.requestSubmit();
+                            }
+                          },
+                        }}
+                        attachments={
+                          <ChatAttachments
+                            local={localAttachments}
+                            uploaded={chatAttachments}
+                            disabled={!!busy || readonly || queuedSend}
+                            removeLocal={(file) => {
+                              setLocalAttachments((items) => items.filter((item) => item !== file));
+                              setRetryUploads((items) => items.filter((item) => item !== file));
+                            }}
+                            removeUploaded={(id) =>
+                              setChatAttachments((items) => items.filter((item) => item.id !== id))
+                            }
+                          />
                         }
-                      }}
-                      onPaste={(event) => {
-                        if (event.clipboardData.files.length) {
-                          event.preventDefault();
-                          if (!readonly) chooseAttachments(Array.from(event.clipboardData.files));
+                        uploadConsent={
+                          !!localAttachments.length && (
+                            <label className="flex min-h-11 items-center gap-2 px-2 text-xs leading-5 text-[var(--pui-muted)]">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 shrink-0 accent-[var(--pui-primary)]"
+                                checked={uploadConsent}
+                                disabled={!!busy || readonly || queuedSend}
+                                onChange={(event) => setUploadConsent(event.target.checked)}
+                              />
+                              첨부한 파일의 자동 처리에 동의합니다.
+                            </label>
+                          )
                         }
-                      }}
-                    >
-                      <div className="workspace-composer-surface">
-                        <ChatAttachments
-                          local={localAttachments}
-                          uploaded={chatAttachments}
-                          disabled={!!busy || readonly || queuedSend}
-                          removeLocal={(file) => {
-                            setLocalAttachments((items) => items.filter((item) => item !== file));
-                            setRetryUploads((items) => items.filter((item) => item !== file));
-                          }}
-                          removeUploaded={(id) =>
-                            setChatAttachments((items) => items.filter((item) => item.id !== id))
-                          }
-                        />
-                        {!!localAttachments.length && (
-                          <FieldLabel className="workspace-consent">
-                            <ControlInput
-                              type="checkbox"
-                              checked={uploadConsent}
-                              disabled={!!busy || readonly || queuedSend}
-                              onChange={(event) => setUploadConsent(event.target.checked)}
-                            />
-                            첨부한 파일의 자동 처리에 동의합니다.
-                          </FieldLabel>
-                        )}
-                        {(busy === "upload" || queuedSend) && (
-                          <div className="workspace-chat-upload-status" role="status">
-                            {!uploadProgress &&
-                            chatAttachments.length > 0 &&
-                            chatAttachments.every((file) => file.status === "ready") ? (
-                              <Clock3 size={16} />
-                            ) : (
-                              <LoaderCircle size={16} className="workspace-spin" />
-                            )}
-                            <span>
-                              {uploadProgress
-                                ? `${uploadProgress.fileName} · ${uploadProgressLabel(uploadProgress.value)}`
-                                : chatAttachments.length > 0 &&
-                                    chatAttachments.every((file) => file.status === "ready")
-                                  ? "사건과 리포트 준비의 완료 확인을 기다려요. 입력과 자료는 보존돼요."
-                                  : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
-                              {uploadProgress && (
-                                <ElapsedTime
-                                  startedAt={uploadProgress.startedAt}
-                                  label=" · 전송 시작 후"
+                        uploadFeedback={
+                          (busy === "upload" || queuedSend) && (
+                            <div
+                              className="flex min-w-0 items-start gap-2 px-2 py-3 text-xs leading-5 text-[var(--pui-muted)]"
+                              role="status"
+                            >
+                              {!uploadProgress &&
+                              chatAttachments.length > 0 &&
+                              chatAttachments.every((file) => file.status === "ready") ? (
+                                <Clock3 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                              ) : (
+                                <LoaderCircle
+                                  size={16}
+                                  className="mt-0.5 shrink-0 animate-spin motion-reduce:animate-none"
+                                  aria-hidden="true"
                                 />
                               )}
-                              {!busy &&
-                                !chatAttachments.every((file) => file.status === "ready") &&
-                                " 파일 전송은 끝났고, 내용을 읽는 중이에요. 큰 문서나 음성·영상은 더 걸릴 수 있어요."}
-                            </span>
-                            {!busy && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  queuedUpload.current = null;
-                                  setQueuedSend(false);
-                                }}
-                              >
-                                전송 대기 취소
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                        {!!selected.length && (
-                          <section className="composer-mentions" aria-label="멘션한 자료">
-                            {readyFiles
-                              .filter((file) => selected.includes(file.id))
-                              .map((file) => (
-                                <span key={file.id}>
-                                  <FileText size={14} />
-                                  {file.name}
-                                  <ControlButton
-                                    type="button"
-                                    aria-label={`${file.name} 멘션 해제`}
-                                    disabled={!!busy || readonly || queuedSend}
-                                    onClick={() =>
-                                      setSelected((ids) => ids.filter((id) => id !== file.id))
-                                    }
-                                  >
-                                    <X size={13} />
-                                  </ControlButton>
-                                </span>
-                              ))}
-                          </section>
-                        )}
-                        <div className="workspace-composer-row">
-                          <Disclosure
-                            ref={composerMenu}
-                            className="composer-add-menu"
-                            onKeyDown={(event) => {
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                event.currentTarget.dispatchEvent(
-                                  new CustomEvent("baro-disclosure-close"),
-                                );
-                                event.currentTarget
-                                  .querySelector<HTMLElement>("[data-disclosure-button]")
-                                  ?.focus();
-                              } else if (event.key === "Tab") {
-                                requestAnimationFrame(() => {
-                                  const menu = composerMenu.current;
-                                  if (menu && !menu.contains(document.activeElement)) menu.close();
-                                });
-                              }
-                            }}
-                          >
-                            <DisclosureSummary
-                              ref={composerTrigger}
-                              variant="icon"
-                              aria-label="자료 추가 및 멘션"
-                              title="자료 추가 및 멘션"
-                            >
-                              <Plus size={20} />
-                            </DisclosureSummary>
-                            <div className="composer-add-menu__content">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                disabled={!!busy || readonly || queuedSend}
-                                onClick={(event) => {
-                                  event.currentTarget
-                                    .closest("[data-disclosure]")
-                                    ?.dispatchEvent(new CustomEvent("baro-disclosure-close"));
-                                  openUploadChooser();
-                                }}
-                              >
-                                <Upload size={17} />
-                                자료 추가
-                              </Button>
-                              <fieldset disabled={!!busy || readonly || queuedSend}>
-                                <legend>
-                                  <Paperclip size={16} /> 자료 멘션{" "}
-                                  {selected.length > 0 && `· ${selected.length}개 선택`}
-                                </legend>
-                                {readyFiles.length ? (
-                                  readyFiles.map((file) => (
-                                    <FieldLabel key={file.id}>
-                                      <ControlInput
-                                        type="checkbox"
-                                        checked={selected.includes(file.id)}
-                                        onChange={(event) =>
-                                          setSelected((ids) =>
-                                            event.target.checked
-                                              ? [...new Set([...ids, file.id])]
-                                              : ids.filter((id) => id !== file.id),
-                                          )
-                                        }
-                                      />
-                                      <span>{file.name}</span>
-                                    </FieldLabel>
-                                  ))
-                                ) : (
-                                  <p>처리가 완료된 자료를 대화에 연결할 수 있어요.</p>
+                              <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                                {uploadProgress
+                                  ? `${uploadProgress.fileName} · ${uploadProgressLabel(uploadProgress.value)}`
+                                  : chatAttachments.length > 0 &&
+                                      chatAttachments.every((file) => file.status === "ready")
+                                    ? "사건과 리포트 준비의 완료 확인을 기다려요. 입력과 자료는 보존돼요."
+                                    : "첨부 파일을 처리하고 있어요. 준비되면 메시지를 보내요."}
+                                {uploadProgress && (
+                                  <ElapsedTime
+                                    startedAt={uploadProgress.startedAt}
+                                    label=" · 전송 시작 후"
+                                  />
                                 )}
-                              </fieldset>
-                              {lookupAvailable && view.case.schemaVersion === "2" && (
-                                <Button
+                                {!busy &&
+                                  !chatAttachments.every((file) => file.status === "ready") &&
+                                  " 파일 전송은 끝났고, 내용을 읽는 중이에요. 큰 문서나 음성·영상은 더 걸릴 수 있어요."}
+                              </span>
+                              {!busy && (
+                                <ComposerButton
                                   type="button"
                                   variant="ghost"
-                                  size="icon"
-                                  className="workspace-lookup-open"
-                                  aria-label="외부 조회"
-                                  title="외부 조회"
-                                  disabled={!!busy || readonly || queuedSend || pendingResponse}
+                                  size="sm"
                                   onClick={() => {
-                                    composerMenu.current?.close();
-                                    lookupAttempt.current = null;
-                                    setLookupOpen(true);
+                                    queuedUpload.current = null;
+                                    setQueuedSend(false);
                                   }}
                                 >
-                                  <Search size={17} />
-                                  <span>외부 조회</span>
-                                </Button>
+                                  전송 대기 취소
+                                </ComposerButton>
                               )}
                             </div>
-                          </Disclosure>
-                          <FieldLabel className="workspace-sr-only" htmlFor="workspace-message">
-                            추가 사실 또는 질문
-                          </FieldLabel>
-                          <ControlTextarea
-                            ref={draftInput}
-                            id="workspace-message"
-                            rows={1}
-                            // Native maxlength counts UTF-16; the change handler caps Unicode characters.
-                            maxLength={20000}
-                            value={draft}
-                            disabled={readonly || busy === "send" || queuedSend}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setDraft(
-                                draftComposing.current
-                                  ? value
-                                  : [...value].slice(0, 10000).join(""),
-                              );
-                            }}
-                            onCompositionStart={() => {
-                              draftComposing.current = true;
-                            }}
-                            onCompositionEnd={(event) => {
-                              draftComposing.current = false;
-                              setDraft([...event.currentTarget.value].slice(0, 10000).join(""));
-                            }}
-                            placeholder="사건에 대해 궁금한 점이나 추가할 내용을 적어 주세요"
-                            aria-invalid={messageTooLong}
-                            onKeyDown={(event) => {
-                              if (
-                                event.key === "Enter" &&
-                                (event.metaKey || event.ctrlKey) &&
-                                !event.nativeEvent.isComposing &&
-                                !draftComposing.current &&
-                                event.nativeEvent.keyCode !== 229 &&
-                                !busy &&
-                                !pendingResponse &&
-                                !readonly &&
-                                !queuedSend &&
-                                (draft.trim() ||
-                                  selected.length ||
-                                  localAttachments.length ||
-                                  chatAttachments.length) &&
-                                (!localAttachments.length || uploadConsent) &&
-                                !messageTooLong
-                              ) {
-                                event.preventDefault();
-                                event.currentTarget.form?.requestSubmit();
-                              }
-                            }}
-                          />
-                          <Button
-                            className="workspace-send"
-                            type="submit"
-                            disabled={
-                              !!busy ||
-                              queuedSend ||
-                              (!draft.trim() &&
-                                !selected.length &&
-                                !localAttachments.length &&
-                                !chatAttachments.length) ||
-                              (!!localAttachments.length && !uploadConsent) ||
-                              messageTooLong ||
-                              readonly ||
-                              pendingResponse ||
-                              chatAttachments.some(
-                                (file) => file.status === "failed" || !!file.uploadRejection,
-                              )
-                            }
-                          >
-                            {busy === "send" ? (
-                              <LoaderCircle className="workspace-spin" size={17} />
-                            ) : (
-                              <Send size={17} />
+                          )
+                        }
+                        mentions={
+                          !!selected.length && (
+                            <section
+                              className="mb-2 flex flex-wrap gap-1.5 px-2"
+                              aria-label="멘션한 자료"
+                            >
+                              {readyFiles
+                                .filter((file) => selected.includes(file.id))
+                                .map((file) => (
+                                  <span
+                                    key={file.id}
+                                    className="flex max-w-full items-center gap-1 rounded-lg border border-[var(--pui-border)] bg-[var(--pui-background)] pl-2 text-xs text-[var(--pui-text)]"
+                                  >
+                                    <FileText size={14} className="shrink-0" aria-hidden="true" />
+                                    <span className="min-w-0 truncate">{file.name}</span>
+                                    <ComposerButton
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      aria-label={`${file.name} 멘션 해제`}
+                                      disabled={!!busy || readonly || queuedSend}
+                                      onClick={() =>
+                                        setSelected((ids) => ids.filter((id) => id !== file.id))
+                                      }
+                                    >
+                                      <X size={13} aria-hidden="true" />
+                                    </ComposerButton>
+                                  </span>
+                                ))}
+                            </section>
+                          )
+                        }
+                        addMenu={
+                          <ComposerAddMenu ref={composerMenu} triggerRef={composerTrigger}>
+                            {(close) => (
+                              <>
+                                <ComposerButton
+                                  type="button"
+                                  variant="ghost"
+                                  className="w-full justify-start rounded-lg"
+                                  disabled={!!busy || readonly || queuedSend}
+                                  onClick={() => {
+                                    close();
+                                    openUploadChooser();
+                                  }}
+                                >
+                                  <Upload size={17} aria-hidden="true" />
+                                  자료 추가
+                                </ComposerButton>
+                                <fieldset
+                                  className="border-t border-[var(--pui-border)] pt-2"
+                                  disabled={!!busy || readonly || queuedSend}
+                                >
+                                  <legend className="flex items-center gap-2 px-2 text-xs font-medium text-[var(--pui-muted)]">
+                                    <Paperclip size={16} aria-hidden="true" /> 자료 멘션{" "}
+                                    {selected.length > 0 && `· ${selected.length}개 선택`}
+                                  </legend>
+                                  {readyFiles.length ? (
+                                    readyFiles.map((file) => (
+                                      <label
+                                        key={file.id}
+                                        className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-[var(--pui-background)]"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 shrink-0 accent-[var(--pui-primary)]"
+                                          checked={selected.includes(file.id)}
+                                          onChange={(event) =>
+                                            setSelected((ids) =>
+                                              event.target.checked
+                                                ? [...new Set([...ids, file.id])]
+                                                : ids.filter((id) => id !== file.id),
+                                            )
+                                          }
+                                        />
+                                        <span className="min-w-0 [overflow-wrap:anywhere]">
+                                          {file.name}
+                                        </span>
+                                      </label>
+                                    ))
+                                  ) : (
+                                    <p className="px-2 py-3 text-xs leading-5 text-[var(--pui-muted)]">
+                                      처리가 완료된 자료를 대화에 연결할 수 있어요.
+                                    </p>
+                                  )}
+                                </fieldset>
+                                {lookupAvailable && view.case.schemaVersion === "2" && (
+                                  <ComposerButton
+                                    type="button"
+                                    variant="ghost"
+                                    className="w-full justify-start rounded-lg"
+                                    aria-label="외부 조회"
+                                    title="외부 조회"
+                                    disabled={!!busy || readonly || queuedSend || pendingResponse}
+                                    onClick={() => {
+                                      composerMenu.current?.close();
+                                      lookupAttempt.current = null;
+                                      setLookupOpen(true);
+                                    }}
+                                  >
+                                    <Search size={17} aria-hidden="true" />
+                                    <span>외부 조회</span>
+                                  </ComposerButton>
+                                )}
+                              </>
                             )}
-                            {busy === "send" ? "저장 중" : "보내기"}
-                          </Button>
-                        </div>
-                      </div>
-                    </form>
+                          </ComposerAddMenu>
+                        }
+                        sending={busy === "send"}
+                        sendDisabled={
+                          !!busy ||
+                          queuedSend ||
+                          (!draft.trim() &&
+                            !selected.length &&
+                            !localAttachments.length &&
+                            !chatAttachments.length) ||
+                          (!!localAttachments.length && !uploadConsent) ||
+                          messageTooLong ||
+                          readonly ||
+                          pendingResponse ||
+                          chatAttachments.some(
+                            (file) => file.status === "failed" || !!file.uploadRejection,
+                          )
+                        }
+                      />
+                    </GlobalProductTheme>
                   </>
                 )}
                 {tab === "files" && materialsPanel}

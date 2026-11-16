@@ -206,7 +206,7 @@ test("chat attachment chooser keeps the unsent message in the conversation", asy
   await page.goto(base);
   await page.getByLabel("추가 사실 또는 질문").fill("미전송 합성 초안");
   const chooser = page.waitForEvent("filechooser");
-  await page.locator(".composer-add-menu > [data-disclosure-button]").click();
+  await page.locator("[data-product-composer-menu] > [data-disclosure-button]").click();
   await page.getByRole("button", { name: "자료 추가", exact: true }).click();
   await (await chooser).setFiles({
     name: "합성.txt",

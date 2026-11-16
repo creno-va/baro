@@ -153,8 +153,11 @@ test("an example only fills the composer and home remains usable at enlarged tex
   const example = page.getByRole("button", { name: "빌려준 돈을 못 받았어요" });
   await expect(example).toBeEnabled();
   const targetHeights = await page
-    .locator(".conversation-home button:not([role=radio]), .conversation-context label")
+    .locator(
+      "[data-product-case-input] button:not([role=radio]), [data-product-case-input] label:has(input[type=radio])",
+    )
     .evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().height));
+  expect(targetHeights.length).toBeGreaterThan(0);
   expect(targetHeights.every((height) => height >= 44)).toBe(true);
   await example.click();
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });

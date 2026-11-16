@@ -1,5 +1,6 @@
 // Isolated browser harness for unchanged product components while A's shell is developed.
 import { resolve } from "node:path";
+import { compileProductStyles } from "./product-styles";
 
 const root = resolve(import.meta.dir, "../..");
 const httpFixture = Bun.env.BARO_REPORT_HTTP_FIXTURE === "true";
@@ -39,15 +40,8 @@ const bundle = await Bun.build({
 if (!bundle.success) throw new Error("Report browser bundle failed");
 const script = await bundle.outputs[0]?.text();
 if (!script) throw new Error("Report bundle missing");
-const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
-  .replace(/^@import .*;$/gm, "")
-  .replace(/@theme inline\s*\{[^}]*\}/s, "");
 const css =
-  globalCss +
-  (await Bun.file(`${root}/src/styles/shell.css`).text()) +
-  (await Bun.file(`${root}/src/styles/app-focus.css`).text()) +
-  (await Bun.file(`${root}/src/styles/design-system.css`).text()) +
-  (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
+  (await compileProductStyles(root)) +
   (await Bun.file(`${root}/src/styles/reports.css`).text()) +
   (await Bun.file(`${root}/src/styles/evidence.css`).text()) +
   (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
@@ -70,7 +64,7 @@ const server = Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body class="app-frame" data-app-workspace><p>API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO D - 합성 브라우저 검증</title><link rel="stylesheet" href="/app.css"></head><body class="app-frame" data-app-workspace><p>API 예시 응답으로 보기 · 독립 D 브라우저 검증</p><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
       {
         headers: {
           "content-type": "text/html;charset=utf-8",
