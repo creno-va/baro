@@ -71,6 +71,7 @@
     "@headlessui/react": "2.2.10",
     "@noble/hashes": "2.4.0",
     "@tailwindcss/vite": "4.3.3",
+    "@tanstack/react-query": "5.107.1",
     "astro": "7.3.5",
     "better-auth": "1.7.7",
     "class-variance-authority": "0.7.1",
@@ -82,7 +83,8 @@
     "react-dom": "19.3.0",
     "tailwind-merge": "3.7.0",
     "tailwindcss": "4.3.3",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "zustand": "5.1.0"
   },
   "devDependencies": {
     "@baro/contracts": "workspace:*",
