@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, apiMode, type CaseView, type WorkspaceView } from "../../client/api";
-import { queryKeys } from "../../client/query/resources";
+import { ensureCaseEntry, queryKeys } from "../../client/query/resources";
 import { useWebSession, WebQueryProvider } from "../../client/query/session";
 import { CASE_NARRATIVE_MIN_LENGTH } from "../../contracts/common";
 import { Conversation } from "./Conversation";
@@ -284,6 +284,9 @@ function Sidebar({
 }
 
 function NewStory({ onCreated }: { onCreated: (item: CaseView) => void }) {
+  useEffect(() => {
+    document.title = "새 이야기 · BARO";
+  }, []);
   const { session, owner } = useWebSession();
   const query = useQueryClient();
   const current = useViewGuard();
@@ -390,7 +393,9 @@ function NewStory({ onCreated }: { onCreated: (item: CaseView) => void }) {
         </label>
         <textarea
           id="story"
-          placeholder="언제, 누구와, 어떤 일이 있었나요?\n지금 가장 걱정되는 점을 편하게 적어주세요."
+          placeholder={
+            "언제, 누구와, 어떤 일이 있었나요?\n지금 가장 걱정되는 점을 편하게 적어주세요."
+          }
           minLength={CASE_NARRATIVE_MIN_LENGTH}
           maxLength={5000}
           required
@@ -477,8 +482,16 @@ function CaseWorkspace({
   const [details, setDetails] = useState(false);
   const [manage, setManage] = useState(false);
   const item = useQuery({
-    queryKey: queryKeys.case(owner, caseId),
-    queryFn: () => api.cases.get(caseId),
+    queryKey: [...queryKeys.case(owner, caseId), "entry"],
+    queryFn: ({ signal }) =>
+      ensureCaseEntry({
+        client: query,
+        owner,
+        caseId,
+        signal,
+        list: () => api.cases.list(),
+        get: (id) => api.cases.get(id),
+      }),
     enabled: Boolean(owner),
   });
   const workspace = useQuery({
@@ -488,6 +501,10 @@ function CaseWorkspace({
     refetchInterval: (state) =>
       state.state.data?.messages.some((message) => message.status === "pending") ? 2500 : false,
   });
+  const pageTitle = workspace.data?.case.title ?? item.data?.title;
+  useEffect(() => {
+    if (pageTitle) document.title = `${pageTitle} · BARO`;
+  }, [pageTitle]);
   const refresh = async () => {
     if (!current()) return;
     await Promise.all([

@@ -1,7 +1,9 @@
-import type { SessionView } from "@baro/client-core";
+import type { CaseView, SessionView } from "@baro/client-core";
 import type { QueryClient } from "@tanstack/react-query";
 
-export { queryKeys } from "./client";
+import { queryKeys } from "./client";
+
+export { queryKeys };
 
 export type WebSessionSnapshot = {
   session: SessionView | undefined;
@@ -138,3 +140,33 @@ export function createWebSessionController(deps: {
 }
 
 export type WebSessionController = ReturnType<typeof createWebSessionController>;
+
+/** Entry metadata may come from the sidebar's owner-scoped list. It is never
+ * stored as a full case detail: summary editors need the authoritative detail DTO. */
+export async function ensureCaseEntry(deps: {
+  client: QueryClient;
+  owner: string | null;
+  caseId: string;
+  signal: AbortSignal;
+  list: () => Promise<CaseView[]>;
+  get: (id: string) => Promise<CaseView>;
+}): Promise<CaseView> {
+  deps.signal.throwIfAborted();
+  const items = await deps.client.ensureQueryData({
+    queryKey: queryKeys.cases(deps.owner),
+    queryFn: async ({ signal }) => {
+      signal.throwIfAborted();
+      const value = await deps.list();
+      signal.throwIfAborted();
+      return value;
+    },
+  });
+  // The list may remain useful to the sidebar after this entry is abandoned.
+  // Its completion never authorizes a cancelled entry to load a private detail.
+  deps.signal.throwIfAborted();
+  const preview = items.find((item) => item.id === deps.caseId);
+  if (preview?.schemaVersion === "1" || preview?.schemaVersion === "2") return { ...preview };
+  const detail = await deps.get(deps.caseId);
+  deps.signal.throwIfAborted();
+  return detail;
+}
