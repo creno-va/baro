@@ -21,6 +21,8 @@ const existingFiles = new Set([
   "src/product-ui/intake/CaseInputView.tsx",
   "tests/helpers/product-shell-fixture.tsx",
   "tests/helpers/app-workspace-server.ts",
+  "tests/helpers/reports-ui-server.ts",
+  "tests/helpers/report-real-server.ts",
 ]);
 const workspaceStyleImports: Record<string, string> = {
   "src/pages/cases/[caseId].astro": 'import "../../styles/workspace.css";\n',
@@ -159,6 +161,7 @@ const newFiles = new Set([
   "tests/product-ui-questions.test.tsx",
   "scripts/check-product-workspace-preservation.ts",
   "tests/product-ui-workspace-preservation.test.ts",
+  "tests/helpers/product-styles.ts",
 ]);
 
 export function productWorkspaceChangeFindings(

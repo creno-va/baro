@@ -1,7 +1,6 @@
 // Standalone synthetic shell fixture. No application API, DB, provider or secret access.
 import { resolve } from "node:path";
-import { compile } from "@tailwindcss/node";
-import { Scanner } from "@tailwindcss/oxide";
+import { compileProductStyles } from "./product-styles";
 
 const root = resolve(import.meta.dir, "../..");
 const bundle = await Bun.build({
@@ -21,22 +20,8 @@ const bundle = await Bun.build({
 });
 if (!bundle.success) throw new Error("Shell fixture bundle failed");
 const script = await bundle.outputs[0]?.text();
-// Compile the same product entry as Astro. Concatenating legacy CSS alone
-// would leave the real migrated components' Tailwind utilities untested.
-const productEntry = resolve(root, "src/product-ui/product.css");
-const compiler = await compile(await Bun.file(productEntry).text(), {
-  base: resolve(root, "src/product-ui"),
-  from: productEntry,
-  onDependency: () => {},
-});
-const scanner = new Scanner({
-  sources: [
-    { base: root, pattern: "src/**/*.{astro,ts,tsx}", negated: false },
-    { base: root, pattern: "tests/helpers/*.tsx", negated: false },
-  ],
-});
 const css =
-  compiler.build(scanner.scan()) +
+  (await compileProductStyles(root)) +
   `
 .shell-fixture-chat{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
 .shell-fixture-messages{overflow:auto;overscroll-behavior:contain;padding:24px;min-height:0}

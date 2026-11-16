@@ -40,6 +40,9 @@
 
 별도 localhost 4352는 기존 독립 프레임 fixture다. 실제 `product.css`를 공식 Tailwind compiler/scanner 4.3.3으로 컴파일한다.
 기존 CSP·API stub은 유지했으며 compiler 두 패키지만 직접 devDependency로 선언했다. 잠금 파일의 기존 패키지 해석은 보존했다.
+공통 `tests/helpers/product-styles.ts`를 통해 실제 ReportReview를 사용하는 두 독립 리포트 서버도 같은 제품 CSS를 컴파일한다.
+기존 보고서/evidence/resolution/settings CSS와 API resolver·HTTP adapter·CSP는 유지했다. ReportReading만 사용하는 조판/공식 출처 fixture는 변경하지 않았다.
+공유 compiler 출력에서 미해결 import/directive가 없고 제품 utility가 포함되는 것을 별도 CLI로 확인했다. 전체 리포트 브라우저 과업을 실행했다는 뜻은 아니다.
 자료 교정·대화·안쪽 교정 초안을 입력하고 중첩 확인창을 연 채 1440→390px로 전환했다.
 안쪽 modal과 편집 포커스가 유지되고, Escape 뒤 자료 sheet로 전환되며 부모 교정·대화 초안이 보존되는 것을 확인했다.
 다시 Escape를 누르면 자료 열기 버튼으로 복귀했다. 이는 실제 자료 교정 API 저장의 증거가 아니다.

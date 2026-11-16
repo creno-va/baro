@@ -1,6 +1,7 @@
 // Standalone test server: actual SQLite, AES, signed cookies, Hono routes and
 // R2 byte adapter. No source material, credentials or synthetic sessions in artifacts.
 import { resolve } from "node:path";
+import { compileProductStyles } from "./product-styles";
 import { readyFile } from "./report-fixture";
 import { reportHttpFixture } from "./report-http-fixture";
 
@@ -25,15 +26,8 @@ const bundle = await Bun.build({
 });
 if (!bundle.success) throw new Error("Report browser bundle unavailable");
 const script = await bundle.outputs[0]?.text();
-const globalCss = (await Bun.file(`${root}/src/styles/global.css`).text())
-  .replace(/^@import .*;$/gm, "")
-  .replace(/@theme inline\s*\{[^}]*\}/s, "");
 const css =
-  globalCss +
-  (await Bun.file(`${root}/src/styles/design-system.css`).text()) +
-  (await Bun.file(`${root}/src/styles/shell.css`).text()) +
-  (await Bun.file(`${root}/src/styles/workspace.css`).text()) +
-  (await Bun.file(`${root}/src/styles/reports.css`).text());
+  (await compileProductStyles(root)) + (await Bun.file(`${root}/src/styles/reports.css`).text());
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
@@ -59,7 +53,7 @@ const server = Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 SQL 리포트 검증</title><link rel="stylesheet" href="/app.css"></head><body><main id="root" style="padding:20px"></main><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 SQL 리포트 검증</title><link rel="stylesheet" href="/app.css"></head><body><main id="root" style="padding:20px"></main><script type="module" src="/app.js"></script></body></html>',
       { headers: { "content-type": "text/html;charset=utf-8" } },
     );
   },

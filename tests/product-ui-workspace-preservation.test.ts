@@ -143,6 +143,8 @@ describe("conversation and questions phase preservation", () => {
       ...workspacePagePaths,
       "tests/helpers/product-shell-fixture.tsx",
       "tests/helpers/app-workspace-server.ts",
+      "tests/helpers/reports-ui-server.ts",
+      "tests/helpers/report-real-server.ts",
       ...productWorkspaceSelectorPaths,
     ];
     const additions = [
@@ -157,6 +159,7 @@ describe("conversation and questions phase preservation", () => {
       "tests/product-ui-questions.test.tsx",
       "scripts/check-product-workspace-preservation.ts",
       "tests/product-ui-workspace-preservation.test.ts",
+      "tests/helpers/product-styles.ts",
       "docs/quality/conversation/questions.png",
     ];
     expect(
@@ -205,6 +208,8 @@ describe("conversation and questions phase preservation", () => {
       "tests/browser/unreviewed.e2e.ts",
       "tests/helpers/product-shell-fixture-page.astro",
       "tests/helpers/product-shell-input-page.astro",
+      "tests/helpers/report-rework-layout-server.ts",
+      "tests/helpers/report-official-source-server.ts",
       "src/product-ui/Theme.tsx",
       "src/product-ui/intake/controller.ts",
       "src/product-ui/navigation/NavigationView.tsx",
