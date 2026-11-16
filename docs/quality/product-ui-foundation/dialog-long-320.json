@@ -1,0 +1,13 @@
+{
+  "pageWidth": 320,
+  "panels": [
+    {
+      "scrollWidth": 286,
+      "width": 288
+    }
+  ],
+  "viewport": {
+    "height": 740,
+    "width": 320
+  }
+}

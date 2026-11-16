@@ -63,6 +63,12 @@ export default defineConfig({
                   ),
                 });
                 injectRoute({
+                  pattern: "/__product-ui",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/product-ui-page.astro", import.meta.url),
+                  ),
+                });
+                injectRoute({
                   pattern: "/__design-foundation",
                   entrypoint: fileURLToPath(
                     new URL("./tests/helpers/foundation-page.astro", import.meta.url),

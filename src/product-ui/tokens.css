@@ -1,0 +1,26 @@
+[data-product-ui] {
+  --pui-surface: #fff;
+  --pui-background: #f8fafc;
+  --pui-text: #191f28;
+  --pui-muted: #526176;
+  --pui-border: #dce3ed;
+  --pui-primary: #2364e8;
+  --pui-on-primary: #fff;
+  --pui-focus: #2563eb;
+  --pui-danger: #b42318;
+  --pui-radius: 0.75rem;
+  --pui-shadow: 0 12px 32px rgb(15 23 42 / 8%);
+}
+
+[data-product-ui][data-theme="dark"] {
+  --pui-surface: #1b1d22;
+  --pui-background: #14161a;
+  --pui-text: #edf1f7;
+  --pui-muted: #b1bac8;
+  --pui-border: #424b5a;
+  --pui-primary: #9abbff;
+  --pui-on-primary: #101c35;
+  --pui-focus: #b4ceff;
+  --pui-danger: #ffb4aa;
+  --pui-shadow: 0 12px 32px rgb(0 0 0 / 24%);
+}

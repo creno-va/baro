@@ -102,6 +102,9 @@ Codex 네이티브 앱의 직접 reference 확인은 현재 도구 접근 거부
 
 ## 5. 단계별 PR 범위
 
+격리된 공통 primitive·provider·테마와 개발 검토 경로의 현재 사용법은 [공통 UI 기반 명세](./PRODUCT-UI-FOUNDATION.md)를 따른다.
+[공통 기반 브라우저 기록](../quality/product-ui-foundation/README.md)은 실제 업무 화면의 이관 완료와 구분한다.
+
 | 단계 | 산출물과 범위 | 다음 단계로 넘어갈 조건 |
 | --- | --- | --- |
 | 0. 기준 확인 | 기존 BARO 화면·상태·동선과 이 기능표 대조, 정확한 Codex reference/적용 범위 결정, 랜딩 기준 증거 | 디자인 출처와 미확인 부분을 구분하고 검토 가능한 기본 UI 범위 확정 |
