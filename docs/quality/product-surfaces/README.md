@@ -42,4 +42,4 @@ v1은 raw native fetch를 유지하므로 기본 Astro mock이 해당 endpoint�
 
 25 production Astro roots에서 상대 static/reexport/literal dynamic/Astro script 경로310 modules를 독립 조사했고, 이전 UI control subtree의 active import0을 확인했다. [graph](./active-graph.json). Base/App/PublicLayout과 ToolResults는 현재 production graph에서 도달하지 않는다. BrandMark와 downloadLawyerAsset는 asset/business helper만 사용한다. 공통 case-notice, 폰트·테마·포커스·geometry·문서/print·scoped compatibility CSS가 남으며 전체 CSS 삭제를 주장하지 않는다. 랜딩/자산·API/DB·공유 클라이언트는 이 UI 단계에서 바꾸지 않았다.
 
-최종 통합 quick/build·원격 CI 결과는 실행 후 PR 본문에 확정한다. 기존 Docker 의존 로컬 skip은 실제 native 인수와 구분한다.
+최종 통합 `validate:quick`, `validate:build` 통과. Astro705개 파일 errors0/warnings0, 앱/tools·모바일/공유 계약·기존 회귀, production bundle·Worker dry-run·anonymous login/protected shared503 built-runtime을 확인했다. 새 UI/실제 resolver/consent/name 검사는67 tests·698 assertions, fixture 문구/보존/이름 보강40 tests·281 assertions를 별도로 통과했다(중복 검사를 합산하지 않음). 보존 가드도 통과했다. 기존 Docker 의존4개 로컬 skip은 실제 native 성공으로 승격하지 않는다. Biome은 exit0이며 전역213 warnings/55 infos를 오류와 구분해 기록한다. 정확한 제출 head의 원격 CI 결과는 PR 본문에 확정한다.
