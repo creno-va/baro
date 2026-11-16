@@ -416,7 +416,7 @@ test("a late continuation read cannot restore another account's state or busy fl
   await page.getByRole("button", { name: "합성 계정 전환", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.conversationFixture.aborted)).toBe(true);
   await page.evaluate(() => window.conversationFixture.releaseProgress?.());
-  await expect(page.locator(".conversation-agent")).toHaveCount(0);
+  await expect(page.locator("[data-product-conversation-agent]")).toHaveCount(0);
   await expect(
     page.getByRole("textbox", { name: "추가 사실 또는 질문", exact: true }),
   ).toBeEnabled();

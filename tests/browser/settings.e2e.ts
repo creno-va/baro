@@ -50,12 +50,14 @@ test("account deletion is inline with one entry and shows only linked SSO option
         modal.getByRole("button", { name: `${names[provider]}로 재인증`, exact: true }),
       ).toBeEnabled();
     }
-    const positions = await modal.locator(".settings-provider").evaluateAll((buttons) =>
-      buttons.map((button) => {
-        const { left, width } = button.getBoundingClientRect();
-        return { left, width };
-      }),
-    );
+    const positions = await modal
+      .locator("[data-product-account-provider]")
+      .evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const { left, width } = button.getBoundingClientRect();
+          return { left, width };
+        }),
+      );
     const first = positions[0];
     if (first)
       for (const item of positions) {
@@ -83,7 +85,9 @@ test("account deletion is inline with one entry and shows only linked SSO option
         .toBe(true);
       if (width === 1440) {
         const layout = await card.evaluate((node) => {
-          const heading = node.querySelector(".settings-section-heading")?.getBoundingClientRect();
+          const heading = node
+            .querySelector("[data-product-account-section-heading]")
+            ?.getBoundingClientRect();
           const action = node.querySelector("button")?.getBoundingClientRect();
           if (!heading || !action) throw new Error("Account deletion controls missing");
           return {
@@ -98,9 +102,13 @@ test("account deletion is inline with one entry and shows only linked SSO option
         await card.screenshot({ path: `.wrangler/settings-danger-inline-${width}.png` });
         if (width === 1440)
           for (const section of ["usage", "help"])
-            await page.locator(`.settings-${section} .settings-section-heading`).screenshot({
-              path: `.wrangler/settings-${section}-heading.png`,
-            });
+            await page
+              .locator(
+                `[aria-labelledby="settings-${section}-title"] [data-product-account-section-heading]`,
+              )
+              .screenshot({
+                path: `.wrangler/settings-${section}-heading.png`,
+              });
       }
     }
   }

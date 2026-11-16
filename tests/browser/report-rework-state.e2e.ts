@@ -618,7 +618,7 @@ test("report evidence uses the real upload and review components, requests case 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  const targets = await page.locator(".resolution-path").evaluateAll((buttons) =>
+  const targets = await page.locator("[data-product-resolution-path]").evaluateAll((buttons) =>
     buttons.map((button) => ({
       width: button.getBoundingClientRect().width,
       height: button.getBoundingClientRect().height,
@@ -626,7 +626,7 @@ test("report evidence uses the real upload and review components, requests case 
   );
   expect(targets).toHaveLength(3);
   expect(targets.every((target) => target.height >= 44 && target.width >= 44)).toBe(true);
-  const gap = await page.locator(".resolution").evaluate((section) => {
+  const gap = await page.locator("[data-product-resolution]").evaluate((section) => {
     const controls = document.querySelector("[data-product-report-controls]");
     if (!controls) throw new Error("Synthetic report controls missing");
     return section.getBoundingClientRect().top - controls.getBoundingClientRect().bottom;
@@ -1029,15 +1029,17 @@ for (const side of ["prepare_claim", "respond_to_claim"] as const)
         await expect(button).toBeFocused();
         expect(updates).toBe(0);
       } else {
-        await expect(page.locator(".resolution").getByRole("alert")).toContainText(
+        await expect(page.locator("[data-product-resolution]").getByRole("alert")).toContainText(
           "완료하지 못했어요",
         );
-        await expect(page.locator(".resolution").getByRole("status")).toHaveCount(0);
+        await expect(page.locator("[data-product-resolution]").getByRole("status")).toHaveCount(0);
         failPdf = false;
         const download = page.waitForEvent("download");
         await button.click();
         expect((await download).suggestedFilename()).toContain(report.id);
-        await expect(page.locator(".resolution").getByRole("status")).toContainText("저장 요청");
+        await expect(page.locator("[data-product-resolution]").getByRole("status")).toContainText(
+          "저장 요청",
+        );
         expect(updates).toBe(0);
         expect(pdfs).toBe(2);
       }

@@ -470,8 +470,8 @@ test("settings usage disclosure stacks content below its summary and toggles acc
   await expect(page.locator("#settings-usage-title")).toBeVisible();
   await expect(page.locator("#settings-help-title")).toBeVisible();
   await expect(page.locator("#settings-danger-title")).toBeVisible();
-  await expect(page.locator(".account-settings")).toHaveAttribute("aria-busy", "false");
-  const disclosure = page.locator(".settings-usage-guide");
+  await expect(page.locator("[data-product-account]")).toHaveAttribute("aria-busy", "false");
+  const disclosure = page.locator("[data-product-account-usage-guide]");
   const summary = disclosure.locator("[data-disclosure-button]");
   const content = disclosure.locator("p");
   const help = disclosure.getByRole("link", { name: "한도와 대기 도움말" });
@@ -634,7 +634,8 @@ for (const width of [320, 390, 768, 900, 901, 1024, 1440]) {
           }),
         ).toBeVisible();
       if (route === "/lawyers") await expect(page.locator(".directory-profile")).toHaveCount(2);
-      if (route === "/settings") await expect(page.locator(".usage-item")).toHaveCount(4);
+      if (route === "/settings")
+        await expect(page.locator("[data-product-account-usage-item]")).toHaveCount(4);
       await expect(page.locator(".app-frame")).toBeVisible();
       const dimensions = await page.evaluate(() => ({
         available: document.documentElement.clientWidth,
@@ -816,11 +817,11 @@ test("chat replies separate source cards and wrap long titles and attachment nam
     await page.goto(base);
     await hydrated(page);
     const reply = page.locator(".workspace-message--assistant");
-    await expect(reply.locator(".workspace-source-card")).toHaveCount(1);
+    await expect(reply.locator("[data-product-source-card]")).toHaveCount(1);
     await expect(page.getByText("검증한 공식 출처", { exact: true })).toHaveCount(0);
     const gap = await reply.evaluate((element) => {
       const paragraph = element.querySelector("p")?.getBoundingClientRect();
-      const source = element.querySelector(".workspace-source-cards")?.getBoundingClientRect();
+      const source = element.querySelector("[data-product-source-cards]")?.getBoundingClientRect();
       if (!paragraph || !source) throw new Error("Missing synthetic reply source");
       return source.top - paragraph.bottom;
     });

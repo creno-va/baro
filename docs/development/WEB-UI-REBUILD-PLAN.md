@@ -1,7 +1,7 @@
 # 웹 UI 재구성 계획과 기능 보존표
 
 - 최초 기능 조사 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
-- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 요약·자료 목록/교정·리포트. 상세 범위는 [사건 상세 이관](./PRODUCT-DETAILS.md)에 기록한다. 현재 랜딩 이식은 #815의 `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868` 위에 이어진 별도 미제출 작업이며 [검토 기록](../quality/landing-port/README.md)을 따른다.
+- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 → [#816](https://github.com/creno-va/baro/pull/816) 보존된 랜딩 이식. 현재 대화 도구·후속 해결·계정 UI는 #816의 `44caf3ae302bd2fafd4bb7f661b0b33130a0098c` 위에 연결한 다음 미제출 검토 단위(817)다. [사건 상세](./PRODUCT-DETAILS.md), [랜딩 기록](../quality/landing-port/README.md), [대화 도구·계정 범위](./PRODUCT-TOOLS.md)를 각각 확인한다.
 - 현재 작업 순서: 기존 BARO와 정확한 디자인 기준 확인 → 기본 UI·디자인 시스템·공통 shell PR → 상세 기능 UI 이관 → 조회·성능 개선.
 - 이 문서는 코드 조사와 단계별 인수 계획이다. 구현 완료, 실제 화면 인수, 외부 연동 또는 배포 성공을 뜻하지 않는다.
 - 이전 전면 교체 PR #809는 종료된 별도 작업이다. 해당 PR을 다시 열거나 구현 기준으로 재사용하지 않는다.
@@ -45,7 +45,7 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 아래의 **UI 연결**은 최초 조사 기준 SHA의 production page와 component import에서 해당 기능으로 도달할 수 있다는 뜻이다.
 실제 브라우저·외부 공급자 인수 성공을 의미하지 않는다. **조건부 연결**은 세션, 사건 단계, 서버 설정, 작업 상태에 따라 표시 여부나 조작 가능 여부가 달라진다.
-기능이 연결돼 있다는 사실과 새 시각 tree로 이관됐다는 사실은 별개다. 현재 적용 subset과 남은 화면은 5절과 [사건 상세 이관](./PRODUCT-DETAILS.md)을 함께 확인한다.
+기능이 연결돼 있다는 사실과 새 시각 tree로 이관됐다는 사실은 별개다. 현재 적용 subset과 남은 화면은 5절, [사건 상세 이관](./PRODUCT-DETAILS.md), [대화 도구·계정 이관](./PRODUCT-TOOLS.md)을 함께 확인한다.
 
 | 영역·기존 URL | 현재 UI 연결과 구현 | 주요 소스 | 이후 UI 이관에서 보존할 내용 |
 | --- | --- | --- | --- |
@@ -119,14 +119,15 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 | --- | --- | --- |
 | [#810](https://github.com/creno-va/baro/pull/810) 공통 기반 | 격리 primitive·theme·state/query factory·검토 fixture | 전체 업무 query 연결이나 실제 제품 화면 전환 완료 아님 |
 | [#812](https://github.com/creno-va/baro/pull/812) shell·새 사건 | 실제 탐색/모바일 drawer·최근 사건 동작·테마·CaseInput | 기존 업무 island를 새 shell로 감싼 사실만으로 전체 UI를 이관했다고 세지 않음 |
-| [#813](https://github.com/creno-va/baro/pull/813) 대화·질문 | CaseHeader/WorkspaceFrame·composer/메뉴·IntakeQuestions | 메시지·ConversationAgent/Panel/Analysis/Preparation의 업무 tree는 기존 |
-| [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 기준 head `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868`의 별도 검증 기록. EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
-| 현재 랜딩 이식(PR 미제출) | #815 위에서 원래 랜딩을 LandingLayout/LandingPage와 필요한 React island로 이전. [보존 계약](./WEB-LANDING-PRESERVATION.md), [검토 기록](../quality/landing-port/README.md) | 원래 디자인·자산·동선 보존을 검토하는 별도 작업. UI PR 제출 수와 main 통합·배포 완료에 아직 포함하지 않음 |
-| 후속 UI | 대화 분석/준비·업로드/원본·timeline/actions·판례/조회·FollowUpResolution·설정·로그인/동의·도움말/정책·404/410·v1 화면 | source graph에서 실제로 남은 시각 tree다. 기본 UI milestone과 전체 프론트 인수를 구분 |
+| [#813](https://github.com/creno-va/baro/pull/813) 대화·질문 | CaseHeader/WorkspaceFrame·composer/메뉴·IntakeQuestions | 이 단계에서는 메시지·ConversationAgent/Panel/Analysis/Preparation의 업무 tree를 보존했으며 다음 범위에서 별도 이관 |
+| [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 기준 head `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868`의 별도 검증 기록. 이 단계의 EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
+| [#816](https://github.com/creno-va/baro/pull/816) 랜딩 이식 | #815 위에서 원래 랜딩을 LandingLayout/LandingPage와 필요한 React island로 이전. [보존 계약](./WEB-LANDING-PRESERVATION.md), [검토 기록](../quality/landing-port/README.md) | 기준 head `44caf3ae302bd2fafd4bb7f661b0b33130a0098c`. 원래 디자인·자산·동선 보존의 독립 검토 단위이며 main 통합·배포와 구분 |
+| 현재 대화 도구·후속 해결·계정 UI(PR 미제출, 817) | #816 위에서 Agent/Panel/Analysis/Preparation·메시지/점진 표시/출처, FollowUpResolution·문서 초안, AccountSettings/기존 자산 뷰를 이관. [설계·보존 검증](./PRODUCT-TOOLS.md) | source core/AST·SSR·가드 검증과 실제 CUA·최종 CI를 구분. QA는 별도 진행하며 결과 기록 전에 완료로 세지 않음 |
+| 후속 UI | 업로드·촬영/처리·원본 viewer·standalone timeline/actions·판례 검색/원문/비교·외부 조회·로그인/동의·도움말/정책·404/410·v1 화면 | 새 대화 Preparation·Analysis 및 계정 자산 preview와 다른 실제 업무 범위. 별도 worktree의 진행도 이 브랜치 완료로 세지 않음 |
 
-현재 제출된 UI 검토 단위는 #810·#812·#813·#815 네 개다. 랜딩 이식은 #815 기반의 별도 미제출 작업이다.
+현재 제출된 UI 검토 단위는 #810·#812·#813·#815·#816 다섯 개다. 대화 도구·후속 해결·계정 UI는 #816 기반의 다음 미제출 작업이다.
 독립 성능 PR #811(history batching)·#814(report head index)는 UI PR 수에 포함하지 않는다.
-PR 제출·CI와 main 통합·배포는 각각 구분한다. case-details 이후에도 위 후속 UI가 남으므로 전체 프론트 완료 상태가 아니다.
+PR 제출·CI와 main 통합·배포는 각각 구분한다. 현재 도구·계정 단계 뒤에도 위 후속 UI가 남으므로 전체 프론트 완료 상태가 아니다.
 
 | 단계 | 산출물과 범위 | 다음 단계로 넘어갈 조건 |
 | --- | --- | --- |
@@ -176,11 +177,12 @@ PR 제출·CI와 main 통합·배포는 각각 구분한다. case-details 이후
 
 | 기록 대상 | 현재 상태 |
 | --- | --- |
-| 코드 조사·기능 연결표 | 최초 기준 SHA의 기능표 보존. 현재 production import 연결과 실제 이관 subset을 5절·PRODUCT-DETAILS에 추가 |
+| 코드 조사·기능 연결표 | 최초 기준 SHA의 기능표 보존. 현재 production import 연결과 실제 이관 subset을 5절·PRODUCT-DETAILS·PRODUCT-TOOLS에 추가 |
 | 기존 BARO 화면 기준 | 단계별 baseline 캡처·조작 결과와 새 화면 대조를 각 quality 기록에 보존 |
 | 정확한 Codex reference | 직접 앱 도구 접근 거부 유지. 사용자 선택에 따라 공식 공개 소개 영상을 Computer Use로 확인했으며 최신 native 앱 일치와 구분 |
 | 기본 UI PR | #810 공통 기반, #812 실제 탐색·새 사건 화면. 각 PR 및 product-shell 검토 기록에 범위와 증거 보존 |
 | 상세 기능 UI 이관 | #813 대화 프레임·질문, #815 사건 요약·자료 목록/교정·리포트. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
-| 랜딩 이식 | #815 기반 미제출 작업. 원래 디자인·장면·자산·동선을 유지하는 조립 이식과 로컬 검토는 [landing-port 기록](../quality/landing-port/README.md)에 보존. 제품 전체 이관·원격 배포 인수와 구분 |
+| 랜딩 이식 | #816의 독립 PR. 원래 디자인·장면·자산·동선을 유지하는 조립 이식과 로컬 검토는 [landing-port 기록](../quality/landing-port/README.md)에 보존. 제품 전체 이관·원격 배포 인수와 구분 |
+| 대화 도구·후속 해결·계정 UI | #816 기반 미제출 단계. 원문 core/AST·SSR·기존 회귀와 실제 가드/타입 검증은 PRODUCT-TOOLS에 기록. CUA·최종 quick/build/PR CI는 후속 실제 결과로만 기록 |
 | 조회·성능 개선 | #811·#814의 독립 범위와 합성 fixture/plan 증거. 새 UI 또는 query factory만으로 실제 cloud latency 개선을 주장하지 않음 |
 | 실제 외부/배포 인수 | 요청·승인·환경·동일 SHA의 실제 결과가 있을 때 별도로 기록 |

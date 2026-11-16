@@ -1,11 +1,43 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the fixture layout.
-import BaseLayout from "../../src/layouts/BaseLayout.astro";
+import "../../src/product-ui/product.css";
+import "./conversation-agent-legacy.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the existing confirmation/theme island.
+import { Experience } from "../../src/components/ui/experience";
 // biome-ignore lint/correctness/noUnusedImports: Astro hydrates the synthetic harness.
 import { ConversationAgentFixture } from "./conversation-agent-fixture";
-import "../../src/styles/workspace.css";
-import "../../src/styles/product.css";
+
+Astro.response.headers.set("Cache-Control", "private, no-store, no-transform");
+const pageBootstrap =
+  "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });" +
+  "try{var p=localStorage.getItem('baro-theme');var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}";
+const bootstrapDigest = await crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(pageBootstrap),
+);
+Astro.csp?.insertScriptHash(
+  `sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`,
+);
 ---
-<BaseLayout title="합성 대화 연결 검증 · BARO" description="대화 에이전트의 격리 UI 검증">
-  <main id="main-content" tabindex="-1" class="app-frame app-frame--product"><ConversationAgentFixture client:load /></main>
-</BaseLayout>
+
+<!doctype html>
+<html lang="ko" data-baro-ui="" data-theme="light" data-product-chrome="v2">
+  <head>
+    <meta charset="UTF-8" />
+    <script is:inline set:html={pageBootstrap} />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="대화 에이전트의 격리 UI 검증" />
+    <link rel="icon" type="image/svg+xml" href="/brand/logo.svg" />
+    <title>합성 대화 연결 검증 · BARO</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+    <main id="main-content" tabindex="-1" class="app-frame app-frame--product" data-product-ui=""><ConversationAgentFixture client:load /></main>
+    <div data-baro-experience><Experience client:load /></div>
+  </body>
+</html>
+
+<script>
+  import { installAppFocus } from "../../src/client/app-focus";
+
+  installAppFocus(document);
+</script>

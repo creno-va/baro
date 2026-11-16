@@ -1,0 +1,33 @@
+{
+  "base": "b5138bbf1ba2c2f99fe5aec9c0058968de0e9868",
+  "controller_prefixes": [
+    {
+      "entry": "ConversationAgent",
+      "controller": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "bytes": 19415,
+      "sha256": "b1c5b5eac9994b566904a7efcdfe69d9fd779ccb71a9ed1353b699abec9d9166",
+      "byte_identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "controller": "src/product-ui/conversation-tools/useConversationPanelController.ts",
+      "bytes": 3136,
+      "sha256": "1c95e77b1532163f128e5ab62c32609921951998b5e2845870e5fdeb01efb3c9",
+      "byte_identical": true
+    },
+    {
+      "entry": "ProgressiveReply",
+      "controller": "src/product-ui/conversation-tools/useProgressiveReplyController.ts",
+      "bytes": 2168,
+      "sha256": "8f2398a38d0e61412aedb1d8818d0e6b2f25ae91eac51e8a778369002795e420",
+      "byte_identical": true
+    },
+    {
+      "entry": "MessageContent",
+      "controller": "src/product-ui/conversation-tools/MessageView.tsx",
+      "bytes": 1679,
+      "sha256": "b5de53663651d35b373822a797593be7053cbcc0159dd474113eab2e98a56242",
+      "byte_identical": true
+    }
+  ]
+}

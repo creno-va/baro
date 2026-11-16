@@ -352,11 +352,11 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
     true,
   );
   expect(
-    (await new AxeBuilder({ page }).include(".account-settings").analyze()).violations,
+    (await new AxeBuilder({ page }).include("[data-product-account]").analyze()).violations,
   ).toEqual([]);
   await page.getByRole("button", { name: "계정과 모든 사건 삭제", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  expect((await new AxeBuilder({ page }).include(".report-modal").analyze()).violations).toEqual(
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations).toEqual(
     [],
   );
   await page.keyboard.press("Escape");

@@ -9,10 +9,20 @@ import {
   type ComponentProps,
   isValidElement,
   type ReactNode,
+  type Ref,
   useEffect,
+  useImperativeHandle,
   useRef,
 } from "react";
 import { cn, definedProps } from "./utils";
+
+export interface DisclosureHandle {
+  readonly open: boolean;
+  close: () => void;
+  contains: (node: Node | null) => boolean;
+  closest: (selector: string) => Element | null;
+  focusTrigger: () => void;
+}
 
 export function DisclosureSummary({ children, className, ...props }: ComponentProps<"button">) {
   const content = (
@@ -41,20 +51,38 @@ export function DisclosureSummary({ children, className, ...props }: ComponentPr
 
 function Content({
   expanded,
+  close,
   requested,
   onOpenChange,
+  handle,
   children,
   className,
   ...props
 }: Omit<ComponentProps<"div">, "onToggle"> & {
   expanded: boolean;
+  close: () => void;
   requested?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
+  handle?: Ref<DisclosureHandle> | undefined;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const lastRequested = useRef(requested);
   const notify = useRef(onOpenChange);
   notify.current = onOpenChange;
+  useImperativeHandle(
+    handle,
+    () => ({
+      open: expanded,
+      close: () => {
+        if (expanded) close();
+      },
+      contains: (node) => root.current?.contains(node) ?? false,
+      closest: (selector) => root.current?.closest(selector) ?? null,
+      focusTrigger: () =>
+        root.current?.querySelector<HTMLButtonElement>("[data-disclosure-button]")?.focus(),
+    }),
+    [expanded, close],
+  );
   useEffect(() => {
     notify.current?.(expanded);
   }, [expanded]);
@@ -94,17 +122,26 @@ function Content({
 export function Disclosure({
   open,
   onOpenChange,
+  ref,
   children,
   ...props
-}: Omit<ComponentProps<"div">, "onToggle"> & {
+}: Omit<ComponentProps<"div">, "onToggle" | "ref"> & {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  ref?: Ref<DisclosureHandle>;
   children: ReactNode;
 }) {
   return (
     <HeadlessDisclosure defaultOpen={open ?? false}>
-      {({ open: expanded }) => (
-        <Content {...props} expanded={expanded} requested={open} onOpenChange={onOpenChange}>
+      {({ open: expanded, close }) => (
+        <Content
+          {...props}
+          expanded={expanded}
+          close={close}
+          requested={open}
+          onOpenChange={onOpenChange}
+          handle={ref}
+        >
           {children}
         </Content>
       )}

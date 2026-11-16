@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { compileProductStyles } from "./product-styles";
 import { resolutionHarness, resolutionSource } from "./resolution-fixture";
 
 const root = resolve(import.meta.dir, "../..");
@@ -22,11 +23,7 @@ if (!bundle.success) throw Error("resolution fixture build failed");
 const script = await bundle.outputs.find((file) => file.path.endsWith(".js"))?.text();
 if (!script) throw Error("fixture script missing");
 const css =
-  (await Bun.file(`${root}/src/styles/global.css`).text())
-    .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "") +
-  (await Bun.file(`${root}/src/styles/design-system.css`).text()) +
-  (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
+  (await compileProductStyles(root)) +
   "main{max-width:840px;margin:auto;padding:20px}nav{display:flex;gap:20px;align-items:center}nav button{min-height:44px}";
 let h = resolutionHarness(),
   ownerId = "owner",
@@ -193,7 +190,7 @@ Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 후속 해결 검증</title><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 후속 해결 검증</title><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>',
       {
         headers: {
           "content-type": "text/html;charset=utf-8",
