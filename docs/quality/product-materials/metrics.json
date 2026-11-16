@@ -1,0 +1,142 @@
+{
+  "embeddedMobile": {
+    "focus": "<h3 tabindex=\"-1\">합성 검증 판례 · 임대차보증금 반환</h3>",
+    "heading": 332,
+    "panel": [
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 390
+      }
+    ],
+    "scrollWidth": 390,
+    "viewport": 390
+  },
+  "standalone320": {
+    "scrollWidth": 320,
+    "topics": [
+      {
+        "left": 17,
+        "right": 143.15625
+      },
+      {
+        "left": 151.15625,
+        "right": 230.453125
+      },
+      {
+        "left": 17,
+        "right": 118.921875
+      },
+      {
+        "left": 126.921875,
+        "right": 225.328125
+      },
+      {
+        "left": 17,
+        "right": 131.0625
+      },
+      {
+        "left": 139.0625,
+        "right": 213.265625
+      },
+      {
+        "left": 17,
+        "right": 115.40625
+      },
+      {
+        "left": 123.40625,
+        "right": 197.609375
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      },
+      {
+        "left": 0,
+        "right": 0
+      }
+    ],
+    "viewport": 320
+  },
+  "lookup320": {
+    "dialog": [
+      {
+        "buttons": [
+          {
+            "disabled": false,
+            "name": "닫기"
+          }
+        ],
+        "left": 0,
+        "right": 320
+      }
+    ],
+    "scrollWidth": 320,
+    "width": 320
+  },
+  "comparison": "Default explicit mock does not implement comparison; visible retry/error rendered. No external source opened.",
+  "lookup": "Default mock lacks a lookup catalog; unavailable notice and Escape opener return observed."
+}

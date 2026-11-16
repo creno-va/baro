@@ -4,7 +4,6 @@ import { PrecedentResearch } from "../../../components/workspace/PrecedentResear
 import { opaqueIdSchema } from "../../../contracts";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import CaseLayout from "../../../layouts/CaseLayout.astro";
-import "../../../styles/precedents.css";
 
 const identity = opaqueIdSchema.safeParse(Astro.params.caseId);
 if (!identity.success) return Astro.redirect("/cases");

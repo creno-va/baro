@@ -15,6 +15,7 @@
 @import "../styles/reports.css" layer(legacy);
 @import "../styles/resolution.css" layer(legacy);
 @import "../styles/settings.css" layer(legacy);
+@import "../styles/precedents.css" layer(legacy);
 @import "../styles/case-workbench.css" layer(legacy);
 @import "./tokens.css";
 

@@ -66,7 +66,7 @@ test("desktop and mobile complete topic, result and original flow without overfl
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(page.getByText("내 사건과 얼마나 비슷한가요?", { exact: true })).toHaveCount(0);
   await expect(page.getByText("공식 원문 확인", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".precedent-card .precedent-snippet")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-card] .precedent-snippet")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
@@ -89,8 +89,11 @@ test("desktop and mobile complete topic, result and original flow without overfl
   await expect(original).toBeVisible();
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.locator(".precedent-topic").first()).toHaveCSS("margin-top", "0px");
-    await expect(page.locator(".precedent-topic").first()).toHaveCSS(
+    await expect(page.locator("[data-product-precedent-topic]").first()).toHaveCSS(
+      "margin-top",
+      "0px",
+    );
+    await expect(page.locator("[data-product-precedent-topic]").first()).toHaveCSS(
       "display",
       width < 768 ? "grid" : "flex",
     );
@@ -101,7 +104,7 @@ test("desktop and mobile complete topic, result and original flow without overfl
       .poll(() =>
         page.evaluate(
           () =>
-            [...document.querySelectorAll(".precedent-workspace *")].filter((node) => {
+            [...document.querySelectorAll("[data-product-precedent-research] *")].filter((node) => {
               const style = getComputedStyle(node);
               return (
                 /auto|scroll/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1
@@ -118,13 +121,17 @@ test("desktop and mobile complete topic, result and original flow without overfl
   await expect(list).toBeVisible();
   await expect(page.getByRole("region", { name: "유사 판례 비교" })).toHaveCount(0);
   await list.getByRole("button").first().click();
-  await expect(selected.locator(".precedent-document-heading h3")).toBeFocused();
+  await expect(selected.locator("[data-product-precedent-document-heading] h3")).toBeFocused();
   await expect
     .poll(
-      async () => (await selected.locator(".precedent-document-heading h3").boundingBox())?.y ?? -1,
+      async () =>
+        (await selected.locator("[data-product-precedent-document-heading] h3").boundingBox())?.y ??
+        -1,
     )
     .toBeGreaterThanOrEqual(80);
-  const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
+  const scan = await new AxeBuilder({ page })
+    .include("[data-product-precedent-research]")
+    .analyze();
   expect(scan.violations).toEqual([]);
 });
 
@@ -210,7 +217,7 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
   await expect(list.getByRole("listitem")).toHaveCount(5);
   await expect(
     page.locator(
-      ".precedent-result-heading > p,.precedent-result-heading > div,.precedent-result-note",
+      "[data-product-precedent-results-heading] > p,[data-product-precedent-results-heading] > div,.precedent-result-note",
     ),
   ).toHaveCount(0);
   await expect(list.getByRole("button", { name: /판례 내용 보기/ })).toHaveCount(0);
@@ -228,15 +235,15 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
     await page.evaluate(() => document.fonts.ready);
     await expect
       .poll(async () => {
-        const layout = await list.locator(".precedent-card").evaluateAll((cards) =>
+        const layout = await list.locator("[data-product-precedent-card]").evaluateAll((cards) =>
           cards.map((card) => {
             const rect = card.getBoundingClientRect();
             return {
               height: rect.height,
               titleHeight: card.querySelector("h4")?.getBoundingClientRect().height ?? 0,
               metadataTop:
-                (card.querySelector(".precedent-metadata")?.getBoundingClientRect().top ?? 0) -
-                rect.top,
+                (card.querySelector("[data-product-precedent-metadata]")?.getBoundingClientRect()
+                  .top ?? 0) - rect.top,
             };
           }),
         );
@@ -261,11 +268,13 @@ test("five-card pages append on demand, cards clamp titles and the full judgment
   const detail = page.getByRole("region", { name: "선택한 판례" });
   await expect(detail.getByRole("heading", { name: "【판시사항】" })).toBeVisible();
   await expect(detail.getByRole("heading", { name: "【판결요지】" })).toBeVisible();
-  await expect(detail.locator(".precedent-full-text")).toContainText("판결문 맨 끝의 합성 주문");
+  await expect(detail.locator("[data-product-precedent-document]")).toContainText(
+    "판결문 맨 끝의 합성 주문",
+  );
   await expect(detail.getByText("원문 일부", { exact: true })).toHaveCount(0);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    const headings = detail.locator(".precedent-full-text > h4");
+    const headings = detail.locator("[data-product-precedent-document] > h4");
     await expect(headings.filter({ hasText: "원고, 피상고인" })).toHaveCount(1);
     await expect(headings.filter({ hasText: "피고, 상고인" })).toHaveCount(1);
     const styles = await headings.evaluateAll((nodes) =>
@@ -404,7 +413,7 @@ test("changed case content clears old results and selected detail without a chan
     }, id);
     await expect(list).toHaveCount(0);
     await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
-    await expect(page.locator(".precedent-result-heading")).toHaveCount(0);
+    await expect(page.locator("[data-product-precedent-results-heading]")).toHaveCount(0);
     await expect(
       page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요."),
     ).toHaveCount(0);
@@ -573,7 +582,7 @@ test("unattempted comparisons ignore failed latest jobs and legacy case-wide hin
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
   await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
@@ -592,7 +601,9 @@ test("a completed comparison survives its own revision and does not leak onto an
   await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
   await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").nth(1).click();
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
-  await expect(page.locator(".precedent-state-card,.comparison-result")).toHaveCount(0);
+  await expect(
+    page.locator("[data-product-precedent-state],[data-product-comparison-result]"),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
   await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
   await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
@@ -604,13 +615,13 @@ test("a completed comparison survives its own revision and does not leak onto an
     window.dispatchEvent(new Event("focus"));
   }, id);
   await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
   await page.evaluate(() => {
     sessionStorage.setItem("synthetic-comparison-read-failure", "true");
     window.dispatchEvent(new Event("focus"));
   });
   await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
 });
 
 test("failed comparison uses one recovery card and keeps the original readable", async ({
@@ -620,7 +631,7 @@ test("failed comparison uses one recovery card and keeps the original readable",
   await page.evaluate(() => sessionStorage.setItem("synthetic-comparison-failed", "true"));
   await page.getByRole("button", { name: "내 사건과 유사도 비교" }).click();
   const region = page.getByRole("region", { name: "유사 판례 비교" });
-  const card = region.locator(".precedent-state-card");
+  const card = region.locator("[data-product-precedent-state]");
   await expect(card).toHaveCount(1);
   await expect(card.getByRole("heading", { name: "비교를 완료하지 못했어요" })).toBeVisible();
   await expect(card.getByRole("button", { name: "다시 비교", exact: true })).toBeEnabled();
@@ -648,7 +659,7 @@ test("failed comparison uses one recovery card and keeps the original readable",
   }, id);
   await expect(page.getByRole("region", { name: "선택한 판례" })).toHaveCount(0);
   await expect(page.getByRole("list", { name: "관련 판례 목록" })).toHaveCount(0);
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "판례 찾기", exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 900 });
   await page.screenshot({ path: ".wrangler/precedent-refresh-failed-390.png", fullPage: true });
@@ -685,13 +696,13 @@ test("comparison survives foreground during admission, renders fixed indicators 
   await expect(region.locator(".precedent-body")).toHaveCount(1);
   await expect(region.getByRole("button", { name: /유사 · \+12.5점/ })).toHaveCount(2);
   await expect(region.getByRole("button", { name: /확인 불가 · \+0점/ })).toHaveCount(6);
-  const reasonOpener = region.locator(".comparison-highlight").first();
+  const reasonOpener = region.locator("[data-product-comparison-highlight]").first();
   await reasonOpener.click();
   const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });
   await expect(reason.getByRole("heading", { name: "내 사건", exact: true }).first()).toBeVisible();
   await expect(reason.getByRole("heading", { name: "판례", exact: true }).first()).toBeVisible();
-  await expect(reason.locator(".comparison-reason")).toHaveCount(2);
-  const evidence = reason.locator(".comparison-evidence").first();
+  await expect(reason.locator("[data-product-comparison-reason]")).toHaveCount(2);
+  const evidence = reason.locator("[data-product-comparison-evidence]").first();
   await expect(evidence.locator("blockquote")).toHaveCSS("border-left-width", "0px");
   await expect(evidence.locator("blockquote")).toHaveCSS("padding-left", "0px");
   expect((await evidence.locator("blockquote").boundingBox())?.x).toBe(
@@ -711,8 +722,8 @@ test("comparison survives foreground during admission, renders fixed indicators 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
-    await expect(reason.locator(".comparison-reason")).toHaveCount(2);
-    for (const block of await reason.locator(".comparison-reason").all()) {
+    await expect(reason.locator("[data-product-comparison-reason]")).toHaveCount(2);
+    for (const block of await reason.locator("[data-product-comparison-reason]").all()) {
       const explanation = block.locator(":scope > p");
       await explanation.scrollIntoViewIfNeeded();
       await expect(explanation).toBeInViewport();
@@ -756,7 +767,9 @@ test("comparison survives foreground during admission, renders fixed indicators 
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: `.wrangler/comparison-${width}.png`, fullPage: true });
   }
-  const scan = await new AxeBuilder({ page }).include(".precedent-workspace").analyze();
+  const scan = await new AxeBuilder({ page })
+    .include("[data-product-precedent-research]")
+    .analyze();
   expect(scan.violations).toEqual([]);
   await page.reload();
   await comparisonTransport(page);
@@ -775,7 +788,7 @@ test("comparison survives foreground during admission, renders fixed indicators 
     window.dispatchEvent(new Event("focus"));
   });
   await expect(region.getByRole("status")).toContainText("비교 이후");
-  await expect(region.locator(".precedent-state-card")).toHaveCount(1);
+  await expect(region.locator("[data-product-precedent-state]")).toHaveCount(1);
 });
 
 test("comparison recovers a lost receipt without another POST and preserves work on read failure", async ({
@@ -846,7 +859,7 @@ test("a delayed admission receipt cannot erase an already recovered completed co
   );
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeVisible();
   await expect(region.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(region.locator(".comparison-indicator")).toHaveCount(8);
+  await expect(region.locator("[data-product-comparison-indicator]")).toHaveCount(8);
   expect(
     await page.evaluate(
       () => JSON.parse(sessionStorage.getItem("synthetic-comparison-keys") ?? "[]").length,
@@ -1045,7 +1058,7 @@ test("returning to results after comparison keeps cards usable without a case-ch
     window.dispatchEvent(new Event("focus"));
   });
   await expect(page.getByRole("heading", { name: "사실관계 유사도" })).toBeVisible();
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
   await page.getByRole("button", { name: "검색 결과로", exact: true }).click();
   await expect(
     page.getByText("사건 내용이 바뀌었어요. 최신 내용으로 다시 검색해 주세요.", { exact: true }),
@@ -1057,5 +1070,5 @@ test("returning to results after comparison keeps cards usable without a case-ch
     page.getByRole("link", { name: /국가법령정보센터에서 전체 원문 보기/ }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "내 사건과 유사도 비교" })).toBeEnabled();
-  await expect(page.locator(".precedent-state-card")).toHaveCount(0);
+  await expect(page.locator("[data-product-precedent-state]")).toHaveCount(0);
 });

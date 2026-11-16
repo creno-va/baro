@@ -1,0 +1,254 @@
+{
+  "base": "44caf3ae302bd2fafd4bb7f661b0b33130a0098c",
+  "raw_core": [
+    {
+      "entry": "EvidenceUpload",
+      "target": "useEvidenceUploadController.ts",
+      "js_string_length": 2302,
+      "utf8_byte_length": 2356,
+      "byte_identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "target": "useEvidencePickerController.ts",
+      "js_string_length": 1889,
+      "utf8_byte_length": 2081,
+      "byte_identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "target": "useChatAttachmentsController.ts",
+      "js_string_length": 288,
+      "utf8_byte_length": 288,
+      "byte_identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "target": "AttachmentPreview.tsx",
+      "js_string_length": 270,
+      "utf8_byte_length": 270,
+      "byte_identical": true
+    }
+  ],
+  "ast": [
+    {
+      "entry": "CaseMaterials",
+      "attribute": "disabled",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "CaseMaterials",
+      "attribute": "onClick",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "CaseMaterials",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "CaseMaterials",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "CaseMaterials",
+      "attribute": "href",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "CaseMaterials",
+      "attribute": "canEdit",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "disabled",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "onClick",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "href",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ChatAttachments",
+      "attribute": "canEdit",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "disabled",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "onClick",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "href",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceRequirements",
+      "attribute": "canEdit",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "disabled",
+      "count": 4,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "ref",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "type",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "hidden",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "multiple",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "accept",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "capture",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "aria-label",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "onClick",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidencePicker",
+      "attribute": "onChange",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "disabled",
+      "count": 7,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "onClick",
+      "count": 3,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "onChange",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "checked",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "href",
+      "count": 3,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "attribute": "canEdit",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "slot": "EvidencePicker",
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "slot": "ChatAttachments",
+      "identical": true
+    },
+    {
+      "entry": "EvidenceUpload",
+      "slot": "FileReview",
+      "identical": true
+    }
+  ]
+}

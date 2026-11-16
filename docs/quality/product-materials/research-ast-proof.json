@@ -1,0 +1,132 @@
+{
+  "base": "44caf3ae302bd2fafd4bb7f661b0b33130a0098c",
+  "proofs": [
+    {
+      "entry": "PrecedentResearch",
+      "attribute": "disabled",
+      "count": 5,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentResearch",
+      "attribute": "checked",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentResearch",
+      "attribute": "onClick",
+      "count": 5,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentResearch",
+      "attribute": "onChange",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentComparisonPanel",
+      "attribute": "disabled",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentComparisonPanel",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentComparisonPanel",
+      "attribute": "onClick",
+      "count": 3,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentComparisonPanel",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentDocument",
+      "attribute": "disabled",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentDocument",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentDocument",
+      "attribute": "onClick",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentDocument",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "attribute": "disabled",
+      "count": 6,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "attribute": "checked",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "attribute": "maxLength",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "attribute": "required",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "attribute": "inputMode",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentResearch",
+      "calls": 25,
+      "identical": true
+    },
+    {
+      "entry": "PrecedentComparisonPanel",
+      "calls": 20,
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "lifted": "submit",
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "lifted": "changeTool",
+      "identical": true
+    },
+    {
+      "entry": "LookupDialog",
+      "lifted": "changeKind",
+      "identical": true
+    }
+  ]
+}

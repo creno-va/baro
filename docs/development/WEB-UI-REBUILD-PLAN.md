@@ -1,7 +1,7 @@
 # 웹 UI 재구성 계획과 기능 보존표
 
 - 최초 기능 조사 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
-- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 → [#816](https://github.com/creno-va/baro/pull/816) 보존된 랜딩 이식. 현재 대화 도구·후속 해결·계정 UI는 #816의 `44caf3ae302bd2fafd4bb7f661b0b33130a0098c` 위에 연결한 다음 미제출 검토 단위(817)다. [사건 상세](./PRODUCT-DETAILS.md), [랜딩 기록](../quality/landing-port/README.md), [대화 도구·계정 범위](./PRODUCT-TOOLS.md)를 각각 확인한다.
+- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 → [#816](https://github.com/creno-va/baro/pull/816) 보존된 랜딩 이식. [#817](https://github.com/creno-va/baro/pull/817) 대화 도구·후속 해결·계정 UI는 `f82400cf9966c7daecbef5b1275f4b3642be7506`의 품질·native 렌더링 CI가 통과했다. 다음 검토 단위는 자료 첨부·판례/조회 UI다. [사건 상세](./PRODUCT-DETAILS.md), [랜딩 기록](../quality/landing-port/README.md), [대화 도구·계정 범위](./PRODUCT-TOOLS.md), [첨부·판례 범위](./PRODUCT-MATERIALS.md)를 각각 확인한다.
 - 현재 작업 순서: 기존 BARO와 정확한 디자인 기준 확인 → 기본 UI·디자인 시스템·공통 shell PR → 상세 기능 UI 이관 → 조회·성능 개선.
 - 이 문서는 코드 조사와 단계별 인수 계획이다. 구현 완료, 실제 화면 인수, 외부 연동 또는 배포 성공을 뜻하지 않는다.
 - 이전 전면 교체 PR #809는 종료된 별도 작업이다. 해당 PR을 다시 열거나 구현 기준으로 재사용하지 않는다.
@@ -183,6 +183,7 @@ PR 제출·CI와 main 통합·배포는 각각 구분한다. 현재 도구·계�
 | 기본 UI PR | #810 공통 기반, #812 실제 탐색·새 사건 화면. 각 PR 및 product-shell 검토 기록에 범위와 증거 보존 |
 | 상세 기능 UI 이관 | #813 대화 프레임·질문, #815 사건 요약·자료 목록/교정·리포트. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
 | 랜딩 이식 | #816의 독립 PR. 원래 디자인·장면·자산·동선을 유지하는 조립 이식과 로컬 검토는 [landing-port 기록](../quality/landing-port/README.md)에 보존. 제품 전체 이관·원격 배포 인수와 구분 |
-| 대화 도구·후속 해결·계정 UI | #816 기반 미제출 단계. 원문 core/AST·SSR·기존 회귀와 실제 가드/타입 검증은 PRODUCT-TOOLS에 기록. CUA·최종 quick/build/PR CI는 후속 실제 결과로만 기록 |
+| 대화 도구·후속 해결·계정 UI | #817 제출, 품질·native CI 통과. 원문 core/AST·SSR·실제 Astro mock CUA·quick/build는 PRODUCT-TOOLS 및 product-tools 검토 기록 참조 |
+| 자료 첨부·판례/조회 UI | #817 기반 검토 단위. 새 controller/view와 source/AST·실제 Astro mock CUA를 PRODUCT-MATERIALS 및 product-materials 기록에 구분 |
 | 조회·성능 개선 | #811·#814의 독립 범위와 합성 fixture/plan 증거. 새 UI 또는 query factory만으로 실제 cloud latency 개선을 주장하지 않음 |
 | 실제 외부/배포 인수 | 요청·승인·환경·동일 SHA의 실제 결과가 있을 때 별도로 기록 |

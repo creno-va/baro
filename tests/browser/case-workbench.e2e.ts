@@ -111,7 +111,9 @@ test("precedent search and full text stay beside the conversation; report remain
   await page.getByRole("tab", { name: "판례", exact: true }).click();
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
-  await expect(page.locator("[data-product-case-context] .precedent-full-text")).toBeVisible();
+  await expect(
+    page.locator("[data-product-case-context] [data-product-precedent-document]"),
+  ).toBeVisible();
   await expect(input).toHaveValue("판례를 읽으면서 유지할 합성 초안");
   await expect(page).toHaveURL(new RegExp(`${materialsCasePath}$`));
   await page.screenshot({ path: ".wrangler/ui795/workbench-precedent.png" });
