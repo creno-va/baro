@@ -1,7 +1,7 @@
 # 웹 UI 재구성 계획과 기능 보존표
 
 - 최초 기능 조사 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
-- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → `codex/baro-case-details-ui`의 사건 요약·자료 목록/교정·리포트. 현재 단계의 기준은 #813 `8c642ea1dd157e83456314095251a8d58f9d4c38`이며 상세 범위는 [사건 상세 이관](./PRODUCT-DETAILS.md)에 기록한다.
+- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 요약·자료 목록/교정·리포트. 상세 범위는 [사건 상세 이관](./PRODUCT-DETAILS.md)에 기록한다. 현재 랜딩 이식은 #815의 `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868` 위에 이어진 별도 미제출 작업이며 [검토 기록](../quality/landing-port/README.md)을 따른다.
 - 현재 작업 순서: 기존 BARO와 정확한 디자인 기준 확인 → 기본 UI·디자인 시스템·공통 shell PR → 상세 기능 UI 이관 → 조회·성능 개선.
 - 이 문서는 코드 조사와 단계별 인수 계획이다. 구현 완료, 실제 화면 인수, 외부 연동 또는 배포 성공을 뜻하지 않는다.
 - 이전 전면 교체 PR #809는 종료된 별도 작업이다. 해당 PR을 다시 열거나 구현 기준으로 재사용하지 않는다.
@@ -21,6 +21,8 @@ Codex 네이티브 앱의 직접 reference 확인은 현재 도구 접근 거부
 BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 명세](./PRODUCT-SHELL.md)에 기록한다.
 
 랜딩은 기존 디자인을 보존한다. 제품 UI의 시각 방향과 랜딩의 개편을 같은 작업으로 묶지 않는다.
+후속 랜딩 이식은 원래 장면·자산·동선을 유지하면서 Astro와 필요한 React island로 조립을 옮기는 별도 범위다.
+이 구현 준비와 로컬 검토를 전체 제품 UI 이관·main 통합·배포 완료로 해석하지 않는다.
 
 ## 2. 현재 화면 조립과 경계
 
@@ -28,7 +30,8 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 | 조립 요소 | 현재 역할 | 기본 UI PR에서 보존할 계약 |
 | --- | --- | --- |
-| [BaseLayout](../../src/layouts/BaseLayout.astro) | 랜딩·로그인/동의·공개 안내의 기존 문서 head·CSP·캐시·테마/접근성 진입점 | 기존 공유 의존성과 랜딩 동작 보존 |
+| [BaseLayout](../../src/layouts/BaseLayout.astro) | 로그인/동의·공개 안내의 기존 문서 head·CSP·캐시·테마/접근성 진입점 | 원본 랜딩이 공유하던 의존성을 보존하고 후속 랜딩 조립은 별도 layout으로 분리 |
+| [LandingLayout](../../src/layouts/LandingLayout.astro) | 보존된 랜딩의 전용 문서 조립 | 랜딩 이식의 실제 범위·동작·로컬 검토를 제품 shell과 구분 |
 | [ProductLayout](../../src/layouts/ProductLayout.astro) | 실제 제품 경로의 head·CSP·private no-store·Zod/테마 초기화와 제품 전용 CSS layer | BaseLayout의 랜딩 import를 바꾸지 않고 기존 보안·캐시·focus 계약 유지 |
 | [AppLayout](../../src/layouts/AppLayout.astro)·[CaseWorkbenchLayout](../../src/layouts/CaseWorkbenchLayout.astro) | ProductLayout 안의 탐색 island와 본문 slot | 기존 props, main 영역, 독립 island 조립, 모든 기존 경로 |
 | [CaseLayout](../../src/layouts/CaseLayout.astro) | 사건 shell, 원본 미디어·로컬 사진 preview의 CSP, 안내·analytics 환경 | 기존 환경·권한·CSP·자료 preview 경계 |
@@ -46,7 +49,7 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 | 영역·기존 URL | 현재 UI 연결과 구현 | 주요 소스 | 이후 UI 이관에서 보존할 내용 |
 | --- | --- | --- | --- |
-| 랜딩 `/` | UI 연결: 영상·스크롤·시연·소개·시작 링크 | [index](../../src/pages/index.astro), [랜딩 구성](../../src/components/landing/), [랜딩 스크립트](../../src/client/landing.ts) | 기존 디자인·자산·동작을 보존 |
+| 랜딩 `/` | UI 연결: 영상·스크롤·시연·소개·시작 링크 | [index](../../src/pages/index.astro), [랜딩 구성](../../src/product-ui/landing/LandingPage.astro), [랜딩 모션](../../src/product-ui/landing/motion/index.ts) | 기존 디자인·자산·동작을 보존 |
 | 로그인 `/login` | UI 연결: Kakao·Naver·Google, 연결 중·실패·재시도, 기존 계정 유형 유지 | [AuthButtons](../../src/components/AuthButtons.tsx), [session adapter](../../src/client/api/session.ts), [복귀 경로](../../src/client/return-path.ts) | 실제 provider 실패 표시, 허용된 복귀, 역할을 임의로 덮지 않는 동작 |
 | 동의 `/consent` | 조건부 연결: 현재 정책 조회·저장·기존 동의 후 복귀, 정책 원문 새 창 | [ConsentForm](../../src/components/ConsentForm.tsx) | 동의 버전·연령 계약, 저장 확인 뒤 이동, 오류 시 입력 보존 |
 | 새 사건 `/new` | UI 연결: 서술, 고소·청구 준비/상대방 주장 대응 입장, 길이 검증, Turnstile과 멱등 생성 | [CaseInput](../../src/components/intake/CaseInput.tsx), [rework adapter](../../src/client/api/rework.ts) | 목적·개인/기업 맥락의 구분, 동일 생성 요청 복구, 생성 뒤 질문 진입 |
@@ -92,8 +95,8 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 첫 PR은 다음 경로와 의존성의 디자인·행동을 보존한다.
 
-- 랜딩: [index](../../src/pages/index.astro), [components/landing](../../src/components/landing/), `src/client/landing*.ts`, `src/styles/landing*.css`, `public/landing/`, 공개 폰트·브랜드 자산.
-- 랜딩 공유 의존성: [BaseLayout](../../src/layouts/BaseLayout.astro), [Brand](../../src/components/ui/brand.tsx), [global.css](../../src/styles/global.css), [shell.css](../../src/styles/shell.css), [app-focus.css](../../src/styles/app-focus.css), [design-system.css](../../src/styles/design-system.css), [app-focus 설치](../../src/client/app-focus.ts).
+- 랜딩: [index](../../src/pages/index.astro), [새 랜딩 구성](../../src/product-ui/landing/LandingPage.astro), `src/product-ui/landing/motion/`, `src/product-ui/landing/styles/`, `public/landing/`, 공개 폰트·브랜드 자산.
+- 원본 랜딩 공유 의존성(후속 이식은 [LandingLayout](../../src/layouts/LandingLayout.astro)으로 분리): [BaseLayout](../../src/layouts/BaseLayout.astro), [Brand](../../src/components/ui/brand.tsx), [global.css](../../src/styles/global.css), [shell.css](../../src/styles/shell.css), [app-focus.css](../../src/styles/app-focus.css), [design-system.css](../../src/styles/design-system.css), [app-focus 설치](../../src/client/app-focus.ts).
 - 백엔드·계약·데이터: `src/server/`, `src/contracts/`, `src/workflows/`, `src/worker.ts`, schema·migration·원본 저장소·삭제·실행 작업.
 - 모바일·공유 클라이언트: `apps/mobile/`, `packages/api-client/`, `packages/client-core/`, `packages/design-tokens/`. [global.css](../../src/styles/global.css)·[product.css](../../src/styles/product.css)의 공유 token 추출 계약도 유지한다.
 - 운영: 기존 공급자·모델·결제·AI200/일·질문2×3·권한·동의·revision/CAS·물리/기술 한도·비용 관측 전용 정책.
@@ -117,10 +120,11 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 | [#810](https://github.com/creno-va/baro/pull/810) 공통 기반 | 격리 primitive·theme·state/query factory·검토 fixture | 전체 업무 query 연결이나 실제 제품 화면 전환 완료 아님 |
 | [#812](https://github.com/creno-va/baro/pull/812) shell·새 사건 | 실제 탐색/모바일 drawer·최근 사건 동작·테마·CaseInput | 기존 업무 island를 새 shell로 감싼 사실만으로 전체 UI를 이관했다고 세지 않음 |
 | [#813](https://github.com/creno-va/baro/pull/813) 대화·질문 | CaseHeader/WorkspaceFrame·composer/메뉴·IntakeQuestions | 메시지·ConversationAgent/Panel/Analysis/Preparation의 업무 tree는 기존 |
-| 현재 `codex/baro-case-details-ui` | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 새 PR 번호/최종 head 검사는 제출 시 기록. EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
+| [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 기준 head `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868`의 별도 검증 기록. EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
+| 현재 랜딩 이식(PR 미제출) | #815 위에서 원래 랜딩을 LandingLayout/LandingPage와 필요한 React island로 이전. [보존 계약](./WEB-LANDING-PRESERVATION.md), [검토 기록](../quality/landing-port/README.md) | 원래 디자인·자산·동선 보존을 검토하는 별도 작업. UI PR 제출 수와 main 통합·배포 완료에 아직 포함하지 않음 |
 | 후속 UI | 대화 분석/준비·업로드/원본·timeline/actions·판례/조회·FollowUpResolution·설정·로그인/동의·도움말/정책·404/410·v1 화면 | source graph에서 실제로 남은 시각 tree다. 기본 UI milestone과 전체 프론트 인수를 구분 |
 
-현재 제출된 UI 검토 단위는 #810·#812·#813 세 개이며 사건 상세는 다음 작업 단위다.
+현재 제출된 UI 검토 단위는 #810·#812·#813·#815 네 개다. 랜딩 이식은 #815 기반의 별도 미제출 작업이다.
 독립 성능 PR #811(history batching)·#814(report head index)는 UI PR 수에 포함하지 않는다.
 PR 제출·CI와 main 통합·배포는 각각 구분한다. case-details 이후에도 위 후속 UI가 남으므로 전체 프론트 완료 상태가 아니다.
 
@@ -176,6 +180,7 @@ PR 제출·CI와 main 통합·배포는 각각 구분한다. case-details 이후
 | 기존 BARO 화면 기준 | 단계별 baseline 캡처·조작 결과와 새 화면 대조를 각 quality 기록에 보존 |
 | 정확한 Codex reference | 직접 앱 도구 접근 거부 유지. 사용자 선택에 따라 공식 공개 소개 영상을 Computer Use로 확인했으며 최신 native 앱 일치와 구분 |
 | 기본 UI PR | #810 공통 기반, #812 실제 탐색·새 사건 화면. 각 PR 및 product-shell 검토 기록에 범위와 증거 보존 |
-| 상세 기능 UI 이관 | #813 대화 프레임·질문, 현재 사건 요약·자료 목록/교정·리포트 단계. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
+| 상세 기능 UI 이관 | #813 대화 프레임·질문, #815 사건 요약·자료 목록/교정·리포트. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
+| 랜딩 이식 | #815 기반 미제출 작업. 원래 디자인·장면·자산·동선을 유지하는 조립 이식과 로컬 검토는 [landing-port 기록](../quality/landing-port/README.md)에 보존. 제품 전체 이관·원격 배포 인수와 구분 |
 | 조회·성능 개선 | #811·#814의 독립 범위와 합성 fixture/plan 증거. 새 UI 또는 query factory만으로 실제 cloud latency 개선을 주장하지 않음 |
 | 실제 외부/배포 인수 | 요청·승인·환경·동일 SHA의 실제 결과가 있을 때 별도로 기록 |
