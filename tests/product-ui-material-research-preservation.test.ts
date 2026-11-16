@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -43,15 +44,28 @@ async function commit(root: string) {
   );
 }
 async function submittedPrecedentTest() {
-  const child = Bun.spawn(
-    ["git", "show", "92cb1add152b1144e2baba06d4011455c173f4dc:tests/browser/precedents.e2e.ts"],
-    { cwd: join(import.meta.dir, ".."), stdout: "pipe", stderr: "pipe" },
-  );
-  const [source, error] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  if ((await child.exited) !== 0) throw new Error(error || "VERIFIED_SUBMITTED_TEST_REQUIRED");
+  let source = await readFile(new URL("./browser/precedents.e2e.ts", import.meta.url), "utf8");
+  const selectors = [
+    [
+      `    page
+      .getByRole("button", { name: "공식 원문 확인 중…", exact: true })
+      .locator("[data-product-research-spinner]"),`,
+      '    page.getByRole("button", { name: "공식 원문 확인 중…", exact: true }).locator(".ui-spinner"),',
+    ],
+    [
+      '  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" }).locator("[data-dialog]");',
+      '  const reason = page.getByRole("dialog", { name: "비교 근거와 이유" });',
+    ],
+  ] as const;
+  for (const [before, after] of selectors) {
+    if (source.split(before).length !== 2) throw new Error("EXACT_REVIEWED_SELECTOR_REQUIRED");
+    source = source.replace(before, after);
+  }
+  if (
+    createHash("sha256").update(source).digest("hex") !==
+    "69d756d72a26bdda266643cb0aa04f607f1196996deb91bf88614b5cdf0e5e3a"
+  )
+    throw new Error("VERIFIED_SUBMITTED_TEST_REQUIRED");
   return source;
 }
 const baselinePackage = {
