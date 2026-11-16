@@ -44,6 +44,7 @@ export function Button({
     <HeadlessButton
       {...props}
       {...(ref === undefined ? {} : { ref })}
+      data-variant={variant === undefined ? "primary" : variant}
       type={type}
       disabled={disabled}
       autoFocus={autoFocus}
@@ -102,6 +103,7 @@ export function ButtonLink({
   return (
     <a
       {...props}
+      data-variant={variant === undefined ? "primary" : variant}
       href={unavailable ? undefined : href}
       target={target}
       rel={safeRel}

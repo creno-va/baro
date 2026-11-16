@@ -1,0 +1,49 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the theme island.
+import { PublicThemeControl } from "../product-ui/public/PublicThemeControl";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the shared document layout.
+import ProductLayout from "./ProductLayout.astro";
+
+interface Props {
+  title: string;
+  description: string;
+  width?: "auth" | "document";
+  navigationLabel?: string;
+  showStart?: boolean;
+  footer?: boolean;
+}
+const {
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  title,
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  description,
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  width = "document",
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  navigationLabel = "BARO 이용 안내",
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  showStart = false,
+  // biome-ignore lint/correctness/noUnusedVariables: Astro renders this prop.
+  footer = false,
+} = Astro.props;
+---
+<ProductLayout title={title} description={description}>
+  <div data-product-ui="" data-product-public="" class="min-h-dvh bg-[var(--pui-background)] text-[var(--pui-text)]">
+    <header class="border-b border-[var(--pui-border)] bg-[var(--pui-surface)]">
+      <nav aria-label={navigationLabel} class="mx-auto flex min-h-16 max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-2 sm:px-6">
+        <a href="/" aria-label="BARO 홈" class="flex min-h-11 items-center gap-2 rounded-lg text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--pui-focus)]">
+          <img src="/brand/logo.svg" alt="" width="28" height="28" />BARO
+        </a>
+        <div class="flex max-w-full flex-wrap items-center gap-2 sm:gap-4">
+          <a href="/help" class="inline-flex min-h-11 items-center rounded-lg px-2 text-sm text-[var(--pui-muted)] hover:text-[var(--pui-text)] focus-visible:outline-2 focus-visible:outline-[var(--pui-focus)]">도움말</a>
+          {showStart && <a href="/new" class="inline-flex min-h-11 items-center rounded-xl bg-[var(--pui-primary)] px-3 text-sm font-medium text-[var(--pui-on-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--pui-focus)]">사건 준비 시작</a>}
+          <PublicThemeControl client:load />
+        </div>
+      </nav>
+    </header>
+    <main id="main-content" tabindex="-1" class:list={["mx-auto w-full px-4 py-10 focus:outline-none sm:px-6 sm:py-16", width === "auth" ? "max-w-lg" : "max-w-3xl"]}>
+      <slot />
+    </main>
+    {footer && <footer class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 border-t border-[var(--pui-border)] px-4 py-6 text-xs leading-6 text-[var(--pui-muted)] sm:px-6"><span>BARO · 사건을 이해하고 준비하는 도구</span><nav aria-label="서비스 정책" class="flex flex-wrap gap-x-4 [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center [&_a]:rounded [&_a]:underline [&_a]:underline-offset-4 [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-[var(--pui-focus)]"><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a></nav></footer>}
+  </div>
+</ProductLayout>

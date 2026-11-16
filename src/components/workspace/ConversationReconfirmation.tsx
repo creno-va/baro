@@ -86,7 +86,7 @@ export function ConversationReconfirmation({
         onBusyChange={setContextBusy}
       />
       {summaryDirty && (
-        <p className="workspace-muted">
+        <p className="text-sm leading-7 text-[var(--pui-muted)]">
           작성 중인 재확인 설명을 먼저 저장하거나 닫은 뒤 입장·절차를 바꿀 수 있어요.
         </p>
       )}

@@ -1,0 +1,19 @@
+---
+interface Props {
+  accountRights?: boolean;
+}
+// biome-ignore lint/correctness/noUnusedVariables: Astro renders this conditional section.
+const { accountRights = false } = Astro.props;
+---
+<div data-product-unavailable="" class="space-y-6">
+  <h1 class="text-3xl font-semibold tracking-tight">기능 이용 안내</h1>
+  <section role="status" aria-live="polite" class="space-y-3 rounded-2xl border border-[var(--pui-border)] bg-[var(--pui-surface)] p-5 sm:p-6">
+    <h2 class="text-lg font-semibold">현재 변호사 연결 기능은 제공하지 않습니다.</h2>
+    <p class="text-sm leading-7 text-[var(--pui-muted)]">변호사 목록·공개 프로필·전용 프로필 화면의 제공을 종료했어요. 기존 계정의 본인 사건·자료·리포트는 계속 이용할 수 있어요.</p>
+  </section>
+  <nav aria-label="이용 가능한 화면" class="flex flex-wrap gap-2">
+    <a href="/new" class="inline-flex min-h-11 items-center rounded-xl bg-[var(--pui-primary)] px-4 py-2 text-sm font-medium text-[var(--pui-on-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--pui-focus)]">내 사건으로</a>
+    <a href="/help" class="inline-flex min-h-11 items-center rounded-xl border border-[var(--pui-border)] bg-[var(--pui-surface)] px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--pui-focus)]">도움말</a>
+  </nav>
+  {accountRights && <section class="space-y-3 rounded-2xl border border-[var(--pui-border)] bg-[var(--pui-surface)] p-5 sm:p-6"><h2 class="text-lg font-semibold">프로필 자료와 계정 권리</h2><p class="text-sm leading-7 text-[var(--pui-muted)]">기존 프로필에 등록한 본인 자료는 설정의 이전에 등록한 자료에서 확인하고 내려받거나 삭제할 수 있어요. 계정 전체 삭제도 설정에서 별도로 확인할 수 있어요.</p><a href="/settings" class="inline-flex min-h-11 items-center rounded-lg text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-[var(--pui-focus)]">계정 설정 확인</a></section>}
+</div>

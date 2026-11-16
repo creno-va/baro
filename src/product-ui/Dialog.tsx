@@ -8,6 +8,7 @@ import {
 import {
   type ComponentPropsWithoutRef,
   type ReactNode,
+  type Ref,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -22,6 +23,9 @@ export type DialogProps = {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
+  titleId?: string;
+  headerActions?: ReactNode;
+  placement?: "center" | "responsive-sheet";
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
@@ -32,6 +36,7 @@ export type DialogProps = {
   preserveMounted?: boolean;
   showCloseButton?: boolean;
   panelProps?: Omit<ComponentPropsWithoutRef<"div">, "children" | "style" | "className">;
+  panelRef?: Ref<HTMLDivElement>;
 };
 
 function restoreFocus(destination: HTMLElement | null | undefined) {
@@ -59,6 +64,9 @@ export function Dialog({
   open,
   onClose,
   title,
+  titleId,
+  headerActions,
+  placement = "center",
   description,
   children,
   footer,
@@ -69,6 +77,7 @@ export function Dialog({
   preserveMounted = false,
   showCloseButton = true,
   panelProps,
+  panelRef,
 }: DialogProps) {
   const theme = useProductTheme();
   // Headless portal placeholders contain inline styles before mounting. Defer
@@ -102,30 +111,46 @@ export function Dialog({
       {...(preserveMounted ? { hidden: !open } : {})}
       onClose={onClose}
       {...(initialFocus ? { initialFocus } : {})}
-      className="relative z-50"
+      className={placement === "responsive-sheet" ? "fixed inset-0 z-50" : "relative z-50"}
       data-product-ui=""
       data-theme={theme}
     >
       <DialogBackdrop className="fixed inset-0 bg-black/40" />
       <div className="fixed inset-0 w-screen overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+        <div
+          className={
+            placement === "responsive-sheet"
+              ? "flex min-h-full items-end justify-center sm:items-center sm:p-6"
+              : "flex min-h-full items-center justify-center p-4 sm:p-6"
+          }
+        >
           <DialogPanel
             {...panelProps}
+            {...(panelRef ? { ref: panelRef } : {})}
             data-dialog=""
             className={cn(
               "w-full max-w-lg rounded-2xl border border-[var(--pui-border)] bg-[var(--pui-surface)] p-6 text-[var(--pui-text)] shadow-xl",
+              placement === "responsive-sheet" && "max-sm:max-w-none max-sm:rounded-b-none",
               className,
             )}
           >
             <header className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <DialogTitle className="text-lg font-semibold leading-snug">{title}</DialogTitle>
+                <DialogTitle
+                  {...(titleId === undefined ? {} : { id: titleId })}
+                  className="text-lg font-semibold leading-snug"
+                >
+                  {title}
+                </DialogTitle>
                 {description && (
                   <Description className="mt-2 text-sm leading-relaxed text-[var(--pui-muted)]">
                     {description}
                   </Description>
                 )}
               </div>
+              {headerActions != null && (
+                <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+              )}
               {showCloseButton && (
                 <Button variant="ghost" size="icon" aria-label={closeLabel} onClick={onClose}>
                   <svg

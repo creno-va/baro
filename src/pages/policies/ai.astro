@@ -4,9 +4,8 @@ import PolicyDocument from "../../components/PolicyDocument.astro";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
 import { policyDrafts } from "../../content/policy-drafts";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
-import AppLayout from "../../layouts/AppLayout.astro";
-import "../../styles/policies.css";
+import ProductPublicLayout from "../../layouts/ProductPublicLayout.astro";
 ---
-<AppLayout title={policyDrafts.ai.title} description={policyDrafts.ai.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
+<ProductPublicLayout showStart title={policyDrafts.ai.title} description={policyDrafts.ai.description}>
   <PolicyDocument kind="ai" />
-</AppLayout>
+</ProductPublicLayout>
