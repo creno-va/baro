@@ -1,10 +1,10 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { AccountSettings } from "../components/AccountSettings";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseLayout from "../layouts/CaseLayout.astro";
-import "../styles/settings.css";
-import "../styles/public-compat.css";
-import "../styles/reports.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import { Settings } from "../components/web/Settings";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
+import BaseLayout from "../layouts/BaseLayout.astro";
 ---
-<CaseLayout title="설정과 사용량"><AccountSettings client:load /></CaseLayout>
+<BaseLayout title="설정과 사용량 · BARO" description="내 계정과 자료, 서비스 사용량을 관리합니다.">
+  <Settings client:load />
+  <noscript><p class="web-noscript">계정 설정을 확인하려면 JavaScript를 켜 주세요.</p></noscript>
+</BaseLayout>

@@ -26,7 +26,7 @@ const bundle = await Bun.build({
     {
       name: "reports-test-api",
       setup(build) {
-        build.onResolve({ filter: /^\.\.\/(?:\.\.\/)?client\/api$/ }, () => ({
+        build.onResolve({ filter: /^(?:\.\.\/)+(?:src\/)?client\/api$/ }, () => ({
           path: resolve(
             import.meta.dir,
             httpFixture || fileReviewFixture ? "report-real-api.ts" : "reports-ui-api.ts",

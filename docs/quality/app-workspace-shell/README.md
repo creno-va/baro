@@ -40,7 +40,7 @@ CI 성공·main 병합 뒤 소비하여 검증한다. 리포트 document/목차�
 
 ## 재현
 
-컴포넌트 계약과 실행 명령은 [workspace-frame.md](../../../src/components/ui/workspace-frame.md).
+이전 컴포넌트 계약과 실행 명령은 [workspace-frame.md](../../../tests/helpers/retired-web/components/ui/workspace-frame.md).
 기본 full-browser는 같은 basename config를 자동 수집한다. 정확 baseline 공개 픽셀 비교는
 `app-workspace-public.evidence.ts`의 opt-in 로컬 증거이며 baseline URL 미지정 시 명시적으로
 skip한다. `app-workspace-app.config.ts`만 이 파일을 선택하므로 기본 서버로 잘못 실행하지 않는다.

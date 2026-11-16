@@ -12,7 +12,7 @@ export default {
         enforce: "pre" as const,
         resolveId(source: string, importer?: string) {
           if (
-            source === "../../client/api" &&
+            /^(?:\.\.\/)+(?:src\/)?client\/api$/.test(source) &&
             (importer?.endsWith("/components/workspace/Workspace.tsx") ||
               importer?.endsWith("/components/workspace/ConversationAgent.tsx") ||
               importer?.endsWith("/components/workspace/useEvidenceUpload.ts") ||

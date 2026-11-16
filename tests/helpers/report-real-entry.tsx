@@ -1,6 +1,6 @@
 import "./headless-experience";
 import { createRoot } from "react-dom/client";
-import { ReportReview } from "../../src/components/reports/ReportReview";
+import { ReportReview } from "./retired-web/components/reports/ReportReview";
 
 const root = document.getElementById("root");
 if (root)

@@ -1,12 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ReportReading } from "../src/components/reports/ReportReading";
 import { type V2LegalAnalysisSnapshot, v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2";
 import { missingReportAnalysis, reportAnalysisText } from "../src/server/modules/reports/analysis";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { reportText } from "../src/server/modules/reports/source";
 import { reportSections } from "../src/utils/report-sections";
 import { reportPreparedAnalysisFixture } from "./helpers/report-prepared-analysis-fixture";
+import { ReportReading } from "./helpers/retired-web/components/reports/ReportReading";
 
 const fixtures: Awaited<ReturnType<typeof reportPreparedAnalysisFixture>>[] = [];
 afterEach(() => {

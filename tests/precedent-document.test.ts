@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { precedentHighlights } from "../src/client/precedent-highlights";
-import { PrecedentDocument } from "../src/components/workspace/PrecedentDocument";
 import type { V2PrecedentComparison } from "../src/contracts/v2/precedent-comparison";
 import { precedentDisplayParts, precedentDocumentParts } from "../src/utils/precedent-document";
+import { PrecedentDocument } from "./helpers/retired-web/components/workspace/PrecedentDocument";
 
 test("judgment headings gain hierarchy without changing a single original offset or byte", () => {
   const text =

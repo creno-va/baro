@@ -260,7 +260,7 @@ header(auto)/body(minmax(0,1fr))를 두고 중앙 메시지·자료 각각 스�
   기존 인증6/공개 pixel4 검증과00 독립 shell16/16을 확인했다.00이 실제 메뉴 겹침과 초기 열린
   desktop panel의 잘못된 modal/focus를 찾아 각각 수정·재검증했다.이 SHA를02 제품 착수와03
   서버 PR 재검증 기준으로 전달했다. 실제 export·적용법은
-  [공통 frame 가이드](../../src/components/ui/workspace-frame.md), 전후 화면은
+  [이전 공통 frame 가이드](../../tests/helpers/retired-web/components/ui/workspace-frame.md), 전후 화면은
   [shell 검증 기록](../quality/app-workspace-shell/README.md)이다.
 - 고객 본문 서버 PR756 exact `8bb58a65e13c03fb00db1946bbe5b5f68f6dd2df`: quality42440378000/
   native42440377956 SUCCESS→main `ac2cf6a6e6e9bb3a1c8b89b2b9aa9b9723eb3244`.

@@ -2,13 +2,13 @@ import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createReportHtml } from "../src/components/reports/document";
-import { ReportReading } from "../src/components/reports/ReportReading";
 import { reportMarkdownHtml, reportOfficialSourceUrl } from "../src/utils/report-markdown";
 import {
   officialReportUrls,
   officialSourceReport,
   rejectedReportUrls,
 } from "./helpers/report-official-source-fixture";
+import { ReportReading } from "./helpers/retired-web/components/reports/ReportReading";
 
 test("only exact official canonical source IDs become navigation, preserving the literal URL", () => {
   for (const url of officialReportUrls)

@@ -1,25 +1,25 @@
 import { useState } from "react";
-import { AppNavigation, type NavigationRole } from "../../src/components/ui/app-navigation";
-import { Badge, Separator, Skeleton } from "../../src/components/ui/badge";
-import { Button } from "../../src/components/ui/button";
+import { AppNavigation, type NavigationRole } from "./retired-web/components/ui/app-navigation";
+import { Badge, Separator, Skeleton } from "./retired-web/components/ui/badge";
+import { Button } from "./retired-web/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../../src/components/ui/card";
-import { Dialog } from "../../src/components/ui/dialog";
+} from "./retired-web/components/ui/card";
+import { Dialog } from "./retired-web/components/ui/dialog";
 import {
   Select as ControlSelect,
   FieldDescription,
   Input,
   Label,
   Textarea,
-} from "../../src/components/ui/form";
-import { PageHeader } from "../../src/components/ui/page-header";
-import { StatePanel, type StateVariant } from "../../src/components/ui/state-panel";
-import { Tabs } from "../../src/components/ui/tabs";
+} from "./retired-web/components/ui/form";
+import { PageHeader } from "./retired-web/components/ui/page-header";
+import { StatePanel, type StateVariant } from "./retired-web/components/ui/state-panel";
+import { Tabs } from "./retired-web/components/ui/tabs";
 
 const states: Array<{ variant: StateVariant; title: string; description: string }> = [
   {

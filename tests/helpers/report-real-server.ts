@@ -16,7 +16,7 @@ const bundle = await Bun.build({
     {
       name: "real-report-adapters",
       setup(build) {
-        build.onResolve({ filter: /^\.\.\/\.\.\/client\/api$/ }, () => ({
+        build.onResolve({ filter: /^(?:\.\.\/)+(?:src\/)?client\/api$/ }, () => ({
           path: resolve(import.meta.dir, "report-real-api.ts"),
         }));
       },

@@ -9,7 +9,7 @@ const bundle = await Bun.build({
     {
       name: "shell-fixture-api",
       setup(build) {
-        build.onResolve({ filter: /^\.\.\/\.\.\/client\/api$/ }, () => ({
+        build.onResolve({ filter: /^(?:\.\.\/)+(?:src\/)?client\/api$/ }, () => ({
           path: resolve(import.meta.dir, "app-workspace-api.ts"),
         }));
       },

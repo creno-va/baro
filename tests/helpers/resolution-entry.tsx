@@ -1,4 +1,4 @@
-import { ActionButton as ControlButton } from "../../src/components/ui/button";
+import { ActionButton as ControlButton } from "./retired-web/components/ui/button";
 import "./headless-experience";
 import { createReworkClient, responseError } from "@baro/api-client";
 import { createSessionScope } from "@baro/client-core";
@@ -7,7 +7,7 @@ import { createRoot } from "react-dom/client";
 import {
   FollowUpResolution,
   type ResolutionClient,
-} from "../../src/components/resolution/FollowUpResolution";
+} from "./retired-web/components/resolution/FollowUpResolution";
 
 async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, init);

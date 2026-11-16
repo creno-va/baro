@@ -1,18 +1,18 @@
 import { useState } from "react";
-import { Badge } from "../../src/components/ui/badge";
-import { Button } from "../../src/components/ui/button";
-import { Dialog } from "../../src/components/ui/dialog";
-import { Input, Label, Select, Textarea } from "../../src/components/ui/form";
-import { InlineNotice } from "../../src/components/ui/inline-notice";
+import { Badge } from "./retired-web/components/ui/badge";
+import { Button } from "./retired-web/components/ui/button";
+import { Dialog } from "./retired-web/components/ui/dialog";
+import { Input, Label, Select, Textarea } from "./retired-web/components/ui/form";
+import { InlineNotice } from "./retired-web/components/ui/inline-notice";
 import {
   ReadingContent,
   SourceReference,
   TableScroll,
-} from "../../src/components/ui/reading-content";
-import { ActionGroup, Section } from "../../src/components/ui/section";
-import { StatePanel } from "../../src/components/ui/state-panel";
-import { CaseWorkspaceFrame } from "../../src/components/ui/workspace-frame";
-import { CaseNavigation, type CaseTask } from "../../src/components/workspace/CaseNavigation";
+} from "./retired-web/components/ui/reading-content";
+import { ActionGroup, Section } from "./retired-web/components/ui/section";
+import { StatePanel } from "./retired-web/components/ui/state-panel";
+import { CaseWorkspaceFrame } from "./retired-web/components/ui/workspace-frame";
+import { CaseNavigation, type CaseTask } from "./retired-web/components/workspace/CaseNavigation";
 
 const title =
   "물품 대금을 받지 못한 경위와 상대방이 보낸 장문의 설명을 함께 검토하는 합성 사건 — 계약 내용·자료의 날짜·확인하지 못한 사실을 구분해 준비하기";

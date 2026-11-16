@@ -1,8 +1,8 @@
-import { ActionButton as ControlButton } from "../../src/components/ui/button";
+import { ActionButton as ControlButton } from "./retired-web/components/ui/button";
 import "./headless-experience";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { FileReview } from "../../src/components/workspace/FileReview";
+import { FileReview } from "./retired-web/components/workspace/FileReview";
 
 const changed = async () => {};
 const report = () => {};

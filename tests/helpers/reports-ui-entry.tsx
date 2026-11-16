@@ -1,8 +1,8 @@
 import "./headless-experience";
 import { createRoot } from "react-dom/client";
-import { AccountSettings } from "../../src/components/AccountSettings";
-import { CaseDeleteDialog } from "../../src/components/intake/CaseDeleteDialog";
-import { ReportReview } from "../../src/components/reports/ReportReview";
+import { AccountSettings } from "./retired-web/components/AccountSettings";
+import { CaseDeleteDialog } from "./retired-web/components/intake/CaseDeleteDialog";
+import { ReportReview } from "./retired-web/components/reports/ReportReview";
 
 const root = document.getElementById("root");
 if (root)

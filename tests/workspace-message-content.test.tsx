@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MessageContent } from "../src/components/workspace/MessageContent";
+import { MessageContent } from "./helpers/retired-web/components/workspace/MessageContent";
 
 test("chat prose groups spaced lists and preserves numbered steps and inline emphasis", () => {
   const html = renderToStaticMarkup(

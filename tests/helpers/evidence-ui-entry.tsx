@@ -1,11 +1,11 @@
-import { ActionButton as ControlButton } from "../../src/components/ui/button";
+import { ActionButton as ControlButton } from "./retired-web/components/ui/button";
 import "./headless-experience";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { FileView } from "../../src/client/api/types";
-import { CaseMaterials } from "../../src/components/workspace/CaseMaterials";
-import { EvidenceUpload } from "../../src/components/workspace/EvidenceUpload";
-import { FileReview } from "../../src/components/workspace/FileReview";
+import { CaseMaterials } from "./retired-web/components/workspace/CaseMaterials";
+import { EvidenceUpload } from "./retired-web/components/workspace/EvidenceUpload";
+import { FileReview } from "./retired-web/components/workspace/FileReview";
 
 function Fixture() {
   const [version, setVersion] = useState(0);

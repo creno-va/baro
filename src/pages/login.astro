@@ -1,59 +1,10 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
-import { AuthButtons } from "../components/AuthButtons";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { Brand } from "../components/ui/brand";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
-import { ThemeToggle } from "../components/ui/theme-toggle";
-// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
+import { Access } from "../components/web/Access";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
 import BaseLayout from "../layouts/BaseLayout.astro";
-import "../styles/login.css";
-
-// biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
-const oauthFailed = Astro.url.searchParams.has("error");
-const oauthErrors = Astro.url.searchParams.getAll("error");
-// biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
-const errorMessage = oauthErrors.includes("account_not_linked")
-  ? "이메일 소유 확인이 없어 계정을 연결하지 못했어요. 이메일이 인증된 소셜 계정이나 기존에 사용한 로그인 방법으로 계속해 주세요."
-  : oauthErrors.includes("unable_to_link_account")
-    ? "계정 연결을 완료하지 못했어요. 잠시 후 다시 시도하거나 기존에 사용한 로그인 방법으로 계속해 주세요."
-    : oauthErrors.includes("access_denied")
-      ? "로그인을 취소했어요. 원하는 계정을 다시 선택해 주세요."
-      : oauthErrors.includes("session_expired")
-        ? "안전한 이용을 위해 다시 로그인해 주세요."
-        : "로그인이 완료되지 않았어요. 다시 선택해 주세요.";
 ---
-
-<BaseLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다.">
-  <main id="main-content" tabindex="-1" class="login-page">
-    <nav class="login-navigation" aria-label="로그인 화면">
-      <a class="login-back" href="/" aria-label="홈으로 돌아가기">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m12 5-7 7 7 7M5 12h15" />
-        </svg>
-      </a>
-      <span>로그인 · 회원가입</span><ThemeToggle client:load />
-    </nav>
-    <div class="login-content">
-      <header class="login-intro">
-        <Brand />
-        <p class="login-intro__headline">법률 고민의 시작, <br />바로와 함께.</p>
-        <p class="login-intro__caption">막막한 순간부터, 다음 한 걸음까지.</p>
-      </header>
-      <section class="login-panel" aria-labelledby="login-title">
-        <h1 id="login-title">로그인 · 회원가입</h1>
-        <p class="login-panel__description">소셜 계정으로 내 사건 정리를 시작하세요.</p>
-        {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
-        <AuthButtons client:load />
-        <footer class="login-footer">
-          <div class="login-policy-links">
-            <a href="/policies/terms">이용약관</a>
-            <span aria-hidden="true">·</span>
-            <a href="/policies/privacy">개인정보 처리방침</a>
-          </div>
-          <a class="login-help" href="/help">로그인에 어려움이 있나요?</a>
-        </footer>
-      </section>
-    </div>
-  </main>
+<BaseLayout title="로그인 · BARO" description="소셜 계정으로 내 사건 정리를 시작하세요.">
+  <Access mode="login" client:load />
+  <noscript><p class="web-noscript">계정 확인을 위해 JavaScript를 켜 주세요. <a href="/help">도움말</a></p></noscript>
 </BaseLayout>

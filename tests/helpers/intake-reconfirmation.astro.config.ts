@@ -10,7 +10,10 @@ export default {
         name: "isolated-intake-reconfirmation-facade",
         enforce: "pre" as const,
         resolveId(source: string, importer?: string) {
-          if (source === "../../client/api" && importer?.includes("/components/intake/"))
+          if (
+            /^(?:\.\.\/)+(?:src\/)?client\/api$/.test(source) &&
+            importer?.includes("/components/intake/")
+          )
             return fileURLToPath(new URL("./intake-rework-client-fixture.ts", import.meta.url));
           return null;
         },

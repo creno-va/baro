@@ -3,16 +3,16 @@ import {
   Input as ControlInput,
   Textarea as ControlTextarea,
   Label as FieldLabel,
-} from "../../src/components/ui/form";
+} from "./retired-web/components/ui/form";
 import "./headless-experience";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { installAppFocus } from "../../src/client/app-focus";
-import { AppNavigation } from "../../src/components/ui/app-navigation";
-import { Button } from "../../src/components/ui/button";
-import { Dialog } from "../../src/components/ui/dialog";
-import { CaseWorkspaceFrame } from "../../src/components/ui/workspace-frame";
-import { CaseNavigation } from "../../src/components/workspace/CaseNavigation";
+import { AppNavigation } from "./retired-web/components/ui/app-navigation";
+import { Button } from "./retired-web/components/ui/button";
+import { Dialog } from "./retired-web/components/ui/dialog";
+import { CaseWorkspaceFrame } from "./retired-web/components/ui/workspace-frame";
+import { CaseNavigation } from "./retired-web/components/workspace/CaseNavigation";
 
 function MaterialsFixture({
   onSiblingReview,

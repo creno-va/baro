@@ -1,18 +1,12 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { CaseInput } from "../components/intake/CaseInput";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseWorkbenchLayout from "../layouts/CaseWorkbenchLayout.astro";
-import "../styles/intake.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the React application.
+import { WebApp } from "../components/web/WebApp";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the document layout.
+import BaseLayout from "../layouts/BaseLayout.astro";
 
-Astro.response.headers.set("Cache-Control", "no-store");
+Astro.response.headers.set("Cache-Control", "private, no-store");
 ---
-
-<CaseWorkbenchLayout
-  title="BARO — 복잡한 일도, 하나씩"
-  description="어떤 일이 있었는지 편하게 들려주세요. BARO가 상황에 맞는 질문과 대화로 사건 정리를 도와드려요."
-  contentClass="conversation-main"
->
-  <CaseInput requireSession client:load />
-  <noscript><p>사건 정리를 시작하려면 브라우저에서 JavaScript를 켜고 <a href="/login">로그인</a>해 주세요.</p></noscript>
-</CaseWorkbenchLayout>
+<BaseLayout title="새 사건 · BARO" description="어떤 일이 있었는지 들려주세요. 사건의 사실과 자료를 한곳에서 정리합니다.">
+  <WebApp client:only="react" />
+  <noscript><main id="main-content"><p>사건 정리를 시작하려면 JavaScript를 켜 주세요.</p></main></noscript>
+</BaseLayout>

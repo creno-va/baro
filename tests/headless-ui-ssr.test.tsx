@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { Dialog } from "../src/components/ui/dialog";
-import { Disclosure, DisclosureSummary } from "../src/components/ui/disclosure";
-import { Input, Select, Textarea } from "../src/components/ui/form";
-import { MediaPlayer } from "../src/components/ui/media-player";
-import { Popover, PopoverButton, PopoverPanel } from "../src/components/ui/popover";
-import { Range } from "../src/components/ui/range";
-import { Tabs } from "../src/components/ui/tabs";
-import { ThemeToggle } from "../src/components/ui/theme-toggle";
-import { CaseWorkspaceFrame } from "../src/components/ui/workspace-frame";
+import { Dialog } from "./helpers/retired-web/components/ui/dialog";
+import { Disclosure, DisclosureSummary } from "./helpers/retired-web/components/ui/disclosure";
+import { Input, Select, Textarea } from "./helpers/retired-web/components/ui/form";
+import { MediaPlayer } from "./helpers/retired-web/components/ui/media-player";
+import { Popover, PopoverButton, PopoverPanel } from "./helpers/retired-web/components/ui/popover";
+import { Range } from "./helpers/retired-web/components/ui/range";
+import { Tabs } from "./helpers/retired-web/components/ui/tabs";
+import { ThemeToggle } from "./helpers/retired-web/components/ui/theme-toggle";
+import { CaseWorkspaceFrame } from "./helpers/retired-web/components/ui/workspace-frame";
 
 test("web controls preserve strict style-attribute CSP during server rendering", () => {
   const markup = renderToString(

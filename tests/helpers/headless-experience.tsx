@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { Experience } from "../../src/components/ui/experience";
+import { Experience } from "./retired-web/components/ui/experience";
 import "../../src/styles/design-system.css";
 
 if (typeof document !== "undefined" && !document.querySelector("[data-baro-experience]")) {

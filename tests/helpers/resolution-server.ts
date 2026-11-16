@@ -10,7 +10,7 @@ const bundle = await Bun.build({
     {
       name: "isolated-resolution-client",
       setup(build) {
-        build.onResolve({ filter: /^\.\.\/\.\.\/client\/api$/ }, () => ({
+        build.onResolve({ filter: /^(?:\.\.\/)+(?:src\/)?client\/api$/ }, () => ({
           path: resolve(import.meta.dir, "resolution-default-api.ts"),
         }));
       },

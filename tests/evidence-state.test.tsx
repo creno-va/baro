@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { FileView } from "../src/client/api/types";
-import { CaseMaterials } from "../src/components/workspace/CaseMaterials";
 import {
   evidenceRequirementStates,
   materialState,
   observationKind,
 } from "../src/components/workspace/evidence-state";
 import type { V2EvidenceRequirement, V2Fact, V2FileObservation } from "../src/contracts/v2";
+import { CaseMaterials } from "./helpers/retired-web/components/workspace/CaseMaterials";
 
 const file: FileView = {
   id: "synthetic-file",

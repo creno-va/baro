@@ -1,8 +1,8 @@
 import "./headless-experience";
 import { createRoot } from "react-dom/client";
 import { createReportMarkup } from "../../src/components/reports/document";
-import { ReportReading } from "../../src/components/reports/ReportReading";
 import { reportReworkLayoutFixture } from "./report-rework-layout-fixture";
+import { ReportReading } from "./retired-web/components/reports/ReportReading";
 
 const query = new URLSearchParams(location.search);
 const fixture = reportReworkLayoutFixture(

@@ -30,7 +30,7 @@ export default {
         enforce: "pre" as const,
         resolveId(source: string, importer?: string) {
           if (
-            source === "../../client/api" &&
+            /^(?:\.\.\/)+(?:src\/)?client\/api$/.test(source) &&
             importer?.endsWith("/workspace/ConversationAgent.tsx")
           )
             return fileURLToPath(new URL("./conversation-agent-browser-api.ts", import.meta.url));

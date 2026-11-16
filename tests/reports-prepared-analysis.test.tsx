@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ReportReading } from "../src/components/reports/ReportReading";
 import { type V2LegalAnalysisSnapshot, v2LegalAnalysisSnapshotSchema } from "../src/contracts/v2";
 import { createV2ReportsRepository } from "../src/server/db/v2-reports";
 import { reportAnalysisReviewSchema } from "../src/server/modules/reports/analysis-review";
 import { createReportsService } from "../src/server/modules/reports/service";
 import { reportPreparedAnalysisFixture } from "./helpers/report-prepared-analysis-fixture";
+import { ReportReading } from "./helpers/retired-web/components/reports/ReportReading";
 
 async function fixture(purpose: "prepare_claim" | "respond_to_claim" = "prepare_claim") {
   const f = await reportPreparedAnalysisFixture(purpose);

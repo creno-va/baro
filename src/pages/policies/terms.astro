@@ -1,12 +1,19 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
-import PolicyDocument from "../../components/PolicyDocument.astro";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the title and description.
-import { policyDrafts } from "../../content/policy-drafts";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the component.
-import AppLayout from "../../layouts/AppLayout.astro";
-import "../../styles/policies.css";
+import { POLICY_VERSIONS, policyDrafts } from "../../content/policy-drafts";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the layout.
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the policy.
+const policy = policyDrafts.terms;
+// biome-ignore lint/correctness/noUnusedVariables: Astro template reads the version.
+const version = POLICY_VERSIONS.terms;
 ---
-<AppLayout title={policyDrafts.terms.title} description={policyDrafts.terms.description} role="visitor" availableRoutes={["/", "/lawyers", "/help"]}>
-  <PolicyDocument kind="terms" />
-</AppLayout>
+<BaseLayout title={`${policy.title} · BARO`} description={policy.description}>
+  <main id="main-content" class="web-policy-page" tabindex="-1">
+    <nav class="web-public-nav" aria-label="정책 탐색"><a class="web-brand" href="/"><img src="/brand/logo.svg" width="28" height="28" alt="" />BARO</a><a class="web-quiet-link" href="/help">도움말</a></nav>
+    <article><header><p class="web-kicker">이용 안내 · {version}</p><h1>{policy.title}</h1><p>{policy.description}</p></header>
+      {policy.sections.map((section) => <section id={section.id}><h2>{section.title}</h2>{section.paragraphs.map((paragraph) => <p>{paragraph}</p>)}</section>)}
+    </article>
+    <footer class="web-public-footer"><a href="/policies/terms">이용약관</a><a href="/policies/privacy">개인정보 처리방침</a><a href="/policies/ai">AI 이용 고지</a><a href="/new">작업 공간</a></footer>
+  </main>
+</BaseLayout>

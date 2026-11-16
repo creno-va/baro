@@ -1,0 +1,920 @@
+import { ArrowUpFromLine, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  api,
+  LawyerApiError,
+  type LawyerAssetView,
+  type LawyerView,
+  lawyerAssets,
+  lawyerErrorMessage,
+} from "../../../../../src/client/api/lawyers";
+import { sessionApi } from "../../../../../src/client/api/session";
+import { startForegroundPolling } from "../../../../../src/client/foreground-poll";
+import { FIELD_LABELS, REGION_LABELS } from "../../../../../src/components/lawyers/labels";
+import {
+  profileReady,
+  selfAssetUrl,
+  stripSelfPhotoMetadata,
+} from "../../../../../src/server/modules/lawyers/self-profile-contract";
+import { Button } from "../ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+  Input as ControlInput,
+  Select as ControlSelect,
+  Textarea as ControlTextarea,
+  Label as FieldLabel,
+} from "../ui/form";
+import { PageHeader } from "../ui/page-header";
+import { StatePanel } from "../ui/state-panel";
+import { AssetPhoto, downloadLawyerAsset } from "./AssetPhoto";
+import { ProfileContent } from "./Profile";
+
+async function photoData(file: File) {
+  if (
+    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+    file.size > 10 * 1024 * 1024
+  )
+    throw new LawyerApiError("VALIDATION_ERROR", "JPEG·PNG·WebP 사진을 10MB 이하로 선택해 주세요.");
+  const bitmap = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 240;
+    canvas.height = 240;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("image unavailable");
+    const side = Math.min(bitmap.width, bitmap.height);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, 240, 240);
+    context.drawImage(
+      bitmap,
+      (bitmap.width - side) / 2,
+      (bitmap.height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      240,
+      240,
+    );
+    for (const quality of [0.8, 0.6, 0.4]) {
+      const result = stripSelfPhotoMetadata(canvas.toDataURL("image/jpeg", quality));
+      if (result.length <= 44000) return result;
+    }
+    throw new LawyerApiError(
+      "VALIDATION_ERROR",
+      "사진을 줄이지 못했어요. 더 작은 사진으로 다시 선택해 주세요.",
+    );
+  } finally {
+    bitmap.close();
+  }
+}
+type VerifiedSession = {
+  identity: string;
+  epoch: number;
+  changed: boolean;
+  canMutate: boolean;
+};
+const busyLabels = {
+  load: "내 프로필을 불러오고 있어요.",
+  session: "로그인 상태를 확인하고 있어요.",
+  save: "프로필을 저장하고 있어요.",
+  assets: "업로드 자료 상태를 확인하고 있어요.",
+  remove: "자료 삭제를 접수하고 있어요.",
+  uploadSession: "업로드 전 로그인 상태를 확인하고 있어요.",
+  photo: "프로필 사진을 준비하고 있어요.",
+  upload: "자료를 업로드하고 있어요.",
+  uploadResult: "업로드 결과를 확인하고 있어요.",
+  download: "자료를 다운로드하고 있어요.",
+};
+export function Editor() {
+  const [saved, setSaved] = useState<LawyerView | null>(null);
+  const [draft, setDraft] = useState<LawyerView | null>(null);
+  const [busyAction, setBusyAction] = useState<keyof typeof busyLabels | null>("load");
+  const busy = busyAction !== null;
+  const [canMutate, setCanMutate] = useState(false);
+  const [accessUnknown, setAccessUnknown] = useState(false);
+  const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
+  const [notice, setNotice] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [assets, setAssets] = useState<LawyerAssetView[]>([]);
+  const [pendingUpload, setPendingUpload] = useState<{
+    id: string;
+    name: string;
+    purpose: "profile_photo" | "portfolio";
+    previewData: string | null;
+  } | null>(null);
+  const portfolioUpload = pendingUpload?.purpose === "portfolio" ? pendingUpload : null;
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const dirty = !!saved && !!draft && JSON.stringify(saved) !== JSON.stringify(draft);
+  const canSave = !pendingUpload && !!draft && profileReady(draft) && (dirty || !saved?.published);
+  const fail = useCallback((cause: unknown) => {
+    setError(lawyerErrorMessage(cause));
+    setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
+  }, []);
+  const owner = useRef<string | null>(null);
+  const epoch = useRef(0);
+  const sessionRequest = useRef(0);
+  const latestSessionCheck = useRef<Promise<VerifiedSession | null> | null>(null);
+  const profileRequest = useRef(0);
+  const clear = useCallback(() => {
+    epoch.current += 1;
+    profileRequest.current += 1;
+    setCanMutate(false);
+    setAccessUnknown(false);
+    setAssets([]);
+    setPendingUpload(null);
+    setPhotoPreview(null);
+    setSaved(null);
+    setDraft(null);
+    setConfirmDiscard(false);
+    setNotice("");
+    setError("");
+    setErrorCode("");
+  }, []);
+  const verify = useCallback(async () => {
+    const request = ++sessionRequest.current;
+    const check = async (): Promise<VerifiedSession | null> => {
+      let session: Awaited<ReturnType<typeof sessionApi.get>>;
+      try {
+        session = await sessionApi.get();
+      } catch (cause) {
+        if (request !== sessionRequest.current) return null;
+        const code = (cause as { code?: string })?.code;
+        if (["UNAUTHENTICATED", "FORBIDDEN", "ROLE_REQUIRED"].includes(code ?? "")) {
+          owner.current = null;
+          clear();
+          setBusyAction(null);
+          setError(lawyerErrorMessage(cause));
+          setErrorCode(code ?? "UNAUTHENTICATED");
+          return null;
+        } else {
+          setAccessUnknown(true);
+          setCanMutate(false);
+          setConfirmDiscard(false);
+        }
+        throw cause;
+      }
+      if (request !== sessionRequest.current) return null;
+      const identity = session.user
+        ? `${session.user.id}:${session.user.accountType}:${session.needsConsent}`
+        : "signed-out";
+      const changed = owner.current !== identity;
+      if (changed) {
+        owner.current = identity;
+        clear();
+      }
+      if (session.user?.accountType !== "lawyer") {
+        clear();
+        setBusyAction(null);
+        setErrorCode("UNAUTHENTICATED");
+        setError("변호사 역할로 로그인해 주세요.");
+        return null;
+      }
+      setAccessUnknown(false);
+      setCanMutate(!session.needsConsent);
+      return { identity, epoch: epoch.current, changed, canMutate: !session.needsConsent };
+    };
+    let pending: Promise<VerifiedSession | null> | null = check();
+    latestSessionCheck.current = pending;
+    // Returning from the file picker may supersede an action's session check.
+    // Follow the latest authoritative result without cancelling the action or
+    // accepting an older account/consent result, even if the new check settled.
+    while (pending) {
+      let checked: VerifiedSession | null;
+      try {
+        checked = await pending;
+      } catch (cause) {
+        if (pending === latestSessionCheck.current) throw cause;
+        pending = latestSessionCheck.current;
+        continue;
+      }
+      if (pending !== latestSessionCheck.current) {
+        pending = latestSessionCheck.current;
+        continue;
+      }
+      return checked;
+    }
+    return null;
+  }, [clear]);
+  const load = useCallback(async () => {
+    setBusyAction("load");
+    let run = profileRequest.current;
+    try {
+      const checked = await verify();
+      if (!checked) return;
+      run = ++profileRequest.current;
+      const p = await api.lawyers.getMine();
+      if (checked.epoch !== epoch.current || run !== profileRequest.current) return;
+      const after = await verify();
+      if (!after || after.identity !== checked.identity || after.epoch !== checked.epoch) {
+        if (after?.changed) await load();
+        return;
+      }
+      setSaved(p);
+      setDraft(p);
+      setError("");
+      setErrorCode("");
+    } catch (cause) {
+      if (run !== profileRequest.current) return;
+      if (
+        ["UNAUTHENTICATED", "FORBIDDEN", "NOT_FOUND", "ROLE_REQUIRED"].includes(
+          (cause as { code?: string })?.code ?? "",
+        )
+      )
+        clear();
+      run = profileRequest.current;
+      setError(lawyerErrorMessage(cause));
+      setErrorCode(cause instanceof LawyerApiError ? cause.code : "");
+    } finally {
+      if (run === profileRequest.current) setBusyAction(null);
+    }
+  }, [verify, clear]);
+  useEffect(() => {
+    let alive = true;
+    void load();
+    const refresh = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const checked = await verify();
+        if (alive && checked?.changed) await load();
+      } catch (cause) {
+        if (!alive) return;
+        setBusyAction(null);
+        setError(lawyerErrorMessage(cause));
+      }
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener("storage", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      alive = false;
+      epoch.current += 1;
+      sessionRequest.current += 1;
+      latestSessionCheck.current = null;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener("storage", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [load, verify]);
+  useEffect(() => {
+    if (!dirty) return;
+    const leave = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", leave);
+    return () => window.removeEventListener("beforeunload", leave);
+  }, [dirty]);
+  async function restoreAccess() {
+    setBusyAction("session");
+    try {
+      const checked = await verify();
+      if (!checked) return;
+      if (checked.changed || !draft) await load();
+      else {
+        setError("");
+        setErrorCode("");
+      }
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+  const patch = (field: keyof LawyerView, value: unknown) => {
+    if (!canMutate) return;
+    setDraft((p) => (p ? { ...p, [field]: value } : p));
+    setNotice("");
+  };
+  const failForOwner = async (cause: unknown, startEpoch: number) => {
+    if (epoch.current !== startEpoch) return;
+    try {
+      const checked = await verify();
+      if (!checked || checked.epoch !== startEpoch) {
+        if (checked?.changed) await load();
+        return;
+      }
+      fail(cause);
+    } catch (sessionError) {
+      if (epoch.current !== startEpoch) return;
+      setBusyAction(null);
+      fail(sessionError);
+    }
+  };
+  const mutate = async (operation: () => Promise<LawyerView>, message: string, action: "save") => {
+    const startEpoch = epoch.current;
+    setBusyAction(action);
+    setError("");
+    setNotice("");
+    try {
+      const checked = await verify();
+      if (!checked || checked.epoch !== startEpoch) {
+        if (checked?.changed) await load();
+        return;
+      }
+      if (!checked.canMutate)
+        throw new LawyerApiError("CONSENT_REQUIRED", "수정·공개 전 필수 동의를 확인해 주세요.");
+      const p = await operation();
+      if (epoch.current !== startEpoch) return;
+      const after = await verify();
+      if (!after || after.identity !== checked.identity || after.epoch !== startEpoch) {
+        if (after?.changed) await load();
+        return;
+      }
+      setDraft(p);
+      setSaved(p);
+      setErrorCode("");
+      setPhotoPreview(null);
+      setNotice(message);
+    } catch (cause) {
+      await failForOwner(cause, startEpoch);
+    } finally {
+      if (epoch.current === startEpoch) setBusyAction(null);
+    }
+  };
+  const save = async () => {
+    if (!draft || busy || !canMutate || !canSave) return;
+    await mutate(() => api.lawyers.saveMine(draft), "프로필을 저장했어요.", "save");
+  };
+  const attach = useCallback(
+    (asset: LawyerAssetView, title = "포트폴리오 파일") => {
+      if (!canMutate || asset.status !== "ready") return;
+      if (asset.purpose === "profile_photo") setPhotoPreview(null);
+      setDraft((current) =>
+        current
+          ? asset.purpose === "profile_photo"
+            ? { ...current, photoAssetId: asset.id, photoUrl: selfAssetUrl(current.id, asset.id) }
+            : {
+                ...current,
+                portfolio: [
+                  {
+                    id: crypto.randomUUID(),
+                    title: title.slice(0, 300),
+                    url: selfAssetUrl(current.id, asset.id),
+                    assetId: asset.id,
+                  },
+                ],
+              }
+          : current,
+      );
+      setNotice("자료를 연결했어요. 프로필을 저장하면 반영돼요.");
+    },
+    [canMutate],
+  );
+  useEffect(() => {
+    if (!pendingUpload || busy || !canMutate) return;
+    const startEpoch = epoch.current;
+    let alive = true,
+      reads = 0;
+    const stop = startForegroundPolling(async () => {
+      try {
+        const checked = await verify();
+        if (!alive || !checked || checked.epoch !== startEpoch || !checked.canMutate) return;
+        const items = await lawyerAssets.list();
+        if (!alive || epoch.current !== startEpoch) return;
+        const after = await verify();
+        if (!alive || !after || after.epoch !== startEpoch || !after.canMutate) return;
+        setAssets(items);
+        const asset = items.find((item) => item.id === pendingUpload.id);
+        if (asset?.status === "ready") {
+          attach({ ...asset, purpose: asset.purpose ?? pendingUpload.purpose }, pendingUpload.name);
+          if (pendingUpload.previewData) setPhotoPreview(pendingUpload.previewData);
+          setPendingUpload(null);
+          stop();
+        } else if (asset?.status === "failed" || ++reads >= 45) {
+          throw new LawyerApiError(
+            "UNAVAILABLE",
+            asset?.status === "failed"
+              ? "자료를 처리하지 못했어요. 파일을 다시 선택해 주세요."
+              : "자료 처리가 계속되고 있어요. 잠시 후 파일을 다시 선택하면 상태를 확인할 수 있어요.",
+          );
+        }
+      } catch (cause) {
+        if (!alive || epoch.current !== startEpoch) return;
+        setPendingUpload(null);
+        fail(cause);
+        stop();
+      }
+    }, 4000);
+    return () => {
+      alive = false;
+      stop();
+    };
+  }, [pendingUpload, busy, canMutate, verify, attach, fail]);
+  const refreshAssets = async () => {
+    if (busy) return;
+    const startEpoch = epoch.current;
+    setBusyAction("assets");
+    setError("");
+    setNotice("");
+    try {
+      const checked = await verify();
+      if (!checked || checked.epoch !== startEpoch) return;
+      const items = await lawyerAssets.list();
+      if (epoch.current !== startEpoch) return;
+      const after = await verify();
+      if (!after || after.epoch !== startEpoch) {
+        if (after?.changed) await load();
+        return;
+      }
+      setAssets(items);
+      setNotice(items.length ? "자료 상태를 확인했어요." : "업로드한 자료가 없어요.");
+    } catch (cause) {
+      await failForOwner(cause, startEpoch);
+    } finally {
+      if (epoch.current === startEpoch) setBusyAction(null);
+    }
+  };
+  const upload = async (file: File, purpose: "profile_photo" | "portfolio") => {
+    if (!draft || busy || !canMutate) return;
+    const startEpoch = epoch.current;
+    setPendingUpload(null);
+    setBusyAction("uploadSession");
+    setError("");
+    setNotice("");
+    try {
+      const checked = await verify();
+      if (!checked || checked.epoch !== startEpoch) return;
+      if (!checked.canMutate)
+        throw new LawyerApiError("CONSENT_REQUIRED", "필수 동의를 확인해 주세요.");
+      let selected = file,
+        previewData: string | null = null;
+      if (purpose === "profile_photo") {
+        setBusyAction("photo");
+        previewData = await photoData(file);
+        selected = new File(
+          [Uint8Array.from(atob(previewData.split(",")[1] ?? ""), (c) => c.charCodeAt(0))],
+          "profile.jpg",
+          { type: "image/jpeg" },
+        );
+      }
+      if (epoch.current !== startEpoch) return;
+      setBusyAction("upload");
+      const asset = await lawyerAssets.upload(draft.id, selected, purpose);
+      if (epoch.current !== startEpoch) return;
+      setBusyAction("uploadResult");
+      const after = await verify();
+      if (!after || after.epoch !== startEpoch) {
+        if (after?.changed) await load();
+        return;
+      }
+      setAssets((items) => [asset, ...items.filter((a) => a.id !== asset.id)]);
+      if (asset.status === "ready") {
+        attach({ ...asset, purpose: asset.purpose ?? purpose }, file.name);
+        if (previewData) setPhotoPreview(previewData);
+      } else {
+        setPendingUpload({ id: asset.id, name: file.name, purpose, previewData });
+        setNotice("자료를 처리하고 있어요. 완료되면 자동으로 연결해요.");
+      }
+    } catch (cause) {
+      await failForOwner(cause, startEpoch);
+    } finally {
+      if (epoch.current === startEpoch) setBusyAction(null);
+    }
+  };
+  // Capture the displayed owner; do not deliver a completed download to a new account.
+  const displayedOwner = owner.current;
+  const displayedEpoch = epoch.current;
+  const canDeliverDownload = async () => {
+    const checked = await verify();
+    if (checked?.changed) await load();
+    return !!checked && checked.identity === displayedOwner && checked.epoch === displayedEpoch;
+  };
+  const downloadExisting = async (asset: LawyerAssetView, index: number) => {
+    if (!draft || busy) return;
+    setBusyAction("download");
+    setError("");
+    try {
+      await downloadLawyerAsset(
+        draft.id,
+        asset.id,
+        true,
+        `업로드 자료 ${index + 1}`,
+        canDeliverDownload,
+      );
+    } catch (cause) {
+      await failForOwner(cause, displayedEpoch);
+    } finally {
+      if (epoch.current === displayedEpoch) setBusyAction(null);
+    }
+  };
+  return (
+    <div className="lawyer-editor">
+      <PageHeader
+        title="내 변호사 프로필"
+        description="프로필을 저장하면 변호사 찾기에 공개돼요."
+      />
+      {error && (
+        <StatePanel
+          variant={
+            errorCode === "UNAUTHENTICATED" || errorCode === "CONSENT_REQUIRED"
+              ? "permission"
+              : "error"
+          }
+          title={error}
+          description={
+            errorCode === "CONFLICT"
+              ? "지금 작성한 내용은 그대로 남아 있어요. 최신 내용을 불러오면 현재 변경을 버릴지 먼저 확인해요."
+              : draft
+                ? "입력한 내용은 그대로 남아 있어요. 자료 상태를 확인하거나 실패한 작업을 다시 시도해 주세요."
+                : "본인 계정의 프로필만 관리할 수 있어요."
+          }
+          action={
+            errorCode === "UNAUTHENTICATED" ? (
+              <a className="ui-button ui-button--primary" href="/login?returnTo=%2Flawyer">
+                로그인
+              </a>
+            ) : errorCode === "CONSENT_REQUIRED" ? (
+              <a className="ui-button ui-button--primary" href="/consent?returnTo=%2Flawyer">
+                동의 확인
+              </a>
+            ) : (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  if (accessUnknown) void restoreAccess();
+                  else if (dirty) setConfirmDiscard(true);
+                  else void load();
+                }}
+              >
+                {accessUnknown ? "로그인 상태 다시 확인" : "최신 프로필 다시 불러오기"}
+              </Button>
+            )
+          }
+        />
+      )}
+      {notice && (
+        <p className="lawyer-notice" role="status">
+          {notice}
+        </p>
+      )}
+      {busyAction && !accessUnknown && (
+        <StatePanel variant="loading" title={busyLabels[busyAction]} />
+      )}
+      {draft && !accessUnknown && (
+        <>
+          {!canMutate && (
+            <StatePanel
+              variant="permission"
+              title="재동의 전에도 기존 프로필과 자료를 확인할 수 있어요."
+              description="수정·공개·새 업로드는 필수 동의를 확인한 뒤 사용할 수 있어요."
+              action={
+                <a className="ui-button ui-button--primary" href="/consent?returnTo=%2Flawyer">
+                  동의 확인
+                </a>
+              }
+            />
+          )}
+          {confirmDiscard && (
+            <Card>
+              <CardContent>
+                <p>저장하지 않은 변경을 버리고 최신 프로필을 불러올까요?</p>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      setConfirmDiscard(false);
+                      void load();
+                    }}
+                  >
+                    변경 버리기
+                  </Button>
+                  <Button variant="outline" onClick={() => setConfirmDiscard(false)}>
+                    계속 편집
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {!canMutate ? (
+            <>
+              <p className="lawyer-notice">저장된 프로필을 보고 있어요.</p>
+              <ProfileContent
+                lawyer={
+                  photoPreview ? { ...draft, photoUrl: photoPreview, photoAssetId: null } : draft
+                }
+                privateRead
+                canDeliverDownload={canDeliverDownload}
+              />
+              {!canMutate && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>기존 업로드 자료</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" disabled={busy} onClick={() => void refreshAssets()}>
+                      자료 상태 확인
+                    </Button>
+                    <ul className="lawyer-assets mt-3" aria-label="기존 업로드 자료">
+                      {assets.map((asset, index) => (
+                        <li key={asset.id}>
+                          <span>
+                            {asset.purpose === "profile_photo" ? "프로필 사진" : "포트폴리오 자료"}{" "}
+                            ·{" "}
+                            {asset.status === "ready"
+                              ? "다운로드 가능"
+                              : asset.status === "failed"
+                                ? "처리 실패"
+                                : "처리 대기 또는 진행 중"}
+                          </span>
+                          <Button
+                            variant="outline"
+                            disabled={busy || asset.status !== "ready"}
+                            onClick={() => void downloadExisting(asset, index)}
+                          >
+                            업로드 자료 {index + 1} 다운로드
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          ) : (
+            <form
+              noValidate
+              id="lawyer-profile-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void save();
+              }}
+            >
+              <fieldset disabled={busy || !canMutate} className="lawyer-editor-sections">
+                <div className="lawyer-photo-surface">
+                  <div className="lawyer-photo-row">
+                    <AssetPhoto
+                      profileId={draft.id}
+                      assetId={photoPreview ? null : draft.photoAssetId}
+                      fallback={photoPreview ?? draft.photoUrl}
+                      alt="내 프로필 사진"
+                      size={80}
+                      privateRead
+                    />
+                    <div className="lawyer-photo-copy">
+                      <h2>프로필 사진</h2>
+                      <p>JPEG·PNG·WebP · 최대 10MB</p>
+                    </div>
+                    <div className="lawyer-photo-actions">
+                      <FieldLabel className="lawyer-photo-upload">
+                        <ArrowUpFromLine size={16} aria-hidden="true" />
+                        사진 변경
+                        <ControlInput
+                          aria-label="프로필 사진"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={async (e) => {
+                            const file = e.currentTarget.files?.[0];
+                            e.currentTarget.value = "";
+                            if (!file) return;
+                            await upload(file, "profile_photo");
+                          }}
+                        />
+                      </FieldLabel>
+                      {(draft.photoUrl || photoPreview || draft.photoAssetId) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="프로필에서 사진 제외"
+                          title="사진 제외"
+                          disabled={!draft.photoUrl || busy}
+                          onClick={() => {
+                            setDraft({ ...draft, photoUrl: null, photoAssetId: null });
+                            setPhotoPreview(null);
+                          }}
+                        >
+                          <X size={18} aria-hidden="true" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <section className="profile-edit-section" aria-labelledby="profile-basic-heading">
+                  <header>
+                    <h2 id="profile-basic-heading">1. 기본 정보</h2>
+                  </header>
+                  <div className="lawyer-fields lawyer-fields--three">
+                    <FieldLabel className="lawyer-field">
+                      <span>
+                        이름{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <ControlInput
+                        required
+                        aria-label="이름"
+                        value={draft.name}
+                        maxLength={100}
+                        onChange={(e) => patch("name", e.target.value)}
+                        autoComplete="name"
+                      />
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
+                      <span>
+                        사무실 이름{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <ControlInput
+                        required
+                        aria-label="사무실 이름"
+                        value={draft.officeName}
+                        maxLength={200}
+                        onChange={(e) => patch("officeName", e.target.value)}
+                        autoComplete="organization"
+                      />
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
+                      <span>
+                        지역{" "}
+                        <span aria-hidden="true" className="profile-required">
+                          *
+                        </span>
+                      </span>
+                      <span className="lawyer-select">
+                        <ControlSelect
+                          required
+                          aria-label="지역"
+                          value={draft.region}
+                          onChange={(e) => patch("region", e.target.value)}
+                        >
+                          <option value="">지역 선택</option>
+                          {Object.entries(REGION_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </ControlSelect>
+                      </span>
+                    </FieldLabel>
+                  </div>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-intro-heading">
+                  <header>
+                    <h2 id="profile-intro-heading">
+                      2. 소개{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                    </h2>
+                  </header>
+                  <FieldLabel className="lawyer-field">
+                    <span className="sr-only">소개</span>
+                    <ControlTextarea
+                      required
+                      value={draft.introduction}
+                      maxLength={5000}
+                      rows={5}
+                      placeholder="상담을 준비하는 의뢰인에게 활동과 경험을 소개해 주세요."
+                      onChange={(e) => patch("introduction", e.target.value)}
+                    />
+                  </FieldLabel>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-fields-heading">
+                  <header>
+                    <h2 id="profile-fields-heading">
+                      3. 업무 분야{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                      <small>복수 선택</small>
+                    </h2>
+                  </header>
+                  <fieldset className="lawyer-practice-options">
+                    <legend className="sr-only">분야 (복수 선택)</legend>
+                    <div className="lawyer-checkboxes">
+                      {Object.entries(FIELD_LABELS).map(([value, label]) => (
+                        <FieldLabel key={value}>
+                          <ControlInput
+                            type="checkbox"
+                            checked={draft.practiceAreas.includes(value)}
+                            onChange={(e) =>
+                              patch(
+                                "practiceAreas",
+                                e.target.checked
+                                  ? [...draft.practiceAreas, value]
+                                  : draft.practiceAreas.filter((field) => field !== value),
+                              )
+                            }
+                          />
+                          <span>{label}</span>
+                        </FieldLabel>
+                      ))}
+                    </div>
+                  </fieldset>
+                </section>
+                <section className="profile-edit-section" aria-labelledby="profile-contact-heading">
+                  <header>
+                    <h2 id="profile-contact-heading">4. 사무실과 연락처</h2>
+                    <p>연락받을 수단을 하나 이상 입력하세요.</p>
+                  </header>
+                  <FieldLabel className="lawyer-field">
+                    <span>
+                      사무실 주소{" "}
+                      <span aria-hidden="true" className="profile-required">
+                        *
+                      </span>
+                    </span>
+                    <ControlInput
+                      required
+                      aria-label="사무실 주소"
+                      value={draft.address}
+                      maxLength={500}
+                      onChange={(e) => patch("address", e.target.value)}
+                      autoComplete="street-address"
+                    />
+                  </FieldLabel>
+                  <div className="lawyer-fields lawyer-fields--three">
+                    <FieldLabel className="lawyer-field">
+                      전화번호
+                      <ControlInput
+                        type="tel"
+                        value={draft.phone}
+                        maxLength={30}
+                        onChange={(e) => patch("phone", e.target.value)}
+                        autoComplete="tel"
+                      />
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
+                      이메일
+                      <ControlInput
+                        type="email"
+                        value={draft.email}
+                        maxLength={254}
+                        onChange={(e) => patch("email", e.target.value)}
+                        autoComplete="email"
+                      />
+                    </FieldLabel>
+                    <FieldLabel className="lawyer-field">
+                      웹사이트 / 외부 상담 URL
+                      <ControlInput
+                        type="url"
+                        placeholder="https://"
+                        value={draft.website}
+                        maxLength={2000}
+                        onChange={(e) => patch("website", e.target.value)}
+                      />
+                    </FieldLabel>
+                  </div>
+                </section>
+                <Card className="profile-edit-section">
+                  <CardHeader>
+                    <CardTitle>
+                      5. 포트폴리오 <small>선택</small>
+                    </CardTitle>
+                    <p>활동과 경험을 소개하세요. 의뢰인 정보는 포함하지 마세요.</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="lawyer-portfolio-input">
+                      <FieldLabel className="lawyer-portfolio-upload">
+                        <ArrowUpFromLine size={22} aria-hidden="true" />
+                        <span>
+                          {portfolioUpload
+                            ? `${portfolioUpload.name} · 처리 중…`
+                            : draft.portfolio[0]?.title || "포트폴리오 파일 (이미지·PDF)"}
+                        </span>
+                        <ControlInput
+                          type="file"
+                          aria-label="포트폴리오 파일"
+                          accept="image/jpeg,image/png,image/webp,application/pdf"
+                          disabled={busy}
+                          onChange={async (event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = "";
+                            if (file) await upload(file, "portfolio");
+                          }}
+                        />
+                      </FieldLabel>
+                      {(draft.portfolio.length > 0 || portfolioUpload) && (
+                        <Button
+                          variant="ghost"
+                          aria-label="포트폴리오 파일 제거"
+                          disabled={busy}
+                          onClick={() => {
+                            setPendingUpload(null);
+                            patch("portfolio", []);
+                          }}
+                        >
+                          <X size={18} />
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </fieldset>
+              <footer className="lawyer-form-footer">
+                <Button type="submit" disabled={busy || !canMutate || !canSave}>
+                  {busyAction === "save" ? "저장 중…" : "프로필 저장"}
+                </Button>
+              </footer>
+            </form>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

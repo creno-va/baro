@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Button } from "../../src/components/ui/button";
-import { MediaPlayer } from "../../src/components/ui/media-player";
 import silentVideo from "../fixtures/media/scenes-silent.mp4?url";
+import { Button } from "./retired-web/components/ui/button";
+import { MediaPlayer } from "./retired-web/components/ui/media-player";
 
 export function MediaPlayerFixture() {
   const [open, setOpen] = useState(true);

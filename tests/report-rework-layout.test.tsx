@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createReportHtml } from "../src/components/reports/document";
-import { ReportReading } from "../src/components/reports/ReportReading";
 import { reportReworkLayoutFixture } from "./helpers/report-rework-layout-fixture";
+import { ReportReading } from "./helpers/retired-web/components/reports/ReportReading";
 
 for (const side of ["claim", "response"] as const) {
   test(`${side}: web and HTML retain the same requirements, exact quotations and concrete comparison`, () => {

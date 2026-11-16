@@ -1,12 +1,17 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { ReportReview } from "../../../components/reports/ReportReview";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads layout.
-import CaseLayout from "../../../layouts/CaseLayout.astro";
-import "../../../styles/workspace.css";
-import "../../../styles/reports.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the React application.
+import { WebApp } from "../../../components/web/WebApp";
+import { opaqueIdSchema } from "../../../contracts";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the document layout.
+import BaseLayout from "../../../layouts/BaseLayout.astro";
 
-// biome-ignore lint/correctness/noUnusedVariables: Astro template reads route.
-const caseId = Astro.params.caseId ?? "";
+const identity = opaqueIdSchema.safeParse(Astro.params.caseId);
+if (!identity.success) return Astro.redirect("/new", 302);
+// biome-ignore lint/correctness/noUnusedVariables: Astro passes this validated ID to the island.
+const caseId = identity.data;
+Astro.response.headers.set("Cache-Control", "private, no-store");
 ---
-<CaseLayout title="내 사건 이해와 해결 준비"><ReportReview caseId={caseId} rework client:load /></CaseLayout>
+<BaseLayout title="사건 리포트 · BARO" description="사건의 대화, 자료, 요약과 리포트를 한곳에서 확인합니다.">
+  <WebApp initialCaseId={caseId} initialTab="report" client:only="react" />
+  <noscript><main id="main-content"><p>사건을 확인하려면 JavaScript를 켜 주세요.</p></main></noscript>
+</BaseLayout>

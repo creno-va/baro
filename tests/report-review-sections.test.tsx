@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ReportReading } from "../src/components/reports/ReportReading";
 import {
   replaceReportReviewSection,
   reportReviewSections,
   withInlineReportPhotos,
 } from "../src/components/reports/review-sections";
+import { ReportReading } from "./helpers/retired-web/components/reports/ReportReading";
 
 const original =
   "사건 요약\r\n송금 자료를 정리했다.\r\n\r\n당사자\r\n합성 당사자\r\n\r\n사실·주장·출처\r\n[출처] 합성 원문 · 2쪽\r\n\r\n미확인 사항\r\n거래와 약속의 관계\r\n\r\n공식 출처\r\n보존할 합성 출처\r\n\r\n준비할 행동\r\n원본을 보관한다.";

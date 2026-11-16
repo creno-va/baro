@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { WorkspaceView } from "../../src/client/api/types";
-import { Button } from "../../src/components/ui/button";
-import { Textarea as ControlTextarea, Label as FieldLabel } from "../../src/components/ui/form";
-import {
-  ConversationAgent,
-  type ConversationClient,
-} from "../../src/components/workspace/ConversationAgent";
 import { v2AnalysisBasisSchema } from "../../src/contracts/v2";
 import type { ConversationFixtureControl } from "./conversation-agent-browser-api";
 import { limitedConversationState } from "./conversation-state";
+import { Button } from "./retired-web/components/ui/button";
+import { Textarea as ControlTextarea, Label as FieldLabel } from "./retired-web/components/ui/form";
+import {
+  ConversationAgent,
+  type ConversationClient,
+} from "./retired-web/components/workspace/ConversationAgent";
 
 /** Explicit isolated UI adapter; never imported from a product route or service. */
 export function ConversationAgentFixture() {

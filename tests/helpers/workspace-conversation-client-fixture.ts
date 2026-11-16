@@ -3,12 +3,12 @@ import {
   ensureMockWorkspace,
   type WorkspaceMockRuntime,
 } from "../../src/client/api/mock/workspace";
-import type { ConversationClient } from "../../src/components/workspace/ConversationAgent";
 import {
   v2ConversationActionRequestSchema,
   v2ConversationStateSchema,
 } from "../../src/contracts/v2";
 import { conversationState } from "./conversation-state";
+import type { ConversationClient } from "./retired-web/components/workspace/ConversationAgent";
 
 /** Isolated UI reads. No simulated paid analysis/report success or production fallback. */
 export function workspaceConversationFixture(runtime: WorkspaceMockRuntime): ConversationClient {

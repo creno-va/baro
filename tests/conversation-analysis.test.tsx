@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ConversationAnalysis } from "../src/components/workspace/ConversationAnalysis";
 import { nextConversationAction } from "../src/components/workspace/conversation-state";
 import { v2ConversationStateSchema } from "../src/contracts/v2";
 import { conversationState, limitedConversationState } from "./helpers/conversation-state";
+import { ConversationAnalysis } from "./helpers/retired-web/components/workspace/ConversationAnalysis";
 
 test("read-only analysis shows unavailable sources, the exact missing fact and current purpose without claiming completion", () => {
   const state = limitedConversationState("respond_to_claim");
