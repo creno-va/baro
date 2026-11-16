@@ -1,0 +1,277 @@
+{
+  "base": "44caf3ae302bd2fafd4bb7f661b0b33130a0098c",
+  "segments": [
+    {
+      "name": "state-effects-mutations",
+      "before": {
+        "characters": 20631,
+        "utf8Bytes": 21218
+      },
+      "after": {
+        "characters": 20631,
+        "utf8Bytes": 21218
+      },
+      "identical": true
+    },
+    {
+      "name": "retry-file",
+      "before": {
+        "characters": 956,
+        "utf8Bytes": 1208
+      },
+      "after": {
+        "characters": 956,
+        "utf8Bytes": 1208
+      },
+      "identical": true
+    },
+    {
+      "name": "chooser-message-upload-timeline",
+      "before": {
+        "characters": 15859,
+        "utf8Bytes": 16681
+      },
+      "after": {
+        "characters": 15859,
+        "utf8Bytes": 16681
+      },
+      "identical": true
+    },
+    {
+      "name": "derived-view-state",
+      "before": {
+        "characters": 1022,
+        "utf8Bytes": 1022
+      },
+      "after": {
+        "characters": 1022,
+        "utf8Bytes": 1022
+      },
+      "identical": true
+    }
+  ],
+  "apiCalls": {
+    "before": 24,
+    "after": 24,
+    "identical": true,
+    "removed": [],
+    "added": []
+  },
+  "ownerAndIoCalls": {
+    "before": 99,
+    "after": 99,
+    "identical": true,
+    "removed": [],
+    "added": []
+  },
+  "props": {
+    "disabled": {
+      "before": 42,
+      "after": 42,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "checked": {
+      "before": 4,
+      "after": 4,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "required": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "maxLength": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "pattern": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "minLength": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "rows": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "type": {
+      "before": 13,
+      "after": 13,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "id": {
+      "before": 6,
+      "after": 6,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "key": {
+      "before": 16,
+      "after": 16,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "aria-label": {
+      "before": 16,
+      "after": 16,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onSubmit": {
+      "before": 2,
+      "after": 2,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onDragOver": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onDrop": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onPaste": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onCompositionStart": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onCompositionEnd": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onScroll": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onKeyDown": {
+      "before": 1,
+      "after": 1,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onFocus": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onInput": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    },
+    "onBlur": {
+      "before": 0,
+      "after": 0,
+      "identical": true,
+      "removed": [],
+      "added": []
+    }
+  },
+  "refs": {
+    "before": 4,
+    "after": 4,
+    "identical": true,
+    "removed": [],
+    "added": []
+  },
+  "liftedOperations": [
+    {
+      "operation": "history",
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    {
+      "operation": "original",
+      "before": 2,
+      "after": 2,
+      "identical": true
+    },
+    {
+      "operation": "chat-retry",
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    {
+      "operation": "delete",
+      "before": 1,
+      "after": 1,
+      "identical": true
+    }
+  ],
+  "precision": {
+    "identical": true,
+    "original": "{ const precision = value as NonNullable<TimelineView[\"datePrecision\"]>; setEntry({ ...entry, datePrecision: precision, date: timelineDateInput(entry.date ?? \"\", precision, entry.datePrecision), }); }",
+    "current": "{ const precision = value as NonNullable<TimelineView[\"datePrecision\"]>; setEntry({ ...entry, datePrecision: precision, date: timelineDateInput(entry.date ?? \"\", precision, entry.datePrecision), }); }",
+    "enclosingEntryGuard": "if (!entry) return;"
+  },
+  "timeline": {
+    "onClickIdentical": true,
+    "hrefIdentical": true,
+    "helperCallsIdentical": true
+  },
+  "excludedBoundaries": [
+    "imports/declarations and presentation helpers",
+    "renderConversationPane JSX factory -> WorkspacePanes",
+    "historyButton JSX factory -> WorkspaceHistory/loadHistory",
+    "schemaVersion=1 early return -> WorkspaceView",
+    "contextSummary,errorFeedback,uploadRecovery,fileViewer,materialsPanel and remaining JSX -> pure views",
+    "four run operation handlers lifted with equivalent enclosing preview/delete null guards; chat retry changes message.id capture to messageId parameter",
+    "timeline precision event body -> direct string callback with enclosing entry guard",
+    "DS control adapters and Dialog panelRef/titleId/headerActions; client api.rework injected unchanged as conversationClient"
+  ]
+}

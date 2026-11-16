@@ -396,9 +396,10 @@ for (const [collection, suffix, label, count] of [
       await expect(page.getByText("Saved message 0", { exact: true })).toBeVisible();
       await expect(page.locator("#workspace-message")).toHaveValue("Keep this unsent draft 😀");
     } else if (collection === "timeline") {
-      await expect(page.locator(".workspace-timeline > li")).toHaveCount(count);
+      await expect(page.locator("[data-product-workspace-timeline] > li")).toHaveCount(count);
       await expect(page.getByRole("button", { name: "일정 추가", exact: true })).toBeDisabled();
-    } else await expect(page.locator(".workspace-action-list > li")).toHaveCount(count);
+    } else
+      await expect(page.locator("[data-product-workspace-action-list] > li")).toHaveCount(count);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(more).toHaveCount(0);
   });

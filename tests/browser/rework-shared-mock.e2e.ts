@@ -72,7 +72,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
       .check();
     await page.getByRole("button", { name: "보내기", exact: true }).click();
     const attachment = page
-      .locator(".workspace-message-attachments")
+      .locator("[data-product-workspace-message-attachments]")
       .getByRole("link", { name: "shared-inline.txt", exact: true })
       .last();
     await expect(attachment).toBeVisible();

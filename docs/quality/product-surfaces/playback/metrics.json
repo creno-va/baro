@@ -1,0 +1,360 @@
+[
+  {
+    "stage": "initial",
+    "data": {
+      "audio": [
+        {
+          "currentTime": 0,
+          "duration": 20,
+          "paused": true,
+          "readyState": 4,
+          "source": "/__synthetic-audio.wav"
+        }
+      ],
+      "inlineStyleCount": 6,
+      "overflow": false,
+      "video": [
+        {
+          "duration": 8,
+          "height": 360,
+          "paused": true,
+          "readyState": 4,
+          "width": 640
+        }
+      ],
+      "viewport": {
+        "height": 863,
+        "width": 1200
+      }
+    }
+  },
+  {
+    "stage": "audio-playing",
+    "data": {
+      "currentTime": 11.758692,
+      "duration": 20,
+      "paused": false,
+      "readyState": 4
+    }
+  },
+  {
+    "stage": "audio-home-arrow",
+    "data": {
+      "currentTime": 1,
+      "paused": true
+    }
+  },
+  {
+    "stage": "audio-end",
+    "data": {
+      "currentTime": 19.999,
+      "paused": true
+    }
+  },
+  {
+    "stage": "volume-home",
+    "data": {
+      "muted": true
+    }
+  },
+  {
+    "stage": "volume-step-and-mute",
+    "data": {
+      "muted": true,
+      "ariaValue": "0"
+    }
+  },
+  {
+    "stage": "volume-restored",
+    "data": {
+      "muted": false,
+      "ariaValue": "5"
+    }
+  },
+  {
+    "stage": "speed-1.5",
+    "data": {
+      "rate": 1.5,
+      "selected": "1.5"
+    }
+  },
+  {
+    "stage": "before-lock",
+    "data": {
+      "currentTime": 0.244344,
+      "paused": false
+    }
+  },
+  {
+    "stage": "after-lock",
+    "data": {
+      "currentTime": 0.883184,
+      "paused": true
+    }
+  },
+  {
+    "stage": "after-unlock-no-autoresume",
+    "data": {
+      "currentTime": 0.883184,
+      "paused": true
+    }
+  },
+  {
+    "stage": "video-playing",
+    "data": {
+      "currentTime": 0.0644,
+      "duration": 8,
+      "height": 360,
+      "paused": false,
+      "width": 640
+    }
+  },
+  {
+    "stage": "video-fullscreen",
+    "data": {
+      "activeFullscreenTag": null,
+      "video": [
+        {
+          "currentTime": 1,
+          "paused": true
+        }
+      ],
+      "viewport": {
+        "height": 863,
+        "width": 1200
+      }
+    }
+  },
+  {
+    "stage": "responsive-390",
+    "data": {
+      "controls": [
+        {
+          "height": 44,
+          "label": "재생 위치",
+          "width": 332
+        },
+        {
+          "height": 44,
+          "label": "재생",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "소리 끄기",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "음량",
+          "width": 98
+        },
+        {
+          "height": 44,
+          "label": "1.5배",
+          "width": 112
+        },
+        {
+          "height": 44,
+          "label": "재생 위치",
+          "width": 332
+        },
+        {
+          "height": 44,
+          "label": "재생",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "소리 끄기",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "음량",
+          "width": 98
+        },
+        {
+          "height": 44,
+          "label": "1배",
+          "width": 112
+        },
+        {
+          "height": 44,
+          "label": "전체 화면",
+          "width": 44
+        }
+      ],
+      "documentWidth": 390,
+      "players": [
+        {
+          "left": 16,
+          "right": 374,
+          "width": 358
+        },
+        {
+          "left": 16,
+          "right": 374,
+          "width": 358
+        }
+      ],
+      "viewport": {
+        "height": 900,
+        "width": 390
+      }
+    }
+  },
+  {
+    "stage": "responsive-320",
+    "data": {
+      "buttons": [
+        {
+          "height": 44,
+          "label": "재생 위치",
+          "width": 262
+        },
+        {
+          "height": 44,
+          "label": "재생",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "소리 끄기",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "음량",
+          "width": 98
+        },
+        {
+          "height": 44,
+          "label": "1.5배",
+          "width": 112
+        },
+        {
+          "height": 44,
+          "label": "재생 위치",
+          "width": 262
+        },
+        {
+          "height": 44,
+          "label": "재생",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "소리 끄기",
+          "width": 44
+        },
+        {
+          "height": 44,
+          "label": "음량",
+          "width": 98
+        },
+        {
+          "height": 44,
+          "label": "1배",
+          "width": 112
+        },
+        {
+          "height": 44,
+          "label": "전체 화면",
+          "width": 44
+        }
+      ],
+      "documentWidth": 320,
+      "players": [
+        {
+          "left": 16,
+          "right": 304,
+          "width": 288
+        },
+        {
+          "left": 16,
+          "right": 304,
+          "width": 288
+        }
+      ],
+      "tracks": [
+        {
+          "height": 44,
+          "trackWidth": 250,
+          "width": 262
+        },
+        {
+          "height": 44,
+          "trackWidth": 86,
+          "width": 98
+        },
+        {
+          "height": 44,
+          "trackWidth": 250,
+          "width": 262
+        },
+        {
+          "height": 44,
+          "trackWidth": 86,
+          "width": 98
+        }
+      ],
+      "viewport": {
+        "height": 900,
+        "width": 320
+      }
+    }
+  },
+  {
+    "stage": "audio-pointer-midpoint-320",
+    "data": {
+      "currentTime": 10,
+      "paused": true
+    }
+  },
+  {
+    "stage": "before-close",
+    "data": {
+      "currentTime": 10.00288,
+      "paused": false
+    }
+  },
+  {
+    "stage": "after-close-unmount",
+    "data": {
+      "audioCount": 0,
+      "audioGroupCount": 0,
+      "videoCount": 1
+    }
+  },
+  {
+    "stage": "console-and-csp-observation",
+    "data": {
+      "logs": [],
+      "cspMeta": [],
+      "note": "Browser console observations only; HTTP CSP response headers are not exposed by the documented CUA API."
+    }
+  },
+  {
+    "stage": "exact-rate-name-fixed",
+    "data": {
+      "exactButtonCount": 1,
+      "selected": "1.5",
+      "playbackRate": 1.5
+    }
+  },
+  {
+    "stage": "post-fix-console",
+    "data": {
+      "warningOrErrorCount": 0,
+      "logs": []
+    }
+  },
+  {
+    "stage": "viewport-cleanup",
+    "data": {
+      "height": 863,
+      "width": 1200
+    }
+  }
+]

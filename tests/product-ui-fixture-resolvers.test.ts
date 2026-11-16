@@ -39,10 +39,10 @@ describe("moved UI controllers retain the exact isolated API composition", () =>
     ).toBeNull();
   });
 
-  test("workspace retains its original subjects while moving only Agent and FileReview owners", () => {
+  test("workspace isolates the actual owning controllers after each UI migration", () => {
     const resolve = resolver(workspace, "isolated-workspace-contract-facade");
     for (const path of [
-      "components/workspace/Workspace.tsx",
+      "product-ui/workspace/useWorkspaceController.ts",
       "components/workspace/useEvidenceUpload.ts",
       "product-ui/research/useLookupController.ts",
       "components/intake/useCustomerAccess.ts",
@@ -51,6 +51,8 @@ describe("moved UI controllers retain the exact isolated API composition", () =>
     ])
       expect(resolve(source, importer(path))).toBe(fixture("workspace-client-fixture.ts"));
     for (const path of [
+      "components/workspace/Workspace.tsx",
+      "product-ui/workspace/WorkspaceView.tsx",
       "components/workspace/ConversationAgent.tsx",
       "components/workspace/FileReview.tsx",
       "components/workspace/LookupDialog.tsx",

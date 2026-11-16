@@ -1,0 +1,16 @@
+[
+  {
+    "path": "src/product-ui/legacy-case/QuestionsView.tsx",
+    "line": 55,
+    "tag": "TextareaField",
+    "label": "{`${index + 1}번 답변`}",
+    "ariaLabel": "{`${index + 1}번 답변`}"
+  },
+  {
+    "path": "src/product-ui/reports/SectionEditor.tsx",
+    "line": 86,
+    "tag": "TextareaField",
+    "label": "{`${reportSectionTitle(section.title)} 수정`}",
+    "ariaLabel": "{`${reportSectionTitle(section.title)} 수정`}"
+  }
+]

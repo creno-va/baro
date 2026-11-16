@@ -1,6 +1,6 @@
 import { AccountSettingsView } from "../product-ui/account/AccountSettingsView";
 import { useAccountSettingsController } from "../product-ui/account/useAccountSettingsController";
-import { ProviderIcon } from "./AuthButtons";
+import { ProviderIcon } from "../product-ui/public/ProviderIcon";
 import { LegacyProfileAssets } from "./lawyers/LegacyProfileAssets";
 
 export function AccountSettings() {

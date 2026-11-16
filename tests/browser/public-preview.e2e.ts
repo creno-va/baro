@@ -90,7 +90,9 @@ test("intake opens the restored workspace and report controls without lawyer con
   await goToCaseTool(page, "actions");
   await expect(page).toHaveURL(`${casePath}/actions`);
   await expect(page.getByRole("heading", { name: "다음 행동", exact: true })).toBeVisible();
-  await expect(page.locator('.workspace-action-list [role="checkbox"]').first()).toBeEnabled();
+  await expect(
+    page.locator('[data-product-workspace-action-list] [role="checkbox"]').first(),
+  ).toBeEnabled();
   await goToCaseTool(page, "reports");
   await expect(page).toHaveURL(`${casePath}/reports`);
   const preparation = page.getByRole("region", { name: "리포트 준비 상태", exact: true });

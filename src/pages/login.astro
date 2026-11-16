@@ -1,13 +1,8 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the login island.
 import { AuthButtons } from "../components/AuthButtons";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import { Brand } from "../components/ui/brand";
-// biome-ignore lint/correctness/noUnusedImports: Astro template reads the island.
-import { ThemeToggle } from "../components/ui/theme-toggle";
-// biome-ignore lint/correctness/noUnusedImports: Astro resolves component imports in the template.
-import BaseLayout from "../layouts/BaseLayout.astro";
-import "../styles/login.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the new public frame.
+import ProductPublicLayout from "../layouts/ProductPublicLayout.astro";
 
 // biome-ignore lint/correctness/noUnusedVariables: Used in the Astro template.
 const oauthFailed = Astro.url.searchParams.has("error");
@@ -23,37 +18,23 @@ const errorMessage = oauthErrors.includes("account_not_linked")
         ? "안전한 이용을 위해 다시 로그인해 주세요."
         : "로그인이 완료되지 않았어요. 다시 선택해 주세요.";
 ---
-
-<BaseLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다.">
-  <main id="main-content" tabindex="-1" class="login-page">
-    <nav class="login-navigation" aria-label="로그인 화면">
-      <a class="login-back" href="/" aria-label="홈으로 돌아가기">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m12 5-7 7 7 7M5 12h15" />
-        </svg>
-      </a>
-      <span>로그인 · 회원가입</span><ThemeToggle client:load />
-    </nav>
-    <div class="login-content">
-      <header class="login-intro">
-        <Brand />
-        <p class="login-intro__headline">법률 고민의 시작, <br />바로와 함께.</p>
-        <p class="login-intro__caption">막막한 순간부터, 다음 한 걸음까지.</p>
-      </header>
-      <section class="login-panel" aria-labelledby="login-title">
-        <h1 id="login-title">로그인 · 회원가입</h1>
-        <p class="login-panel__description">소셜 계정으로 내 사건 정리를 시작하세요.</p>
-        {oauthFailed && <p class="form-error login-callback-error" role="alert">{errorMessage}</p>}
-        <AuthButtons client:load />
-        <footer class="login-footer">
-          <div class="login-policy-links">
-            <a href="/policies/terms">이용약관</a>
-            <span aria-hidden="true">·</span>
-            <a href="/policies/privacy">개인정보 처리방침</a>
-          </div>
-          <a class="login-help" href="/help">로그인에 어려움이 있나요?</a>
-        </footer>
-      </section>
-    </div>
-  </main>
-</BaseLayout>
+<ProductPublicLayout title="로그인 — BARO" description="Google, Naver 또는 Kakao 계정으로 BARO에 로그인합니다." width="auth" navigationLabel="로그인 화면">
+  <div data-product-login="" class="space-y-8">
+    <header class="space-y-3">
+      <p class="text-3xl font-semibold leading-tight tracking-tight">법률 고민의 시작, <br />바로와 함께.</p>
+      <p class="text-sm leading-7 text-[var(--pui-muted)]">막막한 순간부터, 다음 한 걸음까지.</p>
+    </header>
+    <section aria-labelledby="login-title" class="space-y-6 rounded-2xl border border-[var(--pui-border)] bg-[var(--pui-surface)] p-5 sm:p-7">
+      <div class="space-y-2">
+        <h1 id="login-title" class="text-xl font-semibold tracking-tight">로그인 · 회원가입</h1>
+        <p data-product-login-description="" class="text-sm leading-6 text-[var(--pui-muted)]">소셜 계정으로 내 사건 정리를 시작하세요.</p>
+      </div>
+      {oauthFailed && <p data-product-login-callback-error="" class="rounded-xl border border-[var(--pui-danger)] p-3 text-sm leading-6 text-[var(--pui-danger)]" role="alert">{errorMessage}</p>}
+      <AuthButtons client:load />
+      <footer class="space-y-3 border-t border-[var(--pui-border)] pt-4 text-xs leading-6 text-[var(--pui-muted)] [&_a]:inline-flex [&_a]:min-h-11 [&_a]:items-center [&_a]:rounded [&_a]:underline [&_a]:underline-offset-4 [&_a]:focus-visible:outline-2 [&_a]:focus-visible:outline-[var(--pui-focus)]">
+        <div class="flex flex-wrap items-center gap-2"><a href="/policies/terms">이용약관</a><span aria-hidden="true">·</span><a href="/policies/privacy">개인정보 처리방침</a></div>
+        <a href="/help">로그인에 어려움이 있나요?</a>
+      </footer>
+    </section>
+  </div>
+</ProductPublicLayout>

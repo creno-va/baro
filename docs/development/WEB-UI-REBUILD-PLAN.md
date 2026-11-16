@@ -1,7 +1,7 @@
 # 웹 UI 재구성 계획과 기능 보존표
 
 - 최초 기능 조사 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
-- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 → [#816](https://github.com/creno-va/baro/pull/816) 보존된 랜딩 이식. [#817](https://github.com/creno-va/baro/pull/817) 대화 도구·후속 해결·계정 UI는 `f82400cf9966c7daecbef5b1275f4b3642be7506`의 품질·native 렌더링 CI가 통과했다. 다음 검토 단위는 자료 첨부·판례/조회 UI다. [사건 상세](./PRODUCT-DETAILS.md), [랜딩 기록](../quality/landing-port/README.md), [대화 도구·계정 범위](./PRODUCT-TOOLS.md), [첨부·판례 범위](./PRODUCT-MATERIALS.md)를 각각 확인한다.
+- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 → [#816](https://github.com/creno-va/baro/pull/816) 보존된 랜딩 이식. [#817](https://github.com/creno-va/baro/pull/817) 대화 도구·후속 해결·계정 UI는 `f82400cf9966c7daecbef5b1275f4b3642be7506`의 품질·native 렌더링 CI가 통과했다. [#818](https://github.com/creno-va/baro/pull/818) 자료 첨부·판례/조회 UI를 제출했고, 마지막 작업 공간·공개/인증·v1·재생기·공통 확인 UI를 통합 검토하고 있다. [사건 상세](./PRODUCT-DETAILS.md), [랜딩 기록](../quality/landing-port/README.md), [대화 도구·계정 범위](./PRODUCT-TOOLS.md), [첨부·판례 범위](./PRODUCT-MATERIALS.md), [최종 화면 범위](./PRODUCT-SURFACES.md)를 각각 확인한다.
 - 현재 작업 순서: 기존 BARO와 정확한 디자인 기준 확인 → 기본 UI·디자인 시스템·공통 shell PR → 상세 기능 UI 이관 → 조회·성능 개선.
 - 이 문서는 코드 조사와 단계별 인수 계획이다. 구현 완료, 실제 화면 인수, 외부 연동 또는 배포 성공을 뜻하지 않는다.
 - 이전 전면 교체 PR #809는 종료된 별도 작업이다. 해당 PR을 다시 열거나 구현 기준으로 재사용하지 않는다.
@@ -30,10 +30,10 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 | 조립 요소 | 현재 역할 | 기본 UI PR에서 보존할 계약 |
 | --- | --- | --- |
-| [BaseLayout](../../src/layouts/BaseLayout.astro) | 로그인/동의·공개 안내의 기존 문서 head·CSP·캐시·테마/접근성 진입점 | 원본 랜딩이 공유하던 의존성을 보존하고 후속 랜딩 조립은 별도 layout으로 분리 |
+| [BaseLayout](../../src/layouts/BaseLayout.astro) | 최초 조사 당시 로그인/공개 안내의 문서 조립. 현재 production graph에서 미도달 | 원본과 compatibility는 보존; 현재 공개 경로는 ProductPublicLayout 사용 |
 | [LandingLayout](../../src/layouts/LandingLayout.astro) | 보존된 랜딩의 전용 문서 조립 | 랜딩 이식의 실제 범위·동작·로컬 검토를 제품 shell과 구분 |
 | [ProductLayout](../../src/layouts/ProductLayout.astro) | 실제 제품 경로의 head·CSP·private no-store·Zod/테마 초기화와 제품 전용 CSS layer | BaseLayout의 랜딩 import를 바꾸지 않고 기존 보안·캐시·focus 계약 유지 |
-| [AppLayout](../../src/layouts/AppLayout.astro)·[CaseWorkbenchLayout](../../src/layouts/CaseWorkbenchLayout.astro) | ProductLayout 안의 탐색 island와 본문 slot | 기존 props, main 영역, 독립 island 조립, 모든 기존 경로 |
+| [CaseWorkbenchLayout](../../src/layouts/CaseWorkbenchLayout.astro)·[ProductPublicLayout](../../src/layouts/ProductPublicLayout.astro) | 현재 ProductLayout 안의 제품 탐색/본문 또는 공개 header/본문 조립. 기존 AppLayout은 production 미도달 | 기존 main/독립 island·경로·문서 보안 계약 유지 |
 | [CaseLayout](../../src/layouts/CaseLayout.astro) | 사건 shell, 원본 미디어·로컬 사진 preview의 CSP, 안내·analytics 환경 | 기존 환경·권한·CSP·자료 preview 경계 |
 | [AppNavigation](../../src/components/ui/app-navigation.tsx) | 세션과 최근 사건을 읽는 독립 탐색 island | 기존 조회·이름 변경·삭제·로그아웃 처리와 owner guard |
 | [CaseWorkspaceFrame](../../src/components/ui/workspace-frame.tsx) | 헤더·중앙·참고 패널 배치, 반응형 overlay와 포커스 | 기존 `header`, `children`, `panel` 등 인터페이스; 업무 API를 소유하지 않는 경계 |
@@ -122,12 +122,14 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 | [#813](https://github.com/creno-va/baro/pull/813) 대화·질문 | CaseHeader/WorkspaceFrame·composer/메뉴·IntakeQuestions | 이 단계에서는 메시지·ConversationAgent/Panel/Analysis/Preparation의 업무 tree를 보존했으며 다음 범위에서 별도 이관 |
 | [#815](https://github.com/creno-va/baro/pull/815) 사건 상세 | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 기준 head `b5138bbf1ba2c2f99fe5aec9c0058968de0e9868`의 별도 검증 기록. 이 단계의 EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
 | [#816](https://github.com/creno-va/baro/pull/816) 랜딩 이식 | #815 위에서 원래 랜딩을 LandingLayout/LandingPage와 필요한 React island로 이전. [보존 계약](./WEB-LANDING-PRESERVATION.md), [검토 기록](../quality/landing-port/README.md) | 기준 head `44caf3ae302bd2fafd4bb7f661b0b33130a0098c`. 원래 디자인·자산·동선 보존의 독립 검토 단위이며 main 통합·배포와 구분 |
-| 현재 대화 도구·후속 해결·계정 UI(PR 미제출, 817) | #816 위에서 Agent/Panel/Analysis/Preparation·메시지/점진 표시/출처, FollowUpResolution·문서 초안, AccountSettings/기존 자산 뷰를 이관. [설계·보존 검증](./PRODUCT-TOOLS.md) | source core/AST·SSR·가드 검증과 실제 CUA·최종 CI를 구분. QA는 별도 진행하며 결과 기록 전에 완료로 세지 않음 |
-| 후속 UI | 업로드·촬영/처리·원본 viewer·standalone timeline/actions·판례 검색/원문/비교·외부 조회·로그인/동의·도움말/정책·404/410·v1 화면 | 새 대화 Preparation·Analysis 및 계정 자산 preview와 다른 실제 업무 범위. 별도 worktree의 진행도 이 브랜치 완료로 세지 않음 |
+| [#817](https://github.com/creno-va/baro/pull/817) 대화 도구·후속 해결·계정 | Agent/Panel/Analysis/Preparation·메시지/점진 표시/출처, FollowUpResolution·초안, AccountSettings/기존 자산. [검증](./PRODUCT-TOOLS.md) | 정확한 head의 quality·native rendering CI 통과. 실제 CUA·로컬 quick/build와 외부 조건은 별도 기록 |
+| [#818](https://github.com/creno-va/baro/pull/818) 첨부·판례/조회 | evidence/research controller/view, 검색·읽기·비교·명시적 조회 UI. [검증](./PRODUCT-MATERIALS.md) | 최종 head `f9e5cf28bb4dbfd202ea7b636d80d2ec499f4ad7`의 quality·법률 회귀 CI 통과, 판례 브라우저15개 통과. 파일 선택기 도구 중단으로 실제 업로드 성공은 확인하지 못함 |
+| 통합 작업 공간·공개/인증 화면 | standalone Workspace/timeline/actions/FileViewer, playback, public/auth/help/policy/404/410, v1 CaseDetail/Feedback, ProductExperience. [범위](./PRODUCT-SURFACES.md), [검토](../quality/product-surfaces/README.md) | 실제 Astro/CUA·별도 v1 HTTP·원문/SSR/AST·독립 active graph·로컬 통합 quick/build 통과. 부모 CI도 통과했으며 정확한 제출 head의 PR CI는 본문에 기록 |
 
-현재 제출된 UI 검토 단위는 #810·#812·#813·#815·#816 다섯 개다. 대화 도구·후속 해결·계정 UI는 #816 기반의 다음 미제출 작업이다.
+UI 검토 단위는 #810·#812·#813·#815·#816·#817·#818과 본 작업 공간·공개 화면 통합 스택이다. 각각의 정확한 head·검증 기록을 유지한다.
 독립 성능 PR #811(history batching)·#814(report head index)는 UI PR 수에 포함하지 않는다.
-PR 제출·CI와 main 통합·배포는 각각 구분한다. 현재 도구·계정 단계 뒤에도 위 후속 UI가 남으므로 전체 프론트 완료 상태가 아니다.
+production import graph에서 미이관 interactive control/scene을 찾지 못했으며, 공통 legal footer·font/theme/focus·geometry·문서/print·격리 compatibility CSS는 보존한다. 모든 구형 파일/CSS의 삭제를 뜻하지 않는다.
+PR 제출·CI와 main 통합·원격 migration·실제 외부 연동·배포를 구분한다.
 
 | 단계 | 산출물과 범위 | 다음 단계로 넘어갈 조건 |
 | --- | --- | --- |
@@ -184,6 +186,7 @@ PR 제출·CI와 main 통합·배포는 각각 구분한다. 현재 도구·계�
 | 상세 기능 UI 이관 | #813 대화 프레임·질문, #815 사건 요약·자료 목록/교정·리포트. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
 | 랜딩 이식 | #816의 독립 PR. 원래 디자인·장면·자산·동선을 유지하는 조립 이식과 로컬 검토는 [landing-port 기록](../quality/landing-port/README.md)에 보존. 제품 전체 이관·원격 배포 인수와 구분 |
 | 대화 도구·후속 해결·계정 UI | #817 제출, 품질·native CI 통과. 원문 core/AST·SSR·실제 Astro mock CUA·quick/build는 PRODUCT-TOOLS 및 product-tools 검토 기록 참조 |
-| 자료 첨부·판례/조회 UI | #817 기반 검토 단위. 새 controller/view와 source/AST·실제 Astro mock CUA를 PRODUCT-MATERIALS 및 product-materials 기록에 구분 |
+| 자료 첨부·판례/조회 UI | #818 제출. source/AST·실제 Astro mock CUA·quick/build를 PRODUCT-MATERIALS에 구분. 표시 보완과 이력 없는 CI 테스트까지 반영한 최종 quality·법률 회귀 CI 통과 |
+| 작업 공간·공개/인증·v1·재생기 | 최종 이관과 실제 CUA·별도 v1 native HTTP·원본 재생·active graph 근거를 PRODUCT-SURFACES 및 product-surfaces에 기록. 통합 quick/build 통과, PR CI는 정확한 제출 head의 본문 기록으로 확정 |
 | 조회·성능 개선 | #811·#814의 독립 범위와 합성 fixture/plan 증거. 새 UI 또는 query factory만으로 실제 cloud latency 개선을 주장하지 않음 |
 | 실제 외부/배포 인수 | 요청·승인·환경·동일 SHA의 실제 결과가 있을 때 별도로 기록 |

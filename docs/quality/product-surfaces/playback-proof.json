@@ -1,0 +1,213 @@
+{
+  "base": "44caf3ae302bd2fafd4bb7f661b0b33130a0098c",
+  "regions": [
+    {
+      "name": "clock-and-initial-state",
+      "before": {
+        "characters": 453,
+        "utf8Bytes": 453
+      },
+      "after": {
+        "characters": 453,
+        "utf8Bytes": 453
+      },
+      "identical": true
+    },
+    {
+      "name": "controller-all-original-refs-state-effects-handlers-and-derived-state",
+      "before": {
+        "characters": 3584,
+        "utf8Bytes": 3764
+      },
+      "after": {
+        "characters": 3584,
+        "utf8Bytes": 3764
+      },
+      "identical": true
+    },
+    {
+      "name": "range-fill-limit-clamp-and-width-effect",
+      "before": {
+        "characters": 370,
+        "utf8Bytes": 370
+      },
+      "after": {
+        "characters": 370,
+        "utf8Bytes": 370
+      },
+      "identical": true
+    }
+  ],
+  "props": {
+    "disabled": {
+      "before": 7,
+      "after": 7,
+      "identical": true
+    },
+    "aria-label": {
+      "before": 7,
+      "after": 7,
+      "identical": true
+    },
+    "aria-busy": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "aria-pressed": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "aria-live": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "ref": {
+      "before": 2,
+      "after": 2,
+      "identical": true
+    },
+    "key": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "src": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "hidden": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "playsInline": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "preload": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "value": {
+      "before": 3,
+      "after": 3,
+      "identical": true
+    },
+    "max": {
+      "before": 2,
+      "after": 2,
+      "identical": true
+    },
+    "step": {
+      "before": 1,
+      "after": 1,
+      "identical": true
+    },
+    "valueText": {
+      "before": 2,
+      "after": 2,
+      "identical": true
+    }
+  },
+  "decoderEvents": {
+    "onLoadedMetadata": true,
+    "onLoadStart": true,
+    "onDurationChange": true,
+    "onProgress": true,
+    "onCanPlay": true,
+    "onTimeUpdate": true,
+    "onPlay": true,
+    "onPause": true,
+    "onEnded": true,
+    "onVolumeChange": true,
+    "onRateChange": true
+  },
+  "rangeHandlers": {
+    "onKeyDown": true,
+    "onPointerDown": true,
+    "onPointerMove": true,
+    "onPointerUp": true
+  },
+  "rangeProps": {
+    "type": true,
+    "role": true,
+    "aria-label": true,
+    "aria-valuemin": true,
+    "aria-valuemax": true,
+    "aria-valuenow": true,
+    "aria-valuetext": true,
+    "disabled": true,
+    "ref": true
+  },
+  "lifted": {
+    "mute": true,
+    "rate": true,
+    "reload": true,
+    "onMediaError": true
+  },
+  "optionProof": {
+    "before": [
+      {
+        "value": "0.75",
+        "label": "0.75배"
+      },
+      {
+        "value": "1",
+        "label": "1배"
+      },
+      {
+        "value": "1.25",
+        "label": "1.25배"
+      },
+      {
+        "value": "1.5",
+        "label": "1.5배"
+      },
+      {
+        "value": "2",
+        "label": "2배"
+      }
+    ],
+    "after": [
+      {
+        "value": "0.75",
+        "label": "0.75배"
+      },
+      {
+        "value": "1",
+        "label": "1배"
+      },
+      {
+        "value": "1.25",
+        "label": "1.25배"
+      },
+      {
+        "value": "1.5",
+        "label": "1.5배"
+      },
+      {
+        "value": "2",
+        "label": "2배"
+      }
+    ],
+    "identical": true
+  },
+  "compatibilityHooks": [
+    ".ui-range__track",
+    ".ui-media__time"
+  ],
+  "notes": [
+    "Core is raw identical through original pre-JSX derived state; declaration/import/return wiring excluded.",
+    "11 sync decoder events unchanged; onError expression is named onMediaError with the identical setError call.",
+    "Select onChange native event field is now direct value:string; Number(value), enabled gate and sync ordering preserved.",
+    "Fullscreen remains the same fieldset ref and full original fullscreen/video layout is expressed in Tailwind arbitrary variants.",
+    "Existing ui/range.tsx and all browser/playback fixtures/tests are unchanged by this implementation.",
+    "No browser playback/portal/fullscreen/CSP/geometry claim from SSR/decoder-port unit tests."
+  ]
+}

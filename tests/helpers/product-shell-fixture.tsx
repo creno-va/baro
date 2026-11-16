@@ -53,6 +53,19 @@ export function prepareProductShellFixture(
   storage.setItem("shell-app-seeded", "1");
 }
 
+/** Opens an unchecked consent screen without accepting or submitting a policy. */
+export function prepareProductConsentFixture(
+  mode: unknown,
+  hostname: string,
+  storage: Pick<Storage, "setItem">,
+) {
+  prepareProductShellFixture(mode, hostname, storage);
+  storage.setItem(
+    "baro-api-mock-v1:session",
+    JSON.stringify({ ...productShellFixtureValues().session, needsConsent: true }),
+  );
+}
+
 /** Additional local, synthetic material. No original binary is fabricated. */
 export function prepareProductDetailsFixture(
   mode: unknown,
@@ -104,14 +117,22 @@ export function ProductShellFixture() {
   const [message, setMessage] = useState("아직 합성 계정을 준비하지 않았습니다.");
   const [error, setError] = useState("");
   const mock = import.meta.env.PUBLIC_API_MODE === "mock";
-  function prepare(details = false) {
+  function prepare(details = false, consent = false) {
     try {
-      const seed = details ? prepareProductDetailsFixture : prepareProductShellFixture;
+      const seed = consent
+        ? prepareProductConsentFixture
+        : details
+          ? prepareProductDetailsFixture
+          : prepareProductShellFixture;
       seed(import.meta.env.PUBLIC_API_MODE, location.hostname, localStorage);
       window.dispatchEvent(new Event("baro-session-changed"));
       setPrepared(true);
       setError("");
-      setMessage("로컬 합성 고객과 사건을 준비했습니다. 아래 실제 제품 경로를 열어 확인하세요.");
+      setMessage(
+        consent
+          ? "동의가 필요한 로컬 합성 계정을 준비했습니다. 정책 동의는 제출하지 않았습니다."
+          : "로컬 합성 고객과 사건을 준비했습니다. 아래 실제 제품 경로를 열어 확인하세요.",
+      );
     } catch {
       setError("localhost의 명시적 mock 모드와 사용 가능한 로컬 저장 공간이 필요합니다.");
     }
@@ -143,8 +164,9 @@ export function ProductShellFixture() {
         <h1 className="text-3xl font-semibold">실제 제품 shell 검토</h1>
         <p className="leading-7">
           개발 전용 화면입니다. 버튼을 누르기 전에는 저장 공간을 바꾸지 않습니다. 합성 계정 준비는
-          실제 로그인이나 약관 동의가 아니며, 로컬 mock 세션의 needsConsent=false를 직접 설정합니다.
-          같은 로컬 주소의 합성 사건 목록을 초기 예시로 바꿉니다.
+          실제 로그인이나 약관 동의가 아니며 정책 동의를 제출하지 않습니다. 기본 준비는
+          needsConsent=false, 동의 화면용은 needsConsent=true인 로컬 mock 세션을 설정합니다. 같은
+          로컬 주소의 합성 사건 목록을 초기 예시로 바꿉니다.
         </p>
         {!mock && (
           <p role="alert">PUBLIC_API_MODE=mock으로 실행한 localhost에서만 준비할 수 있습니다.</p>
@@ -156,6 +178,9 @@ export function ProductShellFixture() {
           <Button disabled={!mock} variant="secondary" onClick={() => prepare(true)}>
             자료가 있는 합성 계정 준비
           </Button>
+          <Button disabled={!mock} variant="secondary" onClick={() => prepare(false, true)}>
+            동의 화면용 합성 계정 준비
+          </Button>
           <Button disabled={!mock} variant="secondary" onClick={visitor}>
             방문자 상태로 초기화
           </Button>
@@ -164,6 +189,9 @@ export function ProductShellFixture() {
         {error && <p role="alert">{error}</p>}
         {prepared && (
           <nav aria-label="실제 제품 경로" className="flex flex-wrap gap-3">
+            <ButtonLink href="/consent" variant="secondary">
+              동의 화면 열기
+            </ButtonLink>
             <ButtonLink href="/new">새 사건 열기</ButtonLink>
             <ButtonLink href="/__product-shell/input" variant="secondary">
               빌드 CSP 입력 확인

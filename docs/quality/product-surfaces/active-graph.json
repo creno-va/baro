@@ -1,0 +1,6718 @@
+{
+  "capturedAt": "2026-11-16T14:30:44.228Z",
+  "head": "a9e9ec282077e4bf5021bcc22d979b794df7ed4e",
+  "scope": "25 production non-API Astro page roots; relative static imports/reexports, literal dynamic imports and Astro script blocks; excludes type-only/external packages and does not expand import.meta.glob.",
+  "pages": [
+    "src/pages/404.astro",
+    "src/pages/app.astro",
+    "src/pages/cases/[caseId].astro",
+    "src/pages/cases/[caseId]/actions.astro",
+    "src/pages/cases/[caseId]/files.astro",
+    "src/pages/cases/[caseId]/intake.astro",
+    "src/pages/cases/[caseId]/precedents.astro",
+    "src/pages/cases/[caseId]/reports.astro",
+    "src/pages/cases/[caseId]/summary.astro",
+    "src/pages/cases/[caseId]/timeline.astro",
+    "src/pages/cases/index.astro",
+    "src/pages/cases/new.astro",
+    "src/pages/consent.astro",
+    "src/pages/help.astro",
+    "src/pages/index.astro",
+    "src/pages/lawyer/index.astro",
+    "src/pages/lawyers/[id].astro",
+    "src/pages/lawyers/index.astro",
+    "src/pages/login.astro",
+    "src/pages/new.astro",
+    "src/pages/policies/ai-notice.astro",
+    "src/pages/policies/ai.astro",
+    "src/pages/policies/privacy.astro",
+    "src/pages/policies/terms.astro",
+    "src/pages/settings.astro"
+  ],
+  "modules": [
+    "src/client/api/cases.ts",
+    "src/client/api/challenge.ts",
+    "src/client/api/context.ts",
+    "src/client/api/core.ts",
+    "src/client/api/errors.ts",
+    "src/client/api/fetch.ts",
+    "src/client/api/files.ts",
+    "src/client/api/index.ts",
+    "src/client/api/lawyers.ts",
+    "src/client/api/mock/cases.ts",
+    "src/client/api/mock/lawyers.ts",
+    "src/client/api/mock/precedents.ts",
+    "src/client/api/mock/runtime.ts",
+    "src/client/api/mock/session.ts",
+    "src/client/api/precedent-comparison.ts",
+    "src/client/api/precedents.ts",
+    "src/client/api/session.ts",
+    "src/client/api/types.ts",
+    "src/client/auth.ts",
+    "src/client/confirm.ts",
+    "src/client/foreground-poll.ts",
+    "src/client/precedent-highlights.ts",
+    "src/client/return-path.ts",
+    "src/client/session-events.ts",
+    "src/client/theme.ts",
+    "src/components/AccountSettings.tsx",
+    "src/components/AuthButtons.tsx",
+    "src/components/ConsentForm.tsx",
+    "src/components/HelpFaq.tsx",
+    "src/components/PolicyDocument.astro",
+    "src/components/analysis/CaseDetail.tsx",
+    "src/components/analysis/Feedback.tsx",
+    "src/components/intake/CaseInput.tsx",
+    "src/components/intake/IntakeQuestions.tsx",
+    "src/components/intake/SummaryReconfirmation.tsx",
+    "src/components/intake/SummaryReview.tsx",
+    "src/components/intake/useCustomerAccess.ts",
+    "src/components/intake/useSceneTransition.ts",
+    "src/components/lawyers/AssetPhoto.tsx",
+    "src/components/lawyers/LegacyProfileAssets.tsx",
+    "src/components/reports/ReportReview.tsx",
+    "src/components/reports/download-reviewed.ts",
+    "src/components/reports/download.ts",
+    "src/components/reports/orientation.ts",
+    "src/components/reports/review-sections.ts",
+    "src/components/resolution/FollowUpResolution.tsx",
+    "src/components/resolution/draft-review.ts",
+    "src/components/resolution/error-diagnostic.ts",
+    "src/components/ui/app-navigation.tsx",
+    "src/components/ui/brand.tsx",
+    "src/components/ui/media-player.tsx",
+    "src/components/ui/workspace-frame.tsx",
+    "src/components/workspace/CaseContextPanel.tsx",
+    "src/components/workspace/CaseMaterials.tsx",
+    "src/components/workspace/CaseNavigation.tsx",
+    "src/components/workspace/ChatAttachments.tsx",
+    "src/components/workspace/ComparisonResult.tsx",
+    "src/components/workspace/ConversationAgent.tsx",
+    "src/components/workspace/ConversationAnalysis.tsx",
+    "src/components/workspace/ConversationContextReview.tsx",
+    "src/components/workspace/ConversationPanel.tsx",
+    "src/components/workspace/ConversationPreparation.tsx",
+    "src/components/workspace/ConversationReconfirmation.tsx",
+    "src/components/workspace/ElapsedTime.tsx",
+    "src/components/workspace/EvidencePicker.tsx",
+    "src/components/workspace/EvidenceRequirements.tsx",
+    "src/components/workspace/EvidenceUpload.tsx",
+    "src/components/workspace/FileReview.tsx",
+    "src/components/workspace/LookupDialog.tsx",
+    "src/components/workspace/MaterialsPanel.tsx",
+    "src/components/workspace/PrecedentComparisonPanel.tsx",
+    "src/components/workspace/PrecedentDocument.tsx",
+    "src/components/workspace/PrecedentResearch.tsx",
+    "src/components/workspace/ProgressiveReply.tsx",
+    "src/components/workspace/SourceCards.tsx",
+    "src/components/workspace/TimelineEvidence.tsx",
+    "src/components/workspace/Workspace.tsx",
+    "src/components/workspace/conversation-progress.ts",
+    "src/components/workspace/conversation-state.ts",
+    "src/components/workspace/conversation-upload.ts",
+    "src/components/workspace/evidence-state.ts",
+    "src/components/workspace/processing-progress.ts",
+    "src/components/workspace/source-label.ts",
+    "src/components/workspace/timeline-draft.ts",
+    "src/components/workspace/timeline-evidence.ts",
+    "src/components/workspace/useEvidenceUpload.ts",
+    "src/content/policy-drafts.ts",
+    "src/contracts.ts",
+    "src/contracts/analytics.ts",
+    "src/contracts/cases.ts",
+    "src/contracts/common.ts",
+    "src/contracts/consent.ts",
+    "src/contracts/deletion.ts",
+    "src/contracts/index.ts",
+    "src/contracts/mobile-auth.ts",
+    "src/contracts/pipeline.ts",
+    "src/contracts/questions.ts",
+    "src/contracts/results.ts",
+    "src/contracts/v2/case-title.ts",
+    "src/contracts/v2/common.ts",
+    "src/contracts/v2/conversation-state.ts",
+    "src/contracts/v2/directory.ts",
+    "src/contracts/v2/files.ts",
+    "src/contracts/v2/index.ts",
+    "src/contracts/v2/intake.ts",
+    "src/contracts/v2/lawyers.ts",
+    "src/contracts/v2/legal-analysis.ts",
+    "src/contracts/v2/legal-availability.ts",
+    "src/contracts/v2/precedent-comparison.ts",
+    "src/contracts/v2/precedent-research.ts",
+    "src/contracts/v2/precedent-topics.ts",
+    "src/contracts/v2/reports.ts",
+    "src/contracts/v2/resolution.ts",
+    "src/contracts/v2/rework.ts",
+    "src/contracts/v2/sources.ts",
+    "src/contracts/v2/tools.ts",
+    "src/contracts/v2/upload-consistency.ts",
+    "src/contracts/v2/usage.ts",
+    "src/contracts/v2/workspace.ts",
+    "src/layouts/CaseLayout.astro",
+    "src/layouts/CaseWorkbenchLayout.astro",
+    "src/layouts/LandingLayout.astro",
+    "src/layouts/ProductLayout.astro",
+    "src/layouts/ProductPublicLayout.astro",
+    "src/pages/404.astro",
+    "src/pages/app.astro",
+    "src/pages/cases/[caseId].astro",
+    "src/pages/cases/[caseId]/actions.astro",
+    "src/pages/cases/[caseId]/files.astro",
+    "src/pages/cases/[caseId]/intake.astro",
+    "src/pages/cases/[caseId]/precedents.astro",
+    "src/pages/cases/[caseId]/reports.astro",
+    "src/pages/cases/[caseId]/summary.astro",
+    "src/pages/cases/[caseId]/timeline.astro",
+    "src/pages/cases/index.astro",
+    "src/pages/cases/new.astro",
+    "src/pages/consent.astro",
+    "src/pages/help.astro",
+    "src/pages/index.astro",
+    "src/pages/lawyer/index.astro",
+    "src/pages/lawyers/[id].astro",
+    "src/pages/lawyers/index.astro",
+    "src/pages/login.astro",
+    "src/pages/new.astro",
+    "src/pages/policies/ai-notice.astro",
+    "src/pages/policies/ai.astro",
+    "src/pages/policies/privacy.astro",
+    "src/pages/policies/terms.astro",
+    "src/pages/settings.astro",
+    "src/product-ui/Button.tsx",
+    "src/product-ui/Dialog.tsx",
+    "src/product-ui/Disclosure.tsx",
+    "src/product-ui/Field.tsx",
+    "src/product-ui/GlobalTheme.tsx",
+    "src/product-ui/Provider.tsx",
+    "src/product-ui/Select.tsx",
+    "src/product-ui/Theme.tsx",
+    "src/product-ui/account/AccountComponents.tsx",
+    "src/product-ui/account/AccountSettingsView.tsx",
+    "src/product-ui/account/LegacyProfileAssetsView.tsx",
+    "src/product-ui/account/useAccountSettingsController.ts",
+    "src/product-ui/account/useLegacyProfileAssetsController.ts",
+    "src/product-ui/conversation-tools/AgentView.tsx",
+    "src/product-ui/conversation-tools/AnalysisView.tsx",
+    "src/product-ui/conversation-tools/MessageView.tsx",
+    "src/product-ui/conversation-tools/PanelView.tsx",
+    "src/product-ui/conversation-tools/PreparationView.tsx",
+    "src/product-ui/conversation-tools/ProgressiveReplyView.tsx",
+    "src/product-ui/conversation-tools/SourceCardsView.tsx",
+    "src/product-ui/conversation-tools/useConversationAgentController.ts",
+    "src/product-ui/conversation-tools/useConversationPanelController.ts",
+    "src/product-ui/conversation-tools/useProgressiveReplyController.ts",
+    "src/product-ui/conversation/CaseHeader.tsx",
+    "src/product-ui/conversation/ComposerAddMenu.tsx",
+    "src/product-ui/conversation/ConversationComposer.tsx",
+    "src/product-ui/evidence/AttachmentPreview.tsx",
+    "src/product-ui/evidence/CaseMaterialsView.tsx",
+    "src/product-ui/evidence/ChatAttachmentsView.tsx",
+    "src/product-ui/evidence/EvidencePickerView.tsx",
+    "src/product-ui/evidence/EvidenceRequirementsView.tsx",
+    "src/product-ui/evidence/EvidenceUploadView.tsx",
+    "src/product-ui/evidence/useChatAttachmentsController.ts",
+    "src/product-ui/evidence/useEvidencePickerController.ts",
+    "src/product-ui/evidence/useEvidenceUploadController.ts",
+    "src/product-ui/experience/ProductExperience.tsx",
+    "src/product-ui/experience/useExperienceController.ts",
+    "src/product-ui/intake/CaseInputError.tsx",
+    "src/product-ui/intake/CaseInputView.tsx",
+    "src/product-ui/intake/QuestionAnswerField.tsx",
+    "src/product-ui/intake/QuestionRecovery.tsx",
+    "src/product-ui/intake/QuestionsView.tsx",
+    "src/product-ui/intake/controller.ts",
+    "src/product-ui/intake/examples.ts",
+    "src/product-ui/intake/useCaseInputController.ts",
+    "src/product-ui/intake/useQuestionsController.ts",
+    "src/product-ui/landing/DemoLab.tsx",
+    "src/product-ui/landing/LandingBrand.tsx",
+    "src/product-ui/landing/LandingLink.tsx",
+    "src/product-ui/landing/LandingNavigation.tsx",
+    "src/product-ui/landing/LandingPage.astro",
+    "src/product-ui/landing/demo-content.ts",
+    "src/product-ui/landing/motion/blue.ts",
+    "src/product-ui/landing/motion/ceo.ts",
+    "src/product-ui/landing/motion/clarity.ts",
+    "src/product-ui/landing/motion/finale.ts",
+    "src/product-ui/landing/motion/future.ts",
+    "src/product-ui/landing/motion/index.ts",
+    "src/product-ui/landing/motion/journey.ts",
+    "src/product-ui/landing/motion/logo.ts",
+    "src/product-ui/landing/motion/origin.ts",
+    "src/product-ui/landing/motion/phone.ts",
+    "src/product-ui/landing/motion/time.ts",
+    "src/product-ui/landing/scene-classes.ts",
+    "src/product-ui/landing/scenes/BlueScene.tsx",
+    "src/product-ui/landing/scenes/CeoScene.tsx",
+    "src/product-ui/landing/scenes/ClarityScene.tsx",
+    "src/product-ui/landing/scenes/EverydayScene.tsx",
+    "src/product-ui/landing/scenes/FinaleScene.tsx",
+    "src/product-ui/landing/scenes/FutureScene.tsx",
+    "src/product-ui/landing/scenes/HeroScene.tsx",
+    "src/product-ui/landing/scenes/LogoScene.tsx",
+    "src/product-ui/landing/scenes/OriginScene.tsx",
+    "src/product-ui/landing/scenes/PhoneScene.tsx",
+    "src/product-ui/landing/scenes/TimeScene.tsx",
+    "src/product-ui/legacy-case/CaseDetailView.tsx",
+    "src/product-ui/legacy-case/FeedbackView.tsx",
+    "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+    "src/product-ui/legacy-case/QuestionsView.tsx",
+    "src/product-ui/legacy-case/ResultView.tsx",
+    "src/product-ui/legacy-case/presentation.ts",
+    "src/product-ui/legacy-case/useCaseDetailController.ts",
+    "src/product-ui/legacy-case/useFeedbackController.ts",
+    "src/product-ui/legacy-case/useLegacyQuestionsController.ts",
+    "src/product-ui/legacy-case/useLegacyResultController.ts",
+    "src/product-ui/materials/CaseContextView.tsx",
+    "src/product-ui/materials/FileReviewView.tsx",
+    "src/product-ui/materials/MaterialsPanelView.tsx",
+    "src/product-ui/materials/ReviewObservation.tsx",
+    "src/product-ui/materials/coverage.ts",
+    "src/product-ui/materials/useCaseContextController.ts",
+    "src/product-ui/materials/useFileReviewController.ts",
+    "src/product-ui/navigation/NavigationView.tsx",
+    "src/product-ui/navigation/focus.ts",
+    "src/product-ui/navigation/types.ts",
+    "src/product-ui/navigation/useNavigationController.ts",
+    "src/product-ui/playback/MediaPlayerView.tsx",
+    "src/product-ui/playback/Range.tsx",
+    "src/product-ui/playback/useMediaPlayerController.ts",
+    "src/product-ui/public/AuthView.tsx",
+    "src/product-ui/public/ConsentView.tsx",
+    "src/product-ui/public/HelpFaqView.tsx",
+    "src/product-ui/public/ProviderIcon.tsx",
+    "src/product-ui/public/PublicThemeControl.tsx",
+    "src/product-ui/public/UnavailableFeature.astro",
+    "src/product-ui/public/useAuthController.ts",
+    "src/product-ui/public/useConsentController.ts",
+    "src/product-ui/queries.ts",
+    "src/product-ui/reports/ReportComponents.tsx",
+    "src/product-ui/reports/ReportReading.tsx",
+    "src/product-ui/reports/ReportReviewView.tsx",
+    "src/product-ui/reports/SectionEditor.tsx",
+    "src/product-ui/reports/report-status.ts",
+    "src/product-ui/reports/useReportReviewController.ts",
+    "src/product-ui/research/ComparisonPanelView.tsx",
+    "src/product-ui/research/ComparisonResultView.tsx",
+    "src/product-ui/research/LookupView.tsx",
+    "src/product-ui/research/PrecedentDocumentView.tsx",
+    "src/product-ui/research/ResearchNotice.tsx",
+    "src/product-ui/research/ResearchView.tsx",
+    "src/product-ui/research/presentation.ts",
+    "src/product-ui/research/useComparisonPanelController.ts",
+    "src/product-ui/research/useLookupController.ts",
+    "src/product-ui/research/useResearchController.ts",
+    "src/product-ui/resolution/ResolutionComponents.tsx",
+    "src/product-ui/resolution/ResolutionGuide.tsx",
+    "src/product-ui/resolution/ResolutionScope.tsx",
+    "src/product-ui/resolution/ResolutionView.tsx",
+    "src/product-ui/resolution/useResolutionController.ts",
+    "src/product-ui/state.ts",
+    "src/product-ui/summary/ContextReviewView.tsx",
+    "src/product-ui/summary/FactAnswer.tsx",
+    "src/product-ui/summary/SummaryContext.tsx",
+    "src/product-ui/summary/SummaryDisclosure.tsx",
+    "src/product-ui/summary/SummaryMaterials.tsx",
+    "src/product-ui/summary/SummaryProblem.tsx",
+    "src/product-ui/summary/SummaryReading.tsx",
+    "src/product-ui/summary/SummaryReconfirmationView.tsx",
+    "src/product-ui/summary/completion.ts",
+    "src/product-ui/summary/useContextReviewController.ts",
+    "src/product-ui/summary/useSummaryReconfirmationController.ts",
+    "src/product-ui/utils.ts",
+    "src/product-ui/workspace/TimelineEvidenceView.tsx",
+    "src/product-ui/workspace/WorkspaceContext.tsx",
+    "src/product-ui/workspace/WorkspaceControls.tsx",
+    "src/product-ui/workspace/WorkspaceFeedback.tsx",
+    "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+    "src/product-ui/workspace/WorkspaceHistory.tsx",
+    "src/product-ui/workspace/WorkspaceMaterials.tsx",
+    "src/product-ui/workspace/WorkspacePanes.tsx",
+    "src/product-ui/workspace/WorkspaceView.tsx",
+    "src/product-ui/workspace/presentation.ts",
+    "src/product-ui/workspace/useWorkspaceController.ts",
+    "src/server/modules/analytics/browser.ts",
+    "src/server/modules/analytics/sdk.ts",
+    "src/server/modules/external-tools/catalog.ts",
+    "src/utils/precedent-document.ts",
+    "src/utils/report-markdown.ts",
+    "src/utils/report-sections.ts",
+    "src/utils/resolution.ts",
+    "src/utils/time.ts"
+  ],
+  "edges": [
+    {
+      "from": "src/pages/404.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/ProductPublicLayout.astro",
+      "to": "src/product-ui/public/PublicThemeControl.tsx",
+      "symbols": [
+        "PublicThemeControl"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/PublicThemeControl.tsx",
+      "to": "src/client/theme.ts",
+      "symbols": [
+        "setTheme",
+        "subscribeTheme",
+        "themePreference"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/PublicThemeControl.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Button.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/PublicThemeControl.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/GlobalTheme.tsx",
+      "to": "src/client/theme.ts",
+      "symbols": [
+        "subscribeTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/GlobalTheme.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "ProductThemeScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Theme.tsx",
+      "to": "src/product-ui/Provider.tsx",
+      "symbols": [
+        "useProductUI"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Provider.tsx",
+      "to": "src/product-ui/queries.ts",
+      "symbols": [
+        "createProductQueryClient"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Provider.tsx",
+      "to": "src/product-ui/state.ts",
+      "symbols": [
+        "createProductUIStore"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/PublicThemeControl.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/ProductPublicLayout.astro",
+      "to": "src/layouts/ProductLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/ProductLayout.astro",
+      "to": "src/product-ui/product.css",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/ProductLayout.astro",
+      "to": "src/product-ui/experience/ProductExperience.tsx",
+      "symbols": [
+        "ProductExperience"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/ProductExperience.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/ProductExperience.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Dialog.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Dialog.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Dialog.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/ProductExperience.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/ProductExperience.tsx",
+      "to": "src/product-ui/experience/useExperienceController.ts",
+      "symbols": [
+        "useExperienceController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/useExperienceController.ts",
+      "to": "src/client/confirm.ts",
+      "symbols": [
+        "confirmation",
+        "resolveConfirmation",
+        "subscribeConfirmation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/experience/useExperienceController.ts",
+      "to": "src/client/theme.ts",
+      "symbols": [
+        "applyTheme",
+        "themePreference"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId].astro",
+      "to": "src/components/workspace/Workspace.tsx",
+      "symbols": [
+        "Workspace"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/product-ui/workspace/useWorkspaceController.ts",
+      "symbols": [
+        "useWorkspaceController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError",
+        "apiRequest",
+        "cacheClient",
+        "registerHttpMockHandler"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/fetch.ts",
+      "symbols": [
+        "apiFetch"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "mockRequest"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/runtime.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/mock/session.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/mock/session.ts",
+      "to": "src/contracts/consent.ts",
+      "symbols": [
+        "CURRENT_POLICY_VERSIONS",
+        "consentInputSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/session.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/session.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "readStore",
+        "registerMockHandlers",
+        "writeStore"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/core.ts",
+      "to": "src/client/api/mock/cases.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/mock/cases.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "caseDisplayTitle",
+        "V2_INTAKE_POLICY",
+        "V2_LIMITS",
+        "v2CaseRenameRequestSchema",
+        "v2SummarySchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/case-title.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/case-title.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/common.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "opaqueIdSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/conversation-state.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/conversation-state.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "opaqueIdSchema",
+        "revisionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/conversation-state.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2FailureCodeSchema",
+        "v2IdListSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/conversation-state.ts",
+      "to": "src/contracts/v2/legal-analysis.ts",
+      "symbols": [
+        "v2LegalAnalysisSnapshotSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/legal-analysis.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "dateSchema",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/legal-analysis.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2HashSchema",
+        "v2IdListSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/legal-analysis.ts",
+      "to": "src/contracts/v2/legal-availability.ts",
+      "symbols": [
+        "legalFailureReasonSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/legal-analysis.ts",
+      "to": "src/contracts/v2/rework.ts",
+      "symbols": [
+        "v2AnalysisBasisSchema",
+        "v2AnalysisEvidenceSchema",
+        "v2CaseContextSchema",
+        "v2CasePurposeSchema",
+        "v2EvidenceRequirementSchema",
+        "v2ReworkVersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/rework.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "CASE_NARRATIVE_MIN_LENGTH",
+        "displayText",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/rework.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2FailureCodeSchema",
+        "v2HashSchema",
+        "v2IdListSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/rework.ts",
+      "to": "src/contracts/v2/intake.ts",
+      "symbols": [
+        "v2SummarySchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/intake.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "CASE_NARRATIVE_MIN_LENGTH",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/intake.ts",
+      "to": "src/contracts/questions.ts",
+      "symbols": [
+        "answerSchema",
+        "questionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/questions.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "schemaVersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/intake.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "V2_LIMITS",
+        "v2JsonRequestSchema",
+        "v2VersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/intake.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2FactSchema",
+        "v2FactsSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/sources.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "dateSchema",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/sources.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "V2_LIMITS",
+        "v2HashSchema",
+        "v2IdListSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/rework.ts",
+      "to": "src/contracts/v2/workspace.ts",
+      "symbols": [
+        "v2WorkspaceSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/workspace.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "CASE_NARRATIVE_MIN_LENGTH",
+        "dateSchema",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/workspace.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2FailureCodeSchema",
+        "v2IdListSchema",
+        "v2JobPhaseSchema",
+        "v2VersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/workspace.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2FactReferenceSchema",
+        "v2MaterialReferenceSchema",
+        "v2OfficialCitationSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/workspace.ts",
+      "to": "src/contracts/v2/tools.ts",
+      "symbols": [
+        "v2LookupRequestsSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/tools.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "opaqueIdSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/legal-analysis.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2MaterialReferenceSchema",
+        "v2OfficialCitationSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/conversation-state.ts",
+      "to": "src/contracts/v2/rework.ts",
+      "symbols": [
+        "v2AnalysisBasisSchema",
+        "v2CaseContextSchema",
+        "v2ConversationIntentSchema",
+        "v2PreparationStateSchema",
+        "v2ReworkVersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/directory.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/directory.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/directory.ts",
+      "to": "src/contracts/v2/lawyers.ts",
+      "symbols": [
+        "v2LegalFieldSchema",
+        "v2RegionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/lawyers.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/lawyers.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2FailureCodeSchema",
+        "v2HashSchema",
+        "v2JsonRequestSchema",
+        "v2VersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/lawyers.ts",
+      "to": "src/contracts/v2/files.ts",
+      "symbols": [
+        "v2UploadReservationRequestSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/files.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/files.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "V2_LIMITS",
+        "v2CountSchema",
+        "v2FailureCodeSchema",
+        "v2HashSchema",
+        "v2JobPhaseSchema",
+        "v2JsonRequestSchema",
+        "v2VersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/files.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2SourcePositionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/files.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/intake.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/lawyers.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/legal-analysis.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/legal-availability.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/reports.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/reports.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/reports.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "V2_LIMITS",
+        "v2FailureCodeSchema",
+        "v2HashSchema",
+        "v2IdListSchema",
+        "v2JsonRequestSchema",
+        "v2VersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/reports.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2FactsSchema",
+        "v2OfficialCitationSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/reports.ts",
+      "to": "src/contracts/v2/workspace.ts",
+      "symbols": [
+        "v2ActionSchema",
+        "v2TimelineEntrySchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/resolution.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/resolution.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "displayText",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/resolution.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "v2IdListSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/resolution.ts",
+      "to": "src/contracts/v2/legal-analysis.ts",
+      "symbols": [
+        "v2SourceClaimSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/resolution.ts",
+      "to": "src/contracts/v2/rework.ts",
+      "symbols": [
+        "v2AnalysisBasisSchema",
+        "v2ProcedureSchema",
+        "v2ResolutionChoiceSchema",
+        "v2ReworkVersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/resolution.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2OfficialCitationSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/rework.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/tools.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/upload-consistency.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/usage.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/usage.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "dateSchema",
+        "displayText",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/usage.ts",
+      "to": "src/contracts/v2/common.ts",
+      "symbols": [
+        "V2_LIMITS",
+        "v2CountSchema",
+        "v2VersionSchema",
+        "v2WaitReasonSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/index.ts",
+      "to": "src/contracts/v2/workspace.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/cases.ts",
+      "to": "src/client/api/cases.ts",
+      "symbols": [
+        "answersInputSchema",
+        "createInputSchema",
+        "revisionInputSchema",
+        "summaryInputSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/cases.ts",
+      "to": "src/client/api/challenge.ts",
+      "symbols": [
+        "securityToken"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/challenge.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/cases.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/cases.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "apiMode",
+        "request"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/cases.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/cases.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "readStore",
+        "registerMockHandlers",
+        "requireSession",
+        "writeStore"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/session.ts",
+      "symbols": [
+        "sessionApi"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/session.ts",
+      "to": "src/client/auth.ts",
+      "symbols": [
+        "authClient"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/session.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref",
+        "returnPathFromLocation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/session.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "notifySessionChanged"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/session.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError",
+        "apiMode",
+        "request"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/session.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/session.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/index.ts",
+      "to": "src/client/api/types.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/client/api/files.ts",
+      "symbols": [
+        "validateUpload"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/files.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/client/confirm.ts",
+      "symbols": [
+        "confirmAction"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/client/foreground-poll.ts",
+      "symbols": [
+        "startForegroundPolling"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/useCustomerAccess.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/useCustomerAccess.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/useCustomerAccess.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "isExplicitSignOut"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/components/reports/download-reviewed.ts",
+      "symbols": [
+        "downloadReviewedReport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/download-reviewed.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/download-reviewed.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts.ts",
+      "to": "src/contracts/index.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/analytics.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/analytics.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "caseStatusSchema",
+        "timestampSchema",
+        "uuidSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/cases.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/cases.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "analysisStatusSchema",
+        "boundedText",
+        "CASE_NARRATIVE_MIN_LENGTH",
+        "caseStatusSchema",
+        "displayText",
+        "errorSchema",
+        "revisionSchema",
+        "timestampSchema",
+        "uuidSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/cases.ts",
+      "to": "src/contracts/questions.ts",
+      "symbols": [
+        "questionsSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/cases.ts",
+      "to": "src/contracts/results.ts",
+      "symbols": [
+        "resultSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/results.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "citationIdsSchema",
+        "dateSchema",
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "schemaVersionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/results.ts",
+      "to": "src/contracts/consent.ts",
+      "symbols": [
+        "CURRENT_POLICY_VERSIONS",
+        "PREVIOUS_AI_NOTICE_VERSION"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/consent.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/deletion.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/deletion.ts",
+      "to": "src/contracts/mobile-auth.ts",
+      "symbols": [
+        "mobileAuthV2ProviderSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/pipeline.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/pipeline.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "boundedText",
+        "dateSchema",
+        "displayText",
+        "schemaVersionSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/pipeline.ts",
+      "to": "src/contracts/results.ts",
+      "symbols": [
+        "citationSchema",
+        "contentHashSchema",
+        "resultSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/questions.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/index.ts",
+      "to": "src/contracts/results.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/download-reviewed.ts",
+      "to": "src/components/reports/download.ts",
+      "symbols": [
+        "downloadBlob"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/download-reviewed.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/components/workspace/conversation-upload.ts",
+      "symbols": [
+        "beginConversationUpload",
+        "queuedConversationUpload",
+        "uploadCanonical"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/conversation-upload.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "v2HashSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "evidenceRequirementStates"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/components/workspace/timeline-draft.ts",
+      "symbols": [
+        "timelineDateInput",
+        "timelineEventLength"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/useWorkspaceController.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "V2_LIMITS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/product-ui/workspace/WorkspaceView.tsx",
+      "symbols": [
+        "WorkspaceView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/ui/brand.tsx",
+      "symbols": [
+        "BrandMark"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/ui/workspace-frame.tsx",
+      "symbols": [
+        "CaseWorkspaceFrame"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/workspace-frame.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/workspace-frame.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/workspace-frame.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/workspace-frame.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn",
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/CaseNavigation.tsx",
+      "symbols": [
+        "CaseNavigation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseNavigation.tsx",
+      "to": "src/product-ui/conversation/CaseHeader.tsx",
+      "symbols": [
+        "CaseHeader"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/CaseHeader.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/CaseHeader.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/CaseHeader.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseNavigation.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/ChatAttachments.tsx",
+      "symbols": [
+        "ChatAttachments"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ChatAttachments.tsx",
+      "to": "src/product-ui/evidence/ChatAttachmentsView.tsx",
+      "symbols": [
+        "ChatAttachmentsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/ChatAttachmentsView.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "materialState",
+        "materialStateLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/ChatAttachmentsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/ChatAttachmentsView.tsx",
+      "to": "src/product-ui/evidence/AttachmentPreview.tsx",
+      "symbols": [
+        "AttachmentPreview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ChatAttachments.tsx",
+      "to": "src/product-ui/evidence/useChatAttachmentsController.ts",
+      "symbols": [
+        "useChatAttachmentsController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ChatAttachments.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/ElapsedTime.tsx",
+      "symbols": [
+        "ElapsedTime"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ElapsedTime.tsx",
+      "to": "src/components/workspace/processing-progress.ts",
+      "symbols": [
+        "elapsedLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/EvidenceRequirements.tsx",
+      "symbols": [
+        "EvidenceRequirements"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceRequirements.tsx",
+      "to": "src/product-ui/evidence/EvidenceRequirementsView.tsx",
+      "symbols": [
+        "EvidenceRequirementsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceRequirementsView.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "evidenceRequirementStates",
+        "materialStateLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceRequirementsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceRequirements.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/ProgressiveReply.tsx",
+      "symbols": [
+        "ProgressiveReply"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ProgressiveReply.tsx",
+      "to": "src/product-ui/conversation-tools/ProgressiveReplyView.tsx",
+      "symbols": [
+        "ProgressiveReplyView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/ProgressiveReplyView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/ProgressiveReplyView.tsx",
+      "to": "src/product-ui/conversation-tools/MessageView.tsx",
+      "symbols": [
+        "MessageView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ProgressiveReply.tsx",
+      "to": "src/product-ui/conversation-tools/useProgressiveReplyController.ts",
+      "symbols": [
+        "useProgressiveReplyController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/processing-progress.ts",
+      "symbols": [
+        "uploadProgressLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/SourceCards.tsx",
+      "symbols": [
+        "SourceCards"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/SourceCards.tsx",
+      "to": "src/product-ui/conversation-tools/SourceCardsView.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "referenceLabel",
+        "timelineDateLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/source-label.ts",
+      "to": "src/utils/time.ts",
+      "symbols": [
+        "secondsLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/TimelineEvidence.tsx",
+      "symbols": [
+        "TimelineEvidence"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/TimelineEvidence.tsx",
+      "to": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "positionLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "to": "src/components/workspace/timeline-evidence.ts",
+      "symbols": [
+        "timelineEvidence"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Disclosure.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn",
+        "definedProps"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/TimelineEvidenceView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/workspace/timeline-draft.ts",
+      "symbols": [
+        "timelineEventLength"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink",
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/conversation/ComposerAddMenu.tsx",
+      "symbols": [
+        "ComposerAddMenu"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/ComposerAddMenu.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/ComposerAddMenu.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/ComposerAddMenu.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/conversation/ConversationComposer.tsx",
+      "symbols": [
+        "ConversationComposer"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation/ConversationComposer.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Select.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Select.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Select.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn",
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/presentation.ts",
+      "symbols": [
+        "tabLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceContext.tsx",
+      "symbols": [
+        "WorkspaceContext"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceContext.tsx",
+      "to": "src/components/workspace/CaseMaterials.tsx",
+      "symbols": [
+        "CaseMaterials"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseMaterials.tsx",
+      "to": "src/product-ui/evidence/CaseMaterialsView.tsx",
+      "symbols": [
+        "CaseMaterialsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/CaseMaterialsView.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "materialState",
+        "materialStateLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/CaseMaterialsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseMaterials.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceContext.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceContext.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceControls.tsx",
+      "symbols": [
+        "WorkspaceInput",
+        "WorkspaceTextarea",
+        "WorkspaceLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceControls.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceFeedback.tsx",
+      "symbols": [
+        "workspaceFeedback"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFeedback.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFeedback.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+      "symbols": [
+        "WorkspaceFileViewer"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+      "to": "src/components/ui/media-player.tsx",
+      "symbols": [
+        "MediaPlayer"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/media-player.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/media-player.tsx",
+      "to": "src/product-ui/playback/MediaPlayerView.tsx",
+      "symbols": [
+        "MediaPlayerView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/playback/MediaPlayerView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/playback/MediaPlayerView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/playback/MediaPlayerView.tsx",
+      "to": "src/product-ui/playback/Range.tsx",
+      "symbols": [
+        "Range"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/playback/Range.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/media-player.tsx",
+      "to": "src/product-ui/playback/useMediaPlayerController.ts",
+      "symbols": [
+        "useMediaPlayerController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+      "to": "src/product-ui/workspace/presentation.ts",
+      "symbols": [
+        "fileStatus",
+        "size"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceHistory.tsx",
+      "symbols": [
+        "workspaceHistory"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceHistory.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "symbols": [
+        "WorkspaceMaterials"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/components/workspace/ChatAttachments.tsx",
+      "symbols": [
+        "ChatAttachments"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/components/workspace/ElapsedTime.tsx",
+      "symbols": [
+        "ElapsedTime"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/components/workspace/EvidenceRequirements.tsx",
+      "symbols": [
+        "EvidenceRequirements"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/components/workspace/MaterialsPanel.tsx",
+      "symbols": [
+        "MaterialsPanel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/MaterialsPanel.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/MaterialsPanel.tsx",
+      "to": "src/product-ui/materials/MaterialsPanelView.tsx",
+      "symbols": [
+        "MaterialsPanelView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/MaterialsPanelView.tsx",
+      "to": "src/components/workspace/ElapsedTime.tsx",
+      "symbols": [
+        "ElapsedTime"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/MaterialsPanelView.tsx",
+      "to": "src/components/workspace/processing-progress.ts",
+      "symbols": [
+        "fileFailureLabel",
+        "fileProcessingLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/MaterialsPanelView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/MaterialsPanelView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/components/workspace/processing-progress.ts",
+      "symbols": [
+        "uploadProgressLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "V2_LIMITS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceMaterials.tsx",
+      "to": "src/product-ui/workspace/WorkspaceControls.tsx",
+      "symbols": [
+        "WorkspaceInput",
+        "WorkspaceLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/product-ui/workspace/WorkspacePanes.tsx",
+      "symbols": [
+        "workspacePanes"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspacePanes.tsx",
+      "to": "src/components/workspace/ConversationPreparation.tsx",
+      "symbols": [
+        "ConversationPreparation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationPreparation.tsx",
+      "to": "src/product-ui/conversation-tools/PreparationView.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/PreparationView.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "timelineDateLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/PreparationView.tsx",
+      "to": "src/components/workspace/TimelineEvidence.tsx",
+      "symbols": [
+        "TimelineEvidence"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/PreparationView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/PreparationView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspacePanes.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/analysis/CaseDetail.tsx",
+      "symbols": [
+        "CaseDetail"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/CaseDetailView.tsx",
+      "symbols": [
+        "CaseDetailView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/CaseDetailView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/CaseDetailView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/CaseDetailView.tsx",
+      "to": "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+      "symbols": [
+        "LegacyCaseSection",
+        "legacyLinkClass",
+        "legacyMutedClass"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/CaseDetailView.tsx",
+      "to": "src/product-ui/legacy-case/presentation.ts",
+      "symbols": [
+        "terminal"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/QuestionsView.tsx",
+      "symbols": [
+        "QuestionsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/QuestionsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/QuestionsView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/Field.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn",
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/QuestionsView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/QuestionsView.tsx",
+      "to": "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+      "symbols": [
+        "LegacyCaseSection",
+        "legacyMutedClass"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/ResultView.tsx",
+      "symbols": [
+        "LegacyResultView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/ResultView.tsx",
+      "to": "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+      "symbols": [
+        "LegacyCaseSection",
+        "legacyLinkClass",
+        "legacyMutedClass"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/useCaseDetailController.ts",
+      "symbols": [
+        "useCaseDetailController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useCaseDetailController.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useCaseDetailController.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "analysisStatusResponseSchema",
+        "caseDetailResponseSchema",
+        "errorResponseSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useCaseDetailController.ts",
+      "to": "src/server/modules/analytics/browser.ts",
+      "symbols": [
+        "trackCase"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/server/modules/analytics/browser.ts",
+      "to": "src/contracts/analytics.ts",
+      "symbols": [
+        "analyticsEventSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/server/modules/analytics/browser.ts",
+      "to": "src/server/modules/analytics/sdk.ts",
+      "symbols": [
+        "createAnalyticsSdk",
+        "durationBucket",
+        "resultVisibilityTracker",
+        "sessionAnalyticsAdapter"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/server/modules/analytics/sdk.ts",
+      "to": "src/contracts/analytics.ts",
+      "symbols": [
+        "analyticsEventSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useCaseDetailController.ts",
+      "to": "src/product-ui/legacy-case/presentation.ts",
+      "symbols": [
+        "delays",
+        "stages",
+        "statusLabels",
+        "terminal"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/useLegacyQuestionsController.ts",
+      "symbols": [
+        "useLegacyQuestionsController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useLegacyQuestionsController.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "answersForQuestionsSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/product-ui/legacy-case/useLegacyResultController.ts",
+      "symbols": [
+        "useLegacyResultController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useLegacyResultController.ts",
+      "to": "src/server/modules/analytics/browser.ts",
+      "symbols": [
+        "observeResult",
+        "trackCase"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/CaseDetail.tsx",
+      "to": "src/components/analysis/Feedback.tsx",
+      "symbols": [
+        "Feedback"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/Feedback.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/Feedback.tsx",
+      "to": "src/product-ui/legacy-case/FeedbackView.tsx",
+      "symbols": [
+        "FeedbackView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/FeedbackView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/FeedbackView.tsx",
+      "to": "src/product-ui/legacy-case/LegacyCaseParts.tsx",
+      "symbols": [
+        "LegacyCaseSection",
+        "legacyMutedClass"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/analysis/Feedback.tsx",
+      "to": "src/product-ui/legacy-case/useFeedbackController.ts",
+      "symbols": [
+        "useFeedbackController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useFeedbackController.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useFeedbackController.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "errorResponseSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/legacy-case/useFeedbackController.ts",
+      "to": "src/server/modules/analytics/browser.ts",
+      "symbols": [
+        "trackCase"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/resolution/FollowUpResolution.tsx",
+      "symbols": [
+        "FollowUpResolution"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/resolution/FollowUpResolution.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/resolution/FollowUpResolution.tsx",
+      "to": "src/product-ui/resolution/ResolutionView.tsx",
+      "symbols": [
+        "ResolutionView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/components/resolution/draft-review.ts",
+      "symbols": [
+        "draftReviewState"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/utils/resolution.ts",
+      "symbols": [
+        "resolutionDocumentLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/resolution/ResolutionComponents.tsx",
+      "symbols": [
+        "actionClass",
+        "checkboxClass",
+        "checkClass",
+        "ResolutionNotice"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionComponents.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/resolution/ResolutionGuide.tsx",
+      "symbols": [
+        "ResolutionGuide"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionGuide.tsx",
+      "to": "src/utils/resolution.ts",
+      "symbols": [
+        "resolutionContextLabel",
+        "resolutionGuideTextParts"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionView.tsx",
+      "to": "src/product-ui/resolution/ResolutionScope.tsx",
+      "symbols": [
+        "ResolutionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionScope.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/ResolutionScope.tsx",
+      "to": "src/product-ui/resolution/ResolutionComponents.tsx",
+      "symbols": [
+        "checkboxClass",
+        "checkClass"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/resolution/FollowUpResolution.tsx",
+      "to": "src/product-ui/resolution/useResolutionController.ts",
+      "symbols": [
+        "useResolutionController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/useResolutionController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/useResolutionController.ts",
+      "to": "src/components/reports/download.ts",
+      "symbols": [
+        "downloadBlob"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/useResolutionController.ts",
+      "to": "src/components/resolution/error-diagnostic.ts",
+      "symbols": [
+        "createResolutionSelectionFailureTracker",
+        "resolutionErrorDiagnostic"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/resolution/useResolutionController.ts",
+      "to": "src/utils/resolution.ts",
+      "symbols": [
+        "resolutionDraftIsCurrent",
+        "sameResolutionFiles"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/CaseContextPanel.tsx",
+      "symbols": [
+        "CaseContextPanel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseContextPanel.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseContextPanel.tsx",
+      "to": "src/product-ui/materials/CaseContextView.tsx",
+      "symbols": [
+        "CaseContextView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/CaseContextView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/CaseContextView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/CaseContextView.tsx",
+      "to": "src/components/workspace/PrecedentResearch.tsx",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/components/workspace/PrecedentResearch.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentResearch.tsx",
+      "to": "src/product-ui/research/ResearchView.tsx",
+      "symbols": [
+        "ResearchView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError",
+        "errorMessage"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/components/workspace/CaseNavigation.tsx",
+      "symbols": [
+        "CaseNavigation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/components/workspace/PrecedentDocument.tsx",
+      "symbols": [
+        "PrecedentDocument"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentDocument.tsx",
+      "to": "src/product-ui/research/PrecedentDocumentView.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/PrecedentDocumentView.tsx",
+      "to": "src/client/precedent-highlights.ts",
+      "symbols": [
+        "precedentHighlights"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/PrecedentDocumentView.tsx",
+      "to": "src/utils/precedent-document.ts",
+      "symbols": [
+        "precedentDisplayParts"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/PrecedentDocumentView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/contracts/v2/precedent-topics.ts",
+      "symbols": [
+        "PRECEDENT_TOPIC_LABELS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/product-ui/research/presentation.ts",
+      "symbols": [
+        "isAccessError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/presentation.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ResearchView.tsx",
+      "to": "src/product-ui/research/ResearchNotice.tsx",
+      "symbols": [
+        "ResearchSpinner"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentResearch.tsx",
+      "to": "src/product-ui/research/useResearchController.ts",
+      "symbols": [
+        "useResearchController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useResearchController.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useResearchController.ts",
+      "to": "src/client/api/precedents.ts",
+      "symbols": [
+        "precedentsApi"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedents.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedents.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "request"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedents.ts",
+      "to": "src/client/api/mock/precedents.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/mock/precedents.ts",
+      "to": "src/contracts/v2/precedent-research.ts",
+      "symbols": [
+        "v2PrecedentReadRequestSchema",
+        "v2PrecedentSearchRequestSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-research.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "hasUniqueIds",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-research.ts",
+      "to": "src/contracts/v2/legal-availability.ts",
+      "symbols": [
+        "legalFailureReasonSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-research.ts",
+      "to": "src/contracts/v2/sources.ts",
+      "symbols": [
+        "v2PrecedentCitationSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/precedents.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/precedents.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "readStore",
+        "registerMockHandlers",
+        "requireSession"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useResearchController.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useResearchController.ts",
+      "to": "src/contracts/v2/precedent-topics.ts",
+      "symbols": [
+        "PRECEDENT_TOPIC_LABELS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useResearchController.ts",
+      "to": "src/product-ui/research/presentation.ts",
+      "symbols": [
+        "isAccessError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentResearch.tsx",
+      "to": "src/components/workspace/PrecedentComparisonPanel.tsx",
+      "symbols": [
+        "PrecedentComparisonPanel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentComparisonPanel.tsx",
+      "to": "src/product-ui/research/ComparisonPanelView.tsx",
+      "symbols": [
+        "ComparisonPanelView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonPanelView.tsx",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "errorMessage"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonPanelView.tsx",
+      "to": "src/components/workspace/ComparisonResult.tsx",
+      "symbols": [
+        "ComparisonResult"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ComparisonResult.tsx",
+      "to": "src/product-ui/research/ComparisonResultView.tsx",
+      "symbols": [
+        "ComparisonResultView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonResultView.tsx",
+      "to": "src/contracts/v2/precedent-comparison.ts",
+      "symbols": [
+        "PRECEDENT_COMPARISON_CRITERIA"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-comparison.ts",
+      "to": "src/contracts/common.ts",
+      "symbols": [
+        "displayText",
+        "opaqueIdSchema",
+        "revisionSchema",
+        "timestampSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-comparison.ts",
+      "to": "src/contracts/v2/precedent-research.ts",
+      "symbols": [
+        "v2PrecedentReadRequestSchema",
+        "v2PrecedentReadResponseSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/contracts/v2/precedent-comparison.ts",
+      "to": "src/contracts/v2/workspace.ts",
+      "symbols": [
+        "v2JobSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonResultView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonResultView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonResultView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonResultView.tsx",
+      "to": "src/product-ui/research/PrecedentDocumentView.tsx",
+      "symbols": [
+        "PrecedentDocumentView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/ComparisonPanelView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/PrecedentComparisonPanel.tsx",
+      "to": "src/product-ui/research/useComparisonPanelController.ts",
+      "symbols": [
+        "useComparisonPanelController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useComparisonPanelController.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useComparisonPanelController.ts",
+      "to": "src/client/api/precedent-comparison.ts",
+      "symbols": [
+        "precedentComparisonApi"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedent-comparison.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedent-comparison.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "v2AcceptedOperationSchema",
+        "v2JobSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedent-comparison.ts",
+      "to": "src/contracts/v2/precedent-comparison.ts",
+      "symbols": [
+        "v2PrecedentComparisonRequestSchema",
+        "v2PrecedentComparisonStateSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedent-comparison.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/precedent-comparison.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "apiRequest"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useComparisonPanelController.ts",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/CaseContextPanel.tsx",
+      "to": "src/product-ui/materials/useCaseContextController.ts",
+      "symbols": [
+        "useCaseContextController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/ConversationAgent.tsx",
+      "symbols": [
+        "ConversationAgent"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationAgent.tsx",
+      "to": "src/product-ui/conversation-tools/AgentView.tsx",
+      "symbols": [
+        "AgentView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AgentView.tsx",
+      "to": "src/components/workspace/ConversationAnalysis.tsx",
+      "symbols": [
+        "ConversationAnalysis"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationAnalysis.tsx",
+      "to": "src/product-ui/conversation-tools/AnalysisView.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AnalysisView.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "positionLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AnalysisView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AnalysisView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AgentView.tsx",
+      "to": "src/components/workspace/ConversationPanel.tsx",
+      "symbols": [
+        "ConversationPanel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationPanel.tsx",
+      "to": "src/product-ui/conversation-tools/PanelView.tsx",
+      "symbols": [
+        "PanelView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/PanelView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationPanel.tsx",
+      "to": "src/product-ui/conversation-tools/useConversationPanelController.ts",
+      "symbols": [
+        "useConversationPanelController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AgentView.tsx",
+      "to": "src/components/workspace/conversation-state.ts",
+      "symbols": [
+        "conversationActionLabels",
+        "conversationPaneTitles"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AgentView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/AgentView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationAgent.tsx",
+      "to": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "symbols": [
+        "useConversationAgentController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "to": "src/client/confirm.ts",
+      "symbols": [
+        "confirmAction"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "to": "src/client/foreground-poll.ts",
+      "symbols": [
+        "startForegroundPolling"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "to": "src/components/workspace/conversation-progress.ts",
+      "symbols": [
+        "observeReportContinuation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/conversation-tools/useConversationAgentController.ts",
+      "to": "src/components/workspace/conversation-state.ts",
+      "symbols": [
+        "conversationReadPanes",
+        "nextConversationAction"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/ConversationReconfirmation.tsx",
+      "symbols": [
+        "ConversationReconfirmation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationReconfirmation.tsx",
+      "to": "src/components/intake/SummaryReconfirmation.tsx",
+      "symbols": [
+        "SummaryReconfirmation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/SummaryReconfirmation.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/SummaryReconfirmation.tsx",
+      "to": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "symbols": [
+        "SummaryReconfirmationView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/summary/SummaryContext.tsx",
+      "symbols": [
+        "purposeLabels",
+        "SummaryContext"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/summary/SummaryMaterials.tsx",
+      "symbols": [
+        "SummaryMaterials"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryMaterials.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "materialState",
+        "materialStateLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/summary/SummaryProblem.tsx",
+      "symbols": [
+        "SummaryProblem"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryProblem.tsx",
+      "to": "src/product-ui/intake/CaseInputError.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputError.tsx",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputError.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputError.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReconfirmationView.tsx",
+      "to": "src/product-ui/summary/SummaryReading.tsx",
+      "symbols": [
+        "SummaryChanges",
+        "SummaryReading"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReading.tsx",
+      "to": "src/product-ui/summary/FactAnswer.tsx",
+      "symbols": [
+        "FactAnswer"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/FactAnswer.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "referenceLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/FactAnswer.tsx",
+      "to": "src/product-ui/summary/SummaryDisclosure.tsx",
+      "symbols": [
+        "SummaryDisclosure"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryDisclosure.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryDisclosure.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/SummaryReading.tsx",
+      "to": "src/product-ui/summary/SummaryDisclosure.tsx",
+      "symbols": [
+        "SummaryDisclosure"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/SummaryReconfirmation.tsx",
+      "to": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "symbols": [
+        "useSummaryReconfirmationController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/client/foreground-poll.ts",
+      "symbols": [
+        "startForegroundPolling"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "v2SummarySchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useSummaryReconfirmationController.ts",
+      "to": "src/product-ui/summary/completion.ts",
+      "symbols": [
+        "matches"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/completion.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "v2SummarySchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationReconfirmation.tsx",
+      "to": "src/components/workspace/ConversationContextReview.tsx",
+      "symbols": [
+        "ConversationContextReview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationContextReview.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationContextReview.tsx",
+      "to": "src/product-ui/summary/ContextReviewView.tsx",
+      "symbols": [
+        "ContextReviewView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/ContextReviewView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/ContextReviewView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/ContextReviewView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/ContextReviewView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/ContextReviewView.tsx",
+      "to": "src/product-ui/summary/SummaryContext.tsx",
+      "symbols": [
+        "kindLabels",
+        "purposeLabels",
+        "SummaryContext",
+        "stageLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/ConversationContextReview.tsx",
+      "to": "src/product-ui/summary/useContextReviewController.ts",
+      "symbols": [
+        "useContextReviewController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useContextReviewController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/summary/useContextReviewController.ts",
+      "to": "src/client/confirm.ts",
+      "symbols": [
+        "confirmAction"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/EvidencePicker.tsx",
+      "symbols": [
+        "EvidencePicker"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidencePicker.tsx",
+      "to": "src/product-ui/evidence/EvidencePickerView.tsx",
+      "symbols": [
+        "EvidencePickerView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidencePickerView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidencePicker.tsx",
+      "to": "src/product-ui/evidence/useEvidencePickerController.ts",
+      "symbols": [
+        "useEvidencePickerController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/useEvidencePickerController.ts",
+      "to": "src/client/api/files.ts",
+      "symbols": [
+        "validateUpload"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidencePicker.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/FileReview.tsx",
+      "symbols": [
+        "FileReview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/FileReview.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/FileReview.tsx",
+      "to": "src/product-ui/materials/FileReviewView.tsx",
+      "symbols": [
+        "FileReviewView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/FileReviewView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/FileReviewView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/FileReviewView.tsx",
+      "to": "src/product-ui/intake/CaseInputError.tsx",
+      "symbols": [
+        "CaseInputError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/FileReviewView.tsx",
+      "to": "src/product-ui/materials/ReviewObservation.tsx",
+      "symbols": [
+        "ReviewObservation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/ReviewObservation.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "observationKind",
+        "observationKindLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/ReviewObservation.tsx",
+      "to": "src/components/workspace/source-label.ts",
+      "symbols": [
+        "positionLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/ReviewObservation.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/FileReview.tsx",
+      "to": "src/product-ui/materials/useFileReviewController.ts",
+      "symbols": [
+        "useFileReviewController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/useFileReviewController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/useFileReviewController.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/useFileReviewController.ts",
+      "to": "src/client/confirm.ts",
+      "symbols": [
+        "confirmAction"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/useFileReviewController.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/useFileReviewController.ts",
+      "to": "src/product-ui/materials/coverage.ts",
+      "symbols": [
+        "coverageRows"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/materials/coverage.ts",
+      "to": "src/utils/time.ts",
+      "symbols": [
+        "secondsLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/Workspace.tsx",
+      "to": "src/components/workspace/LookupDialog.tsx",
+      "symbols": [
+        "LookupDialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/LookupDialog.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/LookupDialog.tsx",
+      "to": "src/product-ui/research/LookupView.tsx",
+      "symbols": [
+        "LookupView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/LookupView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/LookupView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/LookupView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "InputField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/LookupView.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/LookupView.tsx",
+      "to": "src/product-ui/research/presentation.ts",
+      "symbols": [
+        "fields",
+        "recipients"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/LookupDialog.tsx",
+      "to": "src/product-ui/research/useLookupController.ts",
+      "symbols": [
+        "useLookupController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useLookupController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/research/useLookupController.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "LOOKUP_CONSENT_VERSION",
+        "v2LookupRequestSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId].astro",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId].astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/CaseLayout.astro",
+      "to": "src/layouts/CaseWorkbenchLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/CaseWorkbenchLayout.astro",
+      "to": "src/components/ui/app-navigation.tsx",
+      "symbols": [
+        "AppNavigation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/app-navigation.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/app-navigation.tsx",
+      "to": "src/product-ui/navigation/NavigationView.tsx",
+      "symbols": [
+        "NavigationView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "InputField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/Theme.tsx",
+      "symbols": [
+        "useProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn",
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/navigation/focus.ts",
+      "symbols": [
+        "useNavigationReturnFocus"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/NavigationView.tsx",
+      "to": "src/product-ui/navigation/types.ts",
+      "symbols": [
+        "navigationActive"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/app-navigation.tsx",
+      "to": "src/product-ui/navigation/useNavigationController.ts",
+      "symbols": [
+        "useNavigationController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/useNavigationController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api",
+        "apiMode",
+        "roleStart"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/useNavigationController.ts",
+      "to": "src/client/theme.ts",
+      "symbols": [
+        "setTheme",
+        "subscribeTheme",
+        "themePreference"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/navigation/useNavigationController.ts",
+      "to": "src/product-ui/navigation/types.ts",
+      "symbols": [
+        "availableNavigation",
+        "caseLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ui/app-navigation.tsx",
+      "to": "src/product-ui/navigation/types.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/CaseWorkbenchLayout.astro",
+      "to": "src/layouts/ProductLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/CaseLayout.astro",
+      "to": "src/server/modules/analytics/browser.ts",
+      "symbols": [
+        "configureAnalytics"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId].astro",
+      "to": "src/server/modules/external-tools/catalog.ts",
+      "symbols": [
+        "lookupCatalog",
+        "lookupConfiguration"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/actions.astro",
+      "to": "src/components/workspace/Workspace.tsx",
+      "symbols": [
+        "Workspace"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/actions.astro",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/actions.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/files.astro",
+      "to": "src/components/workspace/Workspace.tsx",
+      "symbols": [
+        "Workspace"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/files.astro",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/files.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/intake.astro",
+      "to": "src/components/intake/IntakeQuestions.tsx",
+      "symbols": [
+        "IntakeQuestions"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/IntakeQuestions.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/IntakeQuestions.tsx",
+      "to": "src/product-ui/intake/QuestionsView.tsx",
+      "symbols": [
+        "QuestionsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/product-ui/intake/CaseInputError.tsx",
+      "symbols": [
+        "CaseInputError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/product-ui/intake/QuestionAnswerField.tsx",
+      "symbols": [
+        "QuestionAnswerField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionAnswerField.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionAnswerField.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionsView.tsx",
+      "to": "src/product-ui/intake/QuestionRecovery.tsx",
+      "symbols": [
+        "QuestionRecovery"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/QuestionRecovery.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/IntakeQuestions.tsx",
+      "to": "src/product-ui/intake/useQuestionsController.ts",
+      "symbols": [
+        "useQuestionsController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useQuestionsController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useQuestionsController.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useQuestionsController.ts",
+      "to": "src/client/foreground-poll.ts",
+      "symbols": [
+        "startForegroundPolling"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useQuestionsController.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useQuestionsController.ts",
+      "to": "src/components/intake/useSceneTransition.ts",
+      "symbols": [
+        "useSceneTransition"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/intake.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/precedents.astro",
+      "to": "src/components/workspace/PrecedentResearch.tsx",
+      "symbols": [
+        "PrecedentResearch"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/precedents.astro",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/precedents.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/reports.astro",
+      "to": "src/components/reports/ReportReview.tsx",
+      "symbols": [
+        "ReportReview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/ReportReview.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/ReportReview.tsx",
+      "to": "src/product-ui/reports/ReportReviewView.tsx",
+      "symbols": [
+        "ReportReviewView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/components/reports/download.ts",
+      "symbols": [
+        "maskReportText"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/components/ui/workspace-frame.tsx",
+      "symbols": [
+        "CaseWorkspaceFrame"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/components/workspace/CaseNavigation.tsx",
+      "symbols": [
+        "CaseNavigation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/reports/ReportComponents.tsx",
+      "symbols": [
+        "ConfirmDialog",
+        "ReportButton",
+        "LoadingContent",
+        "ReportReadonlyText",
+        "Spinner"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportComponents.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportComponents.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportComponents.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/reports/ReportReading.tsx",
+      "symbols": [
+        "ReportReading"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/components/reports/orientation.ts",
+      "symbols": [
+        "reportOrientation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/components/reports/review-sections.ts",
+      "symbols": [
+        "reportReviewSections",
+        "reportSectionTitle"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/review-sections.ts",
+      "to": "src/utils/report-markdown.ts",
+      "symbols": [
+        "reportPhotoIds",
+        "reportPhotoToken"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/review-sections.ts",
+      "to": "src/utils/report-sections.ts",
+      "symbols": [
+        "reportSections"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/utils/report-markdown.ts",
+      "symbols": [
+        "isReportSourceSection",
+        "reportMarkdownHtml"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReading.tsx",
+      "to": "src/product-ui/reports/SectionEditor.tsx",
+      "symbols": [
+        "SectionEditor"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/SectionEditor.tsx",
+      "to": "src/components/reports/review-sections.ts",
+      "symbols": [
+        "replaceReportReviewSection",
+        "reportSectionTitle"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/SectionEditor.tsx",
+      "to": "src/utils/report-markdown.ts",
+      "symbols": [
+        "reportPhotoIds",
+        "reportPhotoToken"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/SectionEditor.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/SectionEditor.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/SectionEditor.tsx",
+      "to": "src/product-ui/Select.tsx",
+      "symbols": [
+        "SelectField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/product-ui/reports/report-status.ts",
+      "symbols": [
+        "preparationFailureText"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/ReportReview.tsx",
+      "to": "src/product-ui/reports/useReportReviewController.ts",
+      "symbols": [
+        "useReportReviewController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "apiMode"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "isExplicitSignOut"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/components/reports/download.ts",
+      "symbols": [
+        "downloadBlob",
+        "maskReportText"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/components/reports/download-reviewed.ts",
+      "symbols": [
+        "downloadReviewedReport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/components/reports/review-sections.ts",
+      "symbols": [
+        "withInlineReportPhotos"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/useReportReviewController.ts",
+      "to": "src/utils/report-markdown.ts",
+      "symbols": [
+        "reportPhotoIds"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/ReportReview.tsx",
+      "to": "src/components/resolution/FollowUpResolution.tsx",
+      "symbols": [
+        "FollowUpResolution"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/reports/ReportReview.tsx",
+      "to": "src/components/workspace/EvidenceUpload.tsx",
+      "symbols": [
+        "EvidenceUpload"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "symbols": [
+        "EvidenceUploadView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "to": "src/components/workspace/evidence-state.ts",
+      "symbols": [
+        "materialState",
+        "materialStateLabels"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "to": "src/components/workspace/processing-progress.ts",
+      "symbols": [
+        "uploadProgressLabel"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/EvidenceUploadView.tsx",
+      "to": "src/product-ui/intake/CaseInputError.tsx",
+      "symbols": [
+        "CaseInputError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/product-ui/evidence/useEvidenceUploadController.ts",
+      "symbols": [
+        "useEvidenceUploadController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/evidence/useEvidenceUploadController.ts",
+      "to": "src/components/workspace/useEvidenceUpload.ts",
+      "symbols": [
+        "useEvidenceUpload"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/useEvidenceUpload.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/useEvidenceUpload.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/useEvidenceUpload.ts",
+      "to": "src/client/api/files.ts",
+      "symbols": [
+        "uploadFingerprints",
+        "validateUpload"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/useEvidenceUpload.ts",
+      "to": "src/components/intake/useCustomerAccess.ts",
+      "symbols": [
+        "useCustomerAccess"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/components/workspace/ChatAttachments.tsx",
+      "symbols": [
+        "ChatAttachments"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/components/workspace/EvidencePicker.tsx",
+      "symbols": [
+        "EvidencePicker"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/workspace/EvidenceUpload.tsx",
+      "to": "src/components/workspace/FileReview.tsx",
+      "symbols": [
+        "FileReview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/reports.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/summary.astro",
+      "to": "src/components/intake/SummaryReview.tsx",
+      "symbols": [
+        "SummaryReview"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/SummaryReview.tsx",
+      "to": "src/components/intake/SummaryReconfirmation.tsx",
+      "symbols": [
+        "SummaryReconfirmation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/summary.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/timeline.astro",
+      "to": "src/components/workspace/Workspace.tsx",
+      "symbols": [
+        "Workspace"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/timeline.astro",
+      "to": "src/contracts.ts",
+      "symbols": [
+        "opaqueIdSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/[caseId]/timeline.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/new.astro",
+      "to": "src/components/intake/CaseInput.tsx",
+      "symbols": [
+        "CaseInput"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/CaseInput.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/CaseInput.tsx",
+      "to": "src/product-ui/intake/CaseInputView.tsx",
+      "symbols": [
+        "CaseInputView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "TextareaField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/intake/CaseInputError.tsx",
+      "symbols": [
+        "CaseInputError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/intake/controller.ts",
+      "symbols": [
+        "APP_NARRATIVE_MAX_LENGTH",
+        "APP_NARRATIVE_MIN_LENGTH"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/controller.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/controller.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "sessionDestination"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/controller.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "isExplicitSignOut"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/CaseInputView.tsx",
+      "to": "src/product-ui/intake/examples.ts",
+      "symbols": [
+        "prepareExamples",
+        "responseExamples"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/intake/CaseInput.tsx",
+      "to": "src/product-ui/intake/useCaseInputController.ts",
+      "symbols": [
+        "useCaseInputController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useCaseInputController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useCaseInputController.ts",
+      "to": "src/client/session-events.ts",
+      "symbols": [
+        "isExplicitSignOut"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/intake/useCaseInputController.ts",
+      "to": "src/product-ui/intake/controller.ts",
+      "symbols": [
+        "createCaseInputController",
+        "narrativeLength"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/cases/new.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/consent.astro",
+      "to": "src/components/ConsentForm.tsx",
+      "symbols": [
+        "ConsentForm"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ConsentForm.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ConsentForm.tsx",
+      "to": "src/product-ui/public/ConsentView.tsx",
+      "symbols": [
+        "ConsentView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/ConsentView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/ConsentForm.tsx",
+      "to": "src/product-ui/public/useConsentController.ts",
+      "symbols": [
+        "useConsentController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useConsentController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api",
+        "apiMode"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useConsentController.ts",
+      "to": "src/client/api/errors.ts",
+      "symbols": [
+        "ApiError"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useConsentController.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref",
+        "returnPathFromLocation",
+        "sessionDestination"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useConsentController.ts",
+      "to": "src/contracts/consent.ts",
+      "symbols": [
+        "CURRENT_POLICY_VERSIONS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/consent.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/help.astro",
+      "to": "src/components/HelpFaq.tsx",
+      "symbols": [
+        "HelpFaq"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/HelpFaq.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/HelpFaq.tsx",
+      "to": "src/product-ui/public/HelpFaqView.tsx",
+      "symbols": [
+        "HelpFaqView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/HelpFaqView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/help.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/index.astro",
+      "to": "src/layouts/LandingLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/LandingLayout.astro",
+      "to": "src/product-ui/landing/styles/index.css",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/index.astro",
+      "to": "src/product-ui/landing/LandingPage.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/DemoLab.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/DemoLab.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/DemoLab.tsx",
+      "to": "src/product-ui/landing/demo-content.ts",
+      "symbols": [
+        "demoScenarios"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/DemoLab.tsx",
+      "to": "src/product-ui/landing/LandingLink.tsx",
+      "symbols": [
+        "LandingButton",
+        "LandingLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingLink.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingLink.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scene-classes.ts",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/DemoLab.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/LandingBrand.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingBrand.tsx",
+      "to": "src/product-ui/landing/LandingLink.tsx",
+      "symbols": [
+        "LandingLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/LandingNavigation.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingNavigation.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingNavigation.tsx",
+      "to": "src/product-ui/landing/LandingBrand.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingNavigation.tsx",
+      "to": "src/product-ui/landing/LandingLink.tsx",
+      "symbols": [
+        "LandingButton"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingNavigation.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/BlueScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/BlueScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/CeoScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/CeoScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/ClarityScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/ClarityScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/EverydayScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/EverydayScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/FinaleScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/FinaleScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/FutureScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/FutureScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/HeroScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/HeroScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/LogoScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/LogoScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/OriginScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/OriginScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/PhoneScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/PhoneScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/scenes/TimeScene.tsx",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/TimeScene.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/TimeScene.tsx",
+      "to": "src/product-ui/landing/scene-classes.ts",
+      "symbols": [
+        "sceneClasses"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingPage.astro",
+      "to": "src/product-ui/landing/motion/index.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/journey.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/origin.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/blue.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/logo.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/clarity.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/phone.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/time.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/ceo.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/future.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/motion/index.ts",
+      "to": "src/product-ui/landing/motion/finale.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyer/index.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyer/index.astro",
+      "to": "src/product-ui/public/UnavailableFeature.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyers/[id].astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyers/[id].astro",
+      "to": "src/product-ui/public/UnavailableFeature.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyers/index.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/lawyers/index.astro",
+      "to": "src/product-ui/public/UnavailableFeature.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/login.astro",
+      "to": "src/components/AuthButtons.tsx",
+      "symbols": [
+        "AuthButtons"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AuthButtons.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AuthButtons.tsx",
+      "to": "src/product-ui/public/AuthView.tsx",
+      "symbols": [
+        "AuthView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/AuthView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/AuthView.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/AuthView.tsx",
+      "to": "src/product-ui/public/ProviderIcon.tsx",
+      "symbols": [
+        "ProviderIcon",
+        "providers"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AuthButtons.tsx",
+      "to": "src/product-ui/public/useAuthController.ts",
+      "symbols": [
+        "useAuthController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useAuthController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api",
+        "apiMode",
+        "errorMessage"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/public/useAuthController.ts",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "sessionDestination"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AuthButtons.tsx",
+      "to": "src/product-ui/public/ProviderIcon.tsx",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/login.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/new.astro",
+      "to": "src/components/intake/CaseInput.tsx",
+      "symbols": [
+        "CaseInput"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/new.astro",
+      "to": "src/layouts/CaseWorkbenchLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/ai.astro",
+      "to": "src/components/PolicyDocument.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/PolicyDocument.astro",
+      "to": "src/content/policy-drafts.ts",
+      "symbols": [],
+      "dynamic": false
+    },
+    {
+      "from": "src/content/policy-drafts.ts",
+      "to": "src/contracts/consent.ts",
+      "symbols": [
+        "CURRENT_POLICY_VERSIONS"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/ai.astro",
+      "to": "src/content/policy-drafts.ts",
+      "symbols": [
+        "policyDrafts"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/ai.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/privacy.astro",
+      "to": "src/components/PolicyDocument.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/privacy.astro",
+      "to": "src/content/policy-drafts.ts",
+      "symbols": [
+        "policyDrafts"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/privacy.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/terms.astro",
+      "to": "src/components/PolicyDocument.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/terms.astro",
+      "to": "src/content/policy-drafts.ts",
+      "symbols": [
+        "policyDrafts"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/policies/terms.astro",
+      "to": "src/layouts/ProductPublicLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/settings.astro",
+      "to": "src/components/AccountSettings.tsx",
+      "symbols": [
+        "AccountSettings"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AccountSettings.tsx",
+      "to": "src/product-ui/account/AccountSettingsView.tsx",
+      "symbols": [
+        "AccountSettingsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/Disclosure.tsx",
+      "symbols": [
+        "Disclosure",
+        "DisclosureSummary"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/Field.tsx",
+      "symbols": [
+        "InputField"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountSettingsView.tsx",
+      "to": "src/product-ui/account/AccountComponents.tsx",
+      "symbols": [
+        "AccountLoading",
+        "AccountNotice",
+        "AccountSection",
+        "AccountSpinner"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/AccountComponents.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AccountSettings.tsx",
+      "to": "src/product-ui/account/useAccountSettingsController.ts",
+      "symbols": [
+        "useAccountSettingsController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/useAccountSettingsController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/useAccountSettingsController.ts",
+      "to": "src/server/modules/analytics/browser.ts",
+      "symbols": [
+        "accountDeleted"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AccountSettings.tsx",
+      "to": "src/product-ui/public/ProviderIcon.tsx",
+      "symbols": [
+        "ProviderIcon"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/AccountSettings.tsx",
+      "to": "src/components/lawyers/LegacyProfileAssets.tsx",
+      "symbols": [
+        "LegacyProfileAssets"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/lawyers/LegacyProfileAssets.tsx",
+      "to": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "symbols": [
+        "LegacyProfileAssetsView"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "to": "src/client/return-path.ts",
+      "symbols": [
+        "accessHref"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "to": "src/product-ui/Button.tsx",
+      "symbols": [
+        "Button",
+        "ButtonLink"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "to": "src/product-ui/Dialog.tsx",
+      "symbols": [
+        "Dialog"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "to": "src/product-ui/GlobalTheme.tsx",
+      "symbols": [
+        "GlobalProductTheme"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/LegacyProfileAssetsView.tsx",
+      "to": "src/product-ui/account/AccountComponents.tsx",
+      "symbols": [
+        "AccountLoading",
+        "AccountNotice",
+        "AccountSection"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/lawyers/LegacyProfileAssets.tsx",
+      "to": "src/product-ui/account/useLegacyProfileAssetsController.ts",
+      "symbols": [
+        "useLegacyProfileAssetsController"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/useLegacyProfileAssetsController.ts",
+      "to": "src/client/api/index.ts",
+      "symbols": [
+        "api"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/account/useLegacyProfileAssetsController.ts",
+      "to": "src/client/api/lawyers.ts",
+      "symbols": [
+        "lawyerAssets",
+        "lawyerErrorMessage"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/context.ts",
+      "symbols": [
+        "browserSessionScope"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "apiMode",
+        "apiRequest",
+        "responseError",
+        "request"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/core.ts",
+      "symbols": [
+        "reexport"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/mock/lawyers.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/mock/lawyers.ts",
+      "to": "src/contracts/v2/index.ts",
+      "symbols": [
+        "directoryPageSchema"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/lawyers.ts",
+      "to": "src/client/api/lawyers.ts",
+      "symbols": [
+        "LawyerApiError",
+        "rotateLawyers"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/mock/lawyers.ts",
+      "to": "src/client/api/mock/runtime.ts",
+      "symbols": [
+        "readStore",
+        "registerMockHandlers",
+        "requireSession",
+        "writeStore"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/mock/lawyers.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/mock/lawyers.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/mock/lawyers.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/client/api/lawyers.ts",
+      "to": "src/client/api/mock/lawyers.ts",
+      "symbols": [
+        "dynamic"
+      ],
+      "dynamic": true
+    },
+    {
+      "from": "src/product-ui/account/useLegacyProfileAssetsController.ts",
+      "to": "src/components/lawyers/AssetPhoto.tsx",
+      "symbols": [
+        "downloadLawyerAsset"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/components/lawyers/AssetPhoto.tsx",
+      "to": "src/client/api/lawyers.ts",
+      "symbols": [
+        "lawyerAssets"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/settings.astro",
+      "to": "src/layouts/CaseLayout.astro",
+      "symbols": [
+        "default"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/pages/settings.astro",
+      "to": "src/styles/public-compat.css",
+      "symbols": [],
+      "dynamic": false
+    }
+  ],
+  "legacyControls": [
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/ui/brand.tsx",
+      "symbols": [
+        "BrandMark"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceView.tsx",
+      "to": "src/components/ui/workspace-frame.tsx",
+      "symbols": [
+        "CaseWorkspaceFrame"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/workspace/WorkspaceFileViewer.tsx",
+      "to": "src/components/ui/media-player.tsx",
+      "symbols": [
+        "MediaPlayer"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/layouts/CaseWorkbenchLayout.astro",
+      "to": "src/components/ui/app-navigation.tsx",
+      "symbols": [
+        "AppNavigation"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/reports/ReportReviewView.tsx",
+      "to": "src/components/ui/workspace-frame.tsx",
+      "symbols": [
+        "CaseWorkspaceFrame"
+      ],
+      "dynamic": false
+    }
+  ],
+  "oldVisualImports": [],
+  "knownInactive": [
+    {
+      "path": "src/components/workspace/ToolResults.tsx",
+      "reachable": false
+    },
+    {
+      "path": "src/layouts/AppLayout.astro",
+      "reachable": false
+    },
+    {
+      "path": "src/layouts/PublicLayout.astro",
+      "reachable": false
+    },
+    {
+      "path": "src/layouts/BaseLayout.astro",
+      "reachable": false
+    },
+    {
+      "path": "src/components/ui/experience.tsx",
+      "reachable": false
+    }
+  ],
+  "namedHelperEdges": {
+    "brand": [
+      {
+        "from": "src/product-ui/workspace/WorkspaceView.tsx",
+        "symbols": [
+          "BrandMark"
+        ]
+      }
+    ],
+    "assetPhoto": [
+      {
+        "from": "src/product-ui/account/useLegacyProfileAssetsController.ts",
+        "symbols": [
+          "downloadLawyerAsset"
+        ]
+      }
+    ]
+  },
+  "landingModuleCount": 29,
+  "landingProductCrossEdges": [
+    {
+      "from": "src/product-ui/landing/DemoLab.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingLink.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scene-classes.ts",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/LandingNavigation.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "useClientReady"
+      ],
+      "dynamic": false
+    },
+    {
+      "from": "src/product-ui/landing/scenes/TimeScene.tsx",
+      "to": "src/product-ui/utils.ts",
+      "symbols": [
+        "cn"
+      ],
+      "dynamic": false
+    }
+  ],
+  "unresolved": []
+}

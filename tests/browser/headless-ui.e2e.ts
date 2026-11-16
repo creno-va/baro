@@ -174,7 +174,7 @@ test("stored dark preference leaves landing light and anonymous login usable", a
   await page.goto("/login");
   await ready(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator(".login-provider")).toHaveCount(3);
+  await expect(page.locator("[data-product-auth-provider]")).toHaveCount(3);
   const scan = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(scan.violations).toEqual([]);
 });

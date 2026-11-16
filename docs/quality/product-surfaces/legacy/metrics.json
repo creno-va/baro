@@ -1,0 +1,23 @@
+{
+  "minimumWidth": {
+    "content": [
+      {
+        "left": 32,
+        "right": 288
+      }
+    ],
+    "feedbackCount": 0,
+    "scrollWidth": 320,
+    "width": 320
+  },
+  "transport": "Standalone synthetic HTTP harness with actual CaseDetail native fetch, no production auth/DB or external provider",
+  "observed": [
+    "guidance/source anchor/checklist/feedback ACK",
+    "Headless answer mode/direct text+unknown/answers ACK/result focus",
+    "failed/retry ACK",
+    "out_of_scope/urgent_redirect",
+    "active retrieval status",
+    "delete confirmation cancelled only"
+  ],
+  "fixed": "Pure status label import no longer loads the former CaseList/API Vite graph; initial loading error fixed and new-tab console checked."
+}

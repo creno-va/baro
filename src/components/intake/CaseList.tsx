@@ -2,24 +2,15 @@ import { ArrowRight, FolderOpen, MessageCircle, Plus, RotateCw, Trash2 } from "l
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../client/api";
 import type { CaseView } from "../../client/api/types";
-import type { CaseStatus } from "../../contracts";
 import { Button, ButtonLink } from "../ui/button";
 import { LoadingContent } from "../ui/loading";
 import { CaseDeleteDialog } from "./CaseDeleteDialog";
 import { caseHref, ErrorPanel } from "./common";
 import { useCustomerAccess } from "./useCustomerAccess";
 
-// Used by the preserved v1 detail UI.
-export const statusLabels: Record<CaseStatus, string> = {
-  screening: "입력 확인",
-  needs_clarification: "추가 질문",
-  queued: "분석 대기",
-  analyzing: "공식 자료 확인·결과 점검",
-  completed: "결과 완료",
-  out_of_scope: "지원 범위 안내",
-  urgent_redirect: "긴급 안전 안내",
-  failed: "분석 실패",
-};
+// Compatibility export for callers of the former list module.
+export { statusLabels } from "../../product-ui/legacy-case/presentation";
+
 const stageLabels = {
   intake: "질문 답변 중",
   summary: "요약 확인 필요",

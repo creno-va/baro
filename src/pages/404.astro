@@ -1,23 +1,13 @@
 ---
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { ButtonLink } from "../components/ui/button";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { PageHeader } from "../components/ui/page-header";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { ReadingContent } from "../components/ui/reading-content";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { ActionGroup } from "../components/ui/section";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders these components.
-import { StatePanel } from "../components/ui/state-panel";
-// biome-ignore lint/correctness/noUnusedImports: Astro renders the layout.
-import PublicLayout from "../layouts/PublicLayout.astro";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the public frame.
+import ProductPublicLayout from "../layouts/ProductPublicLayout.astro";
 
 Astro.response.status = 404;
 ---
-<PublicLayout title="페이지를 찾을 수 없어요 · BARO" description="주소를 확인하거나 홈과 내 사건으로 이동해 주세요.">
-  <ReadingContent className="ui-stack">
-    <PageHeader eyebrow="404" title="페이지를 찾을 수 없어요" />
-    <StatePanel variant="empty" title="주소를 다시 확인해 주세요" description="주소가 바뀌었거나 존재하지 않는 페이지예요. 홈에서 다시 시작하거나 내 사건을 확인할 수 있어요." />
-    <ActionGroup><ButtonLink href="/" variant="secondary">홈으로</ButtonLink><ButtonLink href="/new">내 사건으로</ButtonLink></ActionGroup>
-  </ReadingContent>
-</PublicLayout>
+<ProductPublicLayout title="페이지를 찾을 수 없어요 · BARO" description="주소를 확인하거나 홈과 내 사건으로 이동해 주세요." showStart footer>
+  <div data-product-not-found="" class="space-y-6">
+    <header class="space-y-2"><p class="text-xs font-medium text-[var(--pui-muted)]">404</p><h1 class="text-3xl font-semibold tracking-tight">페이지를 찾을 수 없어요</h1></header>
+    <section role="status" aria-live="polite" class="space-y-3 rounded-2xl border border-[var(--pui-border)] bg-[var(--pui-surface)] p-5 sm:p-6"><h2 class="text-lg font-semibold">주소를 다시 확인해 주세요</h2><p class="text-sm leading-7 text-[var(--pui-muted)]">주소가 바뀌었거나 존재하지 않는 페이지예요. 홈에서 다시 시작하거나 내 사건을 확인할 수 있어요.</p></section>
+    <nav aria-label="이용 가능한 화면" class="flex flex-wrap gap-2"><a href="/" class="inline-flex min-h-11 items-center rounded-xl border border-[var(--pui-border)] bg-[var(--pui-surface)] px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--pui-focus)]">홈으로</a><a href="/new" class="inline-flex min-h-11 items-center rounded-xl bg-[var(--pui-primary)] px-4 py-2 text-sm font-medium text-[var(--pui-on-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--pui-focus)]">내 사건으로</a></nav>
+  </div>
+</ProductPublicLayout>
