@@ -90,7 +90,7 @@ test("PDF elapsed wait retains the reviewed draft and exposes PDF as the only sa
   await expect.poll(() => calls).toBe(1);
   await expect(page.getByRole("button", { name: "PDF 만드는 중…", exact: true })).toBeDisabled();
   await page.clock.fastForward(65000);
-  await expect(page.locator(".report-progress")).toContainText("요청 시작 후 65초");
+  await expect(page.locator("[data-product-report-progress]")).toContainText("요청 시작 후 65초");
   response.release();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
   await openReportEditor(page);
@@ -174,14 +174,16 @@ test("PDF waits for the postflight owner check despite focus, and rejects a chan
   });
   await page.getByRole("button", { name: /^PDF 다운로드/ }).click();
   await expect.poll(() => blocked).toBe(true);
-  await expect(page.locator(".report-progress")).toContainText("접근 권한 다시 확인 중");
+  await expect(page.locator("[data-product-report-progress]")).toContainText(
+    "접근 권한 다시 확인 중",
+  );
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   expect(downloads).toBe(0);
   expect(pdfCalls).toBe(1);
   postflight.release();
   await expect(page.getByRole("textbox", { name: / 수정$/ }).first()).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("계정 또는 접근 상태가 변경");
-  await expect(page.locator(".report-progress")).toHaveCount(0);
+  await expect(page.locator("[data-product-report-progress]")).toHaveCount(0);
   expect(downloads).toBe(0);
 });
 
@@ -215,8 +217,11 @@ test("report generation shows the actual elapsed request inside its confirmation
   await expect(page.getByRole("button", { name: "새 버전 생성", exact: true })).toBeDisabled();
   generation.release();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".report-progress")).toHaveCount(0);
+  await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.locator("[data-product-report-progress]")).toHaveCount(0);
   expect(generations).toBe(1);
 });
 

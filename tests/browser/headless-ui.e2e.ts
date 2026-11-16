@@ -123,7 +123,7 @@ test("discard confirmation preserves edits and revokes an old owner decision wit
   await countMaterialsRequests(page);
   await page.getByRole("tab", { name: /^자료/ }).click();
   await page
-    .locator(".workspace-file-list > li")
+    .locator("[data-product-material-list] > li")
     .first()
     .getByRole("button", { name: "자료 확인", exact: true })
     .click();

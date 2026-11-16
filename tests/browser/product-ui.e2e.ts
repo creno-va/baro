@@ -875,14 +875,14 @@ test("reports start in reading mode and retain editing through a focus check", a
     }),
   ).toBeVisible();
   await expect(page.getByRole("region", { name: "리포트 검토 본문" })).toBeVisible();
-  const heading = page.locator(".report-heading");
+  const heading = page.locator("[data-product-report-heading]");
   await expect(heading.getByRole("button", { name: "수정하기", exact: true })).toBeVisible();
   await expect(heading.getByRole("button", { name: "새 버전 만들기", exact: true })).toBeVisible();
   await expect(page.getByText("리포트 내용 수정하기", { exact: true })).toHaveCount(0);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(() => document.fonts.ready);
-    await page.locator(".report-canvas").scrollIntoViewIfNeeded();
+    await page.locator("[data-product-report-canvas]").scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))

@@ -66,7 +66,7 @@ test("report review applies the system dark palette to its content and editing s
   await page.goto("/cases/case-demo/reports");
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator(".report-review")).toHaveCSS("color", "rgb(237, 241, 248)");
+  await expect(page.locator("[data-product-report]")).toHaveCSS("color", "rgb(237, 241, 248)");
   await openReportEditor(page);
   const field = page.locator(".report-reading-section").first().getByRole("textbox");
   await expect(field).toHaveCSS("color", "rgb(237, 241, 248)");
@@ -76,7 +76,7 @@ test("report review saves before a compact desktop and full-width mobile PDF dow
   page,
 }) => {
   await page.goto("/cases/case-demo/reports");
-  await expect(page.locator(".report-edit-toggle")).toBeVisible();
+  await expect(page.locator("[data-product-report-edit-toggle]")).toBeVisible();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1",
       state = JSON.parse(localStorage.getItem(key) ?? "{}");
@@ -85,7 +85,7 @@ test("report review saves before a compact desktop and full-width mobile PDF dow
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.reload();
-  const report = page.locator(".report-review");
+  const report = page.locator("[data-product-report]");
   await expect(report.getByRole("heading", { name: "추가 확인 사항", exact: true })).toBeVisible();
   await expect(report.getByRole("heading", { name: "사실·주장·출처", exact: true })).toHaveCount(0);
   await expect(report.getByRole("heading", { name: "공식 출처", exact: true })).toHaveCount(0);
@@ -128,10 +128,10 @@ test("report review saves before a compact desktop and full-width mobile PDF dow
         return { x, y, width, height };
       };
       return {
-        bounds: measure(".report-canvas"),
-        footer: measure(".report-export"),
-        body: measure(".report-read-content"),
-        button: measure(".report-export .primary"),
+        bounds: measure("[data-product-report-canvas]"),
+        footer: measure("[data-product-report-export]"),
+        body: measure("[data-product-report-read-content]"),
+        button: measure("[data-product-report-export] [data-product-report-primary]"),
       };
     });
     if (!bounds || !footer || !body || !button) throw new Error("Missing report download controls");
@@ -370,9 +370,9 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  expect((await new AxeBuilder({ page }).include(".report-review").analyze()).violations).toEqual(
-    [],
-  );
+  expect(
+    (await new AxeBuilder({ page }).include("[data-product-report]").analyze()).violations,
+  ).toEqual([]);
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1";
     const state = JSON.parse(localStorage.getItem(key) ?? "{}");
@@ -383,7 +383,7 @@ test("mobile layout, keyboard cancel, failure and retry use the same components"
   await expect(
     page.getByRole("status").filter({ hasText: "새 리포트 생성과 수정은 필수 동의 후" }),
   ).toBeVisible();
-  await expect(page.locator(".report-edit-toggle")).toBeDisabled();
+  await expect(page.locator("[data-product-report-edit-toggle]")).toBeDisabled();
   await page.evaluate(() => {
     const key = "baro.reports.browser-test.v1";
     const state = JSON.parse(localStorage.getItem(key) ?? "{}");

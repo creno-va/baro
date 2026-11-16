@@ -230,7 +230,7 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
         .getByRole("dialog", { name: "새 버전을 만들까요?", exact: true })
         .getByRole("button", { name: "새 버전 생성", exact: true })
         .click();
-      await expect(report.locator(".report-save-state")).toContainText("버전 2");
+      await expect(report.locator("[data-product-report-save-state]")).toContainText("버전 2");
       await openReportEditor(page);
       const overview = report.getByRole("textbox", { name: "내 사건 한눈에 수정", exact: true });
       await overview.fill(
@@ -240,10 +240,10 @@ for (const purpose of ["고소 준비", "주장 대응"] as const)
         .getByRole("group", { name: "리포트 작업", exact: true })
         .getByRole("button", { name: "수정 내용 저장", exact: true })
         .click();
-      await expect(report.locator(".report-save-state")).toContainText("버전 3");
-      await expect(report.locator(".report-basis-details > [data-disclosure-button]")).toHaveText(
-        "작성 기준",
-      );
+      await expect(report.locator("[data-product-report-save-state]")).toContainText("버전 3");
+      await expect(
+        report.locator("[data-product-report-basis-details] > [data-disclosure-button]"),
+      ).toHaveText("작성 기준");
       const saved = await page.evaluate(async () => {
         const path = "/src/client/api/index.ts";
         const { api } = (await import(path)) as typeof import("../../src/client/api");

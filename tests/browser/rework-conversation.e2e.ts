@@ -183,7 +183,7 @@ async function preserveReport(page: Page, directory: string, fixture: Fixture) {
   const responseIndex = fixture.pdfResponses.length;
   const downloaded = page.waitForEvent("download");
   const button = page
-    .locator(".report-review")
+    .locator("[data-product-report]")
     .getByRole("button", { name: "PDF 다운로드", exact: true });
   await button.click();
   const artifact = await downloaded;
@@ -302,7 +302,7 @@ async function addMaterial(
     await expect(materials.getByText("처리 실패", { exact: true })).toBeVisible();
     await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
     const original = materials
-      .locator(".workspace-file-list > li")
+      .locator("[data-product-material-list] > li")
       .filter({ has: page.getByRole("heading", { name, exact: true }) })
       .getByRole("button", { name: "자료 확인", exact: true });
     await expect(original).toBeVisible();
@@ -716,7 +716,7 @@ test("actual AI200 SQL admission rejects a new message without another model cal
     await expect(page.getByRole("alert").first()).toBeVisible();
     expect((await counters(f)).models).toEqual(before.models);
     await readWorkspaceReport(page);
-    await expect(page.locator(".report-review")).toBeVisible();
+    await expect(page.locator("[data-product-report]")).toBeVisible();
     expect((await counters(f)).models).toEqual(before.models);
   } finally {
     await f.close();
@@ -761,7 +761,7 @@ test("a foreign signed account cannot retain the previous conversation report or
   try {
     await openPreparedWorkspace(page, f);
     await reportReady(page);
-    const priorTitle = await page.locator(".report-heading h2").innerText();
+    const priorTitle = await page.locator("[data-product-report-heading] h2").innerText();
     const priorBody = await page.locator(".report-reading .report-markdown").first().innerText();
     await expect(page.getByText(priorTitle, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(1);
@@ -772,7 +772,9 @@ test("a foreign signed account cannot retain the previous conversation report or
     await context.addCookies([f.info.foreignCookie]);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(page.locator(".report-reading")).toHaveCount(0);
-    await expect(page.locator(".report-heading h2")).toHaveText("내 사건 이해와 해결 준비");
+    await expect(page.locator("[data-product-report-heading] h2")).toHaveText(
+      "내 사건 이해와 해결 준비",
+    );
     await expect(page.getByText(priorTitle, { exact: true })).toHaveCount(0);
     await expect(page.getByText(priorBody, { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -904,7 +906,7 @@ test("the report's own prepare button recovers an actual committed response loss
       name: "이해한 내용을 다음 준비로 이어가요",
       exact: true,
     });
-    const failure = page.locator(".report-error");
+    const failure = page.locator("[data-product-report-error]");
     await expect
       .poll(async () => (await ready.isVisible()) || (await failure.isVisible()))
       .toBe(true);
@@ -1102,7 +1104,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           });
         const completedMaterials = await openWorkspaceMaterials(page);
         await expect(
-          completedMaterials.locator(".materials-panel__report").getByRole("status"),
+          completedMaterials.locator("[data-product-material-report]").getByRole("status"),
         ).toHaveText("리포트를 열 수 있어요");
         await closeWorkspaceMaterials(page);
         const completedResearch = await counters(f);
@@ -1264,7 +1266,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           const beforeAudit = await conversationFocus(page);
           expect(
             (
-              await new AxeBuilder({ page }).include(".report-workspace").analyze()
+              await new AxeBuilder({ page }).include("[data-product-report]").analyze()
             ).violations.filter((violation) =>
               ["serious", "critical"].includes(violation.impact ?? ""),
             ),

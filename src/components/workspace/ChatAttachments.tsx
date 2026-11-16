@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import type { FileView } from "../../client/api/types";
 import { Button } from "../ui/button";
 import { materialState, materialStateLabels } from "./evidence-state";
-import "../../styles/evidence.css";
 
 function LocalPreview({ file }: { file: File }) {
   const [url, setUrl] = useState("");

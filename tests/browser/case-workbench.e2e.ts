@@ -111,13 +111,13 @@ test("precedent search and full text stay beside the conversation; report remain
   await page.getByRole("tab", { name: "판례", exact: true }).click();
   await page.getByRole("button", { name: "판례 찾기", exact: true }).click();
   await page.getByRole("list", { name: "관련 판례 목록" }).getByRole("button").first().click();
-  await expect(page.locator(".case-context .precedent-full-text")).toBeVisible();
+  await expect(page.locator("[data-product-case-context] .precedent-full-text")).toBeVisible();
   await expect(input).toHaveValue("판례를 읽으면서 유지할 합성 초안");
   await expect(page).toHaveURL(new RegExp(`${materialsCasePath}$`));
   await page.screenshot({ path: ".wrangler/ui795/workbench-precedent.png" });
   await page.getByRole("link", { name: "리포트", exact: true }).click();
   await expect(page).toHaveURL(/\/reports\?mode=conversation$/);
-  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeEnabled();
   await expect(page.getByRole("link", { name: "대화로 돌아가기", exact: true })).toHaveAttribute(
     "href",
@@ -235,7 +235,7 @@ test("inline material correction survives pane switching and mobile sheet conver
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
   await page.getByRole("tab", { name: /^자료/ }).click();
   await page
-    .locator(".workspace-file-list > li")
+    .locator("[data-product-material-list] > li")
     .first()
     .getByRole("button", { name: "자료 확인", exact: true })
     .click();
@@ -255,5 +255,5 @@ test("inline material correction survives pane switching and mobile sheet conver
   await review.getByRole("button", { name: "교정 내용 저장", exact: true }).click();
   await expect(review.getByText("교정 내용을 저장했어요. 새로 접속해도 유지됩니다.")).toBeVisible();
   await review.getByRole("button", { name: "자료 목록", exact: true }).click();
-  await expect(page.locator(".workspace-file-list")).toBeVisible();
+  await expect(page.locator("[data-product-material-list]")).toBeVisible();
 });

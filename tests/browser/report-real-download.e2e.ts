@@ -77,7 +77,10 @@ test("ReportReview uses signed real SQL routes and saves a Korean font PDF from 
       ].join("\n"),
     );
     await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-    await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     await expect(page.getByRole("button", { name: /HTML 다운로드|선택 원본 ZIP/ })).toHaveCount(0);
     // Compare the saved HTML endpoint with the file received through the owner-checked UI.
     const savedReport = (await (

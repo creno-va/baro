@@ -1,4 +1,6 @@
+import { resolve } from "node:path";
 import sharp from "sharp";
+import { compileProductStyles } from "./product-styles";
 
 const build = await Bun.build({
   entrypoints: ["tests/helpers/report-rework-layout-entry.tsx"],
@@ -6,12 +8,7 @@ const build = await Bun.build({
 });
 if (!build.success || !build.outputs[0]) throw new Error("REPORT_REWORK_LAYOUT_BUILD_FAILED");
 const script = await build.outputs[0].text();
-const css =
-  (await Bun.file("src/styles/global.css").text())
-    .replace(/^@import .*;$/gm, "")
-    .replace(/@theme inline\s*\{[^}]*\}/s, "") +
-  (await Bun.file("src/styles/design-system.css").text()) +
-  (await Bun.file("src/styles/reports.css").text());
+const css = await compileProductStyles(resolve(import.meta.dir, "../.."));
 const photo = `data:image/jpeg;base64,${Buffer.from(await Bun.file("tests/fixtures/media/image-markers.jpg").arrayBuffer()).toString("base64")}`;
 const portrait = await sharp("tests/fixtures/media/image-markers.jpg")
   .resize(700, 1000, { fit: "contain", background: "white" })
@@ -36,7 +33,7 @@ Bun.serve({
         headers: { "content-type": "image/jpeg" },
       });
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><title>합성 리포트 조판 검증</title></head><body><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><title>합성 리포트 조판 검증</title></head><body><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
       { headers: { "content-type": "text/html;charset=utf-8" } },
     );
   },

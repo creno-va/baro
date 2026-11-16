@@ -813,7 +813,7 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(page.getByText("2차 질문 · 3 / 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "건너뛰기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  const summary = page.locator(".summary-reading-overview").first();
+  const summary = page.locator("[data-product-summary-overview]").first();
   await expect(summary).toContainText(/2026년 8월/);
   await expect(summary).toContainText(/건너뛰기/);
   await expect(page.getByRole("button", { name: "수정 내용 저장" })).toHaveCount(0);
@@ -906,7 +906,7 @@ test("saved intake remains addressable after summary without a previous-answer a
     await page.getByRole("button", { name: "다음 질문", exact: true }).click();
   await page.getByRole("button", { name: "요약 보기", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.locator(".summary-reading-overview").first()).toContainText(
+  await expect(page.locator("[data-product-summary-overview]").first()).toContainText(
     /2026년 7월로 수정/,
   );
 });
@@ -975,7 +975,7 @@ test("new follow-up generation retains the submitted answer and polls past the s
   for (let index = 0; index < 3; index++)
     await page.getByRole("button", { name: "모름", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.locator(".summary-reading-overview").first()).toContainText(/2026년 8월/);
+  await expect(page.locator("[data-product-summary-overview]").first()).toContainText(/2026년 8월/);
 });
 
 for (const editing of [false, true]) {
@@ -1026,7 +1026,7 @@ for (const editing of [false, true]) {
     await expect(page).not.toHaveURL(/edit=1/);
     await finishGeneration(page);
     await expect(page).toHaveURL(/\/summary/, { timeout: 10000 });
-    await expect(page.locator(".summary-reading-overview").first()).toContainText(/100만 원/);
+    await expect(page.locator("[data-product-summary-overview]").first()).toContainText(/100만 원/);
   });
 }
 
@@ -1092,8 +1092,10 @@ test("retrying a failed summary saves the edited answer before generation", asyn
   await expect(answer).toHaveValue("확인해 보니 200만 원이에요.");
   await finishGeneration(page);
   await expect(page).toHaveURL(/\/summary/, { timeout: 10000 });
-  await expect(page.locator(".summary-reading-overview").first()).toContainText(/200만 원/);
-  await expect(page.locator(".summary-reading-overview").first()).not.toContainText(/100만 원/);
+  await expect(page.locator("[data-product-summary-overview]").first()).toContainText(/200만 원/);
+  await expect(page.locator("[data-product-summary-overview]").first()).not.toContainText(
+    /100만 원/,
+  );
 });
 
 for (const reducedMotion of ["no-preference", "reduce"] as const) {
@@ -1215,7 +1217,9 @@ test("generation transport retry keeps the saved answer and never saves it twice
   );
   await page.getByRole("button", { name: "다시 시도", exact: true }).click();
   await expect(page).toHaveURL(/\/summary/);
-  await expect(page.locator(".summary-reading-overview").first()).toContainText(/보존할 합성 답변/);
+  await expect(page.locator("[data-product-summary-overview]").first()).toContainText(
+    /보존할 합성 답변/,
+  );
   expect(
     await page.evaluate(() =>
       JSON.parse(localStorage.getItem("synthetic-recovery-counts") ?? "{}"),
@@ -1286,7 +1290,7 @@ for (const recovery of [
       await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     }
     await expect(page).toHaveURL(/\/summary/);
-    await expect(page.locator(".summary-reading-overview").first()).toContainText(
+    await expect(page.locator("[data-product-summary-overview]").first()).toContainText(
       retryable || canPrepareSummary ? /보존할 합성 답변/ : /수정한 합성 답변/,
     );
   });
@@ -1347,11 +1351,11 @@ test("summary retains choice fact provenance without exposing a separate fact ed
     );
   });
   await page.goto("/cases/synthetic-question-context/summary");
-  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
+  await expect(page.locator("[data-product-summary-overview]").first()).toBeVisible();
   await expect(page.getByText("작성하지 않았다", { exact: true })).toBeVisible();
   await expect(page.getByText("차용증을 작성해 두셨나요?", { exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
+  await expect(page.locator("[data-product-summary-overview]").first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

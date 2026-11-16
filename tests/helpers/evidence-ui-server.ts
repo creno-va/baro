@@ -1,5 +1,6 @@
 // Synthetic component harness. No real account, original or provider is used.
 import { resolve } from "node:path";
+import { compileProductStyles } from "./product-styles";
 
 const root = resolve(import.meta.dir, "../..");
 const bundle = await Bun.build({
@@ -20,10 +21,7 @@ const bundle = await Bun.build({
 if (!bundle.success) throw new Error("Synthetic evidence bundle failed");
 const script = await bundle.outputs.find((file) => file.kind === "entry-point")?.text();
 if (!script) throw new Error("Synthetic evidence script missing");
-const global = (await Bun.file(`${root}/src/styles/global.css`).text())
-  .replace(/^@import .*;$/gm, "")
-  .replace(/@theme inline\s*\{[^}]*\}/s, "");
-const css = `${global}\n${await Bun.file(`${root}/src/styles/design-system.css`).text()}\n${await Bun.file(`${root}/src/styles/workspace.css`).text()}\n${await Bun.file(`${root}/src/styles/evidence.css`).text()}\nmain{max-width:840px;margin:auto;padding:16px}`;
+const css = `${await compileProductStyles(root)}\nmain{max-width:840px;margin:auto;padding:16px}`;
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: Number(Bun.env.BARO_EVIDENCE_TEST_PORT ?? 4364),
@@ -35,7 +33,7 @@ const server = Bun.serve({
     if (path === "/fonts/PretendardVariable.woff2")
       return new Response(Bun.file(`${root}/public/fonts/PretendardVariable.woff2`));
     return new Response(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 자료 검증</title><link rel="stylesheet" href="/app.css"></head><body><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
+      '<!doctype html><html lang="ko" data-baro-ui data-product-chrome="v2"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BARO 합성 자료 검증</title><link rel="stylesheet" href="/app.css"></head><body><main id="root"></main><script type="module" src="/app.js"></script></body></html>',
       {
         headers: {
           "content-type": "text/html;charset=utf-8",

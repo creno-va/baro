@@ -26,8 +26,7 @@ const bundle = await Bun.build({
 });
 if (!bundle.success) throw new Error("Report browser bundle unavailable");
 const script = await bundle.outputs[0]?.text();
-const css =
-  (await compileProductStyles(root)) + (await Bun.file(`${root}/src/styles/reports.css`).text());
+const css = await compileProductStyles(root);
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,

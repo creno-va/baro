@@ -96,7 +96,7 @@ test("review selection is separate from conversation selection and dirty correct
   await panel(page)
     .getByRole("checkbox", { name: /대화에 사용할.*반환 약속/ })
     .check();
-  const second = panel(page).locator(".workspace-file-list > li").nth(1);
+  const second = panel(page).locator("[data-product-material-list] > li").nth(1);
   await second.getByRole("button", { name: "자료 확인", exact: true }).click();
   const review = page.getByRole("dialog", { name: "자료 확인", exact: true });
   const correction = review.getByRole("textbox", { name: "확인·교정한 내용" });

@@ -2,7 +2,7 @@ import { expect, type Page } from "@playwright/test";
 
 export async function openReportEditor(page: Page) {
   await expect(page.locator("astro-island[ssr]")).toHaveCount(0);
-  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
   if (
     await page
       .getByRole("textbox", { name: / 수정$/ })
@@ -10,7 +10,7 @@ export async function openReportEditor(page: Page) {
       .isVisible()
   )
     return;
-  const toggle = page.locator(".report-edit-toggle");
+  const toggle = page.locator("[data-product-report-edit-toggle]");
   await expect(toggle).toBeVisible();
   await expect(toggle).toBeEnabled();
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();

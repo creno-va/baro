@@ -130,7 +130,7 @@ test("conversation material review stays inline and standalone review retains mo
   await expect(
     dialog.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
   ).toBeVisible();
-  await expect(dialog.locator(".file-review-item").first()).toBeVisible();
+  await expect(dialog.locator("[data-product-review-observation]").first()).toBeVisible();
   await expect
     .poll(() =>
       dialog.evaluate(
@@ -663,7 +663,7 @@ test("persisted format refusal remains clear after reload and account re-entry",
   }, key);
   await page.reload();
   const rejected = page
-    .locator(".workspace-file-list > li")
+    .locator("[data-product-material-list] > li")
     .filter({ has: page.getByRole("heading", { name: "protected-synthetic.xls", exact: true }) });
   await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
   await expect(

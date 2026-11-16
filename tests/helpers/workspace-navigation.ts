@@ -50,5 +50,5 @@ export async function readWorkspaceReport(page: Page) {
     }
   }
   await expect(page).toHaveURL(/\/reports\?mode=conversation$/);
-  return page.locator(".report-review");
+  return page.locator("[data-product-report]");
 }

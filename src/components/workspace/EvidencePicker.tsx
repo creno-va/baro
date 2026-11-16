@@ -3,7 +3,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { validateUpload } from "../../client/api/files";
 import { Button } from "../ui/button";
 import { Input as ControlInput } from "../ui/form";
-import "../../styles/evidence.css";
 
 const acceptedFiles =
   ".txt,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,.heic,.mp3,.wav,.m4a,.ogg,.flac,.aac,.mp4,.mov,.webm,.avi,.mkv";
