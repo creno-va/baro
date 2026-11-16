@@ -190,7 +190,7 @@ test("social login actions keep equal heights on narrow phones in both themes", 
   page,
 }) => {
   await page.goto("/login");
-  const providers = page.locator(".login-provider");
+  const providers = page.locator("[data-product-auth-provider]");
   await expect(providers).toHaveCount(3);
   for (const provider of await providers.all()) await expect(provider).toBeEnabled();
   for (const mode of ["light", "dark"] as const) {

@@ -1,0 +1,33 @@
+- link "본문으로 건너뛰기":
+  - /url: "#main-content"
+- banner:
+  - link "BARO 홈":
+    - /url: /
+    - generic: BARO
+  - button "화면 테마 변경":
+  - generic: API 예시
+  - button "메뉴 열기":
+- main:
+  - heading "합성 원본 재생" [level=1]
+  - group "합성 녹음 재생기":
+    - slider "재생 위치"
+    - button "재생":
+    - status "재생 시간": 0:00 / 0:20
+    - button "소리 끄기":
+    - slider "음량"
+    - generic: 재생 속도
+    - button "재생 속도" [active]:
+      - generic: 1.5배
+  - button "원본 음성 닫기"
+  - button "원본 접근 잠그기"
+  - group "합성 영상 재생기":
+    - generic "합성 영상"
+    - slider "재생 위치"
+    - button "재생":
+    - status "재생 시간": 0:00 / 0:08
+    - button "소리 끄기":
+    - slider "음량"
+    - generic: 재생 속도
+    - button "재생 속도":
+      - generic: 1배
+    - button "전체 화면":

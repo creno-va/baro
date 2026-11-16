@@ -123,7 +123,7 @@ describe("remaining surfaces named scope and preserved package gates", () => {
       "src/styles/workspace.css",
       "src/styles/global.css",
       "src/product-ui/product.css",
-      "src/product-ui/Select.tsx",
+      "src/product-ui/Field.tsx",
       "src/product-ui/state.ts",
       "scripts/check-product-materials-preservation.ts",
       "tests/product-ui-material-research-preservation.test.ts",
@@ -222,6 +222,77 @@ describe("remaining surfaces named scope and preserved package gates", () => {
 });
 
 describe("bounded primitive and compatibility integrations", () => {
+  test("the explicit native Select name extension permits only the reviewed candidate", async () => {
+    const path = "src/product-ui/Select.tsx";
+    const candidate = await readFile(new URL(`../${path}`, import.meta.url), "utf8");
+    expect(productSurfacesChangeFindings([{ path, status: "M", existedAtBase: true }])).toEqual([]);
+    expect(productSurfacesIntegrationAllowed(path, "synthetic prior", candidate)).toBe(true);
+    for (const changed of [
+      candidate.replace('props["aria-label"] === undefined', 'props["aria-label"] !== undefined'),
+      candidate.replace("externalLabel === undefined ? labelId : undefined", "labelId"),
+      candidate.replace("onChange={onValueChange}", "onChange={() => {}}"),
+      candidate.replace("disabled={disabled}", "disabled={false}"),
+      `${candidate}// unreviewed change\n`,
+    ])
+      expect(productSurfacesIntegrationAllowed(path, "synthetic prior", changed)).toBe(false);
+  });
+
+  test("the four final imports/resolver patches retain CSP, cache, API source, fixture URLs and every assertion", () => {
+    const fixtures = [
+      {
+        path: "src/layouts/ProductLayout.astro",
+        before:
+          'import { Experience } from "../components/ui/experience";\nAstro.response.headers.set("Cache-Control", "private, no-store, no-transform");\nAstro.csp?.insertScriptHash(hash);\n<Experience client:load />',
+        after:
+          'import { ProductExperience as Experience } from "../product-ui/experience/ProductExperience";\nAstro.response.headers.set("Cache-Control", "private, no-store, no-transform");\nAstro.csp?.insertScriptHash(hash);\n<Experience client:load />',
+      },
+      {
+        path: "src/components/AccountSettings.tsx",
+        before:
+          'import { ProviderIcon } from "./AuthButtons";\nreturn <AccountSettingsView providerIcon={(provider) => <ProviderIcon provider={provider} />} />;',
+        after:
+          'import { ProviderIcon } from "../product-ui/public/ProviderIcon";\nreturn <AccountSettingsView providerIcon={(provider) => <ProviderIcon provider={provider} />} />;',
+      },
+      {
+        path: "tests/helpers/workspace.astro.config.ts",
+        before:
+          'if (source === "../../client/api" && importer?.endsWith("/components/workspace/Workspace.tsx")) return fixtureURL;\nreturn null;',
+        after:
+          'if (source === "../../client/api" && importer?.endsWith("/product-ui/workspace/useWorkspaceController.ts")) return fixtureURL;\nreturn null;',
+      },
+      {
+        path: "tests/product-ui-fixture-resolvers.test.ts",
+        before:
+          'test("workspace retains its original subjects while moving only Agent and FileReview owners", () => {\nconst positive = [\n      "components/workspace/Workspace.tsx",\n];\nconst negative = [\n      "components/workspace/ConversationAgent.tsx",\n      "components/workspace/FileReview.tsx",\n];\nexpect(resolve(source)).toBeNull();\n});',
+        after:
+          'test("workspace isolates the actual owning controllers after each UI migration", () => {\nconst positive = [\n      "product-ui/workspace/useWorkspaceController.ts",\n];\nconst negative = [\n      "components/workspace/Workspace.tsx",\n      "product-ui/workspace/WorkspaceView.tsx",\n      "components/workspace/ConversationAgent.tsx",\n      "components/workspace/FileReview.tsx",\n];\nexpect(resolve(source)).toBeNull();\n});',
+      },
+    ];
+    for (const { path, before, after } of fixtures) {
+      expect(migrateProductSurfacesIntegration(path, before)).toBe(after);
+      expect(productSurfacesIntegrationAllowed(path, before, after)).toBe(true);
+      expect(productSurfacesIntegrationAllowed(path, before, `${after}\n// arbitrary change`)).toBe(
+        false,
+      );
+    }
+    const layout = fixtures[0];
+    if (!layout) throw new Error("MISSING_SYNTHETIC_LAYOUT");
+    expect(
+      productSurfacesIntegrationAllowed(
+        layout.path,
+        layout.before,
+        layout.after.replace("private, no-store, no-transform", "public"),
+      ),
+    ).toBe(false);
+    expect(
+      productSurfacesIntegrationAllowed(
+        layout.path,
+        layout.before,
+        layout.after.replace("insertScriptHash(hash)", "insertScriptHash(unverifiedHash)"),
+      ),
+    ).toBe(false);
+  });
+
   test("the two variant markers preserve Button default, native handlers and link availability bytes", () => {
     const path = "src/product-ui/Button.tsx";
     const base = [
@@ -276,7 +347,7 @@ describe("bounded primitive and compatibility integrations", () => {
       `${candidate}// extra\n`,
     ])
       expect(productSurfacesIntegrationAllowed(path, "synthetic prior", changed)).toBe(false);
-    expect(productSurfacesIntegrationAllowed("src/product-ui/Select.tsx", "same", "same")).toBe(
+    expect(productSurfacesIntegrationAllowed("src/product-ui/Field.tsx", "same", "same")).toBe(
       false,
     );
   });
@@ -300,7 +371,7 @@ describe("actual consumer selectors retain behavior and assertion bytes", () => 
         "expect(page.locator('.policy-document a[href^=\"#\"]')).toHaveCount(0);",
       ),
     ).toBe(
-      'expect(page.locator("[data-product-policy-document] a[href^=\\\"#\\\"]")).toHaveCount(0);',
+      `expect(page.locator(${JSON.stringify('[data-product-policy-document] a[href^="#"]')})).toHaveCount(0);`,
     );
     expect(
       migrateProductSurfacesSelectors(

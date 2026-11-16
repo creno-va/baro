@@ -1,0 +1,122 @@
+{
+  "apiAndAnalytics": {
+    "before": [
+      "fetch(`/api/cases/${caseId}${action === \"delete\" ? \"\" : `/${action}`}`, { method: action === \"delete\" ? \"DELETE\" : \"POST\", headers: { \"idempotency-key\": key, ...(body ? { \"content-type\": \"application/json\" } : {}), }, ...(body ? { body: JSON.stringify(body) } : {}), })",
+      "fetch(`/api/cases/${caseId}/analysis`, { signal: requestController.signal, })",
+      "fetch(`/api/cases/${caseId}/feedback`, { method: \"PUT\", headers: { \"content-type\": \"application/json\" }, body: JSON.stringify({ helpful }), })",
+      "fetch(`/api/cases/${caseId}`, { signal: signal ?? null })",
+      "observeResult(summary.current, caseId, analysisId, result.citations.length)",
+      "trackCase(\"analysis_completed\", caseId, value.analysisId, { ...(value.completedAt ? { occurredAt: value.completedAt } : {}), questionCount: value.questionCount ?? 0, resultStatus: value.status, citationCount: value.result.kind === \"guidance\" ? value.result.citations.length : 0, })",
+      "trackCase(\"analysis_failed\", caseId, value.analysisId, { ...(value.completedAt ? { occurredAt: value.completedAt } : {}), errorCategory: value.error?.code === \"LEGAL_SOURCE_UNAVAILABLE\" ? \"legal_source\" : value.error?.code === \"ANALYSIS_TIMEOUT\" ? \"timeout\" : \"internal\", retryable: value.error?.retryable ?? false, })",
+      "trackCase(\"analysis_started\", caseId, value.analysisId, { occurredAt: value.startedAt, })",
+      "trackCase(\"case_deleted\", caseId, detail.analysisId)",
+      "trackCase(\"citation_opened\", caseId, analysisId, { sourceType: \"statute\", itemIndex: index, })",
+      "trackCase(\"clarification_completed\", caseId, detail.analysisId, { questionCount: value.answers.length, unknownCount: value.answers.filter((answer) => answer.status === \"unknown\").length, })",
+      "trackCase(\"clarification_viewed\", caseId, value.analysisId, { questionCount: value.questions.length, })",
+      "trackCase(\"evidence_checked\", caseId, analysisId, { itemIndex: index, checked: event.target.checked, })",
+      "trackCase(\"trust_answered\", caseId, analysisId, { helpful: helpful ? \"yes\" : \"no\" })"
+    ],
+    "after": [
+      "fetch(`/api/cases/${caseId}${action === \"delete\" ? \"\" : `/${action}`}`, { method: action === \"delete\" ? \"DELETE\" : \"POST\", headers: { \"idempotency-key\": key, ...(body ? { \"content-type\": \"application/json\" } : {}), }, ...(body ? { body: JSON.stringify(body) } : {}), })",
+      "fetch(`/api/cases/${caseId}/analysis`, { signal: requestController.signal, })",
+      "fetch(`/api/cases/${caseId}/feedback`, { method: \"PUT\", headers: { \"content-type\": \"application/json\" }, body: JSON.stringify({ helpful }), })",
+      "fetch(`/api/cases/${caseId}`, { signal: signal ?? null })",
+      "observeResult(summary.current, caseId, analysisId, result.citations.length)",
+      "trackCase(\"analysis_completed\", caseId, value.analysisId, { ...(value.completedAt ? { occurredAt: value.completedAt } : {}), questionCount: value.questionCount ?? 0, resultStatus: value.status, citationCount: value.result.kind === \"guidance\" ? value.result.citations.length : 0, })",
+      "trackCase(\"analysis_failed\", caseId, value.analysisId, { ...(value.completedAt ? { occurredAt: value.completedAt } : {}), errorCategory: value.error?.code === \"LEGAL_SOURCE_UNAVAILABLE\" ? \"legal_source\" : value.error?.code === \"ANALYSIS_TIMEOUT\" ? \"timeout\" : \"internal\", retryable: value.error?.retryable ?? false, })",
+      "trackCase(\"analysis_started\", caseId, value.analysisId, { occurredAt: value.startedAt, })",
+      "trackCase(\"case_deleted\", caseId, detail.analysisId)",
+      "trackCase(\"citation_opened\", caseId, analysisId, { sourceType: \"statute\", itemIndex: index, })",
+      "trackCase(\"clarification_completed\", caseId, detail.analysisId, { questionCount: value.answers.length, unknownCount: value.answers.filter((answer) => answer.status === \"unknown\").length, })",
+      "trackCase(\"clarification_viewed\", caseId, value.analysisId, { questionCount: value.questions.length, })",
+      "trackCase(\"evidence_checked\", caseId, analysisId, { itemIndex: index, checked: event.target.checked, })",
+      "trackCase(\"trust_answered\", caseId, analysisId, { helpful: helpful ? \"yes\" : \"no\" })"
+    ],
+    "equal": true
+  },
+  "caseButtons": {
+    "onClick": {
+      "beforeCount": 6,
+      "afterCount": 6,
+      "equal": true
+    },
+    "disabled": {
+      "beforeCount": 5,
+      "afterCount": 5,
+      "equal": true
+    },
+    "type": {
+      "beforeCount": 6,
+      "afterCount": 6,
+      "equal": true
+    }
+  },
+  "feedbackButtons": {
+    "onClick": {
+      "beforeCount": 2,
+      "afterCount": 2,
+      "equal": true
+    },
+    "disabled": {
+      "beforeCount": 2,
+      "afterCount": 2,
+      "equal": true
+    },
+    "type": {
+      "beforeCount": 2,
+      "afterCount": 2,
+      "equal": true
+    }
+  },
+  "questionValues": {
+    "before": [
+      "answers[question.id]?.status ?? \"\"",
+      "value(question.id)",
+      "value(question.id)"
+    ],
+    "after": [
+      "answers[question.id]?.status ?? \"\"",
+      "value(question.id)",
+      "value(question.id)"
+    ],
+    "equal": true
+  },
+  "checked": {
+    "equal": true
+  },
+  "hrefs": {
+    "equal": true
+  },
+  "externalLinks": {
+    "target": true,
+    "rel": true
+  },
+  "evidenceCallback": {
+    "equal": true
+  },
+  "citationCallback": {
+    "equal": true
+  },
+  "nativeTextarea": {
+    "equal": true
+  },
+  "directStatusSelector": {
+    "equal": true
+  },
+  "directChoiceSelector": {
+    "equal": true
+  },
+  "answersSubmission": {
+    "equal": true
+  },
+  "questionsSubmit": {
+    "equal": true
+  },
+  "imperativeHooks": {
+    "headingRef": true,
+    "resultRef": true,
+    "resultSummaryID": true,
+    "sourceID": true,
+    "questionErrorID": true
+  }
+}

@@ -244,7 +244,7 @@ test("customer completes intake workspace original PDF report and cascading dele
     buffer: Buffer.from("통합 시연용 합성 원본입니다. 실제 사건 자료가 아닙니다."),
   });
   await expect(page.getByRole("heading", { name: "합성증거.txt" })).toBeVisible();
-  await expect(page.locator(".workspace-status--ready")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible({ timeout: 15000 });
   await goToCaseTool(page, "timeline");
   await expect(page).toHaveURL(`${casePath}/timeline`);
   await page.getByRole("button", { name: "일정 추가" }).click();

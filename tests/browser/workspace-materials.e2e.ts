@@ -193,7 +193,7 @@ test("local attachments and consent stay local across panel changes before one e
     (window as Window & { releaseMaterialsUpload?: () => void }).releaseMaterialsUpload?.(),
   );
   await expect(page.locator(".workspace-message--user")).toHaveCount(1);
-  await expect(page.locator(".workspace-message-attachments")).toContainText(
+  await expect(page.locator("[data-product-workspace-message-attachments]")).toContainText(
     "패널 전환 중 보존할 합성 자료.txt",
   );
   await page.reload();

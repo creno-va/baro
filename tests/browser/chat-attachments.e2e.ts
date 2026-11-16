@@ -201,7 +201,7 @@ test("legacy materials keep one compact upload area, coverage, context and retri
   await expect(target).toBeEnabled();
   await expect(page.locator(".workspace-upload-types")).toHaveCount(0);
   await expect(target).toContainText("문서·이미지 100 MB");
-  const context = page.locator(".workspace-context");
+  const context = page.locator("[data-product-workspace-context]");
   const disclosure = context.locator(":scope > [data-disclosure-button]");
   const summaryLink = context.getByRole("link", { name: "요약 검토하기" });
   await expect(context).not.toHaveAttribute("data-open");
@@ -224,8 +224,8 @@ test("legacy materials keep one compact upload area, coverage, context and retri
       };
       return {
         header: box(".case-workspace__header"),
-        content: box(".workspace-grid"),
-        upload: box(".workspace-upload-target"),
+        content: box("[data-product-workspace-grid]"),
+        upload: box("[data-product-workspace-upload-target]"),
         overflow: document.documentElement.scrollWidth > innerWidth + 1,
       };
     });
@@ -717,7 +717,7 @@ for (const viewport of [
     await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
     await expect
       .poll(async () => {
-        const panel = await page.locator(".workspace-main").boundingBox();
+        const panel = await page.locator("[data-product-workspace-main]").boundingBox();
         return panel ? panel.y + panel.height : Infinity;
       })
       .toBeLessThanOrEqual(viewport.height);
@@ -736,7 +736,7 @@ for (const viewport of [
     const before = await tabs.boundingBox();
     const composer = await page.locator("[data-product-composer]").boundingBox();
     const bounds = await log.boundingBox();
-    const panel = await page.locator(".workspace-main").boundingBox();
+    const panel = await page.locator("[data-product-workspace-main]").boundingBox();
     const documentScroll = await page.evaluate(() => scrollY);
     expect(documentScroll).toBe(0);
     if (!before || !composer || !bounds || !panel) throw new Error("Synthetic chat layout missing");
@@ -754,7 +754,7 @@ for (const viewport of [
     expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height + 1);
     expect(
       await page
-        .locator(".workspace-sidebar")
+        .locator("[data-product-workspace-sidebar]")
         .evaluate((node) => !!node.closest(".workspace-messages")),
     ).toBe(true);
     if (viewport.height >= 650) {

@@ -1,0 +1,53 @@
+{
+  "base": "44caf3ae302bd2fafd4bb7f661b0b33130a0098c",
+  "core": {
+    "characters": 1219,
+    "utf8Bytes": 1219,
+    "identical": true,
+    "sha256": "2b199afb6c1c6b02147624a39cd9eaf0409508d447763331618cd8a0982a3246"
+  },
+  "protectedFiles": [
+    {
+      "path": "src/components/ui/experience.tsx",
+      "identical": true
+    },
+    {
+      "path": "src/layouts/BaseLayout.astro",
+      "identical": true
+    },
+    {
+      "path": "src/layouts/LandingLayout.astro",
+      "identical": true
+    },
+    {
+      "path": "src/client/confirm.ts",
+      "identical": true
+    },
+    {
+      "path": "src/client/theme.ts",
+      "identical": true
+    }
+  ],
+  "reconfirmationExactOneClassChange": true,
+  "dialogMappings": {
+    "open": "Boolean(pending) unchanged",
+    "close": "onOpenChange(false) -> onClose -> cancel: resolveConfirmation(false)",
+    "cancel": "same resolveConfirmation(false), actual Button ref+autoFocus equals Dialog initialFocus",
+    "discard": "same resolveConfirmation(true)",
+    "mount": "old static Modal -> preserveMounted true",
+    "focus": "null explicit returnFocusRef enables same Dialog opening-element capture/fallback, without reinterpreting request.source",
+    "theme": "exact existing applyTheme(themePreference()) effect plus existing GlobalProductTheme"
+  },
+  "checks": {
+    "safeButtonRef": true,
+    "initialFocus": true,
+    "returnFocus": true,
+    "close": true,
+    "discard": true
+  },
+  "limits": [
+    "No browser initial/return focus, escape/backdrop interaction or route/session transition exercised.",
+    "Core raw proof includes source observer, storage/session/access/popstate/pagehide listeners and cleanup; confirm/theme clients unchanged.",
+    "ProductLayout integration is owned by root and excluded from protected-path identity."
+  ]
+}

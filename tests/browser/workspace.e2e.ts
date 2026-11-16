@@ -63,7 +63,7 @@ test("readiness offers one next action and keeps the composer visible after an a
   const actions = page.getByRole("group", { name: "대화에서 이어갈 작업", exact: true });
   const primary = actions.getByRole("button", { name: "법률·판례와 현재 약점 확인", exact: true });
   await expect(primary).toBeVisible();
-  await expect(primary).toHaveClass(/ui-button--primary/);
+  await expect(primary).toHaveAttribute("data-variant", "primary");
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 320, height: 844 },
@@ -110,7 +110,7 @@ test("conversation material review stays inline and standalone review retains mo
   await page.getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다." }).check();
   await page.getByRole("button", { name: "보내기", exact: true }).click();
   const attachment = page
-    .locator(".workspace-message-attachments")
+    .locator("[data-product-workspace-message-attachments]")
     .getByRole("link", { name: "conversation-contract.txt" });
   await expect(attachment).toBeVisible();
   await attachment.click();
@@ -126,7 +126,9 @@ test("conversation material review stays inline and standalone review retains mo
   await openCaseTool(page, "자료 1");
   const standaloneReview = page.getByRole("button", { name: "자료 확인", exact: true });
   await standaloneReview.click();
-  const dialog = page.locator(".workspace-dialog");
+  const dialog = page.locator(
+    '[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]',
+  );
   await expect(
     dialog.getByRole("heading", { name: "conversation-contract.txt", exact: true }),
   ).toBeVisible();
@@ -146,7 +148,9 @@ test("conversation material review stays inline and standalone review retains mo
       const max = node.scrollHeight - node.clientHeight;
       node.scrollTop = position === "end" ? max : position === "middle" ? max / 2 : 0;
       await new Promise(requestAnimationFrame);
-      const footer = node.querySelector<HTMLElement>(".workspace-preview > .workspace-buttons")!;
+      const footer = node.querySelector<HTMLElement>(
+        "[data-product-workspace-preview] > [data-product-workspace-buttons]",
+      )!;
       const box = node.getBoundingClientRect();
       const actions = footer.getBoundingClientRect();
       const bottom = box.top + node.clientTop + node.clientHeight;
@@ -156,7 +160,9 @@ test("conversation material review stays inline and standalone review retains mo
           return { covered: !!target && footer.contains(target), tag: target?.tagName };
         },
       );
-      const finalBody = node.querySelector(".workspace-material-apply")!.getBoundingClientRect();
+      const finalBody = node
+        .querySelector("[data-product-workspace-material-apply]")!
+        .getBoundingClientRect();
       return {
         position,
         scrollTop: node.scrollTop,
@@ -303,7 +309,7 @@ for (const width of [320, 390, 768, 1440]) {
       expect(box.y).toBeCloseTo(first.y, 0);
     }
     expect(
-      await page.locator(".workspace-main").evaluate((node) => {
+      await page.locator("[data-product-workspace-main]").evaluate((node) => {
         const style = getComputedStyle(node);
         return {
           opacity: style.opacity,
@@ -689,9 +695,15 @@ test("persisted format refusal remains clear after reload and account re-entry",
   await page.reload();
   await expect(rejected.getByText("등록 거절", { exact: true })).toBeVisible();
   await rejected.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.locator(".workspace-dialog").getByText(/등록 거절 ·/)).toBeVisible();
   await expect(
-    page.locator(".workspace-dialog").getByRole("button", { name: "원본 확인 · 다운로드" }),
+    page
+      .locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]')
+      .getByText(/등록 거절 ·/),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]')
+      .getByRole("button", { name: "원본 확인 · 다운로드" }),
   ).toBeDisabled();
 });
 
@@ -809,7 +821,9 @@ for (const scenario of [
       expect(await opener.getAttribute("aria-label")).toBeNull();
     }
     expect(await reads()).toEqual([]);
-    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+    await expect(
+      page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+    ).not.toBeVisible();
     if (["drag", "pointer-cancel"].includes(scenario)) {
       if (scenario === "pointer-cancel") await opener.dispatchEvent("pointercancel");
       await page.mouse.move(0, 0);
@@ -824,7 +838,9 @@ for (const scenario of [
         ),
       );
     expect(await reads()).toEqual([]);
-    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+    await expect(
+      page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+    ).not.toBeVisible();
     await page.evaluate((scenario) => {
       (window as unknown as { releasePreviewCheck: (result: string) => void }).releasePreviewCheck(
         scenario,
@@ -832,7 +848,9 @@ for (const scenario of [
     }, scenario);
     const accepted = ["normal", "focus", "consent", "double"].includes(scenario);
     if (accepted) {
-      await expect(page.locator(".workspace-dialog")).toBeVisible();
+      await expect(
+        page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+      ).toBeVisible();
       await expect(
         page
           .getByRole("dialog")
@@ -845,7 +863,9 @@ for (const scenario of [
           page.getByRole("heading", { name: "대여금 반환 관련 자료 정리", exact: true }),
         ).toBeVisible();
       else await expect(page.getByRole("alert").first()).toBeVisible();
-      await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+      await expect(
+        page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+      ).not.toBeVisible();
       expect(await reads()).toEqual([]);
     }
     if (scenario === "pointer-down-only") {
@@ -1473,9 +1493,11 @@ test("partial upload readback failure retries only the unaccepted remainder", as
     page.getByRole("heading", { name: "accepted-first.txt", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await expect(page.locator(".workspace-dialog")).toBeVisible();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).toBeVisible();
   await page
-    .locator(".workspace-dialog")
+    .locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]')
     .getByRole("button", { name: "닫기", exact: true })
     .last()
     .click();
@@ -1955,7 +1977,9 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     });
     await expect(page.getByText("결과 확인 가능", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "자료 확인", exact: true }).click();
-    await expect(page.locator(".workspace-dialog")).toBeVisible();
+    await expect(
+      page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+    ).toBeVisible();
     let session = await page.evaluate((key) => {
       const saved = JSON.parse(localStorage.getItem(key) ?? "{}");
       saved.caseOwners = { "synthetic-case": saved.session.user.id };
@@ -2016,7 +2040,9 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
       { key, session },
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(2);
-    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+    await expect(
+      page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+    ).not.toBeVisible();
     if (outcome !== "lawyer")
       await expect(page.getByText("private-session-original.txt", { exact: true })).toHaveCount(0);
     await expect(
@@ -2028,7 +2054,9 @@ for (const outcome of ["other-owner", "lawyer", "signed-out"] as const)
     );
     await expect.poll(() => sessionRequests).toBeGreaterThan(afterDenial);
     if (outcome !== "lawyer") await expect(page.getByRole("alert").first()).toBeVisible();
-    await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+    await expect(
+      page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+    ).not.toBeVisible();
     expect(downloads).toEqual([]);
     expect(
       await page.evaluate(() => (window as unknown as { originalReads: number }).originalReads),
@@ -2279,10 +2307,14 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.reload();
   await expect(page.getByRole("checkbox").first()).toBeChecked();
   await expect(
-    page.locator(".workspace-next").getByRole("link", { name: "리포트 열기", exact: true }),
+    page
+      .locator("[data-product-workspace-next]")
+      .getByRole("link", { name: "리포트 열기", exact: true }),
   ).toHaveAttribute("href", `${base}/reports`);
   await expect(
-    page.locator(".workspace-next").getByRole("link", { name: "변호사 찾기", exact: true }),
+    page
+      .locator("[data-product-workspace-next]")
+      .getByRole("link", { name: "변호사 찾기", exact: true }),
   ).toHaveCount(0);
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
@@ -2294,7 +2326,9 @@ test("chat failure/retry, reload, action checks and timeline editing on actual c
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
   await expect(page.getByText("타임라인을 저장했어요.", { exact: true })).toBeVisible();
-  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).not.toBeVisible();
   await page.reload();
   await expect(page.getByText("2026-10-01", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/workspace-desktop.png", fullPage: true });
@@ -2340,13 +2374,16 @@ test("file processing failure, retry, extracted text, original bytes, cancellati
   await page.getByRole("button", { name: "자료 확인" }).click();
   await page.getByText("원본 추출 내용", { exact: true }).click();
   await expect(
-    page.locator(".workspace-dialog").locator("[data-disclosure] p").filter({ hasText: text }),
+    page
+      .locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]')
+      .locator("[data-disclosure] p")
+      .filter({ hasText: text }),
   ).toBeVisible();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "원본 확인 · 다운로드" }).click();
   expect((await download).suggestedFilename()).toBe("synthetic.txt");
   await page
-    .locator(".workspace-dialog")
+    .locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]')
     .getByRole("button", { name: "닫기", exact: true })
     .last()
     .click();
@@ -2376,9 +2413,13 @@ test("mobile keyboard dialog, empty state, quota, stale input and safe image pre
   await expect(page.getByLabel("추가 사실 또는 질문")).toHaveValue("합성 한도 요청");
   await openCaseTool(page, "타임라인");
   await page.getByRole("button", { name: "일정 추가" }).click();
-  await expect(page.locator(".workspace-dialog")).toBeVisible();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).not.toBeVisible();
   await expect(page.getByRole("button", { name: "일정 추가" })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
@@ -2420,7 +2461,9 @@ test("changing the shared mock owner hides the previous workspace and open edito
     window.dispatchEvent(new Event("focus"));
   }, key);
   await expect(page.getByRole("alert")).toContainText("사건 또는 자료를 찾을 수 없어요.");
-  await expect(page.locator(".workspace-dialog")).not.toBeVisible();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).not.toBeVisible();
   await expect(page.getByRole("heading", { name: "대여금 반환 관련 자료 정리" })).not.toBeVisible();
   await expect(page.getByLabel("어떤 일이 있었나요?")).not.toBeVisible();
 });
@@ -2472,7 +2515,9 @@ test("workspace panels keep their navigation, readable layouts and accessible co
   await page.getByLabel("날짜 (모르면 비워 두세요)").fill("2026-10-01");
   await page.getByLabel("상세 내용").fill("메시지 원본의 날짜와 내용을 확인할 예정입니다.");
   await page.getByRole("button", { name: "타임라인 저장" }).click();
-  await expect(page.locator(".workspace-dialog")).toBeHidden();
+  await expect(
+    page.locator('[role="dialog"][aria-labelledby="workspace-dialog-title"] [data-dialog]'),
+  ).toBeHidden();
   await expect(page.getByRole("heading", { name: "사건의 흐름" })).toBeVisible();
   await captureCaseViewports(page, "timeline");
   await openCaseTool(page, "다음 행동");

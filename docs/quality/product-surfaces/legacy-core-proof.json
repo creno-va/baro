@@ -1,0 +1,26 @@
+{
+  "case": {
+    "bytes": 7849,
+    "identical": true,
+    "baselineSHA256": "ecf7225b4d1ac0e8d233327b69327fe78724c7b2d355f0b76adfbf8d5db1f830",
+    "candidateSHA256": "ecf7225b4d1ac0e8d233327b69327fe78724c7b2d355f0b76adfbf8d5db1f830"
+  },
+  "questions": {
+    "bytes": 1153,
+    "identical": true,
+    "baselineSHA256": "a14ef30d85b7d44a1a6e31c4d91506d9158b2b2af57722447559bcbe83c0dbfc",
+    "candidateSHA256": "a14ef30d85b7d44a1a6e31c4d91506d9158b2b2af57722447559bcbe83c0dbfc"
+  },
+  "result": {
+    "bytes": 592,
+    "identical": true,
+    "baselineSHA256": "0901687ee8fe5d1f1e6a53fe2bb3416bc07633ec8ef980db5b192a66ddc399a3",
+    "candidateSHA256": "0901687ee8fe5d1f1e6a53fe2bb3416bc07633ec8ef980db5b192a66ddc399a3"
+  },
+  "feedback": {
+    "bytes": 1329,
+    "identical": true,
+    "baselineSHA256": "ef203be5d4416870bd81f8f44736b1c534cd9af920766828cc4dd7324e25ab27",
+    "candidateSHA256": "ef203be5d4416870bd81f8f44736b1c534cd9af920766828cc4dd7324e25ab27"
+  }
+}

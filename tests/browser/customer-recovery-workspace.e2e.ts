@@ -49,7 +49,10 @@ test("action check, preparation refresh and a second check wait for AI publicati
     };
   });
   await page.getByRole("button", { name: "새로고침", exact: true }).click();
-  await expect(page.locator(".workspace-action-list")).toHaveAttribute("aria-busy", "true");
+  await expect(page.locator("[data-product-workspace-action-list]")).toHaveAttribute(
+    "aria-busy",
+    "true",
+  );
   await expect(checkbox).toBeDisabled();
   await expect(checkbox).toBeChecked();
   expect(

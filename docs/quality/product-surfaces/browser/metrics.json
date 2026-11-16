@@ -1,0 +1,305 @@
+{
+  "help": {
+    "headerHeight": 121,
+    "scrollWidth": 320,
+    "start": [
+      "사건 준비 시작"
+    ],
+    "width": 320
+  },
+  "privacy": {
+    "mainCount": 1,
+    "scrollWidth": 320,
+    "sections": 8,
+    "version": "이용 안내 · 2026-11-01개인정보 처리방침정보의 처리·공개·삭제 방식과 권리 행사 방법을 안내합니다.",
+    "width": 320
+  },
+  "consentBefore": {
+    "checked": false,
+    "disabled": true,
+    "policies": [
+      {
+        "href": "/policies/terms",
+        "rel": "noopener noreferrer"
+      },
+      {
+        "href": "/policies/privacy",
+        "rel": "noopener noreferrer"
+      },
+      {
+        "href": "/policies/ai",
+        "rel": "noopener noreferrer"
+      }
+    ],
+    "scrollWidth": 320,
+    "width": 320
+  },
+  "consent": "checked/enabled then unchecked; never submitted",
+  "timeline": {
+    "panel": [
+      {
+        "bottom": 844,
+        "clientHeight": 568,
+        "left": 0,
+        "scrollHeight": 568,
+        "width": 390
+      }
+    ],
+    "root": [
+      {
+        "bottom": 844,
+        "left": 0,
+        "width": 390
+      }
+    ],
+    "scrollWidth": 390,
+    "width": 390
+  },
+  "timelineOutcome": "year-only 2025 saved and displayed with month/day unknown; close restored opener; initial unsaved timeline close follows existing discard behavior",
+  "materialInitial": {
+    "covered": [
+      true,
+      true,
+      true
+    ],
+    "footer": {
+      "background": "rgb(255, 255, 255)",
+      "bottom": 843,
+      "position": "sticky",
+      "top": 699
+    },
+    "panel": {
+      "bottom": 844,
+      "clientHeight": 818,
+      "height": 820,
+      "left": 0,
+      "paddingBottom": "0px",
+      "right": 390,
+      "scrollHeight": 1230,
+      "scrollTop": 0
+    },
+    "scrollWidth": 390,
+    "viewport": 390
+  },
+  "footerScroll": [
+    {
+      "background": "rgb(255, 255, 255)",
+      "bodyBottom": 701.546875,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 843,
+      "footerTop": 699,
+      "maxScroll": 512,
+      "paddingBottom": "0px",
+      "panelBottom": 844,
+      "scrollTop": 493,
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "background": "rgb(255, 255, 255)",
+      "bodyBottom": 682.546875,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 842.546875,
+      "footerTop": 698.546875,
+      "maxScroll": 512,
+      "paddingBottom": "0px",
+      "panelBottom": 844,
+      "scrollTop": 512,
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "background": "rgb(255, 255, 255)",
+      "bodyBottom": 682.546875,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 842.546875,
+      "footerTop": 698.546875,
+      "maxScroll": 512,
+      "paddingBottom": "0px",
+      "panelBottom": 844,
+      "scrollTop": 512,
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "background": "rgb(25, 29, 37)",
+      "bodyBottom": 1187.328125,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 759,
+      "footerTop": 615,
+      "maxScroll": 588,
+      "paddingBottom": "0px",
+      "panelBottom": 760,
+      "scrollTop": 0,
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "background": "rgb(25, 29, 37)",
+      "bodyBottom": 807.328125,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 759,
+      "footerTop": 615,
+      "maxScroll": 588,
+      "paddingBottom": "0px",
+      "panelBottom": 760,
+      "scrollTop": 380,
+      "scrollWidth": 320,
+      "width": 320
+    },
+    {
+      "background": "rgb(25, 29, 37)",
+      "bodyBottom": 599.328125,
+      "buttons": [
+        {
+          "height": 44,
+          "width": 161.640625
+        },
+        {
+          "height": 44,
+          "width": 144.75
+        },
+        {
+          "height": 44,
+          "width": 58.203125
+        }
+      ],
+      "covered": [
+        true,
+        true,
+        true
+      ],
+      "footerBottom": 759,
+      "footerTop": 615,
+      "maxScroll": 588,
+      "paddingBottom": "0px",
+      "panelBottom": 760,
+      "scrollTop": 588,
+      "scrollWidth": 320,
+      "width": 320
+    }
+  ],
+  "correction": "cancelled dirty-close preserved text and returned focus, then actual mock save showed file v2",
+  "uploadPresentation": {
+    "background": "rgb(255, 255, 255)",
+    "hintColor": "rgb(82, 97, 118)",
+    "iconBackground": "rgb(246, 247, 249)",
+    "iconColor": "rgb(23, 32, 51)",
+    "variant": "secondary"
+  },
+  "conversationDesktop": {
+    "input": {
+      "bottom": 807,
+      "top": 761
+    },
+    "log": {
+      "bottom": 728,
+      "max": 148,
+      "scrollTop": 148,
+      "top": 57
+    },
+    "primary": [],
+    "scrollWidth": 1440,
+    "width": 1440
+  },
+  "conversationMobile": {
+    "input": {
+      "bottom": 659,
+      "top": 613
+    },
+    "scrollWidth": 320,
+    "width": 320
+  },
+  "conversation": "mock user message pending then completed synthetic reply; actions refresh returned no generated actions; no external provider",
+  "publicStatus": "404/retired pages rendered; HTTP codes separately source/native contract evidence"
+}

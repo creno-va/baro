@@ -124,6 +124,7 @@ export function MediaPlayerView({ controller }: { controller: MediaPlayerControl
         <div data-product-playback-speed="" className="w-28 min-w-0">
           <SelectField
             label="재생 속도"
+            aria-label="재생 속도"
             wrapperClassName="[&>label]:sr-only"
             value={String(state.rate)}
             disabled={blocked}

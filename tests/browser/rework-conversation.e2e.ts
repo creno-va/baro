@@ -300,7 +300,7 @@ async function addMaterial(
   if (expectProcessingFailure) {
     await openWorkspaceMaterials(page);
     await expect(materials.getByText("처리 실패", { exact: true })).toBeVisible();
-    await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
+    await expect(page.locator("[data-product-workspace-message-attachments]")).toHaveCount(0);
     const original = materials
       .locator("[data-product-material-list] > li")
       .filter({ has: page.getByRole("heading", { name, exact: true }) })
@@ -317,7 +317,7 @@ async function addMaterial(
     : await Promise.race([
         admitted,
         page
-          .locator("section.workspace-error")
+          .locator("section[data-product-workspace-error]")
           .waitFor({ state: "visible" })
           .then(() => {
             throw new Error("SYNTHETIC_QUEUED_SEND_FAILED_BEFORE_ADMISSION");
@@ -330,7 +330,7 @@ async function addMaterial(
     .parse(admission.request().postDataJSON().selectedFileIds);
   expect(admittedFiles.includes(completedFile.fileId)).toBe(true);
   const attachment = page
-    .locator(".workspace-message-attachments")
+    .locator("[data-product-workspace-message-attachments]")
     .getByRole("link", { name, exact: true })
     .last();
   await expect(attachment).toBeVisible();
@@ -663,7 +663,7 @@ for (const change of ["technical_revision", "file_revision"] as const)
         await page.getByRole("button", { name: "보내기", exact: true }).click();
         expect((await completed).status()).toBe(200);
         expect((await f.control("settle", {})).ok()).toBe(true);
-        const rejected = page.locator("section.workspace-error");
+        const rejected = page.locator("section[data-product-workspace-error]");
         await expect(rejected).toHaveCount(1);
         await expect(rejected).toBeVisible();
         await expect(rejected).toContainText("자료를 준비하는 동안 사건이나 입력이 바뀌었어요.");
@@ -671,7 +671,7 @@ for (const change of ["technical_revision", "file_revision"] as const)
         await expect(page.getByRole("list", { name: "이번 메시지의 첨부 파일" })).toContainText(
           photoName,
         );
-        await expect(page.locator(".workspace-message-attachments")).toHaveCount(0);
+        await expect(page.locator("[data-product-workspace-message-attachments]")).toHaveCount(0);
         expect(
           f.observations.some(
             (item) =>
@@ -980,7 +980,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           loseQueuedAck
             ? async () => {
                 await expect.poll(() => queuedMessages.length).toBe(1);
-                await expect(page.locator(".workspace-error")).toBeVisible();
+                await expect(page.locator("[data-product-workspace-error]")).toBeVisible();
                 await expect(composer).toBeEnabled();
                 await page.getByRole("button", { name: "보내기", exact: true }).click();
               }
@@ -992,7 +992,7 @@ for (const purpose of ["prepare_claim", "respond_to_claim"] as const)
           expect(queuedMessages[0]?.key).toBeTruthy();
           expect(queuedMessages[1]).toEqual(queuedMessages[0]);
           await expect(
-            page.locator(".workspace-message-attachments").getByRole("link", {
+            page.locator("[data-product-workspace-message-attachments]").getByRole("link", {
               name: "synthetic-conversation-contract.txt",
               exact: true,
             }),

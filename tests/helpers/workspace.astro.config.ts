@@ -13,7 +13,7 @@ export default {
         resolveId(source: string, importer?: string) {
           if (
             source === "../../client/api" &&
-            (importer?.endsWith("/components/workspace/Workspace.tsx") ||
+            (importer?.endsWith("/product-ui/workspace/useWorkspaceController.ts") ||
               importer?.endsWith(
                 "/product-ui/conversation-tools/useConversationAgentController.ts",
               ) ||

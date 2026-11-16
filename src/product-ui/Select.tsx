@@ -9,7 +9,7 @@ import {
 } from "@headlessui/react";
 import { Check, ChevronDown } from "lucide-react";
 import { type ReactNode, type Ref, useId } from "react";
-import { Button } from "./Button";
+import { Button, type ButtonProps } from "./Button";
 import { useProductTheme } from "./Theme";
 import { cn, useClientReady } from "./utils";
 
@@ -24,10 +24,21 @@ export type SelectFieldProps = {
   description?: ReactNode;
   error?: ReactNode;
   "aria-describedby"?: string;
+  "aria-label"?: string;
   className?: string;
   wrapperClassName?: string;
   buttonRef?: Ref<HTMLButtonElement>;
 };
+
+/** Preserve an explicit native name after Listbox adds its contextual label IDs. */
+function SelectButton(props: ButtonProps) {
+  return (
+    <Button
+      {...props}
+      {...(props["aria-label"] === undefined ? {} : { "aria-labelledby": undefined })}
+    />
+  );
+}
 
 /** Controlled values cross the UI boundary directly; no synthetic DOM events. */
 export function SelectField({
@@ -44,6 +55,7 @@ export function SelectField({
   wrapperClassName,
   buttonRef,
   "aria-describedby": externalDescription,
+  "aria-label": externalLabel,
 }: SelectFieldProps) {
   const ready = useClientReady();
   const generatedId = useId();
@@ -77,7 +89,8 @@ export function SelectField({
           disabled
           data-slot="select"
           data-value={value}
-          aria-labelledby={labelId}
+          aria-label={externalLabel}
+          aria-labelledby={externalLabel === undefined ? labelId : undefined}
           aria-describedby={describedBy}
           aria-invalid={Boolean(error) || undefined}
         >
@@ -112,13 +125,14 @@ export function SelectField({
         {...(name ? { name } : {})}
       >
         <ListboxButton
-          as={Button}
+          as={SelectButton}
           {...(buttonRef ? { ref: buttonRef } : {})}
           id={controlId}
           variant="secondary"
           className={controlClass}
           data-slot="select"
           data-value={value}
+          aria-label={externalLabel}
           aria-describedby={describedBy}
           aria-invalid={Boolean(error) || undefined}
         >

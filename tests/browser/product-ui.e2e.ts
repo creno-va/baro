@@ -163,7 +163,7 @@ async function focusAudit(page: Page, keyboard: boolean) {
       [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
         .reverse()
         .find((node) => node.getClientRects().length && !node.closest("[hidden], [inert]")) ??
-      document.querySelector(".app-frame, .login-page, .consent-page");
+      document.querySelector(".app-frame, [data-product-public]");
     if (!scope) throw new Error("Focus audit scope missing");
     const failures: string[] = [];
     let count = 0;
@@ -259,7 +259,7 @@ test("focus feedback keeps accordion keyboard operation without a container outl
   await seed(page, true);
   await page.goto(base);
   await hydrated(page);
-  const disclosure = page.locator(".workspace-context");
+  const disclosure = page.locator("[data-product-workspace-context]");
   const trigger = disclosure.locator("[data-disclosure-button]");
   await page.keyboard.press("Tab");
   await trigger.focus();
@@ -409,7 +409,7 @@ test("focus feedback handles touch and automatic focus from the mobile menu", as
     await seed(page, true);
     await page.goto(base);
     await hydrated(page);
-    const summary = page.locator(".workspace-context > [data-disclosure-button]");
+    const summary = page.locator("[data-product-workspace-context] > [data-disclosure-button]");
     await summary.tap();
     await expect(summary).toHaveCSS("outline-style", "none");
     const opener = page.getByRole("button", { name: "메뉴 열기", exact: true });
@@ -741,7 +741,7 @@ test("chat frame keeps its header and composer fixed when preparation expands an
     await expect(frame).toBeVisible();
     const geometry = () =>
       frame.evaluate((element) => {
-        const chat = element.querySelector(".workspace-main");
+        const chat = element.querySelector("[data-product-workspace-main]");
         const header = element.querySelector(".case-workspace__header");
         const composer = element.querySelector("[data-product-composer]");
         if (!chat || !header || !composer) throw new Error("Synthetic conversation frame missing");
@@ -758,8 +758,8 @@ test("chat frame keeps its header and composer fixed when preparation expands an
     const initial = await geometry();
     expect(initial.composerBottom).toBeLessThanOrEqual(viewport.height);
     const messages = page.locator(".workspace-messages");
-    const context = page.locator(".workspace-context");
-    await expect(messages.locator(".workspace-context")).toHaveCount(1);
+    const context = page.locator("[data-product-workspace-context]");
+    await expect(messages.locator("[data-product-workspace-context]")).toHaveCount(1);
     await context.locator("[data-disclosure-button]").click();
     await expect(context).toHaveAttribute("data-open");
     await context.scrollIntoViewIfNeeded();
@@ -1023,7 +1023,7 @@ test("purpose choices change examples and persist without owner-category UI", as
   const caseId = page.url().split("/")[4];
   await page.goto(`/cases/${caseId}`);
   await expect(page.locator(".case-subject-context")).toHaveCount(0);
-  await page.locator(".workspace-context > [data-disclosure-button]").click();
+  await page.locator("[data-product-workspace-context] > [data-disclosure-button]").click();
   await expect(
     page.getByText("대화와 자료를 바탕으로 사건의 흐름", { exact: false }),
   ).toBeVisible();

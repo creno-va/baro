@@ -13,7 +13,7 @@ import {
 
 /** Acceptance for remaining workspace, public and legacy-case UI migration. Runtime authorization,
  * revision, download and browser behavior remain independent required checks. */
-export const PRODUCT_SURFACES_BASE = "PENDING_VERIFIED_PRODUCT_MATERIALS_BASE";
+export const PRODUCT_SURFACES_BASE = "92cb1add152b1144e2baba06d4011455c173f4dc";
 const command = "bun scripts/check-product-surfaces-preservation.ts";
 const existingFiles = new Set([
   "src/components/AuthButtons.tsx",
@@ -68,6 +68,7 @@ const newFiles = new Set([
   "tests/product-ui-consent-fixture.test.ts",
   "tests/product-ui-playback.test.tsx",
   "tests/product-ui-experience.test.tsx",
+  "tests/product-ui-select-name.test.tsx",
   "tests/helpers/product-legacy-case-entry.tsx",
   "tests/helpers/product-legacy-case-server.ts",
   "scripts/check-product-surfaces-preservation.ts",
@@ -223,8 +224,40 @@ export async function productSurfacesSelectorsAllowed(
   ]);
   return (await child.exited) === 0 && candidate === formatted;
 }
-// Root will supply final reviewed integration patches after the verified 818 rebase.
+// Exact reviewed integration patches against the verified 818 parent.
 const integrationPatches: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  "src/layouts/ProductLayout.astro": [
+    [
+      'import { Experience } from "../components/ui/experience";',
+      'import { ProductExperience as Experience } from "../product-ui/experience/ProductExperience";',
+    ],
+  ],
+  "src/components/AccountSettings.tsx": [
+    [
+      'import { ProviderIcon } from "./AuthButtons";',
+      'import { ProviderIcon } from "../product-ui/public/ProviderIcon";',
+    ],
+  ],
+  "tests/helpers/workspace.astro.config.ts": [
+    [
+      'importer?.endsWith("/components/workspace/Workspace.tsx")',
+      'importer?.endsWith("/product-ui/workspace/useWorkspaceController.ts")',
+    ],
+  ],
+  "tests/product-ui-fixture-resolvers.test.ts": [
+    [
+      "workspace retains its original subjects while moving only Agent and FileReview owners",
+      "workspace isolates the actual owning controllers after each UI migration",
+    ],
+    [
+      '      "components/workspace/Workspace.tsx",\n',
+      '      "product-ui/workspace/useWorkspaceController.ts",\n',
+    ],
+    [
+      '      "components/workspace/ConversationAgent.tsx",\n      "components/workspace/FileReview.tsx",',
+      '      "components/workspace/Workspace.tsx",\n      "product-ui/workspace/WorkspaceView.tsx",\n      "components/workspace/ConversationAgent.tsx",\n      "components/workspace/FileReview.tsx",',
+    ],
+  ],
   "src/components/workspace/ConversationReconfirmation.tsx": [
     [
       '        <p className="workspace-muted">',
@@ -256,6 +289,7 @@ const integrationPatches: Readonly<Record<string, readonly (readonly [string, st
 // title identity and header actions. Reviewed public route/content candidates are
 // also pinned, including status, OAuth branches, policy copy, links and start CTAs.
 const frozenIntegrationBlobs: Readonly<Record<string, string>> = {
+  "src/product-ui/Select.tsx": "4f50e113c111aae2626c113af528cb9bf7290ec1b92aaab6f5cd6a1e8e7f0bfa",
   "tests/helpers/product-shell-fixture.tsx":
     "365f4fdfd68a78042a02ff093c5beb49efc39ba27899c94ffada2e8c1543b136",
   "src/components/PolicyDocument.astro":

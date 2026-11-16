@@ -10,13 +10,13 @@ test("reviewed policies explain dataflow and confirmed operator details without 
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     if (path.startsWith("/policies/")) {
-      await expect(page.locator(".policy-heading")).toContainText(
+      await expect(page.locator("[data-product-policy-heading]")).toContainText(
         path.endsWith("/ai")
           ? CURRENT_POLICY_VERSIONS.aiNoticeVersion
           : CURRENT_POLICY_VERSIONS.termsVersion,
       );
       await expect(page.getByRole("navigation", { name: "문서 목차" })).toHaveCount(0);
-      await expect(page.locator('.policy-document a[href^="#"]')).toHaveCount(0);
+      await expect(page.locator('[data-product-policy-document] a[href^="#"]')).toHaveCount(0);
       await expect(page.locator("article")).toContainText("hechec3534@naver.com");
     }
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);

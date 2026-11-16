@@ -1,0 +1,8 @@
+[
+  {
+    "level": "error",
+    "message": "TypeError: (intermediate value).glob is not a function\n    at http://127.0.0.1:4380/app.js:50119:27",
+    "timestamp": "2026-11-16T14:17:57.885Z",
+    "url": "http://127.0.0.1:4380/app.js"
+  }
+]

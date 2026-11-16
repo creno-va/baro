@@ -143,6 +143,7 @@ export function WorkspaceMaterials({
         {!view.files.length && <h3 className="sr-only">아직 자료가 없어요</h3>}
         <ControlButton
           type="button"
+          variant="secondary"
           data-product-workspace-upload-target=""
           className="flex h-auto w-full flex-col items-center justify-center gap-3 whitespace-normal rounded-xl border-dashed p-5 text-center"
           aria-label={view.files.length ? "파일 추가" : "파일 선택"}
