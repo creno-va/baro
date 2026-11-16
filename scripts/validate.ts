@@ -34,6 +34,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "bun",
       "test",
       "tests/rework-",
+      "tests/product-ui-",
       "tests/legal-analysis",
       "tests/conversation-",
       "tests/resolution-",
