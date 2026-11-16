@@ -12,6 +12,7 @@ import {
   productShellFixtureRoute,
   productShellInputFixtureRoute,
   productShellPackageAllowed,
+  productShellPrecedentsAllowed,
 } from "../scripts/check-product-shell-preservation";
 import {
   ProductShellFixture,
@@ -57,6 +58,18 @@ const nativeFocusTarget = `            const action = document
               .querySelector<HTMLTextAreaElement>("#narrative")
               ?.form?.querySelector<HTMLButtonElement>('button[type="submit"]');`;
 const initialFocusTest = `// Synthetic focus regression\n${oldFocusTarget}\nawait expect(submit).toBeFocused();\n`;
+const oldPrecedentsHover = '  await page.locator(".sidebar-story").first().hover();';
+const currentPrecedentsHover =
+  '  await page.getByRole("link", { name: oldTitle, exact: true }).hover();';
+const oldPrecedentsScope =
+  '    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),';
+const currentPrecedentsScope = `    page
+      .getByRole("navigation", { name: "최근 사건", exact: true })
+      .getByRole("link", { name: newTitle, exact: true }),`;
+const initialPrecedentsTest = `${oldPrecedentsHover}\nawait expect(modal).toBeHidden();\n${oldPrecedentsHover}\nawait expect(button).toBeDisabled();\n${oldPrecedentsScope}\nawait page.reload();\n${oldPrecedentsScope}\nawait expect(heading).toBeVisible();\n`;
+const currentPrecedentsTest = initialPrecedentsTest
+  .replaceAll(oldPrecedentsHover, currentPrecedentsHover)
+  .replaceAll(oldPrecedentsScope, currentPrecedentsScope);
 async function repository() {
   const root = await mkdtemp(join(tmpdir(), "baro-product-shell-"));
   roots.push(root);
@@ -73,6 +86,7 @@ async function repository() {
   await file(root, "package.json", JSON.stringify(initialPackage));
   await file(root, "astro.config.ts", initialConfig);
   await file(root, "tests/browser/dialog-focus.e2e.ts", initialFocusTest);
+  await file(root, "tests/browser/precedents.e2e.ts", initialPrecedentsTest);
   await git(root, "add", ".");
   await commit(root);
   return { root, base: await git(root, "rev-parse", "HEAD") };
@@ -147,6 +161,7 @@ describe("actual product-shell preservation scope", () => {
       "src/components/intake/CaseInput.tsx",
       "src/product-ui/Theme.tsx",
       "tests/browser/dialog-focus.e2e.ts",
+      "tests/browser/precedents.e2e.ts",
     ];
     const additions = [
       "src/layouts/ProductLayout.astro",
@@ -277,6 +292,32 @@ describe("actual product-shell preservation scope", () => {
     ).toBe(false);
   });
 
+  test("precedents maintenance permits exactly four semantic selectors and preserves all assertions", () => {
+    expect(productShellPrecedentsAllowed(initialPrecedentsTest, initialPrecedentsTest)).toBe(true);
+    expect(productShellPrecedentsAllowed(initialPrecedentsTest, currentPrecedentsTest)).toBe(true);
+    expect(
+      productShellPrecedentsAllowed(
+        initialPrecedentsTest,
+        currentPrecedentsTest.replace("toBeDisabled()", "toBeEnabled()"),
+      ),
+    ).toBe(false);
+    expect(
+      productShellPrecedentsAllowed(
+        initialPrecedentsTest,
+        currentPrecedentsTest.replace('name: "최근 사건"', 'name: "다른 사건"'),
+      ),
+    ).toBe(false);
+    expect(
+      productShellPrecedentsAllowed(
+        initialPrecedentsTest,
+        initialPrecedentsTest.replace(oldPrecedentsHover, currentPrecedentsHover),
+      ),
+    ).toBe(false);
+    expect(productShellPrecedentsAllowed(initialPrecedentsTest, `${currentPrecedentsTest}\n`)).toBe(
+      false,
+    );
+  });
+
   test("checks clean repositories, committed allowed work and untracked source", async () => {
     const { root, base } = await repository();
     expect((await checkProductShellPreservation(root, base)).findings).toEqual([]);
@@ -369,6 +410,20 @@ describe("actual product-shell preservation scope", () => {
     await file(root, path, candidate.replace("toBeFocused()", "toBeVisible()"));
     await git(root, "add", path);
     await file(root, path, candidate);
+    expect((await checkProductShellPreservation(root, base)).findings).toContainEqual({
+      path,
+      code: "unapproved_shell_integration_patch",
+    });
+  });
+
+  test("checks precedents assertions in the index despite an allowed worktree selector patch", async () => {
+    const { root, base } = await repository();
+    const path = "tests/browser/precedents.e2e.ts";
+    await file(root, path, currentPrecedentsTest);
+    expect((await checkProductShellPreservation(root, base)).findings).toEqual([]);
+    await file(root, path, currentPrecedentsTest.replace("toBeDisabled()", "toBeEnabled()"));
+    await git(root, "add", path);
+    await file(root, path, currentPrecedentsTest);
     expect((await checkProductShellPreservation(root, base)).findings).toContainEqual({
       path,
       code: "unapproved_shell_integration_patch",

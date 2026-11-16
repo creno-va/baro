@@ -42,7 +42,12 @@ export function productShellChangeFindings(
     if (!["A", "M"].includes(status)) return [{ path, code: "shell_phase_removal_or_type_change" }];
     if (
       path.startsWith("docs/") ||
-      ["package.json", "astro.config.ts", "tests/browser/dialog-focus.e2e.ts"].includes(path) ||
+      [
+        "package.json",
+        "astro.config.ts",
+        "tests/browser/dialog-focus.e2e.ts",
+        "tests/browser/precedents.e2e.ts",
+      ].includes(path) ||
       (existingSource.has(path) && existedAtBase)
     )
       return [];
@@ -95,6 +100,22 @@ export function productShellDialogFocusAllowed(base: string, candidate: string) 
   return (
     candidate === base ||
     (base.split(oldTarget).length === 2 && candidate === base.replace(oldTarget, nativeTarget))
+  );
+}
+
+export function productShellPrecedentsAllowed(base: string, candidate: string) {
+  const oldHover = '  await page.locator(".sidebar-story").first().hover();';
+  const currentHover = '  await page.getByRole("link", { name: oldTitle, exact: true }).hover();';
+  const oldScope =
+    '    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),';
+  const currentScope = `    page
+      .getByRole("navigation", { name: "최근 사건", exact: true })
+      .getByRole("link", { name: newTitle, exact: true }),`;
+  return (
+    candidate === base ||
+    (base.split(oldHover).length === 3 &&
+      base.split(oldScope).length === 3 &&
+      candidate === base.replaceAll(oldHover, currentHover).replaceAll(oldScope, currentScope))
   );
 }
 
@@ -174,7 +195,12 @@ export async function checkProductShellPreservation(root: string, base = PRODUCT
     const stat = await lstat(join(root, path)).catch(() => null);
     if (!stat?.isFile()) findings.push({ path, code: "shell_phase_regular_file_required" });
   }
-  for (const path of ["package.json", "astro.config.ts", "tests/browser/dialog-focus.e2e.ts"]) {
+  for (const path of [
+    "package.json",
+    "astro.config.ts",
+    "tests/browser/dialog-focus.e2e.ts",
+    "tests/browser/precedents.e2e.ts",
+  ]) {
     if (!paths.includes(path)) continue;
     const before = await git(root, ["show", `${sha}:${path}`]);
     const candidates = await Promise.all([
@@ -189,7 +215,9 @@ export async function checkProductShellPreservation(root: string, base = PRODUCT
           ? productShellPackageAllowed(JSON.parse(before), JSON.parse(candidate))
           : path === "astro.config.ts"
             ? productShellConfigAllowed(before, candidate)
-            : productShellDialogFocusAllowed(before, candidate);
+            : path === "tests/browser/dialog-focus.e2e.ts"
+              ? productShellDialogFocusAllowed(before, candidate)
+              : productShellPrecedentsAllowed(before, candidate);
       } catch {
         return false;
       }

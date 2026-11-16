@@ -59,10 +59,13 @@ helper는 mock 외에는 404를 반환하며 배포 빌드에는 포함되지 �
 | [built 검색](./built-csp-search-dark.jpg), [built drawer](./built-csp-drawer-dark.jpg), [built 입력](./built-csp-new-mobile.jpg) | 로컬 합성 built CSP, 실제 제품 컴포넌트 |
 | [기존 랜딩](./landing-preserved-desktop.jpg) | 기존 영상 한 프레임. 전체 모션·픽셀 동일성의 증거로 확대하지 않음 |
 
-기능 controller·SSR·초기 기반/현재 shell 보존 테스트 69개·395개 단언을 통과했다.
+기능 controller·SSR·초기 기반/현재 shell 보존 테스트 71개·403개 단언을 통과했다.
 `bun ci`, `validate:quick`, `validate:build`, 현재 `product-ui:check`와 문서 검사를 통과했다.
 production 번들에는 두 shell 합성 경로와 helper가 없으며 Workers dry-run·built-runtime 확인을 통과했다. 원격 배포는 하지 않았다.
 기존 dialog-focus 회귀의 늦은 포커스 검증문은 유지하며, 제거한 시각 class 대신 textarea의 native form 관계로 제출 버튼을 찾도록 선택자만 바꿨다.
+첫 GitHub 판례 회귀는 제목 수정 과업이 제거된 `.sidebar-story`를 기다려 실패했다.
+해당 과업의 hover와 목록 범위 네 선택자만 link/navigation의 접근성 이름으로 바꿨다.
+버튼 배치·취소·빈 제목 거부·저장·reload 후 제목 보존 단언은 그대로이며, 보존 검사는 이 네 변경 외 단언 수정과 부분 변경을 거부한다.
 
 실제 기기·OS 한글 IME·WebKit 전체 회귀, 상세 업무 화면의 새 시각 tree 이관·외부/운영 인수는 이 검토에 포함되지 않는다.
 자료 교정·리포트 편집·PDF·후속 해결 등 기존 업무 모듈은 보존 상태이며 이 단계에서 재작성 완료로 표시하지 않는다.
