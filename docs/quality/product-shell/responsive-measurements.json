@@ -1,0 +1,98 @@
+[
+  {
+    "main": {
+      "bottom": 900,
+      "left": 0,
+      "top": 56
+    },
+    "navigation": {
+      "height": 56,
+      "width": 390
+    },
+    "pageWidth": 390,
+    "viewport": {
+      "height": 900,
+      "width": 390
+    }
+  },
+  {
+    "main": {
+      "bottom": 900,
+      "left": 0,
+      "top": 56
+    },
+    "navigation": {
+      "height": 56,
+      "width": 768
+    },
+    "pageWidth": 768,
+    "viewport": {
+      "height": 900,
+      "width": 768
+    }
+  },
+  {
+    "main": {
+      "bottom": 900,
+      "left": 0,
+      "top": 56
+    },
+    "navigation": {
+      "height": 56,
+      "width": 1024
+    },
+    "pageWidth": 1024,
+    "viewport": {
+      "height": 900,
+      "width": 1024
+    }
+  },
+  {
+    "main": {
+      "bottom": 900,
+      "left": 0,
+      "top": 56
+    },
+    "navigation": {
+      "height": 56,
+      "width": 1199
+    },
+    "pageWidth": 1199,
+    "viewport": {
+      "height": 900,
+      "width": 1199
+    }
+  },
+  {
+    "main": {
+      "bottom": 900,
+      "left": 80,
+      "top": 0
+    },
+    "navigation": {
+      "height": 900,
+      "width": 80
+    },
+    "pageWidth": 1200,
+    "viewport": {
+      "height": 900,
+      "width": 1200
+    }
+  },
+  {
+    "main": {
+      "bottom": 900,
+      "left": 80,
+      "top": 0
+    },
+    "navigation": {
+      "height": 900,
+      "width": 80
+    },
+    "pageWidth": 1440,
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  }
+]

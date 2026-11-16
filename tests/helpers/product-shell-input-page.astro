@@ -1,0 +1,20 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the same input island as /new.
+import { CaseInput } from "../../src/components/intake/CaseInput";
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the same product layout as /new.
+import CaseWorkbenchLayout from "../../src/layouts/CaseWorkbenchLayout.astro";
+import "../../src/styles/intake.css";
+
+// This injected local fixture tests the UI under built CSP, not /new server authentication.
+if (import.meta.env.PUBLIC_API_MODE !== "mock") return new Response("Not found", { status: 404 });
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<CaseWorkbenchLayout
+  title="CSP 합성 입력 검토 · BARO"
+  description="로컬 합성 계정의 입력 UI와 빌드 CSP 검토입니다. 실제 /new 서버 인증 성공의 증거가 아닙니다."
+  contentClass="conversation-main"
+>
+  <CaseInput requireSession client:load />
+  <noscript><p>합성 입력 화면을 검토하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+</CaseWorkbenchLayout>

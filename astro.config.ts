@@ -69,6 +69,18 @@ export default defineConfig({
                   ),
                 });
                 injectRoute({
+                  pattern: "/__product-shell",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/product-shell-fixture-page.astro", import.meta.url),
+                  ),
+                });
+                injectRoute({
+                  pattern: "/__product-shell/input",
+                  entrypoint: fileURLToPath(
+                    new URL("./tests/helpers/product-shell-input-page.astro", import.meta.url),
+                  ),
+                });
+                injectRoute({
                   pattern: "/__design-foundation",
                   entrypoint: fileURLToPath(
                     new URL("./tests/helpers/foundation-page.astro", import.meta.url),

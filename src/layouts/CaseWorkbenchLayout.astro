@@ -2,8 +2,7 @@
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import { AppNavigation } from "../components/ui/app-navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
-import BaseLayout from "./BaseLayout.astro";
-import "../styles/case-workbench.css";
+import ProductLayout from "./ProductLayout.astro";
 
 interface Props {
   title: string;
@@ -13,9 +12,9 @@ interface Props {
 // biome-ignore lint/correctness/noUnusedVariables: Astro template reads frontmatter.
 const { title, description, contentClass = "case-shell" } = Astro.props;
 ---
-<BaseLayout title={title} description={description}>
-  <div class="app-frame baro-workbench" data-app-workspace data-workbench>
+<ProductLayout title={title} description={description}>
+  <div class="app-frame baro-workbench min-h-dvh p-0 pt-14 min-[1200px]:pt-0 min-[1200px]:pl-[var(--wb-sidebar-width)]" data-app-workspace data-workbench data-product-shell="v2" data-product-ui="">
     <AppNavigation role="user" pathname={Astro.url.pathname} availableRoutes={["/new", "/settings"]} appearance="workbench" client:load />
-    <div class="app-surface"><main id="main-content" class={contentClass} tabindex="-1"><slot /></main></div>
+    <div class="app-surface"><main id="main-content" class:list={[contentClass, { "m-0 w-full max-w-none p-0": contentClass === "conversation-main" }]} tabindex="-1"><slot /></main></div>
   </div>
-</BaseLayout>
+</ProductLayout>

@@ -1,0 +1,46 @@
+---
+import "../product-ui/product.css";
+// biome-ignore lint/correctness/noUnusedImports: Astro renders the island.
+import { Experience } from "../components/ui/experience";
+
+interface Props {
+  title: string;
+  description: string;
+}
+// biome-ignore lint/correctness/noUnusedVariables: Astro reads these props in the template.
+const { title, description } = Astro.props;
+Astro.response.headers.set("Cache-Control", "private, no-store, no-transform");
+const pageBootstrap =
+  "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });" +
+  "try{var p=localStorage.getItem('baro-theme');var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}";
+const bootstrapDigest = await crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(pageBootstrap),
+);
+Astro.csp?.insertScriptHash(
+  `sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`,
+);
+---
+
+<!doctype html>
+<html lang="ko" data-baro-ui="" data-theme="light" data-product-chrome="v2">
+  <head>
+    <meta charset="UTF-8" />
+    <script is:inline set:html={pageBootstrap} />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/brand/logo.svg" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
+    <slot />
+    <div data-baro-experience><Experience client:load /></div>
+  </body>
+</html>
+
+<script>
+  import { installAppFocus } from "../client/app-focus";
+
+  installAppFocus(document);
+</script>

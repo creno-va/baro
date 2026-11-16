@@ -1,0 +1,16 @@
+{
+  "mode": "local synthetic built UI",
+  "path": "/__product-shell/input",
+  "consoleErrorsOrWarningsOnBuiltOrigin": 0,
+  "checks": [
+    "native textarea hydration",
+    "Unicode minimum length dialog",
+    "Tab trap",
+    "Escape return to textarea",
+    "aria-invalid false after close",
+    "global dark theme and portal",
+    "search input autofocus",
+    "mobile drawer and Escape return"
+  ],
+  "scope": "same actual CaseWorkbenchLayout and CaseInput; not /new server-authentication success"
+}

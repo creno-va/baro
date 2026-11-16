@@ -3,6 +3,24 @@ import { useProductUI } from "./Provider";
 
 type ResolvedTheme = "light" | "dark";
 const ProductThemeContext = createContext<ResolvedTheme>("light");
+
+export function ProductThemeScope({
+  theme,
+  children,
+  className,
+}: {
+  theme: ResolvedTheme;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <ProductThemeContext.Provider value={theme}>
+      <div data-product-ui="" data-theme={theme} className={className}>
+        {children}
+      </div>
+    </ProductThemeContext.Provider>
+  );
+}
 const serverDark = () => false;
 const clientDark = () =>
   typeof window !== "undefined" &&
@@ -25,11 +43,9 @@ export function ProductTheme({ children, className }: { children: ReactNode; cla
   const systemDark = useSyncExternalStore(subscribeSystemTheme, clientDark, serverDark);
   const theme = preference === "system" ? (systemDark ? "dark" : "light") : preference;
   return (
-    <ProductThemeContext.Provider value={theme}>
-      <div data-product-ui="" data-theme={theme} className={className}>
-        {children}
-      </div>
-    </ProductThemeContext.Provider>
+    <ProductThemeScope theme={theme} {...(className ? { className } : {})}>
+      {children}
+    </ProductThemeScope>
   );
 }
 

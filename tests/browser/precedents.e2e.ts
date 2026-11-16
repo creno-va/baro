@@ -997,7 +997,7 @@ test("sidebar title modal cancels, saves and persists a renamed case", async ({ 
   const oldTitle = "보증금 반환에 관한 합성 사건";
   const newTitle = "직접 수정한 보증금 반환 사건";
   const edit = page.getByRole("button", { name: `${oldTitle} 제목 수정`, exact: true }).first();
-  await page.locator(".sidebar-story").first().hover();
+  await page.getByRole("link", { name: oldTitle, exact: true }).hover();
   const editBox = await edit.boundingBox();
   const deleteBox = await page
     .getByRole("button", { name: `${oldTitle} 사건 삭제`, exact: true })
@@ -1011,7 +1011,7 @@ test("sidebar title modal cancels, saves and persists a renamed case", async ({ 
   await modal.getByLabel("제목", { exact: true }).fill("취소할 제목");
   await modal.getByRole("button", { name: "취소", exact: true }).click();
   await expect(modal).toBeHidden();
-  await page.locator(".sidebar-story").first().hover();
+  await page.getByRole("link", { name: oldTitle, exact: true }).hover();
   await edit.click();
   await modal.getByLabel("제목", { exact: true }).fill("");
   await expect(modal.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
@@ -1019,12 +1019,16 @@ test("sidebar title modal cancels, saves and persists a renamed case", async ({ 
   await modal.getByRole("button", { name: "저장", exact: true }).click();
   await expect(modal).toBeHidden();
   await expect(
-    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),
+    page
+      .getByRole("navigation", { name: "최근 사건", exact: true })
+      .getByRole("link", { name: newTitle, exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: newTitle })).toBeVisible();
   await page.reload();
   await expect(
-    page.locator(".sidebar-desktop").getByRole("link", { name: newTitle, exact: true }),
+    page
+      .getByRole("navigation", { name: "최근 사건", exact: true })
+      .getByRole("link", { name: newTitle, exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { level: 1, name: newTitle })).toBeVisible();
   await page.screenshot({ path: ".wrangler/sidebar-title-rename.png" });

@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "path": "/__product-shell/input",
+  "hasHashCSP": true,
+  "allowsUnsafeInline": false,
+  "allowsUnsafeEval": false,
+  "cacheControl": "private, no-store, no-transform",
+  "mode": "local synthetic built fixture"
+}
