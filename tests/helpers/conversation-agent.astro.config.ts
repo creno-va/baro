@@ -31,7 +31,7 @@ export default {
         resolveId(source: string, importer?: string) {
           if (
             source === "../../client/api" &&
-            importer?.endsWith("/workspace/ConversationAgent.tsx")
+            importer?.endsWith("/conversation-tools/useConversationAgentController.ts")
           )
             return fileURLToPath(new URL("./conversation-agent-browser-api.ts", import.meta.url));
           return null;

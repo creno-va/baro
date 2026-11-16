@@ -1,0 +1,20 @@
+{
+  "baseline": "b5138bbf1ba2c2f99fe5aec9c0058968de0e9868",
+  "bootstrap_sha256": "861f181ebae45e7152ab037101a2c682df8651c9b6c77080e06407b5149c7376",
+  "checks": {
+    "same_zod_and_theme_bootstrap": true,
+    "same_csp_hash_registration": true,
+    "one_inline_bootstrap": true,
+    "same_cache_control": true,
+    "same_main_and_live_fixture": true,
+    "same_title": true,
+    "same_description": true,
+    "same_language_icon_viewport": true,
+    "same_skiplink": true,
+    "same_experience_island": true,
+    "same_focus_installer": true,
+    "new_compiled_css_and_markers": true,
+    "no_raw_unlayered_legacy_import": true,
+    "layered_fixture_legacy_only": true
+  }
+}

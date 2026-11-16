@@ -126,7 +126,7 @@ test("long service content fits narrow screens and the menu stays closable after
       if (path === "/cases")
         await expect(page.locator(".sidebar-desktop .sidebar-story")).toHaveCount(1);
       if (path === "/settings") {
-        await expect(page.locator(".settings-refresh")).toBeVisible();
+        await expect(page.locator("[data-product-account-refresh]")).toBeVisible();
         await expect(page.locator(".settings-case-delete")).toHaveCount(0);
       }
       if (path.endsWith("/reports")) {

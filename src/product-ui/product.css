@@ -2,8 +2,8 @@
 
 @import "tailwindcss";
 
-/* Product routes retain the business islands' CSS while new Tailwind utilities
- * can own new chrome. The landing keeps its original BaseLayout and imports. */
+/* Retained business CSS stays in the legacy layer while Tailwind owns new
+ * product views. The landing uses its own layout and stylesheet entry. */
 @import "../styles/global.css" layer(legacy);
 @import "../styles/shell.css" layer(legacy);
 @import "../styles/app-focus.css" layer(legacy);
@@ -13,6 +13,8 @@
 @import "../styles/intake.css" layer(legacy);
 @import "../styles/evidence.css" layer(legacy);
 @import "../styles/reports.css" layer(legacy);
+@import "../styles/resolution.css" layer(legacy);
+@import "../styles/settings.css" layer(legacy);
 @import "../styles/case-workbench.css" layer(legacy);
 @import "./tokens.css";
 

@@ -1,0 +1,2 @@
+/* Preserve the isolated fixture's old chrome inside the same legacy layer. */
+@import "../../src/styles/product.css" layer(legacy);

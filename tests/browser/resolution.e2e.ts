@@ -268,7 +268,7 @@ test("320px layout keeps equal choices, touch targets and no document overflow",
   await page.goto("/");
   await page.getByRole("button", { name: /^직접 해결/ }).click();
   await expect(page.getByRole("heading", { name: "준비 순서와 확인할 안내" })).toBeVisible();
-  const metrics = await page.locator(".resolution-path").evaluateAll((buttons) =>
+  const metrics = await page.locator("[data-product-resolution-path]").evaluateAll((buttons) =>
     buttons.map((button) => ({
       height: button.getBoundingClientRect().height,
       width: button.getBoundingClientRect().width,

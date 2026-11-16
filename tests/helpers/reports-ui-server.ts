@@ -42,8 +42,6 @@ const script = await bundle.outputs[0]?.text();
 if (!script) throw new Error("Report bundle missing");
 const css =
   (await compileProductStyles(root)) +
-  (await Bun.file(`${root}/src/styles/resolution.css`).text()) +
-  (await Bun.file(`${root}/src/styles/settings.css`).text()) +
   ".app-frame[data-app-workspace]{display:block}body>p{padding:12px;background:#edf4ff}main#root{padding:20px}";
 const server = Bun.serve({
   hostname: "127.0.0.1",

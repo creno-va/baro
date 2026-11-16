@@ -590,13 +590,13 @@ test("new validated replies reveal whole Korean/emoji graphemes, can finish imme
   await page.screenshot({ path: ".wrangler/chat-progressive-390.png", fullPage: true });
   await page.getByRole("button", { name: "답변 전체 바로 보기" }).click();
   await expect(reply).toHaveCount(0);
-  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
-    text,
-  );
+  await expect(
+    page.locator(".workspace-message--assistant [data-product-message-content]"),
+  ).toHaveText(text);
   await page.reload();
-  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
-    text,
-  );
+  await expect(
+    page.locator(".workspace-message--assistant [data-product-message-content]"),
+  ).toHaveText(text);
   await expect(page.locator("[data-reply-revealing]")).toHaveCount(0);
   expect(await messages(page)).toHaveLength(2);
 });
@@ -608,9 +608,9 @@ test("reduced motion shows the published answer immediately", async ({ page }) =
   await expect(page.locator(".workspace-message--assistant")).toHaveCount(1);
   const text = "기억나는 대로 편하게 말씀해 주세요. 합성 검증용 답변입니다.";
   await publishSyntheticReply(page, text);
-  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
-    text,
-  );
+  await expect(
+    page.locator(".workspace-message--assistant [data-product-message-content]"),
+  ).toHaveText(text);
   await expect(page.getByRole("button", { name: "답변 전체 바로 보기" })).toHaveCount(0);
 });
 
@@ -665,9 +665,9 @@ test("reading earlier text keeps scroll position while the new reply grows; moti
   ).toBe(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(reply).toHaveCount(0);
-  await expect(page.locator(".workspace-message--assistant .workspace-message-content")).toHaveText(
-    text,
-  );
+  await expect(
+    page.locator(".workspace-message--assistant [data-product-message-content]"),
+  ).toHaveText(text);
   expect(await page.evaluate(() => scrollY)).toBe(documentScroll);
   expect(
     await page.getByRole("log", { name: "사건 대화" }).evaluate((node) => node.scrollTop),

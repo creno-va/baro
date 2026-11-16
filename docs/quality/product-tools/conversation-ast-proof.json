@@ -1,0 +1,121 @@
+{
+  "base": "b5138bbf1ba2c2f99fe5aec9c0058968de0e9868",
+  "results": [
+    {
+      "entry": "ConversationAgent",
+      "attribute": "disabled",
+      "count": 5,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "attribute": "onClick",
+      "count": 5,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAnalysis",
+      "attribute": "disabled",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAnalysis",
+      "attribute": "onClick",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAnalysis",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAnalysis",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPreparation",
+      "attribute": "disabled",
+      "count": 3,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPreparation",
+      "attribute": "onClick",
+      "count": 2,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPreparation",
+      "attribute": "onChange",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPreparation",
+      "attribute": "checked",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "attribute": "disabled",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "attribute": "onClick",
+      "count": 1,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "attribute": "onChange",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "attribute": "checked",
+      "count": 0,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "calls": 31,
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "callback": "onReportViewed",
+      "identical": true
+    },
+    {
+      "entry": "ConversationAgent",
+      "callback": "onOpenPane",
+      "identical": true
+    },
+    {
+      "entry": "ConversationPanel",
+      "callback": "onKeyDown body",
+      "identical": true
+    }
+  ]
+}
