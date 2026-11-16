@@ -44,7 +44,7 @@ describe("moved UI controllers retain the exact isolated API composition", () =>
     for (const path of [
       "components/workspace/Workspace.tsx",
       "components/workspace/useEvidenceUpload.ts",
-      "components/workspace/LookupDialog.tsx",
+      "product-ui/research/useLookupController.ts",
       "components/intake/useCustomerAccess.ts",
       "product-ui/conversation-tools/useConversationAgentController.ts",
       "product-ui/materials/useFileReviewController.ts",
@@ -53,6 +53,8 @@ describe("moved UI controllers retain the exact isolated API composition", () =>
     for (const path of [
       "components/workspace/ConversationAgent.tsx",
       "components/workspace/FileReview.tsx",
+      "components/workspace/LookupDialog.tsx",
+      "product-ui/research/LookupView.tsx",
       "product-ui/materials/FileReviewView.tsx",
       "product-ui/account/useAccountSettingsController.ts",
     ])

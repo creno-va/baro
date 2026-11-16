@@ -306,7 +306,7 @@ for (const width of [1440, 390]) {
       }
       if (route === `${base}/precedents`) {
         await page
-          .locator(".precedent-search [data-disclosure] > [data-disclosure-button]")
+          .locator("[data-product-precedent-search] [data-disclosure] > [data-disclosure-button]")
           .click();
         for (const keyboard of [false, true]) {
           const result = await focusAudit(page, keyboard);

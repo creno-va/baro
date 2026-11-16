@@ -1,0 +1,16 @@
+{
+  "server": "http://localhost:4368",
+  "browser": "Chrome",
+  "ownedTabId": "1988751958",
+  "completed": ["visible synthetic seed", "material list", "partial review", "dirty close cancelled", "draft retained on responsive resize", "review close focus", "panel close focus", "missing original honest error", "composer menu opened"],
+  "desktop": {"width":1440,"height":900,"scrollWidth":1440,"panel":{"x":1094.40625,"y":56,"width":345.59375,"height":844}},
+  "mobileViewportSizesApplied": [{"width":390,"height":844},{"width":320,"height":700}],
+  "mobileGeometry": null,
+  "mobileGeometryReason": "Read-only measurements were not persisted before the tool runtime was interrupted.",
+  "console": null,
+  "consoleReason": "Not collected before interruption; no console-clean claim.",
+  "fileChooser": {"attempts":1,"status":"interrupted-without-result","internalStage":"unknown within waitForEvent/click/setFiles batch","file":"tests/fixtures/media/image-markers.jpg","elapsedSecondsReported":1121.6},
+  "actualFileUploadVerified": false,
+  "deletionSubmitted": false,
+  "cleanup": {"ownedTabAbsent":true,"localhost4368TabsAbsent":true,"viewportReset":true,"completionSummarySent":true,"serverUsageReleased":true}
+}

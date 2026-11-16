@@ -18,7 +18,7 @@ export default {
                 "/product-ui/conversation-tools/useConversationAgentController.ts",
               ) ||
               importer?.endsWith("/components/workspace/useEvidenceUpload.ts") ||
-              importer?.endsWith("/components/workspace/LookupDialog.tsx") ||
+              importer?.endsWith("/product-ui/research/useLookupController.ts") ||
               importer?.endsWith("/product-ui/materials/useFileReviewController.ts") ||
               importer?.endsWith("/components/intake/useCustomerAccess.ts"))
           )
