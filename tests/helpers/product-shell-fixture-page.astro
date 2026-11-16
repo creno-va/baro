@@ -1,0 +1,31 @@
+---
+// biome-ignore lint/correctness/noUnusedImports: Astro template reads the fixture.
+import { ProductShellFixture } from "./product-shell-fixture";
+import "./product-ui-fixture.css";
+import "../../src/product-ui/tokens.css";
+
+Astro.response.headers.set("Cache-Control", "private, no-store, no-transform");
+const validationBootstrap = "Object.assign(globalThis, { __zod_globalConfig: { jitless: true } });";
+const bootstrapDigest = await crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(validationBootstrap),
+);
+Astro.csp?.insertScriptHash(
+  `sha256-${btoa(String.fromCharCode(...new Uint8Array(bootstrapDigest)))}`,
+);
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <script is:inline set:html={validationBootstrap} />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="로컬 합성 계정으로 실제 제품 경로를 검토하는 개발 화면" />
+    <title>실제 제품 shell 검토 · BARO</title>
+  </head>
+  <body class="font-sans antialiased">
+    <ProductShellFixture client:load />
+    <noscript>합성 계정 준비에는 JavaScript가 필요합니다.</noscript>
+  </body>
+</html>

@@ -53,9 +53,9 @@ test("late modal restoration respects a newly selected submit target", async ({ 
       () => {
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
-            const action = document.querySelector<HTMLButtonElement>(
-              '.conversation-entry button[type="submit"]',
-            );
+            const action = document
+              .querySelector<HTMLTextAreaElement>("#narrative")
+              ?.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
             if (!action) throw new Error("Synthetic submit target missing");
             action.focus();
             document.documentElement.dataset.pickedSubmit = String(

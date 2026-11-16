@@ -1,7 +1,7 @@
 # 제품 UI 공통 기반
 
-기존 업무 화면과 분리한 새 React island 기반이다. 현재 production 진입점은 이 모듈을 import하지 않는다.
-최종 화면 배치는 [화면 이관 계획](./WEB-UI-REBUILD-PLAN.md)의 레퍼런스 확인 뒤 진행한다.
+새 React island의 공통 기반이다. 초기 격리 준비는 PR #810에 보존하며, 후속 제품 shell에서는 navigation과 새 사건 입력에 연결한다.
+현재 실제 연결과 기존 업무 영역의 경계는 [제품 shell 명세](./PRODUCT-SHELL.md)를 따른다.
 
 ## 구성
 
@@ -52,10 +52,11 @@ Dialog는 mount 뒤 렌더링하므로 JS가 없는 초기 응답에는 열린 d
 | 명령 | 확인 범위 |
 | --- | --- |
 | `bun test tests/product-ui-` | SSR·상태/캐시 분리·초기 단계 경계의 회귀 |
-| `bun run product-ui:check` | origin/main 대비 초기 격리 기반의 변경 경계·import·표시 상태·token CSS |
+| `bun run product-ui:check` | 검증된 초기 기반 대비 현재 제품 shell 단계의 변경·랜딩/API/DB 보존 경계 |
 | `bun run product-ui:measure` | 합성 HTTP와 로컬 D1 adapter의 재현 가능한 호출 수. 실제 서비스 지연 제외 |
 | `bun run validate:quick` | 기존 필수 검사와 새 product-ui 테스트 |
 | `bun run validate:build` | production 번들·fixture 제외·Workers dry-run |
 
-`product-ui:check`는 이 초기 격리 PR의 인수 명령이다. 이후 승인된 실제 화면 이관을 막는 영구 범위 정책으로 사용하지 않는다.
+초기 PR #810에서는 `product-ui:check`가 격리 전용 `scripts/check-product-ui-foundation.ts`를 실행한다.
+실제 제품 연결 단계에서는 `scripts/check-product-shell-preservation.ts`로 교체한다. 초기 격리의 import/CSS 제한을 실제 화면 이관을 막는 영구 정책으로 사용하지 않는다.
 호출 수의 기준과 후속 최적화 인수는 [조회 성능 계획](./WEB-QUERY-PERFORMANCE-PLAN.md)을 따른다.

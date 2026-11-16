@@ -1,0 +1,60 @@
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss";
+
+/* Product routes retain the business islands' CSS while new Tailwind utilities
+ * can own new chrome. The landing keeps its original BaseLayout and imports. */
+@import "../styles/global.css" layer(legacy);
+@import "../styles/shell.css" layer(legacy);
+@import "../styles/app-focus.css" layer(legacy);
+@import "../styles/design-system.css" layer(legacy);
+@import "../styles/case-workbench.css" layer(legacy);
+@import "./tokens.css";
+
+:root[data-product-chrome="v2"] {
+  --app-topbar-height: 0px;
+}
+
+[data-product-shell="v2"] {
+  --wb-sidebar-width: 272px;
+  --wb-canvas: var(--card);
+  --pui-surface: var(--card);
+  --pui-background: var(--background);
+  --pui-text: var(--foreground);
+  --pui-muted: var(--muted-foreground);
+  --pui-border: var(--border);
+  --pui-focus: var(--ring);
+  --pui-danger: var(--destructive);
+}
+
+/* The document marker also covers Headless portals outside the Astro frame. */
+:root[data-product-chrome="v2"] [data-product-ui] {
+  --pui-surface: var(--card);
+  --pui-background: var(--background);
+  --pui-text: var(--foreground);
+  --pui-muted: var(--muted-foreground);
+  --pui-border: var(--border);
+  --pui-focus: var(--ring);
+  --pui-danger: var(--destructive);
+  --pui-primary: var(--foreground);
+  --pui-on-primary: var(--card);
+}
+
+[data-product-shell="v2"][data-sidebar-collapsed="true"] {
+  --wb-sidebar-width: 80px;
+}
+
+[data-product-shell="v2"] .app-surface:has(.conversation-main)::before {
+  display: none;
+}
+
+[data-product-shell="v2"] .case-shell:has(.case-workspace--conversation) {
+  height: calc(var(--app-viewport-height, 100dvh) - var(--app-topbar-height));
+}
+
+@media (max-width: 1199px) {
+  :root[data-product-chrome="v2"] {
+    --app-topbar-height: 56px;
+    scroll-padding-block-start: calc(var(--app-topbar-height) + 16px);
+  }
+}

@@ -2,8 +2,7 @@
 // biome-ignore lint/correctness/noUnusedImports: Astro reads the island.
 import { AppNavigation, type NavigationRole } from "../components/ui/app-navigation";
 // biome-ignore lint/correctness/noUnusedImports: Astro reads the layout.
-import BaseLayout from "./BaseLayout.astro";
-import "../styles/case-workbench.css";
+import ProductLayout from "./ProductLayout.astro";
 
 interface Props {
   title: string;
@@ -16,11 +15,11 @@ interface Props {
 // biome-ignore lint/correctness/noUnusedVariables: Astro reads these props in the template.
 const { title, description, role, availableRoutes, contentClass = "app-main" } = Astro.props;
 ---
-<BaseLayout title={title} description={description}>
-  <div data-app-workspace data-product-ui="refresh" class:list={["app-frame", "baro-workbench", { "app-frame--product": contentClass !== "conversation-main" }]}>
+<ProductLayout title={title} description={description}>
+  <div data-app-workspace data-product-ui="refresh" data-product-shell="v2" class:list={["app-frame baro-workbench min-h-dvh p-0 pt-14 min-[1200px]:pt-0 min-[1200px]:pl-[var(--wb-sidebar-width)]", { "app-frame--product": contentClass !== "conversation-main" }]}>
     <AppNavigation role={role} pathname={Astro.url.pathname} availableRoutes={availableRoutes} appearance="workbench" client:load />
     <div class="app-surface">
-      <main id="main-content" tabindex="-1" class={contentClass}><slot /></main>
+      <main id="main-content" tabindex="-1" class:list={[contentClass, { "m-0 w-full max-w-none p-0": contentClass === "conversation-main" }]}><slot /></main>
     </div>
   </div>
-</BaseLayout>
+</ProductLayout>
