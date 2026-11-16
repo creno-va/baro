@@ -66,7 +66,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       });
     }
     await page.goto(`/cases/${caseId}`);
-    await page.locator(".case-tools > [data-popover-button]").click();
+    await page.locator("[data-product-case-navigation] [data-popover-button]").click();
     const tools = page.getByRole("navigation", { name: "사건 도구", exact: true });
     const link = tools.getByRole("link", { name: "유사 판례", exact: true });
     const point = await link.evaluate((node) => {
@@ -87,7 +87,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     );
     for (const suffix of ["files", "timeline", "actions", "reports"]) {
       await page.goto(`/cases/${caseId}/${suffix}`);
-      await expect(page.locator(".case-header")).toBeVisible();
+      await expect(page.locator("[data-product-case-navigation]")).toBeVisible();
       await expect(page.locator(".workspace-tabs")).toHaveCount(0);
     }
   });

@@ -146,7 +146,7 @@ test("Codex workbench keeps a readable conversation, separate report action and 
     };
     return {
       sidebar: rect(".app-header"),
-      composer: rect(".workspace-composer"),
+      composer: rect("[data-product-composer]"),
       panel: rect("#case-materials-panel"),
       width: document.documentElement.scrollWidth,
     };
@@ -203,9 +203,9 @@ test("plus menu mentions real material IDs without executing work, preserves inp
   await expect(input).toBeEnabled();
   await input.fill("전송하지 않은 합성 초안");
   await countMaterialsRequests(page);
-  const plus = page.locator(".composer-add-menu > [data-disclosure-button]");
+  const plus = page.locator("[data-product-composer-menu] > [data-disclosure-button]");
   await plus.click();
-  await page.locator(".composer-add-menu").getByRole("checkbox").first().check();
+  await page.locator("[data-product-composer-menu]").getByRole("checkbox").first().check();
   await plus.press("Escape");
   await expect(page.getByRole("region", { name: "멘션한 자료" })).toContainText("반환 약속");
   await expect(plus).toBeFocused();

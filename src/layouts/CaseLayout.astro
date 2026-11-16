@@ -1,8 +1,7 @@
 ---
+import { env } from "cloudflare:workers";
 // biome-ignore lint/correctness/noUnusedImports: Astro template reads component.
 import CaseWorkbenchLayout from "./CaseWorkbenchLayout.astro";
-import "../styles/cases.css";
-import { env } from "cloudflare:workers";
 
 interface Props {
   title: string;

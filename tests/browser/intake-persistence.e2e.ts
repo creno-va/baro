@@ -144,9 +144,9 @@ test("answers autosave without advancing, survive reload and keep only an inline
   await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveCount(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const geometry = await page.locator(".intake-scene-action").evaluate((node) => {
-      const back = node.querySelector(".intake-scene-back")?.getBoundingClientRect();
-      const next = node.querySelector(".intake-scene-primary")?.getBoundingClientRect();
+    const geometry = await page.locator("[data-product-question-action]").evaluate((node) => {
+      const back = node.querySelector("[data-product-question-back]")?.getBoundingClientRect();
+      const next = node.querySelector("[data-product-question-primary]")?.getBoundingClientRect();
       if (!next) throw new Error("Intake navigation missing");
       return {
         backRight: back?.right ?? next.left,
@@ -347,7 +347,7 @@ for (const state of ["unknown", "skipped"] as const)
       .getByRole("button", { name: state === "unknown" ? "모름" : "건너뛰기", exact: true })
       .click();
     await expect.poll(() => f.writes.length).toBe(1);
-    const label = page.locator(".intake-scene-answer-state");
+    const label = page.locator("[data-product-question-answer-state]");
     await expect(label).toHaveText("답변을 저장하고 있어요.");
     await expect(label).not.toContainText("다시 시도");
     release();
@@ -362,7 +362,7 @@ for (const state of ["unknown", "skipped"] as const)
       .getByRole("button", { name: state === "unknown" ? "모름" : "건너뛰기", exact: true })
       .click();
     await expect.poll(() => f.writes.length).toBe(1);
-    const label = page.locator(".intake-scene-answer-state");
+    const label = page.locator("[data-product-question-answer-state]");
     await expect(label).toContainText("아직 저장되지 않았어요");
     await expect(label).not.toContainText("저장했어요");
     await expect(page.getByRole("alert")).toBeVisible();

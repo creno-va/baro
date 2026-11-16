@@ -6,8 +6,10 @@ import {
 } from "@headlessui/react";
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Button } from "./button";
-import { useClientReady } from "./utils";
+import { Button } from "../../product-ui/Button";
+import { GlobalProductTheme } from "../../product-ui/GlobalTheme";
+import { useProductTheme } from "../../product-ui/Theme";
+import { cn, useClientReady } from "../../product-ui/utils";
 export interface CaseWorkspaceFrameProps {
   header: ReactNode;
   children: ReactNode;
@@ -19,7 +21,14 @@ export interface CaseWorkspaceFrameProps {
   kind?: "conversation" | "document" | "compare";
 }
 /** A stable portal keeps the same material/editor DOM through inline and sheet modes. */
-export function CaseWorkspaceFrame({
+export function CaseWorkspaceFrame(props: CaseWorkspaceFrameProps) {
+  return (
+    <GlobalProductTheme className="contents">
+      <CaseWorkspaceFrameContent {...props} />
+    </GlobalProductTheme>
+  );
+}
+function CaseWorkspaceFrameContent({
   header,
   children,
   panel,
@@ -30,6 +39,7 @@ export function CaseWorkspaceFrame({
   kind = "conversation",
 }: CaseWorkspaceFrameProps) {
   const clientReady = useClientReady();
+  const theme = useProductTheme();
   const root = useRef<HTMLDivElement>(null);
   const panelNode = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -124,23 +134,31 @@ export function CaseWorkspaceFrame({
   return (
     <div
       ref={root}
-      className={"case-workspace case-workspace--" + kind}
+      className={cn(
+        "case-workspace case-workspace--" + kind,
+        "min-h-0 w-full min-w-0",
+        kind === "conversation" && "grid h-full grid-rows-[auto_minmax(0,1fr)]",
+      )}
       data-panel-open={present && panelOpen}
     >
       <section
-        className="case-workspace__header"
+        className={cn(
+          "case-workspace__header relative z-10 flex min-h-14 min-w-0 items-center gap-2 border-b border-[var(--pui-border)] bg-[var(--pui-surface)] px-3 sm:px-5",
+          kind !== "conversation" && "mb-5 px-0 sm:px-0",
+        )}
         aria-label="사건 제목과 작업"
         tabIndex={kind === "conversation" ? 0 : undefined}
       >
-        <div className="case-workspace__heading">{header}</div>
+        <div className="min-w-0 flex-1">{header}</div>
         {present && (
           <Button
             ref={toggle}
-            className="case-workspace__toggle"
             variant="ghost"
+            size="icon"
             aria-controls={panelId}
             aria-expanded={panelOpen}
             aria-label={panelLabel + (panelOpen ? " 닫기" : " 열기")}
+            title={panelLabel + (panelOpen ? " 닫기" : " 열기")}
             disabled={!onPanelOpenChange}
             onClick={() => requestPanelOpen(!panelOpen)}
           >
@@ -149,13 +167,29 @@ export function CaseWorkspaceFrame({
             ) : (
               <PanelRightOpen size={18} aria-hidden="true" />
             )}
-            <span>{panelLabel}</span>
           </Button>
         )}
       </section>
-      <div className="case-workspace__body">
-        <div className="case-workspace__content">{children}</div>
-        {present && <div className="case-workspace__panel-space" aria-hidden="true" />}
+      <div
+        className={cn(
+          "case-workspace__body grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)]",
+          present && panelOpen && "min-[1200px]:grid-cols-[minmax(0,1fr)_var(--wb-panel-width)]",
+        )}
+      >
+        <div
+          className={cn(
+            "case-workspace__content min-h-0 min-w-0",
+            kind === "conversation" && "flex flex-col overflow-hidden",
+          )}
+        >
+          {children}
+        </div>
+        {present && (
+          <div
+            className={cn("hidden min-w-0", panelOpen && "min-[1200px]:block")}
+            aria-hidden="true"
+          />
+        )}
       </div>
       {present && clientReady && (
         <HeadlessDialog
@@ -163,20 +197,37 @@ export function CaseWorkspaceFrame({
           open={sheet && panelOpen}
           onClose={() => requestPanelOpen(false)}
           initialFocus={initialFocus.current ? initialFocus : closeButton}
-          className="ds-responsive-panel baro-workbench"
+          className={cn(
+            "baro-workbench fixed inset-0 z-40 pointer-events-none",
+            sheet ? "z-[70] pointer-events-auto" : "max-[1199px]:hidden",
+            !panelOpen && "hidden",
+          )}
+          data-product-ui=""
+          data-theme={theme}
+          data-product-workspace-panel=""
           data-mode={sheet ? "sheet" : "inline"}
           data-panel-visible={panelOpen ? "true" : "false"}
         >
-          {sheet && <DialogBackdrop className="ds-modal__backdrop" />}
+          {sheet && <DialogBackdrop className="fixed inset-0 bg-black/30" />}
           <DialogPanel
             ref={panelNode}
             id={panelId}
-            className="case-workspace__panel"
+            className={cn(
+              "case-workspace__panel pointer-events-auto absolute right-0 flex min-h-0 max-w-full flex-col overflow-hidden border-[var(--pui-border)] bg-[var(--pui-surface)] p-0 text-[var(--pui-text)]",
+              sheet
+                ? "inset-y-3 right-3 h-[calc(var(--app-viewport-height,100dvh)-24px)] w-[min(440px,calc(100vw-24px))] rounded-2xl border shadow-xl"
+                : "top-14 h-[calc(var(--app-viewport-height,100dvh)-56px)] w-[var(--wb-panel-width)] rounded-none border-0 border-l",
+            )}
             data-dialog=""
             hidden={!panelOpen}
           >
-            <div className="case-workspace__panel-heading">
-              <DialogTitle as="h2" id={panelId + "-title"}>
+            <div
+              className={cn(
+                "shrink-0 items-center justify-between border-b border-[var(--pui-border)] px-4 py-2",
+                sheet ? "flex" : "hidden",
+              )}
+            >
+              <DialogTitle as="h2" id={panelId + "-title"} className="text-sm font-medium">
                 {panelLabel}
               </DialogTitle>
               <Button
@@ -189,7 +240,7 @@ export function CaseWorkspaceFrame({
                 <X size={18} aria-hidden="true" />
               </Button>
             </div>
-            <div className="case-workspace__panel-content">{panel}</div>
+            <div className="min-h-0 flex-1 overflow-auto overscroll-contain">{panel}</div>
           </DialogPanel>
         </HeadlessDialog>
       )}

@@ -363,17 +363,18 @@ test("generation recovery has two actions with outline resume and space above th
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await savedIntake(page);
-  const panel = page.locator(".intake-recovery");
+  const panel = page.locator("[data-product-question-recovery]");
   await expect(panel.getByRole("button")).toHaveText(["다시 시도", "나중에 이어하기"]);
-  await expect(panel.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveClass(
-    /ui-button--outline/,
+  await expect(panel.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveAttribute(
+    "data-appearance",
+    "outline",
   );
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     // Measure both boxes in one frame: viewport/focus scrolling between two
     // protocol reads must not be mistaken for overlap inside the same form.
     const gap = await panel.evaluate((recovery) => {
-      const action = recovery.parentElement?.querySelector(".intake-scene-navigation");
+      const action = recovery.parentElement?.querySelector("[data-product-question-navigation]");
       if (!action) throw new Error("Missing synthetic recovery layout");
       return recovery.getBoundingClientRect().top - action.getBoundingClientRect().bottom;
     });

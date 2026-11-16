@@ -739,7 +739,10 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await page.goto("/cases");
   await expect(page.getByRole("heading", { name: "어떤 일이 있었나요?" })).toBeVisible();
   await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
-  await expect(page.locator(".conversation-home")).toHaveCSS("view-transition-name", "intake-page");
+  await expect(page.locator("[data-product-case-input]")).toHaveCSS(
+    "view-transition-name",
+    "intake-page",
+  );
   const narrative = page.getByRole("textbox", { name: "지금까지 있었던 일" });
   await narrative.fill(
     "합성 사건입니다. 지난달 지인에게 빌려준 돈을 약속한 날짜가 지나도 돌려받지 못했습니다.",
@@ -750,7 +753,10 @@ test("two-round mobile flow saves/reloads/resumes/back edits/skips and reaches w
   await expect(page).toHaveURL(/\/intake/);
   await expect(page.getByRole("heading", { name: "이 일은 언제 시작됐나요?" })).toBeVisible();
   await expect(page.locator("#main-content")).toHaveCSS("view-transition-name", "none");
-  await expect(page.locator(".intake-flow")).toHaveCSS("view-transition-name", "intake-page");
+  await expect(page.locator("[data-product-questions]")).toHaveCSS(
+    "view-transition-name",
+    "intake-page",
+  );
   await capture(page, "question-mobile");
   await page.setViewportSize({ width: 1280, height: 900 });
   await capture(page, "question-desktop");
@@ -1104,8 +1110,8 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     const second = page.getByRole("heading", { name: "얼마의 금액이 관련되어 있나요?" });
     const answer = page.getByRole("textbox", { name: "답변", exact: true });
     await expect(first).toBeVisible();
-    const scene = page.locator(".intake-scene");
-    const content = page.locator(".intake-scene-content");
+    const scene = page.locator("[data-product-question-scene]");
+    const content = page.locator("[data-product-question-content]");
     if (reducedMotion === "reduce") {
       await expect(content).toHaveCSS("animation-name", "none");
     } else {
@@ -1260,9 +1266,9 @@ for (const recovery of [
     );
     await expect(page.getByRole("alert")).toContainText("저장한 답변은 그대로 남아 있어요");
     await expect(page.getByRole("alert")).not.toContainText("POLICY_REJECTED");
-    await expect(page.getByRole("button", { name: "나중에 이어하기", exact: true })).toHaveClass(
-      /ui-button--outline/,
-    );
+    await expect(
+      page.getByRole("button", { name: "나중에 이어하기", exact: true }),
+    ).toHaveAttribute("data-appearance", "outline");
     await expect(page.getByRole("textbox", { name: "답변", exact: true })).toHaveValue(
       "보존할 합성 답변",
     );

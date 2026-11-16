@@ -8,6 +8,8 @@
 @import "../styles/shell.css" layer(legacy);
 @import "../styles/app-focus.css" layer(legacy);
 @import "../styles/design-system.css" layer(legacy);
+@import "../styles/cases.css" layer(legacy);
+@import "../styles/workspace.css" layer(legacy);
 @import "../styles/case-workbench.css" layer(legacy);
 @import "./tokens.css";
 

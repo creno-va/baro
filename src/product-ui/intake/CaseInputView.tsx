@@ -62,7 +62,8 @@ export function CaseInputView({
   return (
     <>
       <section
-        className="mx-auto flex min-h-[calc(100svh-5rem)] w-full max-w-[800px] flex-col px-4 pb-6 pt-12 text-[var(--pui-text)] sm:px-8 sm:pt-20"
+        data-product-case-input=""
+        className="mx-auto flex min-h-[calc(100svh-5rem)] w-full max-w-[800px] flex-col px-4 pb-6 pt-12 text-[var(--pui-text)] [view-transition-name:intake-page] sm:px-8 sm:pt-20"
         aria-labelledby="conversation-heading"
       >
         <header className="text-center">

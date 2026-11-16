@@ -99,7 +99,7 @@ test("long service content fits narrow screens and the menu stays closable after
       if (path === "/cases/responsive-long-case") {
         const messages = page.locator(".workspace-messages");
         const header = page.locator(".case-workspace__header");
-        const composer = page.locator(".workspace-composer");
+        const composer = page.locator("[data-product-composer]");
         await expect(messages).toBeVisible();
         await expect
           .poll(() => messages.evaluate((node) => node.scrollHeight - node.clientHeight))

@@ -245,7 +245,7 @@ async function chooseMaterial(page: Page, camera = false) {
   if (camera)
     await expect(page.getByRole("img", { name: `${name} 미리보기`, exact: true })).toBeVisible();
   await page
-    .locator(".workspace-composer")
+    .locator("[data-product-composer]")
     .getByRole("checkbox", { name: "첨부한 파일의 자동 처리에 동의합니다.", exact: true })
     .check();
   return { materials, name };
