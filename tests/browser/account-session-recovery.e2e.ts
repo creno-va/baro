@@ -256,7 +256,7 @@ test("a temporary session lookup outage preserves report edits and explicit sign
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect.poll(() => failures).toBeGreaterThan(0);
   const reportError = page
-    .locator(".report-error")
+    .locator("[data-product-report-error]")
     .filter({ has: page.getByRole("button", { name: "다시 확인", exact: true }) });
   await expect(reportError).toHaveAttribute("role", "alert");
   await expect(reportError).toBeVisible();

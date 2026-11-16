@@ -83,7 +83,7 @@ test("explicit mock photos use saved selection, do not refetch on metadata check
   await expect(image).toHaveAttribute("alt", "저장 당시 이름.jpg");
   expect(reads).toBe(1);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.locator(".report-edit-toggle")).toBeEnabled();
+  await expect(page.locator("[data-product-report-edit-toggle]")).toBeEnabled();
   expect(reads).toBe(1);
   expect(await page.locator("html").getAttribute("data-report-dirty")).toBe("false");
   masked = true;
@@ -106,5 +106,5 @@ test("explicit mock photos use saved selection, do not refetch on metadata check
   await expect(page.locator(".report-reading")).toHaveCount(0);
   release?.();
   await expect(page.locator(".report-inline-photo img")).toHaveCount(0);
-  await expect(page.locator(".report-heading")).not.toContainText("합성 사진 저장본");
+  await expect(page.locator("[data-product-report-heading]")).not.toContainText("합성 사진 저장본");
 });

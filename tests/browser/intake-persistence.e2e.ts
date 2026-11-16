@@ -567,7 +567,7 @@ async function summaryFixture(page: Page) {
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND" } } });
   });
   await page.goto(`/cases/${id}/summary`);
-  await expect(page.locator(".summary-reading-overview").first()).toBeVisible();
+  await expect(page.locator("[data-product-summary-overview]").first()).toBeVisible();
   return writes;
 }
 
@@ -575,10 +575,12 @@ test("persisted Unicode summary and facts are readable without canonical text co
   page,
 }) => {
   const writes = await summaryFixture(page);
-  await expect(page.locator(".summary-reading-overview").first()).toHaveText("😀".repeat(3000));
+  await expect(page.locator("[data-product-summary-overview]").first()).toHaveText(
+    "😀".repeat(3000),
+  );
   await expect(page.getByRole("textbox", { name: "요약 편집", exact: true })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "사실 내용", exact: true })).toHaveCount(0);
-  await expect(page.locator(".fact-answer__text")).toHaveText("😀".repeat(1200));
+  await expect(page.locator("[data-product-summary-fact-text]")).toHaveText("😀".repeat(1200));
   expect(writes).toHaveLength(0);
 });
 
@@ -596,5 +598,7 @@ test("natural explanations count Unicode code points without truncating or writi
   await expect(page.getByRole("button", { name: "변경안 요청하기", exact: true })).toBeEnabled();
   await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
   expect(writes).toHaveLength(0);
-  await expect(page.locator(".summary-reading-overview").first()).toHaveText("😀".repeat(3000));
+  await expect(page.locator("[data-product-summary-overview]").first()).toHaveText(
+    "😀".repeat(3000),
+  );
 });

@@ -89,12 +89,15 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await openReportEditor(page);
   const editor = page.getByRole("textbox", { name: / 수정$/ }).first();
   await expect(editor).toBeVisible();
-  await captureCaseViewports(page, "reports", ".report-review");
+  await captureCaseViewports(page, "reports", "[data-product-report]");
   await editor.fill(
     "사용자가 검토한 합성 사실입니다. 연락처 010-1234-5678, synthetic@example.test는 전달 전에 가립니다.",
   );
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
   await page.reload();
   await openReportEditor(page);
   await expect(editor).toHaveValue(/사용자가 검토한 합성 사실/);
@@ -138,9 +141,9 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     ),
   );
   expect(entries).toEqual([{ name: "001-선택 원본.txt", text: originalText }]);
-  expect((await new AxeBuilder({ page }).include(".report-review").analyze()).violations).toEqual(
-    [],
-  );
+  expect(
+    (await new AxeBuilder({ page }).include("[data-product-report]").analyze()).violations,
+  ).toEqual([]);
   await page.screenshot({ path: resolve(artifacts, "integrated-review.png"), fullPage: true });
   await page.goto("/settings");
   await page.getByRole("button", { name: "메뉴 열기" }).click();
@@ -179,8 +182,10 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
     );
   expect(await originalCount()).toBe(0);
   await page.goto(`${casePath}/reports`);
-  await expect(page.locator(".report-error")).toHaveAttribute("role", "alert");
-  await expect(page.locator(".report-error")).toContainText("요청한 내용을 찾지 못했어요.");
+  await expect(page.locator("[data-product-report-error]")).toHaveAttribute("role", "alert");
+  await expect(page.locator("[data-product-report-error]")).toContainText(
+    "요청한 내용을 찾지 못했어요.",
+  );
   await expect(page.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "PDF 다운로드", exact: true })).toHaveCount(0);
   await page.goto("/cases");
@@ -222,7 +227,7 @@ test("shared login/intake/C originals/D review downloads and deletion persist ac
   await expect(peer.getByRole("textbox", { name: / 수정$/ })).toHaveCount(0);
   await expect(peer.getByRole("button", { name: "PDF 다운로드" })).toHaveCount(0);
   await expect(
-    peer.locator(".report-error").getByRole("link", { name: "로그인", exact: true }),
+    peer.locator("[data-product-report-error]").getByRole("link", { name: "로그인", exact: true }),
   ).toBeVisible();
   await page.reload();
   expect(

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { FileReviewView, FileView } from "../../src/client/api/types";
 import { Button, ButtonLink } from "../../src/product-ui/Button";
 import { summary } from "../fixtures/contracts/v2";
 
@@ -52,14 +53,61 @@ export function prepareProductShellFixture(
   storage.setItem("shell-app-seeded", "1");
 }
 
+/** Additional local, synthetic material. No original binary is fabricated. */
+export function prepareProductDetailsFixture(
+  mode: unknown,
+  hostname: string,
+  storage: Pick<Storage, "setItem">,
+) {
+  prepareProductShellFixture(mode, hostname, storage);
+  const file: FileView = {
+    id: "shell-detail-file",
+    revision: 1,
+    name: "합성 보증금 반환 대화.txt",
+    mimeType: "text/plain",
+    sizeBytes: 96,
+    status: "ready",
+    coverage: "합성 텍스트 1쪽 처리, 2쪽 확인 불가",
+    extractedText: "상대방이 보증금을 다음 주에 돌려주겠다고 진술한 합성 대화입니다.",
+  };
+  const observation = {
+    id: "shell-detail-observation",
+    text: file.extractedText,
+    position: { kind: "document", page: 1, paragraph: 1, table: null },
+    certainty: "uncertain",
+    userEdited: false,
+    included: true,
+  } as const;
+  const review: FileReviewView = {
+    file: { id: file.id, name: file.name, revision: 1, status: "ready" },
+    workspaceRevision: 1,
+    coverage: {
+      category: "document",
+      status: "partial",
+      pageCount: 2,
+      pages: [
+        { page: 1, status: "processed" },
+        { page: 2, status: "low_quality" },
+      ],
+    },
+    observations: [{ ordinal: 0, value: observation, original: observation }],
+    nextAfterOrdinal: null,
+    pendingReview: null,
+    recovery: null,
+  };
+  storage.setItem("baro-api-mock-v1:files", JSON.stringify({ [productShellCaseId]: [file] }));
+  storage.setItem("baro-api-mock-v1:fileReviews", JSON.stringify({ [file.id]: review }));
+}
+
 export function ProductShellFixture() {
   const [prepared, setPrepared] = useState(false);
   const [message, setMessage] = useState("아직 합성 계정을 준비하지 않았습니다.");
   const [error, setError] = useState("");
   const mock = import.meta.env.PUBLIC_API_MODE === "mock";
-  function prepare() {
+  function prepare(details = false) {
     try {
-      prepareProductShellFixture(import.meta.env.PUBLIC_API_MODE, location.hostname, localStorage);
+      const seed = details ? prepareProductDetailsFixture : prepareProductShellFixture;
+      seed(import.meta.env.PUBLIC_API_MODE, location.hostname, localStorage);
       window.dispatchEvent(new Event("baro-session-changed"));
       setPrepared(true);
       setError("");
@@ -102,8 +150,11 @@ export function ProductShellFixture() {
           <p role="alert">PUBLIC_API_MODE=mock으로 실행한 localhost에서만 준비할 수 있습니다.</p>
         )}
         <div className="flex flex-wrap gap-3">
-          <Button disabled={!mock} onClick={prepare}>
+          <Button disabled={!mock} onClick={() => prepare()}>
             합성 계정 준비
+          </Button>
+          <Button disabled={!mock} variant="secondary" onClick={() => prepare(true)}>
+            자료가 있는 합성 계정 준비
           </Button>
           <Button disabled={!mock} variant="secondary" onClick={visitor}>
             방문자 상태로 초기화
@@ -119,6 +170,12 @@ export function ProductShellFixture() {
             </ButtonLink>
             <ButtonLink href={`/cases/${productShellCaseId}`} variant="secondary">
               합성 사건 열기
+            </ButtonLink>
+            <ButtonLink href={`/cases/${productShellCaseId}/summary`} variant="secondary">
+              합성 요약 열기
+            </ButtonLink>
+            <ButtonLink href={`/cases/${productShellCaseId}/reports`} variant="secondary">
+              합성 리포트 열기
             </ButtonLink>
             <ButtonLink href="/settings" variant="secondary">
               설정 열기

@@ -102,8 +102,10 @@ test("stored real PDF and report remain readable after source change/re-consent,
       originalText,
     );
     await expect(page.locator("html")).not.toHaveAttribute("data-report-viewed");
-    await expect(page.locator(".report-edit-toggle")).toHaveAccessibleName("수정하기");
-    await expect(page.locator(".report-edit-toggle")).toBeDisabled();
+    await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAccessibleName(
+      "수정하기",
+    );
+    await expect(page.locator("[data-product-report-edit-toggle]")).toBeDisabled();
     await expect(page.getByText(/새 리포트 생성과 수정은 필수 동의 후/)).toBeVisible();
     await expect(page.getByRole("button", { name: "새 버전 만들기" })).toBeDisabled();
     await expect(page.getByRole("checkbox", { name: "식별정보 가리기", exact: true })).toHaveCount(

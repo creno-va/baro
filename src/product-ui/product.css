@@ -10,6 +10,9 @@
 @import "../styles/design-system.css" layer(legacy);
 @import "../styles/cases.css" layer(legacy);
 @import "../styles/workspace.css" layer(legacy);
+@import "../styles/intake.css" layer(legacy);
+@import "../styles/evidence.css" layer(legacy);
+@import "../styles/reports.css" layer(legacy);
 @import "../styles/case-workbench.css" layer(legacy);
 @import "./tokens.css";
 

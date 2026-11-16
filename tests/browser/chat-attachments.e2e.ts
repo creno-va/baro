@@ -274,7 +274,7 @@ test("legacy materials keep one compact upload area, coverage, context and retri
   });
   await expect(page.getByRole("heading", { name: "두 번째.txt", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.locator(".workspace-file-list > li")).toHaveCount(2);
+  await expect(page.locator("[data-product-material-list] > li")).toHaveCount(2);
   await expect(add).toBeEnabled();
 });
 
@@ -514,11 +514,11 @@ test("materials retain every attachment and mark actual evidence without filter 
     .getByRole("link", { name: "자료 2", exact: true })
     .click();
   await expect(page).toHaveURL(/\/files$/);
-  await expect(page.locator(".workspace-file-list")).toContainText("used.txt");
-  await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
+  await expect(page.locator("[data-product-material-list]")).toContainText("used.txt");
+  await expect(page.locator("[data-product-material-list]")).toContainText("unused.txt");
   await expect(page.getByText("근거로 활용됨", { exact: true })).toBeVisible();
   await page.goto(`${base}/files?evidence=1`);
-  await expect(page.locator(".workspace-file-list")).toContainText("unused.txt");
+  await expect(page.locator("[data-product-material-list]")).toContainText("unused.txt");
 });
 
 test("dragged and pasted files stay local until consent and sending", async ({ page }) => {

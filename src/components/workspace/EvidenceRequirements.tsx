@@ -2,7 +2,6 @@ import type { FileView } from "../../client/api/types";
 import type { V2EvidenceRequirement, V2Fact } from "../../contracts/v2";
 import { Button } from "../ui/button";
 import { evidenceRequirementStates, materialStateLabels } from "./evidence-state";
-import "../../styles/evidence.css";
 
 export function EvidenceRequirements({
   requirements,

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { SummaryReconfirmation } from "../intake/SummaryReconfirmation";
 import type { ConversationPaneProps } from "./ConversationAgent";
 import { ConversationContextReview } from "./ConversationContextReview";
-import "../../styles/intake.css";
 
 /** Composes the owning summary UI and explicit user context without copying
  * reconciliation or analysis logic. Only one editor may mutate at a time. */

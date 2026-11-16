@@ -130,7 +130,7 @@ test("common login and B intake flow through C workspace and D report with origi
   await page.screenshot({ path: "test-results/workspace-shared-desktop.png", fullPage: true });
   await openCaseTool(page, "리포트 보기");
   await expect(page).toHaveURL(`${base}/reports`);
-  await expect(page.locator(".report-review")).toBeVisible();
+  await expect(page.locator("[data-product-report]")).toBeVisible();
   await page.getByRole("button", { name: "리포트 준비", exact: true }).click();
   await openReportOptions(page);
   await expect(page.getByRole("region", { name: "리포트 준비 상태" })).toContainText(

@@ -63,7 +63,9 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
   });
   await page.goto("/cases/synthetic-inline-case/reports");
   await expect(page.getByRole("heading", { name: "사건 개요", exact: true })).toBeVisible();
-  await expect(page.locator(".report-output-options,.report-export-notice")).toHaveCount(0);
+  await expect(
+    page.locator(".report-output-options,[data-product-report-export]-notice"),
+  ).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "식별정보 가리기" })).toHaveCount(0);
   await openReportEditor(page);
   const section = page
@@ -182,13 +184,19 @@ test("report edits Markdown and photos inline, saves placement and uses one equa
     .getByRole("dialog", { name: "편집을 취소할까요?", exact: true })
     .getByRole("button", { name: "저장본으로 돌아가기", exact: true })
     .click();
-  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
   expect(saveCount).toBe(1);
   await openReportEditor(page);
   await expect(overview).toHaveValue(originalOverview);
   await overview.fill(`${originalOverview}\n명시 저장한 합성 설명`);
   await page.getByRole("button", { name: "수정 내용 저장", exact: true }).click();
-  await expect(page.locator(".report-edit-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("[data-product-report-edit-toggle]")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
   await expect(page.locator(".report-reading")).toContainText("명시 저장한 합성 설명");
   expect(saveCount).toBe(2);
   for (const [name, path] of [

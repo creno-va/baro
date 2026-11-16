@@ -313,7 +313,9 @@ test("an uploaded synthetic recording can be played while correcting and is remo
   await page
     .getByLabel("업로드할 파일 선택", { exact: true })
     .setInputFiles({ name: "synthetic-silence.wav", mimeType: "audio/wav", buffer: wav });
-  const row = page.locator(".workspace-file-list li").filter({ hasText: "synthetic-silence.wav" });
+  const row = page
+    .locator("[data-product-material-list] li")
+    .filter({ hasText: "synthetic-silence.wav" });
   await expect(row.getByText("결과 확인 가능", { exact: true })).toBeVisible();
   await row.getByRole("button", { name: "자료 확인", exact: true }).click();
   const dialog = page.getByRole("dialog");

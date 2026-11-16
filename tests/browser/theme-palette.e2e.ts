@@ -172,7 +172,7 @@ test("report primary download keeps paired colors on hover in both themes", asyn
   await expect(page.getByRole("textbox", { name: "추가 사실 또는 질문" })).toBeEnabled();
   await page.goto(new URL(page.url()).pathname + "/reports");
   await ready(page);
-  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
   const prepare = page.getByRole("button", { name: "리포트 준비", exact: true });
   if (await prepare.isVisible()) await prepare.click();
   const download = page.getByRole("button", { name: "PDF 다운로드", exact: true });

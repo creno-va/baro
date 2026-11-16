@@ -1,6 +1,7 @@
 # 웹 UI 재구성 계획과 기능 보존표
 
-- 작성 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
+- 최초 기능 조사 기준: 2026-11-16 KST, main `b54566f32d2d81f9c08ebc26acac0209623d3af1`.
+- 현재 이관 기록: #810 기반 → #812 탐색·새 사건 → #813 대화 프레임·질문 → `codex/baro-case-details-ui`의 사건 요약·자료 목록/교정·리포트. 현재 단계의 기준은 #813 `8c642ea1dd157e83456314095251a8d58f9d4c38`이며 상세 범위는 [사건 상세 이관](./PRODUCT-DETAILS.md)에 기록한다.
 - 현재 작업 순서: 기존 BARO와 정확한 디자인 기준 확인 → 기본 UI·디자인 시스템·공통 shell PR → 상세 기능 UI 이관 → 조회·성능 개선.
 - 이 문서는 코드 조사와 단계별 인수 계획이다. 구현 완료, 실제 화면 인수, 외부 연동 또는 배포 성공을 뜻하지 않는다.
 - 이전 전면 교체 PR #809는 종료된 별도 작업이다. 해당 PR을 다시 열거나 구현 기준으로 재사용하지 않는다.
@@ -27,8 +28,9 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 | 조립 요소 | 현재 역할 | 기본 UI PR에서 보존할 계약 |
 | --- | --- | --- |
-| [BaseLayout](../../src/layouts/BaseLayout.astro) | 문서 head, `private, no-store, no-transform`, CSP 해시, Zod jitless 초기화, 제품 테마, 접근성 진입점 | 랜딩·로그인까지 쓰는 공유 의존성, CSP와 캐시 설정 |
-| [AppLayout](../../src/layouts/AppLayout.astro)·[CaseWorkbenchLayout](../../src/layouts/CaseWorkbenchLayout.astro) | 탐색 island와 본문 slot의 제품 shell | 기존 props, main 영역, 독립 island 조립, 모든 기존 경로 |
+| [BaseLayout](../../src/layouts/BaseLayout.astro) | 랜딩·로그인/동의·공개 안내의 기존 문서 head·CSP·캐시·테마/접근성 진입점 | 기존 공유 의존성과 랜딩 동작 보존 |
+| [ProductLayout](../../src/layouts/ProductLayout.astro) | 실제 제품 경로의 head·CSP·private no-store·Zod/테마 초기화와 제품 전용 CSS layer | BaseLayout의 랜딩 import를 바꾸지 않고 기존 보안·캐시·focus 계약 유지 |
+| [AppLayout](../../src/layouts/AppLayout.astro)·[CaseWorkbenchLayout](../../src/layouts/CaseWorkbenchLayout.astro) | ProductLayout 안의 탐색 island와 본문 slot | 기존 props, main 영역, 독립 island 조립, 모든 기존 경로 |
 | [CaseLayout](../../src/layouts/CaseLayout.astro) | 사건 shell, 원본 미디어·로컬 사진 preview의 CSP, 안내·analytics 환경 | 기존 환경·권한·CSP·자료 preview 경계 |
 | [AppNavigation](../../src/components/ui/app-navigation.tsx) | 세션과 최근 사건을 읽는 독립 탐색 island | 기존 조회·이름 변경·삭제·로그아웃 처리와 owner guard |
 | [CaseWorkspaceFrame](../../src/components/ui/workspace-frame.tsx) | 헤더·중앙·참고 패널 배치, 반응형 overlay와 포커스 | 기존 `header`, `children`, `panel` 등 인터페이스; 업무 API를 소유하지 않는 경계 |
@@ -38,8 +40,9 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 ## 3. 구현·현재 UI 연결 기능표
 
-아래의 **UI 연결**은 기준 SHA의 production page와 component import에서 해당 기능으로 도달할 수 있다는 뜻이다.
+아래의 **UI 연결**은 최초 조사 기준 SHA의 production page와 component import에서 해당 기능으로 도달할 수 있다는 뜻이다.
 실제 브라우저·외부 공급자 인수 성공을 의미하지 않는다. **조건부 연결**은 세션, 사건 단계, 서버 설정, 작업 상태에 따라 표시 여부나 조작 가능 여부가 달라진다.
+기능이 연결돼 있다는 사실과 새 시각 tree로 이관됐다는 사실은 별개다. 현재 적용 subset과 남은 화면은 5절과 [사건 상세 이관](./PRODUCT-DETAILS.md)을 함께 확인한다.
 
 | 영역·기존 URL | 현재 UI 연결과 구현 | 주요 소스 | 이후 UI 이관에서 보존할 내용 |
 | --- | --- | --- | --- |
@@ -78,6 +81,7 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 | --- | --- | --- |
 | [ToolResults/ToolResultCards](../../src/components/workspace/ToolResults.tsx) | 컴포넌트·별도 endpoint는 있으나 production UI import가 없음 | 전용 결과 카드가 현재 보인다고 기록하지 않음. 외부 조회의 실제 대화 결과 표현과 별도 카드 연결 여부는 상세 이관 단계에서 결정 |
 | HTML·저장 ZIP·선택 원본 ZIP | [API facade](../../src/client/api/index.ts)에 메서드가 있으나 현재 ReportReview의 주 내보내기는 PDF | API 존재를 현재 화면 기능으로 확대하지 않음. 새 조작 추가는 별도 범위·인수 |
+| ReportReading의 `onAsk` | 현재 production 호출자가 prop을 전달하지 않음 | 전용 ‘이 내용 대화로 질문’ 버튼을 현재 사용 가능한 UI로 기록하지 않음. 기존 미노출과 신규 회귀를 구분 |
 | 최근 사건 검색 | 이미 불러온 본인 사건 제목의 클라이언트 필터 | 서버 전체 검색이나 별도 검색 서비스로 표현하지 않음 |
 | 확인할 일 | 입력·요약 확인을 마치지 않은 사건 목록 | 별도 알림 backend가 있다고 가정하지 않음 |
 | 법률·리포트 읽기 pane | 기존 authorized snapshot 조회·표시 | 펼치거나 이동하는 동작만으로 새 유료 작업을 실행하지 않음 |
@@ -106,6 +110,20 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 격리된 공통 primitive·provider·테마와 개발 검토 경로의 현재 사용법은 [공통 UI 기반 명세](./PRODUCT-UI-FOUNDATION.md)를 따른다.
 [공통 기반 브라우저 기록](../quality/product-ui-foundation/README.md)은 실제 업무 화면의 이관 완료와 구분한다.
 
+### 현재 적용 상태
+
+| 검토 단위 | 실제 새 UI 적용 | 남은 화면·완료 경계 |
+| --- | --- | --- |
+| [#810](https://github.com/creno-va/baro/pull/810) 공통 기반 | 격리 primitive·theme·state/query factory·검토 fixture | 전체 업무 query 연결이나 실제 제품 화면 전환 완료 아님 |
+| [#812](https://github.com/creno-va/baro/pull/812) shell·새 사건 | 실제 탐색/모바일 drawer·최근 사건 동작·테마·CaseInput | 기존 업무 island를 새 shell로 감싼 사실만으로 전체 UI를 이관했다고 세지 않음 |
+| [#813](https://github.com/creno-va/baro/pull/813) 대화·질문 | CaseHeader/WorkspaceFrame·composer/메뉴·IntakeQuestions | 메시지·ConversationAgent/Panel/Analysis/Preparation의 업무 tree는 기존 |
+| 현재 `codex/baro-case-details-ui` | 요약/변경안·입장/절차·자료 목록/교정·참고 패널·리포트 검토/편집. [설계·보존 검증](./PRODUCT-DETAILS.md), [로컬 화면 기록](../quality/product-details/README.md) | 새 PR 번호/최종 head 검사는 제출 시 기록. EvidenceUpload·원본 viewer·후속 해결은 기존 슬롯 |
+| 후속 UI | 대화 분석/준비·업로드/원본·timeline/actions·판례/조회·FollowUpResolution·설정·로그인/동의·도움말/정책·404/410·v1 화면 | source graph에서 실제로 남은 시각 tree다. 기본 UI milestone과 전체 프론트 인수를 구분 |
+
+현재 제출된 UI 검토 단위는 #810·#812·#813 세 개이며 사건 상세는 다음 작업 단위다.
+독립 성능 PR #811(history batching)·#814(report head index)는 UI PR 수에 포함하지 않는다.
+PR 제출·CI와 main 통합·배포는 각각 구분한다. case-details 이후에도 위 후속 UI가 남으므로 전체 프론트 완료 상태가 아니다.
+
 | 단계 | 산출물과 범위 | 다음 단계로 넘어갈 조건 |
 | --- | --- | --- |
 | 0. 기준 확인 | 기존 BARO 화면·상태·동선과 이 기능표 대조, 정확한 Codex reference/적용 범위 결정, 랜딩 기준 증거 | 디자인 출처와 미확인 부분을 구분하고 검토 가능한 기본 UI 범위 확정 |
@@ -117,7 +135,8 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 | 3. 조회·성능 | 실제 중복 요청·payload·대기 시간 측정 뒤 요청 병합·선택 조회·무효화·취소·polling을 각각 개선 | 개선 전후 같은 시나리오 측정, 아래 owner/session/revision/dirty/in-flight 인수표 유지, 공유 모바일 회귀 성공 |
 | 4. 통합 인수 | 정확한 통합 SHA의 필요한 전체 검증과 제한된 실제 외부 확인, 승인 범위 안의 PR·릴리스 | local/mock/SSR/브라우저/실제 외부/배포 증거를 각각 기록. 공개·법률·운영 gate 별도 유지 |
 
-각 상세 단계는 선행 PR의 검토·CI·main 통합 뒤 독립된 범위로 진행한다. 첫 기반 준비에는 Zustand·TanStack Query의 격리된 인스턴스와 검증을 포함할 수 있지만, 기존 업무 island의 조회를 연결하거나 SPA/router·API facade·DB를 함께 교체하지 않는다.
+현재 사용자 승인 범위에서는 선행 PR의 검토·CI 성공 뒤 별도 stacked UI PR로 진행하고 main 통합·배포는 별도로 남긴다.
+각 상세 단계는 독립된 변경·보존/화면 검증 단위로 유지한다. 첫 기반 준비에는 Zustand·TanStack Query의 격리된 인스턴스와 검증을 포함할 수 있지만, 기존 업무 island의 조회를 연결하거나 SPA/router·API facade·DB를 함께 교체하지 않는다.
 조회·성능 단계도 기존 공유 클라이언트의 소유권·멱등성·작업 복구를 우회하지 않는다.
 
 ## 6. 공통 인수표
@@ -153,10 +172,10 @@ BARO의 실제 사건 동선과 함께 해석한 적용 범위는 [제품 shell 
 
 | 기록 대상 | 현재 상태 |
 | --- | --- |
-| 코드 조사·기능 연결표 | 기준 SHA에서 작성. 실제 화면 대조는 별도 기록 필요 |
-| 기존 BARO 화면 기준 | baseline 캡처·조작 결과를 현재 작업에서 수집·대조 |
+| 코드 조사·기능 연결표 | 최초 기준 SHA의 기능표 보존. 현재 production import 연결과 실제 이관 subset을 5절·PRODUCT-DETAILS에 추가 |
+| 기존 BARO 화면 기준 | 단계별 baseline 캡처·조작 결과와 새 화면 대조를 각 quality 기록에 보존 |
 | 정확한 Codex reference | 직접 앱 도구 접근 거부 유지. 사용자 선택에 따라 공식 공개 소개 영상을 Computer Use로 확인했으며 최신 native 앱 일치와 구분 |
-| 기본 UI PR | #810 공통 기반, #812 실제 탐색·새 사건 화면. 상세 범위와 증거는 각 PR 및 product-shell 검토 기록에 보존 |
-| 상세 기능 UI 이관 | 후속 단계. 이 문서는 이관 완료 증거가 아님 |
-| 조회·성능 개선 | 후속 측정·독립 PR 단계 |
+| 기본 UI PR | #810 공통 기반, #812 실제 탐색·새 사건 화면. 각 PR 및 product-shell 검토 기록에 범위와 증거 보존 |
+| 상세 기능 UI 이관 | #813 대화 프레임·질문, 현재 사건 요약·자료 목록/교정·리포트 단계. 관련 primitive·SSR/상태·보존 57 tests/387 assertions와 로컬 합성 CUA 여정은 PRODUCT-DETAILS/검토 기록에 한정. 나머지 업무 화면은 후속 |
+| 조회·성능 개선 | #811·#814의 독립 범위와 합성 fixture/plan 증거. 새 UI 또는 query factory만으로 실제 cloud latency 개선을 주장하지 않음 |
 | 실제 외부/배포 인수 | 요청·승인·환경·동일 SHA의 실제 결과가 있을 때 별도로 기록 |

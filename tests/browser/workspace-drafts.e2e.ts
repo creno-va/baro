@@ -179,7 +179,7 @@ test("material links open once and preserve a later manual selection", async ({ 
   await expect.poll(() => reads).toBeGreaterThan(old);
   await expect(dialog).not.toBeVisible();
   await page
-    .locator(".workspace-file-list > li")
+    .locator("[data-product-material-list] > li")
     .filter({ has: page.getByRole("heading", { name: files[1].name, exact: true }) })
     .getByRole("button", { name: "자료 확인", exact: true })
     .click();

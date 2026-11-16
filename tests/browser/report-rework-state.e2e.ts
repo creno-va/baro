@@ -8,7 +8,7 @@ import {
 import type { V2ResolutionState } from "../../src/contracts/v2/resolution";
 
 async function openPreparation(page: Page) {
-  const detail = page.locator(".report-preparation > [data-disclosure]");
+  const detail = page.locator("[data-product-report-preparation] > [data-disclosure]");
   if ((await detail.count()) && (await detail.getAttribute("data-open")) === null)
     await detail.locator("[data-disclosure-button]").click();
 }
@@ -197,7 +197,7 @@ for (const refresh of ["focus", "status"] as const)
       return route.fulfill({ status: 404, json: {} });
     });
     await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
-    await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+    await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
     await expect(page.getByRole("img", { name: "합성 사진.png", exact: true })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
     const refreshMetadata = async () => {
@@ -208,7 +208,7 @@ for (const refresh of ["focus", "status"] as const)
         await page.getByRole("button", { name: "상태 확인", exact: true }).click();
       }
       await expect.poll(() => reads).toBeGreaterThan(before);
-      await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+      await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
     };
     await refreshMetadata();
     await expect(page.locator("html")).toHaveAttribute("data-report-dirty", "false");
@@ -300,7 +300,7 @@ test("slow status reads finish once and release terminal report controls without
     return route.fulfill({ status: 404, json: {} });
   });
   await page.goto("/cases/synthetic-rework-case/reports?embedded=true&rework=true");
-  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
   await expect(page.getByRole("heading", { name: "리포트를 준비하고 있어요" })).toBeVisible();
   slow = true;
   report = {
@@ -329,7 +329,7 @@ test("slow status reads finish once and release terminal report controls without
   await expect(page.getByRole("heading", { name: "분석을 완료하지 못했어요" })).toBeVisible({
     timeout: 13000,
   });
-  await expect(page.locator(".report-review")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("[data-product-report]")).toHaveAttribute("aria-busy", "false");
   expect(maximumInFlight).toBe(1);
   await openPreparation(page);
   await expect(page.getByRole("button", { name: "리포트 준비", exact: true })).toBeEnabled();
@@ -627,7 +627,7 @@ test("report evidence uses the real upload and review components, requests case 
   expect(targets).toHaveLength(3);
   expect(targets.every((target) => target.height >= 44 && target.width >= 44)).toBe(true);
   const gap = await page.locator(".resolution").evaluate((section) => {
-    const controls = document.querySelector(".report-controls");
+    const controls = document.querySelector("[data-product-report-controls]");
     if (!controls) throw new Error("Synthetic report controls missing");
     return section.getBoundingClientRect().top - controls.getBoundingClientRect().bottom;
   });

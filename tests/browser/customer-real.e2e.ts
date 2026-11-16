@@ -301,7 +301,9 @@ for (const viewport of [
       expect(timelineWrites[0]).toEqual(timelineWrites[1]);
       await page.goto(base);
       await page.getByLabel("추가 사실 또는 질문").fill("계정 전환 후 비워야 할 이전 초안");
-      const selectedContext = page.locator(".case-context").getByRole("tab", { selected: true });
+      const selectedContext = page
+        .locator("[data-product-case-context]")
+        .getByRole("tab", { selected: true });
       const contextChoice = (await selectedContext.count())
         ? await selectedContext.textContent()
         : null;
