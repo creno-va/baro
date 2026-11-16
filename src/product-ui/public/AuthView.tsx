@@ -19,7 +19,7 @@ export function AuthView({ controller: c }: { controller: AuthController }) {
             variant="secondary"
             className={cn("min-h-14 w-full justify-start gap-4 px-4 text-sm", {
               "border-[#fee500] bg-[#fee500] text-[#191919]": provider.id === "kakao",
-              "border-[#03c75a] bg-[#03c75a] text-white": provider.id === "naver",
+              "border-[#03c75a] bg-[#03c75a] text-[#191919]": provider.id === "naver",
               "border-[var(--pui-border)] bg-white text-[#191919]": provider.id === "google",
             })}
             data-product-auth-provider={provider.id}
@@ -32,7 +32,12 @@ export function AuthView({ controller: c }: { controller: AuthController }) {
             }}
             type="button"
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center [&_svg]:h-5 [&_svg]:w-5">
+            <span
+              className={cn(
+                "flex h-6 w-6 shrink-0 items-center justify-center [&_svg]:h-5 [&_svg]:w-5",
+                { "text-white": provider.id === "naver" },
+              )}
+            >
               {c.pendingProvider === provider.id ? (
                 <LoaderCircle
                   size={20}

@@ -16,6 +16,7 @@
 localhost4369, `BARO_UI_TEST_FIXTURE=true PUBLIC_API_MODE=mock`. 개발 전용 visible 버튼만 합성 세션을 준비했다. 실제 OAuth·정책 동의 제출·삭제·외부 공급자·운영 DB는 사용하지 않았다.
 
 - 로그인 callback 오류, provider3개와 320px 배치, theme menu를 확인했다. 버튼56px, 가로 넘침0. provider sign-in은 누르지 않았다.
+- 최종 독립 검토에서 Naver의 green/white 일반 글자 대비2.25:1 회귀를 찾아 라벨을 `#191919`로 수정하고 로고 white는 유지했다. 실제320px light/dark DOM에서 배경RGB3/199/90·라벨25/25/25, 대비7.80:1·버튼56px·가로 넘침0·console0을 재확인했다. hover brightness95의 대비 약7.12:1은 CSS 계산이며 브라우저 hover/Axe 실행으로 표현하지 않는다. [최종 계측](./browser/login-contrast.json), [light](./browser/login-contrast-320-light.png), [dark](./browser/login-contrast-320-dark.png). 앞선 login JPG보다 이 기록이 최종 색상이다.
 - 도움말 FAQ를 키보드로 펼쳤고, privacy 전체8섹션/버전·시작 CTA·404/410 안내와 복귀를 확인했다. 문구의 법률 검토/운영 인수를 뜻하지 않는다.
 - `needsConsent=true` 합성 fixture에서 초기 unchecked/submit disabled → 체크 후 enabled → 다시 unchecked를 확인했다. 제출하지 않았다.
 - 모바일 타임라인 sheet x0/width390/bottom844. 연도만 입력한2025 일정을 저장하고 ‘월·일 미상’을 확인했다. 닫기는 원래 opener로 복귀했다. 미저장 timeline의 닫기는 기존 discard 동작이며 새 보호 기능을 검증했다고 기록하지 않는다.
