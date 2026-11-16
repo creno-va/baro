@@ -164,8 +164,8 @@ export function ProductShellFixture() {
         <h1 className="text-3xl font-semibold">실제 제품 shell 검토</h1>
         <p className="leading-7">
           개발 전용 화면입니다. 버튼을 누르기 전에는 저장 공간을 바꾸지 않습니다. 합성 계정 준비는
-          실제 로그인이나 약관 동의를 수행하지 않습니다. 기본 준비는 needsConsent=false, 동의
-          화면용은 needsConsent=true인 로컬 mock 세션을 설정하며 정책 동의를 제출하지 않습니다. 같은
+          실제 로그인이나 약관 동의가 아니며 정책 동의를 제출하지 않습니다. 기본 준비는
+          needsConsent=false, 동의 화면용은 needsConsent=true인 로컬 mock 세션을 설정합니다. 같은
           로컬 주소의 합성 사건 목록을 초기 예시로 바꿉니다.
         </p>
         {!mock && (

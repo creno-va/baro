@@ -53,7 +53,7 @@ export function QuestionsView({ controller }: { controller: LegacyQuestionsContr
               ) : (
                 <div className="space-y-2">
                   <TextareaField
-                label={`${index + 1}번 답변`}
+                    label={`${index + 1}번 답변`}
                     aria-label={`${index + 1}번 답변`}
                     aria-describedby={`answer-length-${question.id}`}
                     aria-invalid={[...value(question.id).trim()].length > 1000}

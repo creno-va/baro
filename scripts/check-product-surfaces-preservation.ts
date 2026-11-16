@@ -13,7 +13,7 @@ import {
 
 /** Acceptance for remaining workspace, public and legacy-case UI migration. Runtime authorization,
  * revision, download and browser behavior remain independent required checks. */
-export const PRODUCT_SURFACES_BASE = "92cb1add152b1144e2baba06d4011455c173f4dc";
+export const PRODUCT_SURFACES_BASE = "f9e5cf28bb4dbfd202ea7b636d80d2ec499f4ad7";
 const command = "bun scripts/check-product-surfaces-preservation.ts";
 const existingFiles = new Set([
   "src/components/AuthButtons.tsx",
@@ -291,7 +291,7 @@ const integrationPatches: Readonly<Record<string, readonly (readonly [string, st
 const frozenIntegrationBlobs: Readonly<Record<string, string>> = {
   "src/product-ui/Select.tsx": "4f50e113c111aae2626c113af528cb9bf7290ec1b92aaab6f5cd6a1e8e7f0bfa",
   "tests/helpers/product-shell-fixture.tsx":
-    "365f4fdfd68a78042a02ff093c5beb49efc39ba27899c94ffada2e8c1543b136",
+    "afbba88f97061fac31be096a2493e7f7f48c6707aaa3e1628c23a6e57a12890c",
   "src/components/PolicyDocument.astro":
     "184bfd3832a34ec805d087f55d67d7c0bc8d5b8d7b74382221d4bd8417efd6c4",
   "src/pages/404.astro": "ac5e0dd4603941605d0a27fbf2988eac9e9d3bb375cdd06e4e454f927fa61664",
