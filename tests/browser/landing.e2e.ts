@@ -218,7 +218,7 @@ test("shared landing navigation supports desktop chapters and a keyboard-operate
   await expect(page.locator("details[data-landing-menu]")).toBeHidden();
   await trigger.focus();
   await page.keyboard.press("Enter");
-  await expect(menu).toHaveAttribute("open", "");
+  await expect(menu).toHaveAttribute("aria-modal", "true");
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
@@ -265,16 +265,21 @@ test("enhancing an already open fallback menu releases its page lock", async ({ 
     await page.goto("/", { waitUntil: "commit" });
     await fallback.locator("summary").click();
     await expect(fallback).toHaveAttribute("open", "");
+    const nativeLink = fallback.getByRole("link", { name: "앱 둘러보기", exact: true });
+    await expect(nativeLink).toHaveAttribute("href", "#blue-app-reveal");
+    await nativeLink.focus();
+    await expect(nativeLink).toBeFocused();
   } finally {
     releaseScripts();
   }
   await page.waitForLoadState("load");
   await expect(fallback).toBeHidden();
-  await expect(fallback).not.toHaveAttribute("open", "");
+  await expect(fallback).toHaveCount(0);
   await expect(page.locator("[data-landing-menu-trigger]")).toBeVisible();
+  await expect(page.locator("[data-landing-menu-trigger]")).toBeFocused();
   await expect(page.locator(".landing-header .brand")).toBeVisible();
   await expect(page.locator(".landing-header .landing-login")).toBeVisible();
-  await expect(page.locator("[data-landing-menu-dialog]")).not.toHaveAttribute("open", "");
+  await expect(page.locator("[data-landing-menu-dialog]")).toBeHidden();
   const initialScroll = await page.evaluate(() => scrollY);
   // Do not click outside first: an unrelated pointer handler could conceal the stale lock.
   await page.mouse.move(200, 500);
@@ -309,7 +314,10 @@ for (const viewport of [
     );
     await expect(menu).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect.poll(() => menu.evaluate((element) => element.matches(":modal"))).toBe(true);
+    // Headless Dialog supplies modal semantics and inerts the actual page root.
+    await expect(menu).toHaveAttribute("aria-modal", "true");
+    await expect(page.locator(".landing")).toHaveAttribute("inert", "");
+    await expect(page.locator(".landing")).toHaveAttribute("aria-hidden", "true");
     await expect
       .poll(() =>
         menu.evaluate((element) => {

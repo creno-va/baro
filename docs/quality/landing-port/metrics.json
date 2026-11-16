@@ -1,0 +1,256 @@
+{
+  "desktop": {
+    "width": 1440,
+    "height": 900,
+    "documentHeight": 39392,
+    "baselineDocumentHeight": 39392,
+    "horizontalOverflow": 0,
+    "headerHeight": 76,
+    "body": {
+      "background": "rgb(255, 255, 255)",
+      "color": "rgb(32, 40, 56)",
+      "fontFamily": "\"Pretendard Variable\", -apple-system, \"system-ui\", \"Segoe UI\", sans-serif"
+    },
+    "sections": [
+      {
+        "id": "",
+        "scene": "journey-hero",
+        "topDeltaPx": 0,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "how-it-works",
+        "scene": "landing-intro",
+        "topDeltaPx": 0,
+        "heightDeltaPx": -0.4766,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "our-beginning",
+        "scene": "origin-story",
+        "topDeltaPx": -0.4766,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "blue-app-reveal",
+        "scene": "blue-reveal",
+        "topDeltaPx": -0.4766,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "logo-experience",
+        "scene": "logo-experience",
+        "topDeltaPx": -0.4766,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "try-baro",
+        "scene": "demo-lab",
+        "topDeltaPx": -0.4766,
+        "heightDeltaPx": 0.3828,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "clarity",
+        "scene": "clarity-section",
+        "topDeltaPx": -0.0938,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "phone-story",
+        "scene": "phone-story",
+        "topDeltaPx": -0.0938,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "time-experience",
+        "scene": "time-experience",
+        "topDeltaPx": -0.0938,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "everyday",
+        "scene": "everyday-stories",
+        "topDeltaPx": -0.0938,
+        "heightDeltaPx": 0.375,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "",
+        "scene": "landing-lawyers",
+        "topDeltaPx": 0.2812,
+        "heightDeltaPx": 0.0938,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "principles",
+        "scene": "landing-principles",
+        "topDeltaPx": 0.375,
+        "heightDeltaPx": -0.2656,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "from-our-ceo",
+        "scene": "ceo-greeting",
+        "topDeltaPx": 0.1094,
+        "heightDeltaPx": 0.4766,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "everyday-future",
+        "scene": "everyday-future",
+        "topDeltaPx": -0.4141,
+        "heightDeltaPx": 0.3125,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "faq",
+        "scene": "landing-faq",
+        "topDeltaPx": -0.1016,
+        "heightDeltaPx": 0.375,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "start-with-baro",
+        "scene": "finale",
+        "topDeltaPx": 0.2734,
+        "heightDeltaPx": 0,
+        "titleMetricsMatch": true
+      }
+    ]
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844,
+    "documentHeight": 34959,
+    "baselineDocumentHeight": 34959,
+    "horizontalOverflow": 0,
+    "headerHeight": 66,
+    "body": {
+      "background": "rgb(255, 255, 255)",
+      "color": "rgb(32, 40, 56)",
+      "fontFamily": "\"Pretendard Variable\", -apple-system, \"system-ui\", \"Segoe UI\", sans-serif"
+    },
+    "sections": [
+      {
+        "id": "",
+        "scene": "journey-hero",
+        "topDeltaPx": 0,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "how-it-works",
+        "scene": "landing-intro",
+        "topDeltaPx": -0.4062,
+        "heightDeltaPx": 0.1875,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "our-beginning",
+        "scene": "origin-story",
+        "topDeltaPx": -0.2188,
+        "heightDeltaPx": -0.2031,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "blue-app-reveal",
+        "scene": "blue-reveal",
+        "topDeltaPx": -0.4219,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "logo-experience",
+        "scene": "logo-experience",
+        "topDeltaPx": 0.1719,
+        "heightDeltaPx": 0.3984,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "try-baro",
+        "scene": "demo-lab",
+        "topDeltaPx": -0.4297,
+        "heightDeltaPx": -0.3906,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "clarity",
+        "scene": "clarity-section",
+        "topDeltaPx": 0.1797,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "phone-story",
+        "scene": "phone-story",
+        "topDeltaPx": -0.2266,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "time-experience",
+        "scene": "time-experience",
+        "topDeltaPx": 0.3672,
+        "heightDeltaPx": -0.2031,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "everyday",
+        "scene": "everyday-stories",
+        "topDeltaPx": 0.1641,
+        "heightDeltaPx": 0.2891,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "",
+        "scene": "landing-lawyers",
+        "topDeltaPx": 0.4531,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "principles",
+        "scene": "landing-principles",
+        "topDeltaPx": 0.0469,
+        "heightDeltaPx": 0.4531,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "from-our-ceo",
+        "scene": "ceo-greeting",
+        "topDeltaPx": -0.5,
+        "heightDeltaPx": -0.2188,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "everyday-future",
+        "scene": "everyday-future",
+        "topDeltaPx": 0.2812,
+        "heightDeltaPx": -0.0391,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "faq",
+        "scene": "landing-faq",
+        "topDeltaPx": 0.2422,
+        "heightDeltaPx": 0.1406,
+        "titleMetricsMatch": true
+      },
+      {
+        "id": "start-with-baro",
+        "scene": "finale",
+        "topDeltaPx": 0.3828,
+        "heightDeltaPx": -0.4062,
+        "titleMetricsMatch": true
+      }
+    ]
+  }
+}

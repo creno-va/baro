@@ -4,38 +4,38 @@
 - 기준 소스: `main b54566f32d2d81f9c08ebc26acac0209623d3af1`
 - 대상: [랜딩 진입점](../../src/pages/index.astro)의 `/` 화면과 직접 연결된 체험·탐색 동작
 
-첫 기본 UI PR은 기존 랜딩의 디자인과 동작을 그대로 유지한다. 랜딩 마크업·문안·순서·에셋·
-모션·반응형 및 여기에 영향을 주는 공통 레이아웃과 CSS는 보존하고, 새 프론트 기반은
-별도 진입점에서 검토한다. 이후 이식 PR에서도 기존 디자인을 동일하게 구현하는 것이 기준이다.
-이 문서는 소스 조사 결과와 향후 검증 계획이며, 전체 시각 동등성이나 배포 완료 기록이 아니다.
-현재 브라우저 확인 범위는 기준 hero 페이지를 연 것까지다.
+첫 기본 UI PR의 원칙은 기존 랜딩 디자인·동작의 보존이었다. 후속 이식도 같은 문안·순서·
+에셋·모션·반응형을 재현한다. 현재 진입점은 새 Astro/React/Tailwind 구현을 사용하며,
+원본 디자인 계약은 아래 수치와 앵커로 유지한다. 실제 비교 범위와 한계는
+[랜딩 이식 검증 기록](../quality/landing-port/README.md)에 구분해 기록한다. 배포 완료 기록은 아니다.
+원본 진입점은 [고정 SHA의 index](https://github.com/creno-va/baro/blob/b54566f32d2d81f9c08ebc26acac0209623d3af1/src/pages/index.astro)에서 확인한다.
 
 ## 화면 순서와 연결
 
-아래 순서는 [index.astro](../../src/pages/index.astro)의 실제 렌더 순서다. 각 컴포넌트의
+아래 순서는 [LandingPage](../../src/product-ui/landing/LandingPage.astro)의 실제 렌더 순서다. 각 컴포넌트의
 문안·줄바꿈·가상 화면·CTA를 함께 보존한다. 상단 메뉴, 왼쪽 구간 탐색과 체험 링크가
 참조하는 앵커 ID도 유지한다.
 
 | 순서 | 소스·앵커 | 디자인과 동작 |
 | --- | --- | --- |
-| 1 | [LandingNavigation](../../src/components/landing/LandingNavigation.astro) | 상단 로고·구간 링크·로그인, 모바일 전체 메뉴, 구간 진행 표시 |
-| 2 | [HeroFilm](../../src/components/landing/HeroFilm.astro) | 일상 영상 → 파란 포털 → 휴대전화 대화 예시. 제목은 “막막했던 법률 문제, 이제 정리부터 가볍게.” |
-| 3 | `#how-it-works` · index | 세 줄 소개와 이야기·정리·준비 순서 |
-| 4 | [OriginExperience](../../src/components/landing/OriginExperience.astro) · `#our-beginning` | 손글씨 메모의 종이색 장면에서 BARO 도착 화면으로 전환 |
-| 5 | [BlueAppReveal](../../src/components/landing/BlueAppReveal.astro) · `#blue-app-reveal` | 작은 파란 원이 작업 공간으로 확장. 대화·자료·타임라인·리포트 네 기능 선택 |
-| 6 | [LogoExperience](../../src/components/landing/LogoExperience.astro) · `#logo-experience` | 로고와 기능 타일의 회전·분리, 기능별 설명과 체험 연결 |
-| 7 | [DemoLab](../../src/components/landing/DemoLab.astro) · `#try-baro` | 대여금·보증금·급여의 로컬 예시. 대화·자료·타임라인·리포트 체험 |
-| 8 | [PainToClarity](../../src/components/landing/PainToClarity.astro) · `#clarity` | 어두운 배경의 흩어진 걱정을 사실·자료·질문으로 모으는 장면 |
-| 9 | [PhoneStory](../../src/components/landing/PhoneStory.astro) · `#phone-story` | 3D 휴대전화와 이야기·자료·타임라인·상담 준비의 네 장면 |
-| 10 | [TimeExperience](../../src/components/landing/TimeExperience.astro) · `#time-experience` | 시계 사진 확대·소멸, 파란 전환과 시간 관련 메시지 |
-| 11 | [EverydayStories](../../src/components/landing/EverydayStories.astro) · `#everyday` | 집·일터·카페 사진과 세 가지 일상 이야기 |
-| 12 | `.landing-lawyers` · index | 사건 준비 중 리포트 활용 안내와 범주 예시. 현재 변호사 디렉터리 진입 화면이 아님 |
-| 13 | `#principles` · index | 사실·추정 구분, 공식 근거, 사용자 판단의 세 원칙 |
-| 14 | [CeoGreeting](../../src/components/landing/CeoGreeting.astro) · `#from-our-ceo` | 두 인물 사진과 편지의 회전·읽기 흐름 |
-| 15 | [EverydayFuture](../../src/components/landing/EverydayFuture.astro) · `#everyday-future` | 일상 사진·영상과 큰 타이포그래피의 비전 장면 |
-| 16 | `#faq` · index | 기존 네 질문의 키보드 조작 가능한 disclosure |
-| 17 | [FinalExperience](../../src/components/landing/FinalExperience.astro) · `#start-with-baro` | 네 기능 합류 → 앱 → 마지막 메시지와 시작·다시 보기 |
-| 18 | `.landing-footer` · index | BARO, 사건 시작과 정책 링크, 기존 하단 문구 |
+| 1 | [LandingNavigation](../../src/product-ui/landing/LandingNavigation.tsx) | 상단 로고·구간 링크·로그인, 모바일 전체 메뉴, 구간 진행 표시 |
+| 2 | [HeroScene](../../src/product-ui/landing/scenes/HeroScene.tsx) | 일상 영상 → 파란 포털 → 휴대전화 대화 예시. 제목은 “막막했던 법률 문제, 이제 정리부터 가볍게.” |
+| 3 | `#how-it-works` · LandingPage | 세 줄 소개와 이야기·정리·준비 순서 |
+| 4 | [OriginScene](../../src/product-ui/landing/scenes/OriginScene.tsx) · `#our-beginning` | 손글씨 메모의 종이색 장면에서 BARO 도착 화면으로 전환 |
+| 5 | [BlueScene](../../src/product-ui/landing/scenes/BlueScene.tsx) · `#blue-app-reveal` | 작은 파란 원이 작업 공간으로 확장. 대화·자료·타임라인·리포트 네 기능 선택 |
+| 6 | [LogoScene](../../src/product-ui/landing/scenes/LogoScene.tsx) · `#logo-experience` | 로고와 기능 타일의 회전·분리, 기능별 설명과 체험 연결 |
+| 7 | [DemoLab](../../src/product-ui/landing/DemoLab.tsx) · `#try-baro` | 대여금·보증금·급여의 로컬 예시. 대화·자료·타임라인·리포트 체험 |
+| 8 | [ClarityScene](../../src/product-ui/landing/scenes/ClarityScene.tsx) · `#clarity` | 어두운 배경의 흩어진 걱정을 사실·자료·질문으로 모으는 장면 |
+| 9 | [PhoneScene](../../src/product-ui/landing/scenes/PhoneScene.tsx) · `#phone-story` | 3D 휴대전화와 이야기·자료·타임라인·상담 준비의 네 장면 |
+| 10 | [TimeScene](../../src/product-ui/landing/scenes/TimeScene.tsx) · `#time-experience` | 시계 사진 확대·소멸, 파란 전환과 시간 관련 메시지 |
+| 11 | [EverydayScene](../../src/product-ui/landing/scenes/EverydayScene.tsx) · `#everyday` | 집·일터·카페 사진과 세 가지 일상 이야기 |
+| 12 | `.landing-lawyers` · LandingPage | 사건 준비 중 리포트 활용 안내와 범주 예시. 현재 변호사 디렉터리 진입 화면이 아님 |
+| 13 | `#principles` · LandingPage | 사실·추정 구분, 공식 근거, 사용자 판단의 세 원칙 |
+| 14 | [CeoScene](../../src/product-ui/landing/scenes/CeoScene.tsx) · `#from-our-ceo` | 두 인물 사진과 편지의 회전·읽기 흐름 |
+| 15 | [FutureScene](../../src/product-ui/landing/scenes/FutureScene.tsx) · `#everyday-future` | 일상 사진·영상과 큰 타이포그래피의 비전 장면 |
+| 16 | `#faq` · LandingPage | 기존 네 질문의 키보드 조작 가능한 disclosure |
+| 17 | [FinaleScene](../../src/product-ui/landing/scenes/FinaleScene.tsx) · `#start-with-baro` | 네 기능 합류 → 앱 → 마지막 메시지와 시작·다시 보기 |
+| 18 | `.landing-footer` · LandingPage | BARO, 사건 시작과 정책 링크, 기존 하단 문구 |
 
 실제 서비스 시작은 `/new`, 로그인은 `/login`으로 연결한다. 기능별 체험 링크는
 `#try-baro`로 이동하면서 올바른 체험 탭을 선택하고 그 내용으로 포커스를 옮긴다.
@@ -44,41 +44,43 @@
 
 ## 소스 의존성과 스타일 순서
 
-[BaseLayout](../../src/layouts/BaseLayout.astro)은 현재
-[global.css](../../src/styles/global.css), [shell.css](../../src/styles/shell.css),
-[app-focus.css](../../src/styles/app-focus.css), [design-system.css](../../src/styles/design-system.css)를
-가져온다. index는 [landing.css](../../src/styles/landing.css),
-[landing-film.css](../../src/styles/landing-film.css),
-[landing-refinement.css](../../src/styles/landing-refinement.css)를 가져오고 각 시각 컴포넌트가
-자신의 CSS와 스크립트를 추가한다. reset·기본 글꼴·로고 크기에 공통 CSS가 관여하므로
-파일명만 분리한 뒤 이 의존성을 제거하면 동등한 화면이라고 볼 수 없다.
+[LandingLayout](../../src/layouts/LandingLayout.astro)은 제품 테마와 독립된
+[랜딩 Tailwind 진입점](../../src/product-ui/landing/styles/index.css)만 가져온다.
+[base.css](../../src/product-ui/landing/styles/base.css)는 원본 reset·Pretendard·색상·로고 기본값을
+유지한다. 정적인 배치·타이포 선언은 [scene-classes](../../src/product-ui/landing/scene-classes.ts)의
+명시적 Tailwind 유틸리티로 옮기고, 반응형·입체 형상·스크롤 수치는 장면 CSS에 유지한다.
+공통 페이지와 refinement 규칙은 장면 스타일 뒤에서 원본 캐스케이드를 보존한다.
+
+원본 공유 의존성은 [고정 SHA의 BaseLayout](https://github.com/creno-va/baro/blob/b54566f32d2d81f9c08ebc26acac0209623d3af1/src/layouts/BaseLayout.astro)과
+[당시 스타일](https://github.com/creno-va/baro/tree/b54566f32d2d81f9c08ebc26acac0209623d3af1/src/styles)에 보존한다.
+새 랜딩은 이 구 시각 모듈들을 production import하지 않는다.
 
 | 장면 | 스타일 | 동작 |
 | --- | --- | --- |
-| 공통 | 위 공통·페이지 CSS | [landing.ts](../../src/client/landing.ts) |
-| 탐색 | [landing-navigation.css](../../src/styles/landing-navigation.css) | [landing-navigation.ts](../../src/client/landing-navigation.ts) |
-| 첫 화면 | [landing-journey.css](../../src/styles/landing-journey.css) | [landing-journey.ts](../../src/client/landing-journey.ts) |
-| 시작 메모 | [landing-origin.css](../../src/styles/landing-origin.css) | [landing-origin.ts](../../src/client/landing-origin.ts) |
-| 파란 앱 | [landing-blue-reveal.css](../../src/styles/landing-blue-reveal.css) | [landing-blue-reveal.ts](../../src/client/landing-blue-reveal.ts) |
-| 로고 | [landing-logo.css](../../src/styles/landing-logo.css) | [landing-logo.ts](../../src/client/landing-logo.ts) |
-| 체험 | [landing-demo.css](../../src/styles/landing-demo.css) | [landing-demo.ts](../../src/client/landing-demo.ts) |
-| 걱정 정리 | [landing-clarity.css](../../src/styles/landing-clarity.css) | [landing-clarity.ts](../../src/client/landing-clarity.ts) |
-| 휴대전화 | [landing-phone.css](../../src/styles/landing-phone.css) | [landing-phone.ts](../../src/client/landing-phone.ts) |
-| 시간 | [landing-time.css](../../src/styles/landing-time.css) | [landing-time.ts](../../src/client/landing-time.ts) |
-| 일상 사례 | [landing-stories.css](../../src/styles/landing-stories.css) | 공통 reveal 동작 |
-| CEO | [landing-ceo.css](../../src/styles/landing-ceo.css) | [landing-ceo.ts](../../src/client/landing-ceo.ts) |
-| 달라지는 일상 | [landing-future.css](../../src/styles/landing-future.css) | [landing-future.ts](../../src/client/landing-future.ts) |
-| 마지막 장면 | [landing-finale.css](../../src/styles/landing-finale.css) | [landing-finale.ts](../../src/client/landing-finale.ts) |
+| 공통 | [base](../../src/product-ui/landing/styles/base.css), [landing](../../src/product-ui/landing/styles/landing.css), [refinement](../../src/product-ui/landing/styles/refinement.css) | [motion/index](../../src/product-ui/landing/motion/index.ts) |
+| 탐색 | [navigation](../../src/product-ui/landing/styles/navigation.css) | [LandingNavigation](../../src/product-ui/landing/LandingNavigation.tsx): Headless Dialog, mount 이후 구간 진행 표시 |
+| 첫 화면 | [journey](../../src/product-ui/landing/styles/journey.css) | [journey](../../src/product-ui/landing/motion/journey.ts) |
+| 시작 메모 | [origin](../../src/product-ui/landing/styles/origin.css) | [origin](../../src/product-ui/landing/motion/origin.ts) |
+| 파란 앱 | [blue](../../src/product-ui/landing/styles/blue.css) | [blue](../../src/product-ui/landing/motion/blue.ts) |
+| 로고 | [logo](../../src/product-ui/landing/styles/logo.css) | [logo](../../src/product-ui/landing/motion/logo.ts) |
+| 체험 | [demo](../../src/product-ui/landing/styles/demo.css) | [DemoLab](../../src/product-ui/landing/DemoLab.tsx), [합성 예시](../../src/product-ui/landing/demo-content.ts) |
+| 걱정 정리 | [clarity](../../src/product-ui/landing/styles/clarity.css) | [clarity](../../src/product-ui/landing/motion/clarity.ts) |
+| 휴대전화 | [phone](../../src/product-ui/landing/styles/phone.css) | [phone](../../src/product-ui/landing/motion/phone.ts) |
+| 시간 | [time](../../src/product-ui/landing/styles/time.css) | [time](../../src/product-ui/landing/motion/time.ts) |
+| 일상 사례 | [stories](../../src/product-ui/landing/styles/stories.css) | 공통 reveal 동작 |
+| CEO | [ceo](../../src/product-ui/landing/styles/ceo.css) | [ceo](../../src/product-ui/landing/motion/ceo.ts) |
+| 달라지는 일상 | [future](../../src/product-ui/landing/styles/future.css) | [future](../../src/product-ui/landing/motion/future.ts) |
+| 마지막 장면 | [finale](../../src/product-ui/landing/styles/finale.css) | [finale](../../src/product-ui/landing/motion/finale.ts) |
 
-로고는 [ui/brand.tsx](../../src/components/ui/brand.tsx)의 SVG와 대문자 `BARO` 조합이며
-아이콘은 `lucide-react`의 서버 렌더 결과를 사용한다. 각 랜딩 스크립트는 DOM·CSS 변수·
+로고는 [LandingBrand](../../src/product-ui/landing/LandingBrand.tsx)의 SVG와 대문자 `BARO` 조합이며
+아이콘은 `lucide-react`의 서버 렌더 결과를 사용한다. 탐색과 로컬 체험은 React/Headless UI가 소유한다. 장면 모션은 DOM·CSS 변수·
 requestAnimationFrame으로 동작하며 별도 3D 라이브러리나 조회 라이브러리를 요구하지 않는다.
 휴대전화는 폭 280px, 비율 `78:163.4:8.75`, 외벽 52면과 렌즈 벽 24면을 구성하는 DOM/CSS
 형상이다. 정지 이미지나 기존 영상 파일로 바꾸면 현재 디자인과 달라진다.
 
 루트 랜딩에는 제품 화면용 `data-baro-ui`와 테마 적용이 없다. `startAtTop`의 새 진입·
 새로고침 시 hash/scroll 초기화와 이후 같은 페이지 구간 이동은 함께 보존한다.
-Zod `jitless` 초기화와 CSP script hash 등록도 [기존 레이아웃](../../src/layouts/BaseLayout.astro)의
+Zod `jitless` 초기화와 CSP script hash 등록도 [랜딩 레이아웃](../../src/layouts/LandingLayout.astro)의
 독립 실행 계약으로 유지한다.
 
 ## 에셋과 시각 기준
@@ -97,7 +99,7 @@ Zod `jitless` 초기화와 CSP script hash 등록도 [기존 레이아웃](../..
 
 에셋 출처와 최적화 기록은 [asset-provenance.json](../../public/landing/asset-provenance.json)에
 있다. `hero-everyday.mp4`, `phone-journey.mp4`와
-[BenefitFilm](../../src/components/landing/BenefitFilm.astro)은 현재 index에 연결된 hero가 아니다.
+[BenefitFilm](https://github.com/creno-va/baro/blob/b54566f32d2d81f9c08ebc26acac0209623d3af1/src/components/landing/BenefitFilm.astro)은 현재 index에 연결된 hero가 아니다.
 새 이미지·영상 생성은 이식에 필요하지 않다.
 
 기본 화면은 흰색 `#fff`, 본문 `#191f28`, 파랑 `#2364e8`이며 장면별로 `#2869eb`,
@@ -147,8 +149,9 @@ Zod `jitless` 초기화와 CSP script hash 등록도 [기존 레이아웃](../..
 현재 `/`를 기준으로 유지하고, 전환 PR에서 동일 디자인과 동작을 확인한다.
 
 [landing.e2e.ts](../../tests/browser/landing.e2e.ts)는 현재 구간·기하·상호작용 검증의 기준이다.
-현재 랜딩 전체의 시각 동등성을 증명하는 추적된 전용 이미지 기준은 이번 조사에서 찾지
-못했으므로, 아래 캡처는 새로 수행할 계획이다.
+초기 조사에서는 전체 랜딩의 전용 이미지 기준을 찾지 못했다. 이후 원본 기준 캡처와 새 구현의
+[표본 비교](../quality/landing-port/README.md)를 추가했다. 아래 표는 기존 자동 검증의 진행률·경계 계약이며,
+표본 스크린샷을 모든 모션 프레임의 동등성 증거로 확대하지 않는다.
 
 | 대상 | 기준 캡처·비교 위치 |
 | --- | --- |

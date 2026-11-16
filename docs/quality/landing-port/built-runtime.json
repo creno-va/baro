@@ -1,0 +1,34 @@
+{
+  "desktopHeight": 39392,
+  "mobileHeight": 34959,
+  "desktopOverflow": 0,
+  "mobileOverflow": 0,
+  "headlessMenu": {
+    "ariaModal": "true",
+    "backgroundInert": true,
+    "focus": "메뉴 닫기",
+    "locked": "hidden"
+  },
+  "keyboardCycle": true,
+  "escapeReturnedFocus": true,
+  "escapePreservedScroll": true,
+  "localDemoAnswerAndMaterialChoice": true,
+  "warnings": [],
+  "nativeScriptsBlocked": {
+    "anchorVisible": true,
+    "faqOpen": true,
+    "hydrated": false,
+    "menuClosed": true,
+    "nativeMenu": true,
+    "overflow": 0,
+    "readableSteps": 4,
+    "scenario": "Additional test-only enforcing CSP blocks all page scripts; global browser JavaScript setting unchanged",
+    "url": "http://127.0.0.1:4363/#try-baro",
+    "videoSources": [
+      null,
+      null,
+      null
+    ]
+  },
+  "delayedHydrationReleaseExecuted": false
+}
