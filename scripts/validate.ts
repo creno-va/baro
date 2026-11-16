@@ -80,6 +80,7 @@ export function validationCommands(profile: string, root = process.cwd()): Comma
       "tests/native-deletion-http.test.ts",
       "tests/cleanup-dependency-repro.test.ts",
       "tests/reports-render-authorization-budget.test.ts",
+      "tests/report-head-index.test.ts",
       "tests/mobile-ios-accessibility.test.ts",
       "tests/mobile-ios-auth-cancel.test.ts",
       "tests/mobile-ios-directory-ui.test.ts",

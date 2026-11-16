@@ -84,7 +84,7 @@ for (const mode of ["success", "failure", "already-connected"])
       else if (url.endsWith("/api/health/ready"))
         return fail
           ? Response.json({ status: "not_ready" }, { status: 503 })
-          : Response.json({ status: "ready", schemaVersion: "0022_conversation_rework" });
+          : Response.json({ status: "ready", schemaVersion: "0023_report_head_index" });
       else if (url.endsWith("/api/v2/lawyers/self-service"))
         return Response.json({
           items: [

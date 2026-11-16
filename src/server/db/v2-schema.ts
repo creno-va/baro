@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import {
   check,
   index,
@@ -1194,6 +1194,12 @@ export const v2Reports = sqliteTable(
     createdAt: created(),
   },
   (t) => [
+    index("v2_reports_workspace_head_idx").on(
+      t.workspaceId,
+      desc(t.revision),
+      desc(t.createdAt),
+      desc(t.id),
+    ),
     check(
       "v2_report_state",
       sql`${t.state} IN ('queued','building','ready','failed','obsolete') AND ${t.workspaceRevision} >= 1 AND ${t.summaryRevision} >= 1 AND ${t.revision} >= 1`,
