@@ -399,37 +399,56 @@ export function createReworkStateService(
           )
           .all<{ id: string; revision: number; workspace_revision: number; operation_id: string }>()
       ).results;
-      for (const row of messages) {
-        const cipher = await core
-          .statement(
-            "SELECT encrypted_payload FROM v2_messages WHERE id=? AND workspace_id=? AND revision=?",
-            [row.id, id, row.revision],
-          )
-          .first<{ encrypted_payload: string }>();
-        if (!cipher) throw new ReworkError("STALE_REVISION");
-        const value = await core.decrypt(
-          "v2_messages",
-          row.id,
-          ownerId,
-          row.revision,
-          cipher.encrypted_payload,
-          intentSchema,
+      // Bound ciphertext response memory while coalescing the existing reads.
+      // Header authorization and every body predicate/decode/final fence stay unchanged.
+      for (let start = 0; start < messages.length; start += 4) {
+        const page = messages.slice(start, start + 4);
+        const results = await core.binding.batch<{ encrypted_payload: string }>(
+          page.map((row) =>
+            core.statement(
+              "SELECT encrypted_payload FROM v2_messages WHERE id=? AND workspace_id=? AND revision=?",
+              [row.id, id, row.revision],
+            ),
+          ),
         );
         if (
-          value.id !== row.id ||
-          value.operationId !== row.operation_id ||
-          value.workspaceRevision !== row.workspace_revision
+          !Array.isArray(results) ||
+          results.length !== page.length ||
+          results.some(
+            (result) =>
+              result?.success !== true ||
+              !Array.isArray(result.results) ||
+              result.results.length > 1,
+          )
         )
-          throw new ReworkError("STALE_REVISION");
-        if (value.conversationIntent)
-          intents.push({
-            messageId: value.id,
-            requestId: `intent-${value.id}`,
-            intent: value.conversationIntent,
-            // Atomic response publication advances its admission revision once.
-            // Keep this immutable publication revision; never rebase old intents.
-            workspaceRevision: value.workspaceRevision + 1,
-          });
+          throw new ReworkError("DEPENDENCY_UNAVAILABLE");
+        for (const [index, row] of page.entries()) {
+          const cipher = results[index]?.results[0];
+          if (!cipher) throw new ReworkError("STALE_REVISION");
+          const value = await core.decrypt(
+            "v2_messages",
+            row.id,
+            ownerId,
+            row.revision,
+            cipher.encrypted_payload,
+            intentSchema,
+          );
+          if (
+            value.id !== row.id ||
+            value.operationId !== row.operation_id ||
+            value.workspaceRevision !== row.workspace_revision
+          )
+            throw new ReworkError("STALE_REVISION");
+          if (value.conversationIntent)
+            intents.push({
+              messageId: value.id,
+              requestId: `intent-${value.id}`,
+              intent: value.conversationIntent,
+              // Atomic response publication advances its admission revision once.
+              // Keep this immutable publication revision; never rebase old intents.
+              workspaceRevision: value.workspaceRevision + 1,
+            });
+        }
       }
       // A newly published intent may belong to a later revision than the first
       // workspace read. Classify that race before validating one wire snapshot.
